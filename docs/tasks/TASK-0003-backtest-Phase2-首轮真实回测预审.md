@@ -195,3 +195,62 @@
 4. **看板继续后置，待首轮真实回测结果经 Jay.S 审阅后再启动。**
 5. **一切执行仍需遵守“一件事一审核一上锁”，R1 与 R2 不得合并申请 Token。**
 6. **日期与首次总金额已完成冻结，当前可直接进入 R1 的 P1 Token 签发准备；剩余两项非 Token 前置条件继续保留给目标运行环境与正式执行阶段。**
+
+## 八、首轮真实运行复盘后的 R3 补充预审（2026-04-03）
+
+### 实际运行复盘
+
+1. Atlas 已执行批次 R2 lockback；首轮真实回测随后已在当前可运行环境中实际跑通一遍。
+2. 当前实际运行结果为：`completed`、`final_equity=1000000`、`total_trades=0`。
+3. 该结果**不得**作为 75% 里程碑的正式首轮结果交付；回测主线仍停留在 60%。
+
+### 根因确认
+
+1. 当前 FC-224 模板已具备因子、`market_filter` 与 `signal` 的最小解析能力。
+2. 但 `fc_224_strategy.py` 当前 `run()` 仍未进入 `wait_update() + TargetPosTask` 的真实执行循环。
+3. 因此本轮 `completed + zero trades` 应判定为**“策略执行逻辑未闭环”**，而不是“策略本身无交易”。
+
+### 任务归属复核
+
+- **继续归属 TASK-0003，不另开新任务。**
+- 理由：当前仍只是在 `services/backtest/` 单服务边界内，把首轮真实回测从“已能启动”推进到“真实执行链闭环且结果可交付”；没有新增跨服务契约、看板、Docker、README 或部署目标。
+
+### 批次 R3 — FC-224 真实执行循环补齐（P1）
+
+目标：只补 FC-224 模板进入真实执行循环与正式结果判定，不返工 R1/R2 已锁回的其他范围。
+
+#### 白名单文件（冻结为 3 个服务文件）
+
+1. `services/backtest/src/backtest/fc_224_strategy.py`
+2. `services/backtest/src/backtest/runner.py`
+3. `services/backtest/tests/test_fc_224_execution_trace.py`
+
+#### Token 类型
+
+- **P1 Token**（回测 Agent）
+
+#### 本批次允许做的事
+
+1. **继续坚持在线 TqBacktest 路线**，保持 `TqApi + TqSim + TqBacktest + TqAuth` 主路径不变。
+2. 在策略模板内进入 `wait_update() + TargetPosTask` 的真实执行循环，补齐 FC-224 的执行闭环。
+3. 在正式结果判定层明确：若 FC-224 首轮真实回测再次出现 `completed` 且 `total_trades=0`，必须判定为**“策略执行逻辑未闭环”**，不能作为正式首轮结果交付。
+4. 复用现有正式输入冻结口径：FC-224_v3_intraday_trend_cf605_5m、CZCE.CF605、5m、2024-04-03 至 2026-04-03、initial_capital=1000000、手续费=1、双边手续费=8。
+
+#### 本批次明确禁止
+
+1. **不引入本地数据采集路径**，不新增 CSV / Parquet / Tushare / 跨服务取数回放路径。
+2. 不改 API、README、`shared/contracts/**`、dashboard、Docker、`.env.example`、`session.py`、`result_builder.py` 或其他服务目录。
+3. 当前不预授权第 4 个服务文件；若回测 Agent 证明必须新增 `strategy_base.py` 作为共享 helper 抽取点，必须先重新提交补充预审，未经复审不得擅自扩白名单。
+
+#### 验收标准
+
+1. FC-224 模板已进入官方模式的真实执行循环，而不是只做解析与静态判定。
+2. 在线 TqBacktest 路线保持不变，且未引入本地数据采集路径。
+3. 首轮真实回测若仍为零成交，结果会被明确标记为“策略执行逻辑未闭环”，不能再以正式结果口径交付。
+4. 本批次服务代码写入仍严格限制在 3 个白名单文件内。
+
+### R3 补充结论
+
+1. **R3 继续沿用 TASK-0003，不另开任务。**
+2. **R3 最小白名单已冻结为 3 个服务文件，Token 类型为 P1。**
+3. **当前可以直接进入 R3 的 P1 Token 签发准备。**

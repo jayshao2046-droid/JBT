@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0003
 - 审核角色：项目架构师
-- 审核阶段：Phase1 正式建档 + 批次 A 终审 + P0 契约迁移终审 + 批次 B 终审 + 首轮真实回测 Phase2 预审治理补充 + 批次 R1 终审 + 批次 R2 终审
+- 审核阶段：Phase1 正式建档 + 批次 A 终审 + P0 契约迁移终审 + 批次 B 终审 + 首轮真实回测 Phase2 预审治理补充 + 批次 R1 终审 + 批次 R2 终审 + 批次 R2 锁回补记 + 批次 R3 补充预审
 - 审核时间：2026-04-03
-- 审核结论：通过（建档合规；backtest 四份正式契约与 drafts 一致；批次 B 五个白名单文件核验通过；D-BT-01~05 未违反；未提前进入看板、Docker、远端交付；当前已达到“只差策略输入即可执行一次正式回测”的检查点；两枚 Token 已完成 lockback，当前状态均为 `locked`；首轮真实回测区间与首次总金额已完成冻结；批次 R1 四个白名单文件核验通过，未把 `tqsdk` 扩展成额外采集依赖，未新增不必要依赖，保持 R2 基于 `TqBacktest` 的接入方向；批次 R2 服务代码实际写入仅限四个白名单文件，仍保持 `TqApi + TqSim + TqBacktest + TqAuth` 在线回测主路径，未引入本地数据采集路径或额外回测包，手续费、滑点、总金额已纳入最小结果留痕；当前可立即执行 R2 lockback，剩余阻塞仅为运行环境的 TQSDK 凭证与 `tqsdk` 安装）
+- 审核结论：通过（建档合规；backtest 四份正式契约与 drafts 一致；批次 B 五个白名单文件核验通过；D-BT-01~05 未违反；未提前进入看板、Docker、远端交付；当前已达到“只差策略输入即可执行一次正式回测”的检查点；两枚 Token 已完成 lockback，当前状态均为 `locked`；首轮真实回测区间与首次总金额已完成冻结；批次 R1 四个白名单文件核验通过，未把 `tqsdk` 扩展成额外采集依赖，未新增不必要依赖，保持 R2 基于 `TqBacktest` 的接入方向；批次 R2 服务代码实际写入仅限四个白名单文件，仍保持 `TqApi + TqSim + TqBacktest + TqAuth` 在线回测主路径，未引入本地数据采集路径或额外回测包，手续费、滑点、总金额已纳入最小结果留痕；Atlas 已执行 R2 lockback，当前状态为 `locked`；首轮真实回测已实际运行一次，但结果为 `completed`、`final_equity=1000000`、`total_trades=0`，根因确认为 FC-224 模板尚未进入 `wait_update + TargetPosTask` 真实执行循环；当前结果不得作为正式首轮结果交付；最小 R3 已冻结为 3 文件 P1 批次，可直接进入签发准备）
 
 ---
 
@@ -332,3 +332,48 @@ P0 正式契约：2026-04-03 19:01:15 +0800 已锁回，当前状态为 `locked`
 - 架构终审通过。
 - 结论：**TASK-0003 批次 R2 可以立即执行 lockback。**
 - 当前剩余问题判断：**未发现本批白名单内新的代码级阻塞；当前仅剩运行环境问题。** 具体包括目标运行环境需提供 `TQSDK_AUTH_USERNAME` / `TQSDK_AUTH_PASSWORD`，以及当前 shell / 目标环境需安装 `tqsdk`。`TqBacktest` 已包含在 `tqsdk` 内，不需要额外安装其他回测包。
+
+## 批次 R2 锁回补记与批次 R3 补充预审结论（2026-04-03）
+
+### R2 锁回补记
+
+- Atlas 已执行 TASK-0003 批次 R2 lockback，review-id `REVIEW-TASK-0003-R2`，summary `TASK-0003 批次R2完成，终审通过，执行锁回`；事件结果 `approved`，Token 当前状态 `locked`。
+
+### 首轮真实运行复盘
+
+1. 首轮真实回测已在当前可运行环境中实际跑通一遍。
+2. 当前结果为 `completed`、`final_equity=1000000`、`total_trades=0`。
+3. 该结果不得作为正式首轮结果交付，回测主线仍保持 60%。
+
+### 根因判断
+
+1. `fc_224_strategy.py` 当前只完成因子、过滤条件与信号判定解析。
+2. 当前模板 `run()` 尚未进入 `wait_update() + TargetPosTask` 的真实执行循环。
+3. 因此本轮零成交结果应被归类为**“策略执行逻辑未闭环”**，而不是“策略本身无交易”。
+
+### 任务归属与边界
+
+- 继续归属 TASK-0003，不另开新任务。
+- 范围继续严格限制在 `services/backtest/` 单服务目录内，不扩大到 API、README、contracts、dashboard、Docker、其他服务或运行环境治理。
+
+### 批次 R3 白名单与 Token
+
+- Token 类型：**P1 Token（回测 Agent）**
+- 白名单文件：
+	1. `services/backtest/src/backtest/fc_224_strategy.py`
+	2. `services/backtest/src/backtest/runner.py`
+	3. `services/backtest/tests/test_fc_224_execution_trace.py`
+
+### 强制约束
+
+1. 必须继续坚持在线 TqBacktest 路线，保持 `TqApi + TqSim + TqBacktest + TqAuth` 主路径不变。
+2. 不得引入本地数据采集路径，不得新增 CSV / Parquet / Tushare / 跨服务取数回放路径。
+3. 必须在策略模板内进入 `wait_update() + TargetPosTask` 的真实执行循环。
+4. 若 FC-224 首轮真实回测再次出现 `completed` 且 `total_trades=0`，必须明确判定为**“策略执行逻辑未闭环”**，不能作为正式首轮结果交付。
+5. 当前不预授权第 4 个服务文件；若回测 Agent 证明必须新增 `strategy_base.py`，需重新提交补充预审。
+
+### 预审结论
+
+1. **TASK-0003 继续沿用，不另开任务。**
+2. **R3 已完成最小治理预审与白名单冻结。**
+3. **当前可以直接进入 R3 的 P1 Token 签发准备。**
