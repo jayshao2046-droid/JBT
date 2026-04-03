@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0003
 - 审核角色：项目架构师
-- 审核阶段：Phase1 正式建档 + 批次 A 终审 + P0 契约迁移终审 + 批次 B 终审 + 首轮真实回测 Phase2 预审治理补充 + 批次 R1 终审
+- 审核阶段：Phase1 正式建档 + 批次 A 终审 + P0 契约迁移终审 + 批次 B 终审 + 首轮真实回测 Phase2 预审治理补充 + 批次 R1 终审 + 批次 R2 终审
 - 审核时间：2026-04-03
-- 审核结论：通过（建档合规；backtest 四份正式契约与 drafts 一致；批次 B 五个白名单文件核验通过；D-BT-01~05 未违反；未提前进入看板、Docker、远端交付；当前已达到“只差策略输入即可执行一次正式回测”的检查点；两枚 Token 已完成 lockback，当前状态均为 `locked`；首轮真实回测区间与首次总金额已完成冻结；批次 R1 四个白名单文件核验通过，未把 `tqsdk` 扩展成额外采集依赖，未新增不必要依赖，保持 R2 基于 `TqBacktest` 的接入方向，当前可立即 lockback）
+- 审核结论：通过（建档合规；backtest 四份正式契约与 drafts 一致；批次 B 五个白名单文件核验通过；D-BT-01~05 未违反；未提前进入看板、Docker、远端交付；当前已达到“只差策略输入即可执行一次正式回测”的检查点；两枚 Token 已完成 lockback，当前状态均为 `locked`；首轮真实回测区间与首次总金额已完成冻结；批次 R1 四个白名单文件核验通过，未把 `tqsdk` 扩展成额外采集依赖，未新增不必要依赖，保持 R2 基于 `TqBacktest` 的接入方向；批次 R2 服务代码实际写入仅限四个白名单文件，仍保持 `TqApi + TqSim + TqBacktest + TqAuth` 在线回测主路径，未引入本地数据采集路径或额外回测包，手续费、滑点、总金额已纳入最小结果留痕；当前可立即执行 R2 lockback，剩余阻塞仅为运行环境的 TQSDK 凭证与 `tqsdk` 安装）
 
 ---
 
@@ -298,3 +298,37 @@ P0 正式契约：2026-04-03 19:01:15 +0800 已锁回，当前状态为 `locked`
 - 结论：**TASK-0003 批次 R1 可以立即执行 lockback。**
 - 治理留痕说明：当前可读 Git 账本尚未同步 R1 的 `token_id` 摘要原文；Atlas 执行 lockback 时需依据终端原文补写 `token_id` 摘要与 lockback 结果，本次终审不编造该值。
 - R2 结论：**可以进入 R2 Token 申请准备，但必须以“R1 先 lockback、R2 再单独申请独立 P1 Token”为前提，不得合批复用白名单。**
+
+## 批次 R2 终审结论（2026-04-03）
+
+### Token 与范围核验
+
+- 批次 R2 P1 Token 已完成 validate，token_id 摘要：`tok-a909487e-603f-46d1-ab97-2328346ce1de`。
+- 以 `git diff --name-only` 与 `git status --short --untracked-files=all` 复核后，服务代码实际写入仅落在四个白名单文件：`services/backtest/src/backtest/session.py`、`services/backtest/src/backtest/runner.py`、`services/backtest/src/backtest/result_builder.py`、`services/backtest/tests/test_fc_224_execution_trace.py`。
+- 额外发生的 P-LOG 写入仅有 `docs/handoffs/TASK-0003-回测批次R2-真实回测执行交接.md` 与 `docs/prompts/agents/回测提示词.md`，均属于回测 Agent 自有 handoff / 私有 prompt，不构成 P1 越权。
+- 未触碰 `strategy_base.py`、`factor_registry.py`、`fc_224_strategy.py`、`services/backtest/src/api/**`、`services/backtest/README.md`、`shared/contracts/**`、`services/backtest/.env.example`、dashboard、Docker、远端交付或任何依赖声明文件。✅
+
+### 在线 TqBacktest 路线与依赖复核
+
+- `session.py` 仍通过 `TqAuth(...)`、`TqSim(init_balance=...)`、`TqBacktest(start_dt=..., end_dt=...)` 与 `TqApi(sim_account, backtest=backtest, auth=auth, disable_print=True)` 建立在线回测会话，保持官方主路径。✅
+- `TqBacktest` 仍由 `from tqsdk import TqApi, TqAuth, TqBacktest, TqSim` 提供，属于 `tqsdk` 包本身；本批未新增任何其他回测包，也未改动 requirements、pyproject 或安装脚本。✅
+- `runner.py` 本批只读取 `TQSDK_STRATEGY_YAML_DIR` 下的正式 YAML，并冻结首轮真实回测输入；未引入本地历史行情采集、CSV/Parquet 行情回放、Tushare/采集服务路径或跨服务数据读取。✅
+- 结论：当前实现保持“所有回测都走在线执行，不走本地采集数据”的方向，未偏离用户新增约束。✅
+
+### 结果留痕与冻结输入复核
+
+- `runner.py` 已冻结并校验首轮真实回测的策略名、标的、频率、起止日期、总金额、手续费与滑点；不匹配时会直接失败并保留失败原因。✅
+- `result_builder.py` 已把 `strategy_name`、`symbol`、`timeframe`、`start_date`、`end_date`、`initial_capital`、`transaction_costs`、`status`、`report_summary`、`failure_reason` 固化到 `report.json`；completed / failed 路径均保留手续费、滑点与总金额。✅
+- `test_fc_224_execution_trace.py` 已覆盖两条 R2 链路：其一验证手续费/滑点成功接入并落盘，其二验证缺凭证时仍生成失败留痕并保留冻结输入与交易成本。✅
+
+### 自校验复核
+
+- `python3 -m py_compile services/backtest/src/backtest/session.py services/backtest/src/backtest/runner.py services/backtest/src/backtest/result_builder.py services/backtest/tests/test_fc_224_execution_trace.py`：通过。✅
+- `python3 -m pytest services/backtest/tests/test_fc_224_strategy_loading.py services/backtest/tests/test_fc_224_execution_trace.py -q`：结果 `5 passed`。✅
+- 真实运行探测已证明当前阻塞顺序为：先缺 `TQSDK_AUTH_USERNAME` / `TQSDK_AUTH_PASSWORD`，再是当前 shell 的 `python3` 未安装 `tqsdk`；未发现本批白名单内新的代码级失败模式。✅
+
+### Lockback 建议
+
+- 架构终审通过。
+- 结论：**TASK-0003 批次 R2 可以立即执行 lockback。**
+- 当前剩余问题判断：**未发现本批白名单内新的代码级阻塞；当前仅剩运行环境问题。** 具体包括目标运行环境需提供 `TQSDK_AUTH_USERNAME` / `TQSDK_AUTH_PASSWORD`，以及当前 shell / 目标环境需安装 `tqsdk`。`TqBacktest` 已包含在 `tqsdk` 内，不需要额外安装其他回测包。

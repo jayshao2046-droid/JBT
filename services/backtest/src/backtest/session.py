@@ -92,16 +92,13 @@ class TqSdkSessionManager:
     def create_session(self, config: BacktestSessionConfig) -> TqSdkSession:
         self._ensure_factories()
         auth = self._auth_factory(config.auth_username, config.auth_password)
-        sim_account = self._sim_factory(
-            init_balance=config.initial_capital,
-            account_id=config.job_id,
-        )
+        sim_account = self._sim_factory(init_balance=config.initial_capital)
         backtest = self._backtest_factory(
             start_dt=config.start_date,
             end_dt=config.end_date,
         )
         api = self._api_factory(
-            account=sim_account,
+            sim_account,
             backtest=backtest,
             auth=auth,
             disable_print=True,
@@ -126,6 +123,33 @@ class TqSdkSessionManager:
         close = getattr(session.api, "close", None)
         if callable(close):
             close()
+
+    def apply_transaction_costs(
+        self,
+        session: TqSdkSession,
+        *,
+        symbol: str,
+        transaction_costs: Mapping[str, float],
+    ) -> list[str]:
+        notes: list[str] = []
+        slippage = float(transaction_costs["slippage_per_unit"])
+        commission = float(transaction_costs["commission_per_lot_round_turn"])
+
+        set_slippage = getattr(session.account, "set_slippage", None)
+        if callable(set_slippage):
+            set_slippage(symbol, slippage)
+            notes.append(f"transaction_cost_slippage_applied={slippage}")
+        else:
+            notes.append("transaction_cost_slippage_applied=false")
+
+        set_commission = getattr(session.account, "set_commission", None)
+        if callable(set_commission):
+            set_commission(symbol, commission)
+            notes.append(f"transaction_cost_commission_applied={commission}")
+        else:
+            notes.append("transaction_cost_commission_applied=false")
+
+        return notes
 
     def _ensure_factories(self) -> None:
         if (

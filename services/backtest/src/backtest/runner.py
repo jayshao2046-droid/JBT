@@ -39,6 +39,30 @@ class BacktestExecutionError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class FrozenFormalBacktestSpec:
+    strategy_template_id: str
+    symbol: str
+    timeframe_minutes: int
+    start_date: date
+    end_date: date
+    initial_capital: float
+    slippage_per_unit: float
+    commission_per_lot_round_turn: float
+
+
+FIRST_REAL_FC_224_SPEC = FrozenFormalBacktestSpec(
+    strategy_template_id="FC-224_v3_intraday_trend_cf605_5m",
+    symbol="CZCE.CF605",
+    timeframe_minutes=5,
+    start_date=date(2024, 4, 3),
+    end_date=date(2026, 4, 3),
+    initial_capital=1_000_000.0,
+    slippage_per_unit=1.0,
+    commission_per_lot_round_turn=8.0,
+)
+
+
+@dataclass(frozen=True)
 class BacktestJobInput:
     job_id: str
     strategy_template_id: str
@@ -71,6 +95,25 @@ class BacktestJobInput:
             metadata={str(key): value for key, value in metadata.items()},
         )
 
+    @classmethod
+    def build_fc_224_formal_run(
+        cls,
+        *,
+        job_id: str,
+        strategy_yaml_filename: str,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ) -> "BacktestJobInput":
+        return cls(
+            job_id=job_id,
+            strategy_template_id=FIRST_REAL_FC_224_SPEC.strategy_template_id,
+            strategy_yaml_filename=strategy_yaml_filename,
+            symbol=FIRST_REAL_FC_224_SPEC.symbol,
+            start_date=FIRST_REAL_FC_224_SPEC.start_date,
+            end_date=FIRST_REAL_FC_224_SPEC.end_date,
+            initial_capital=FIRST_REAL_FC_224_SPEC.initial_capital,
+            metadata={str(key): value for key, value in (metadata or {}).items()},
+        )
+
 
 @dataclass
 class BacktestRunRecord:
@@ -94,7 +137,9 @@ class OnlineBacktestRunner:
     ) -> None:
         self._settings = settings or get_settings()
         self._session_manager = session_manager or TqSdkSessionManager(settings=self._settings)
-        self._result_builder = result_builder or BacktestResultBuilder()
+        self._result_builder = result_builder or BacktestResultBuilder(
+            result_root=self._settings.backtest_result_dir,
+        )
         self._template_registry = template_registry or strategy_registry
         self._records: Dict[str, BacktestRunRecord] = {}
         self._tasks: Dict[str, asyncio.Task[BacktestRunRecord]] = {}
@@ -123,6 +168,7 @@ class OnlineBacktestRunner:
     def run_job_sync(self, job_input: Union[BacktestJobInput, Mapping[str, Any]]) -> BacktestReport:
         job = self._normalize_job_input(job_input)
         snapshot = self._build_snapshot(job)
+        strategy_definition: Optional[StrategyDefinition] = None
 
         try:
             strategy_yaml_path = self._resolve_strategy_yaml_path(job)
@@ -130,9 +176,21 @@ class OnlineBacktestRunner:
                 strategy_yaml_path,
                 expected_template_id=job.strategy_template_id,
             )
+            self._validate_frozen_first_real_backtest(job, strategy_definition)
+            transaction_costs = self._read_transaction_costs(strategy_definition)
             template_cls = self._template_registry.resolve(strategy_definition.template_id)
             session_config = self._session_manager.build_config_from_job(job)
             with self._session_manager.open_session(session_config) as session:
+                apply_transaction_costs = getattr(self._session_manager, "apply_transaction_costs", None)
+                transaction_cost_notes = []
+                if callable(apply_transaction_costs):
+                    transaction_cost_notes = list(
+                        apply_transaction_costs(
+                            session,
+                            symbol=job.symbol,
+                            transaction_costs=transaction_costs,
+                        )
+                    )
                 runtime_context = StrategyRuntimeContext(
                     job_id=job.job_id,
                     symbol=job.symbol,
@@ -144,16 +202,27 @@ class OnlineBacktestRunner:
                 )
                 strategy = template_cls(runtime_context)
                 artifacts = strategy.run()
-            return self._result_builder.build(snapshot, strategy_definition, artifacts)
+                artifacts.notes.extend(transaction_cost_notes)
+            report = self._result_builder.build(snapshot, strategy_definition, artifacts)
         except StrategyInputRequiredError as exc:
-            return self._result_builder.build_strategy_input_required(snapshot, reason=str(exc))
+            report = self._result_builder.build_strategy_input_required(
+                snapshot,
+                reason=str(exc),
+                strategy_definition=strategy_definition,
+            )
         except (BacktestSessionConfigError, StrategyConfigError, ValueError) as exc:
-            return self._result_builder.build_failed(snapshot, reason=str(exc))
+            report = self._result_builder.build_failed(
+                snapshot,
+                reason=str(exc),
+                strategy_definition=strategy_definition,
+            )
         except Exception as exc:
-            return self._result_builder.build_failed(
+            report = self._result_builder.build_failed(
                 snapshot,
                 reason=f"Backtest execution failed: {exc}",
+                strategy_definition=strategy_definition,
             )
+        return self._finalize_report(snapshot, strategy_definition, report)
 
     async def _execute(self, record: BacktestRunRecord) -> BacktestRunRecord:
         async with self._semaphore:
@@ -184,6 +253,81 @@ class OnlineBacktestRunner:
             end_date=job.end_date,
             initial_capital=job.initial_capital,
         )
+
+    def _finalize_report(
+        self,
+        snapshot: BacktestJobSnapshot,
+        strategy_definition: Optional[StrategyDefinition],
+        report: BacktestReport,
+    ) -> BacktestReport:
+        _ = snapshot
+        _ = strategy_definition
+        self._result_builder.write_report(report)
+        return report
+
+    def _validate_frozen_first_real_backtest(
+        self,
+        job: BacktestJobInput,
+        strategy_definition: StrategyDefinition,
+    ) -> None:
+        if strategy_definition.template_id != FIRST_REAL_FC_224_SPEC.strategy_template_id:
+            return
+
+        mismatches = []
+        if job.symbol != FIRST_REAL_FC_224_SPEC.symbol:
+            mismatches.append(f"symbol must be {FIRST_REAL_FC_224_SPEC.symbol}")
+        if job.start_date != FIRST_REAL_FC_224_SPEC.start_date:
+            mismatches.append(
+                f"start_date must be {FIRST_REAL_FC_224_SPEC.start_date.isoformat()}"
+            )
+        if job.end_date != FIRST_REAL_FC_224_SPEC.end_date:
+            mismatches.append(
+                f"end_date must be {FIRST_REAL_FC_224_SPEC.end_date.isoformat()}"
+            )
+        if not _is_close(job.initial_capital, FIRST_REAL_FC_224_SPEC.initial_capital):
+            mismatches.append(
+                f"initial_capital must be {FIRST_REAL_FC_224_SPEC.initial_capital:.0f}"
+            )
+        if strategy_definition.timeframe_minutes != FIRST_REAL_FC_224_SPEC.timeframe_minutes:
+            mismatches.append(
+                f"timeframe_minutes must be {FIRST_REAL_FC_224_SPEC.timeframe_minutes}"
+            )
+
+        transaction_costs = self._read_transaction_costs(strategy_definition)
+        if not _is_close(
+            transaction_costs["slippage_per_unit"],
+            FIRST_REAL_FC_224_SPEC.slippage_per_unit,
+        ):
+            mismatches.append(
+                "transaction_costs.slippage_per_unit must be 1 for the first formal FC-224 backtest"
+            )
+        if not _is_close(
+            transaction_costs["commission_per_lot_round_turn"],
+            FIRST_REAL_FC_224_SPEC.commission_per_lot_round_turn,
+        ):
+            mismatches.append(
+                "transaction_costs.commission_per_lot_round_turn must be 8 for the first formal FC-224 backtest"
+            )
+
+        if mismatches:
+            raise StrategyConfigError("首轮真实回测冻结输入不匹配: " + "; ".join(mismatches))
+
+    def _read_transaction_costs(self, strategy_definition: StrategyDefinition) -> Dict[str, float]:
+        transaction_costs = strategy_definition.transaction_costs
+        if not transaction_costs:
+            raise StrategyConfigError(
+                "strategy YAML must contain transaction_costs for formal backtest execution"
+            )
+        return {
+            "slippage_per_unit": _coerce_non_negative_float(
+                transaction_costs.get("slippage_per_unit"),
+                label="transaction_costs.slippage_per_unit",
+            ),
+            "commission_per_lot_round_turn": _coerce_non_negative_float(
+                transaction_costs.get("commission_per_lot_round_turn"),
+                label="transaction_costs.commission_per_lot_round_turn",
+            ),
+        }
 
     def _resolve_strategy_yaml_path(self, job: BacktestJobInput) -> Path:
         strategy_root = self._settings.tqsdk_strategy_yaml_dir.expanduser().resolve()
@@ -217,3 +361,19 @@ def _as_non_empty_string(value: Any, *, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{label} must be a non-empty string")
     return value.strip()
+
+
+def _coerce_non_negative_float(value: Any, *, label: str) -> float:
+    if isinstance(value, bool):
+        raise StrategyConfigError(f"{label} must be numeric")
+    try:
+        coerced = float(value)
+    except (TypeError, ValueError) as exc:
+        raise StrategyConfigError(f"{label} must be numeric") from exc
+    if coerced < 0:
+        raise StrategyConfigError(f"{label} must be greater than or equal to zero")
+    return coerced
+
+
+def _is_close(left: float, right: float, *, tolerance: float = 1e-9) -> bool:
+    return abs(left - right) <= tolerance

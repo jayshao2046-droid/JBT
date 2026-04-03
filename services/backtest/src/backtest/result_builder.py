@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from math import inf, sqrt
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
@@ -68,6 +69,12 @@ class BacktestReport:
     symbol: str
     strategy_template_id: str
     strategy_yaml_filename: str
+    strategy_name: str
+    timeframe: str
+    start_date: date
+    end_date: date
+    initial_capital: float
+    transaction_costs: Dict[str, Any]
     status: BacktestReportStatus
     final_equity: float
     max_drawdown: float
@@ -79,10 +86,13 @@ class BacktestReport:
     risk_summary: RiskSummary
     equity_curve: List[EquityCurvePoint]
     notes: List[str]
+    report_summary: str
     failure_reason: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         payload = asdict(self)
+        payload["start_date"] = self.start_date.isoformat()
+        payload["end_date"] = self.end_date.isoformat()
         payload["completed_at"] = self.completed_at.isoformat()
         payload["equity_curve"] = [
             {
@@ -112,10 +122,10 @@ class BacktestResultBuilder:
     def __init__(
         self,
         *,
-        result_root: Optional[PurePosixPath] = None,
+        result_root: Optional[Path] = None,
         risk_free_rate: float = 0.03,
     ) -> None:
-        self._result_root = result_root or PurePosixPath("/runtime/results")
+        self._result_root = Path(result_root or "/runtime/results")
         self._risk_free_rate = risk_free_rate
 
     def build(
@@ -165,6 +175,19 @@ class BacktestResultBuilder:
             failure_reason=reason,
         )
 
+    def write_report(self, report: BacktestReport) -> bool:
+        try:
+            report_dir = self._result_root / report.job_id
+            report_dir.mkdir(parents=True, exist_ok=True)
+            report_file = report_dir / "report.json"
+            report_file.write_text(
+                json.dumps(report.to_dict(), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except OSError:
+            return False
+        return True
+
     def _build_report(
         self,
         *,
@@ -196,6 +219,9 @@ class BacktestResultBuilder:
             peak_position=max(abs(point.position) for point in equity_curve),
         )
         relative_dir = PurePosixPath(job.job_id)
+        strategy_name = self._resolve_strategy_name(job, strategy_definition)
+        timeframe = self._resolve_timeframe(strategy_definition)
+        transaction_costs = self._build_transaction_costs(strategy_definition)
 
         return BacktestReport(
             result_id=str(uuid4()),
@@ -203,6 +229,12 @@ class BacktestResultBuilder:
             symbol=job.symbol,
             strategy_template_id=job.strategy_template_id,
             strategy_yaml_filename=job.strategy_yaml_filename,
+            strategy_name=strategy_name,
+            timeframe=timeframe,
+            start_date=job.start_date,
+            end_date=job.end_date,
+            initial_capital=job.initial_capital,
+            transaction_costs=transaction_costs,
             status=status,
             final_equity=equity_curve[-1].equity,
             max_drawdown=metrics.max_drawdown,
@@ -214,6 +246,17 @@ class BacktestResultBuilder:
             risk_summary=risk_summary,
             equity_curve=equity_curve,
             notes=list(artifacts.notes),
+            report_summary=self._build_report_summary(
+                job=job,
+                strategy_name=strategy_name,
+                timeframe=timeframe,
+                transaction_costs=transaction_costs,
+                status=status,
+                final_equity=equity_curve[-1].equity,
+                total_trades=metrics.total_trades,
+                max_drawdown=metrics.max_drawdown,
+                failure_reason=failure_reason,
+            ),
             failure_reason=failure_reason,
         )
 
@@ -320,3 +363,97 @@ class BacktestResultBuilder:
             max_losses = max(max_losses, current_losses)
 
         return max_wins, max_losses
+
+    def _resolve_strategy_name(
+        self,
+        job: BacktestJobSnapshot,
+        strategy_definition: Optional[StrategyDefinition],
+    ) -> str:
+        if strategy_definition is None:
+            return job.strategy_template_id
+        strategy_name = strategy_definition.metadata.get("name")
+        if isinstance(strategy_name, str) and strategy_name.strip():
+            return strategy_name.strip()
+        return strategy_definition.template_id
+
+    def _resolve_timeframe(self, strategy_definition: Optional[StrategyDefinition]) -> str:
+        if strategy_definition is None or strategy_definition.timeframe_minutes is None:
+            return "unknown"
+        return f"{strategy_definition.timeframe_minutes}m"
+
+    def _build_transaction_costs(
+        self,
+        strategy_definition: Optional[StrategyDefinition],
+    ) -> Dict[str, Any]:
+        if strategy_definition is None:
+            return {
+                "slippage_per_unit": None,
+                "commission_per_lot_round_turn": None,
+            }
+
+        raw_costs = strategy_definition.transaction_costs
+        return {
+            "slippage_per_unit": _coerce_optional_number(raw_costs.get("slippage_per_unit")),
+            "commission_per_lot_round_turn": _coerce_optional_number(
+                raw_costs.get("commission_per_lot_round_turn")
+            ),
+        }
+
+    def _build_report_summary(
+        self,
+        *,
+        job: BacktestJobSnapshot,
+        strategy_name: str,
+        timeframe: str,
+        transaction_costs: Dict[str, Any],
+        status: BacktestReportStatus,
+        final_equity: float,
+        total_trades: int,
+        max_drawdown: float,
+        failure_reason: Optional[str],
+    ) -> str:
+        parts = [
+            f"strategy={strategy_name}",
+            f"symbol={job.symbol}",
+            f"timeframe={timeframe}",
+            f"window={job.start_date.isoformat()}~{job.end_date.isoformat()}",
+            f"initial_capital={job.initial_capital:.2f}",
+            (
+                "slippage_per_unit="
+                f"{_format_optional_number(transaction_costs.get('slippage_per_unit'))}"
+            ),
+            (
+                "commission_per_lot_round_turn="
+                f"{_format_optional_number(transaction_costs.get('commission_per_lot_round_turn'))}"
+            ),
+            f"status={status}",
+        ]
+        if failure_reason:
+            parts.append(f"failure_reason={failure_reason}")
+        else:
+            parts.extend(
+                [
+                    f"final_equity={final_equity:.2f}",
+                    f"total_trades={total_trades}",
+                    f"max_drawdown={max_drawdown:.6f}",
+                ]
+            )
+        return "; ".join(parts)
+
+
+def _coerce_optional_number(value: Any) -> Optional[float]:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_optional_number(value: Any) -> str:
+    if value is None:
+        return "unknown"
+    try:
+        return f"{float(value):g}"
+    except (TypeError, ValueError):
+        return "unknown"
