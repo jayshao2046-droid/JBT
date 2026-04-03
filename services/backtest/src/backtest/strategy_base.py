@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Type, TypeVar
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Type, TypeVar
 
 import yaml
 
@@ -71,6 +71,54 @@ def _coerce_bool(value: Any, *, label: str) -> bool:
     raise StrategyConfigError(f"{label} must be a boolean")
 
 
+def _ensure_string_list(value: Any, *, label: str) -> List[str]:
+    if value is None:
+        return []
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
+        raise StrategyConfigError(f"{label} must be a list of strings")
+
+    items: List[str] = []
+    for index, item in enumerate(value):
+        items.append(_as_non_empty_string(item, label=f"{label}[{index}]"))
+    return items
+
+
+@dataclass(frozen=True)
+class FactorConfig:
+    factor_name: str
+    weight: float
+    params: Dict[str, Any]
+
+
+def _load_factor_configs(value: Any) -> List[FactorConfig]:
+    if value is None:
+        return []
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
+        raise StrategyConfigError("factors must be a list")
+
+    configs: List[FactorConfig] = []
+    for index, item in enumerate(value):
+        factor_mapping = _ensure_mapping(item, label=f"factors[{index}]")
+        factor_name = _as_non_empty_string(
+            _first_value(factor_mapping, "factor_name", "name", "id"),
+            label=f"factors[{index}].factor_name",
+        )
+        configs.append(
+            FactorConfig(
+                factor_name=factor_name,
+                weight=_coerce_float(
+                    factor_mapping.get("weight", 1.0),
+                    label=f"factors[{index}].weight",
+                ),
+                params=_ensure_mapping(
+                    factor_mapping.get("params"),
+                    label=f"factors[{index}].params",
+                ),
+            )
+        )
+    return configs
+
+
 @dataclass(frozen=True)
 class IntegratedRiskModel:
     raw: Dict[str, Any]
@@ -123,6 +171,12 @@ class StrategyDefinition:
     risk: IntegratedRiskModel
     metadata: Dict[str, Any]
     source_path: Path
+    factors: List[FactorConfig] = field(default_factory=list)
+    market_filter: Dict[str, Any] = field(default_factory=dict)
+    signal: Dict[str, Any] = field(default_factory=dict)
+    transaction_costs: Dict[str, Any] = field(default_factory=dict)
+    symbols: List[str] = field(default_factory=list)
+    timeframe_minutes: Optional[int] = None
 
     @classmethod
     def load(
@@ -138,9 +192,9 @@ class StrategyDefinition:
         payload = _ensure_mapping(raw_payload, label="root")
         strategy_section = _ensure_mapping(payload.get("strategy"), label="strategy")
 
-        template_id = _first_value(payload, "strategy_template_id", "template_id")
+        template_id = _first_value(payload, "strategy_template_id", "template_id", "name")
         if template_id is None:
-            template_id = _first_value(strategy_section, "template_id", "id")
+            template_id = _first_value(strategy_section, "template_id", "id", "name")
         template_id = _as_non_empty_string(template_id, label="template_id")
 
         if expected_template_id and template_id != expected_template_id:
@@ -153,6 +207,13 @@ class StrategyDefinition:
             or _first_value(strategy_section, "params", "parameters"),
             label="params",
         )
+        for key in ("position_fraction", "position_adjustment"):
+            extra_value = _first_value(payload, key)
+            if extra_value is None:
+                extra_value = _first_value(strategy_section, key)
+            if extra_value is not None and key not in params:
+                params[key] = extra_value
+
         risk_mapping = _ensure_mapping(
             _first_value(payload, "risk", "risk_config", "risk_controls")
             or _first_value(strategy_section, "risk", "risk_config", "risk_controls"),
@@ -165,6 +226,72 @@ class StrategyDefinition:
             _first_value(payload, "metadata") or _first_value(strategy_section, "metadata"),
             label="metadata",
         )
+        strategy_name = _first_value(payload, "name")
+        if strategy_name is None:
+            strategy_name = _first_value(strategy_section, "name")
+        if strategy_name is not None and "name" not in metadata:
+            metadata["name"] = _as_non_empty_string(strategy_name, label="name")
+
+        for key in ("description", "version", "category"):
+            value = _first_value(payload, key)
+            if value is None:
+                value = _first_value(strategy_section, key)
+            if value is not None and key not in metadata:
+                metadata[key] = value
+
+        tags = _first_value(payload, "tags")
+        if tags is None:
+            tags = _first_value(strategy_section, "tags")
+        if tags is not None and "tags" not in metadata:
+            metadata["tags"] = _ensure_string_list(tags, label="tags")
+
+        factors_payload = _first_value(payload, "factors")
+        if factors_payload is None:
+            factors_payload = _first_value(strategy_section, "factors")
+        factors = _load_factor_configs(factors_payload)
+
+        market_filter = _ensure_mapping(
+            _first_value(payload, "market_filter") or _first_value(strategy_section, "market_filter"),
+            label="market_filter",
+        )
+        if "enabled" in market_filter:
+            market_filter["enabled"] = _coerce_bool(
+                market_filter["enabled"],
+                label="market_filter.enabled",
+            )
+        if "conditions" in market_filter:
+            market_filter["conditions"] = _ensure_string_list(
+                market_filter["conditions"],
+                label="market_filter.conditions",
+            )
+
+        signal = _ensure_mapping(
+            _first_value(payload, "signal") or _first_value(strategy_section, "signal"),
+            label="signal",
+        )
+        for key in ("long_condition", "short_condition"):
+            if key in signal:
+                signal[key] = _as_non_empty_string(signal[key], label=f"signal.{key}")
+        if "confirm_bars" in signal:
+            signal["confirm_bars"] = _coerce_int(signal["confirm_bars"], label="signal.confirm_bars")
+
+        transaction_costs = _ensure_mapping(
+            _first_value(payload, "transaction_costs")
+            or _first_value(strategy_section, "transaction_costs"),
+            label="transaction_costs",
+        )
+
+        symbols_payload = _first_value(payload, "symbols")
+        if symbols_payload is None:
+            symbols_payload = _first_value(strategy_section, "symbols")
+        symbols = _ensure_string_list(symbols_payload, label="symbols")
+
+        timeframe_raw = _first_value(payload, "timeframe_minutes")
+        if timeframe_raw is None:
+            timeframe_raw = _first_value(strategy_section, "timeframe_minutes")
+        timeframe_minutes = None
+        if timeframe_raw is not None:
+            timeframe_minutes = _coerce_int(timeframe_raw, label="timeframe_minutes")
 
         return cls(
             template_id=template_id,
@@ -172,6 +299,12 @@ class StrategyDefinition:
             risk=IntegratedRiskModel(raw=risk_mapping),
             metadata=metadata,
             source_path=yaml_path,
+            factors=factors,
+            market_filter=market_filter,
+            signal=signal,
+            transaction_costs=transaction_costs,
+            symbols=symbols,
+            timeframe_minutes=timeframe_minutes,
         )
 
 
@@ -235,6 +368,30 @@ class FixedTemplateStrategy(ABC):
     @property
     def metadata(self) -> Dict[str, Any]:
         return self.strategy_config.metadata
+
+    @property
+    def factor_configs(self) -> List[FactorConfig]:
+        return list(self.strategy_config.factors)
+
+    @property
+    def market_filter_config(self) -> Dict[str, Any]:
+        return dict(self.strategy_config.market_filter)
+
+    @property
+    def signal_config(self) -> Dict[str, Any]:
+        return dict(self.strategy_config.signal)
+
+    @property
+    def transaction_costs(self) -> Dict[str, Any]:
+        return dict(self.strategy_config.transaction_costs)
+
+    @property
+    def symbols(self) -> List[str]:
+        return list(self.strategy_config.symbols)
+
+    @property
+    def timeframe_minutes(self) -> Optional[int]:
+        return self.strategy_config.timeframe_minutes
 
     def build_target_pos_task(
         self,
@@ -381,6 +538,7 @@ class StrategyTemplateRegistry:
         return template_cls
 
     def resolve(self, template_id: str) -> Type[FixedTemplateStrategy]:
+        _load_builtin_templates()
         template = self._templates.get(template_id)
         if template is None:
             raise StrategyInputRequiredError(
@@ -389,6 +547,7 @@ class StrategyTemplateRegistry:
         return template
 
     def list_template_ids(self) -> List[str]:
+        _load_builtin_templates()
         return sorted(self._templates)
 
 
@@ -399,3 +558,18 @@ def register_strategy_template(
     template_cls: Type[StrategyTemplateType],
 ) -> Type[StrategyTemplateType]:
     return strategy_registry.register(template_cls)
+
+
+def _load_builtin_templates() -> None:
+    try:
+        if __package__:
+            from . import fc_224_strategy as builtin_strategy
+        else:
+            import fc_224_strategy as builtin_strategy
+    except ImportError:
+        return
+
+    _ = builtin_strategy
+
+
+_load_builtin_templates()

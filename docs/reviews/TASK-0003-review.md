@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0003
 - 审核角色：项目架构师
-- 审核阶段：Phase1 正式建档 + 批次 A 终审 + P0 契约迁移终审 + 批次 B 终审 + 首轮真实回测 Phase2 预审治理补充
+- 审核阶段：Phase1 正式建档 + 批次 A 终审 + P0 契约迁移终审 + 批次 B 终审 + 首轮真实回测 Phase2 预审治理补充 + 批次 R1 终审
 - 审核时间：2026-04-03
-- 审核结论：通过（建档合规；backtest 四份正式契约与 drafts 一致；批次 B 五个白名单文件核验通过；D-BT-01~05 未违反；未提前进入看板、Docker、远端交付；当前已达到“只差策略输入即可执行一次正式回测”的检查点；两枚 Token 已完成 lockback，当前状态均为 `locked`；首轮真实回测区间与首次总金额已完成冻结）
+- 审核结论：通过（建档合规；backtest 四份正式契约与 drafts 一致；批次 B 五个白名单文件核验通过；D-BT-01~05 未违反；未提前进入看板、Docker、远端交付；当前已达到“只差策略输入即可执行一次正式回测”的检查点；两枚 Token 已完成 lockback，当前状态均为 `locked`；首轮真实回测区间与首次总金额已完成冻结；批次 R1 四个白名单文件核验通过，未把 `tqsdk` 扩展成额外采集依赖，未新增不必要依赖，保持 R2 基于 `TqBacktest` 的接入方向，当前可立即 lockback）
 
 ---
 
@@ -264,3 +264,37 @@ P0 正式契约：2026-04-03 19:01:15 +0800 已锁回，当前状态为 `locked`
 - **预审通过，可进入 Token 申请准备态。**
 - 当前建议路径：可直接进入 R1 P1 Token 签发，再在 R1 自校验与 handoff 通过后申请 R2 P1。
 - 在 Jay.S 看过首轮真实回测结果前，不启动看板、Docker、远端交付，也不提前展开 P0 契约补录。
+
+## 批次 R1 终审结论（2026-04-03）
+
+### 范围与白名单核验
+
+- 服务代码实际写入仅落在四个白名单文件：`services/backtest/src/backtest/strategy_base.py`、`services/backtest/src/backtest/factor_registry.py`、`services/backtest/src/backtest/fc_224_strategy.py`、`services/backtest/tests/test_fc_224_strategy_loading.py`。
+- 额外发生的 P-LOG 写入仅有 `docs/handoffs/TASK-0003-回测批次R1-因子模板解析交接.md` 与 `docs/prompts/agents/回测提示词.md`，均属于回测 Agent 自有 handoff / 私有 prompt，不构成 P1 越权。
+- 未触碰 `session.py`、`runner.py`、`result_builder.py`、`services/backtest/src/api/**`、`services/backtest/README.md`、`shared/contracts/**`、dashboard、Docker、远端交付或其他白名单外服务文件。✅
+
+### 最小实现边界复核
+
+- `strategy_base.py` 仅扩展最小 YAML 读取能力：接受 `name`、`factors`、`market_filter`、`signal`、`transaction_costs`、`symbols` 与 `timeframe_minutes`，同时保留既有 `template_id / params / risk` 兼容路径；未引入表达式求值器或通用 DSL。✅
+- `factor_registry.py` 仅注册 5 个最小必需因子：MACD、RSI、VolumeRatio、ATR、ADX；未实现额外因子集合、数据采集器或策略编排层。✅
+- `fc_224_strategy.py` 将模板、标的、周期、`market_filter` 条件与 `signal` 判定冻结在 FC-224 当前正式输入范围内，只做最小装配与判定；未扩大成泛化规则引擎。✅
+
+### 依赖与 TqBacktest 方向复核
+
+- 本批未修改 requirements、pyproject、安装脚本或环境变量契约；新增代码仅依赖标准库与既有 backtest 模块，未引入 `pandas`、`numpy`、`ta-lib` 等新三方依赖。✅
+- 官方口径复核通过：`TqBacktest` 属于 `tqsdk` 包，当前正式主线仍由批次 B 的 `session.py` 通过 `from tqsdk import TqApi, TqAuth, TqBacktest, TqSim` 建立在线回测会话。✅
+- R1 仅在模板 / 因子层消费既有 `session.api.get_kline_serial()` 与运行时抽象，未把 `tqsdk` 误拆成额外采集栈，也未偏离后续应继续沿用 `TqApi(TqSim(), backtest=TqBacktest(...), auth=TqAuth(...))` 的接入方向。✅
+
+### 自校验复核
+
+- VS Code 诊断：R1 四个服务文件无错误。✅
+- `python -m py_compile services/backtest/src/backtest/strategy_base.py services/backtest/src/backtest/factor_registry.py services/backtest/src/backtest/fc_224_strategy.py services/backtest/tests/test_fc_224_strategy_loading.py`：通过。✅
+- `pytest services/backtest/tests/test_fc_224_strategy_loading.py -q`：结果 `3 passed`。✅
+- 正式输入原件复核：`/Users/jayshao/Desktop/FC-_5_cf_v1.yaml` 已可直接解析，模板名、标的、频率、最小因子与 `risk` 参数读取结果与 handoff 摘要一致。✅
+
+### Lockback 建议
+
+- 架构终审通过。
+- 结论：**TASK-0003 批次 R1 可以立即执行 lockback。**
+- 治理留痕说明：当前可读 Git 账本尚未同步 R1 的 `token_id` 摘要原文；Atlas 执行 lockback 时需依据终端原文补写 `token_id` 摘要与 lockback 结果，本次终审不编造该值。
+- R2 结论：**可以进入 R2 Token 申请准备，但必须以“R1 先 lockback、R2 再单独申请独立 P1 Token”为前提，不得合批复用白名单。**
