@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0002
 - 审核角色：项目架构师
-- 审核阶段：预审
-- 审核时间：2026-04-03
-- 审核结论：通过（含条件：需 Jay.S 审批后方可进入执行态）
+ - 审核阶段：终审
+ - 审核时间：2026-04-03
+ - 审核结论：通过（Jay.S 已批准，进入执行态；草稿区准备中，P0 写入待 P0 Token）
 
 ## 核验内容
 
@@ -54,7 +54,6 @@
 
 ## 下一步
 
-1. 提交 TASK-0002 建档内容（含 TASK-0001 遗留账本文件）到 Git：`docs: finalize TASK-0001 records and open TASK-0002`。
-2. 等待 Jay.S 对 TASK-0002 完整方案（任务文档 + 预审 review）的明确审批。
-3. 审批通过后：向 Jay.S 申请 `shared/contracts/sim-trading/` 的 P0 Token，方可进入阶段一执行。
-4. 阶段一契约初稿完成后：完成终审，再向 Jay.S 申请 `services/sim-trading/src/` 的 P1 Token，再派发给模拟交易 agent。
+1. TASK-0002 已获 Jay.S 批准（终审通过），架构师进入阶段一草稿准备，请在 `shared/contracts/drafts/sim-trading/` 完成契约草稿并通知 Atlas。
+2. 架构师草稿自校验完成后，向 Jay.S 申请并在 lockctl 中粘贴 P0 Token，方可将草稿迁入 `shared/contracts/sim-trading/`（P0 保护区）并完成锁回。
+3. 阶段一终审完成后：向 Jay.S 申请 `services/sim-trading/src/` 的 P1 Token，派发给模拟交易 agent 执行阶段二骨架创建。

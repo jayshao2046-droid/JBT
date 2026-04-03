@@ -45,3 +45,9 @@
 1. **建档阶段（当前）**：仅写入 P-LOG 协同账本区，不需要 Token。已完成。
 2. **阶段一（契约初稿）**：写入 P0 保护区 `shared/contracts/sim-trading/`，必须在 Jay.S 审批方案并签发 P0 Token 后方可执行。
 3. **阶段二（服务骨架）**：写入 P1 保护区 `services/sim-trading/`，由模拟交易 agent 执行，需 Jay.S 为模拟交易 agent 签发 P1 Token。
+
+## 执行记录（变更）
+
+- 2026-04-03：Jay.S 批准 TASK-0002 进入执行态（阶段一：契约草稿准备）。
+- 当前 P0 Token 状态：已获批准（需 Jay.S 在 lockctl 中生成并粘贴实际 Token 后，方可将草稿迁入 `shared/contracts/sim-trading/` 并完成锁回）。
+- 当前执行状态：阶段一（草稿区）执行中 — 架构师可在 `shared/contracts/drafts/sim-trading/` 编写并提交草稿。

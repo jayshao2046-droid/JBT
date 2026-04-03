@@ -12,7 +12,7 @@
   - TASK-0001 已完全闭环：✅（提交 ID `c849c9ead692649e3d130c295619421332960a33`）
   - Git 仓库已初始化并完成本地初始提交：✅
   - lockctl bootstrap 已完成：✅
-  - Jay.S 对 TASK-0002 方案审批：⏳ 等待中
+  - Jay.S 对 TASK-0002 方案审批：✅ 已批准（2026-04-03）
 - 允许修改文件白名单：
   - `docs/tasks/TASK-0002-*.md`（本文件）
   - `docs/reviews/TASK-0002-review.md`
@@ -33,7 +33,7 @@
   - sim-trading 骨架可在本地独立启动（有最小健康检查）
   - 无跨服务目录读写
   - 无旧系统代码直接复制
-- 当前状态：待审核（等待 Jay.S 审批方案，未进入执行态）
+-- 当前状态：执行中（阶段一：草稿区）
 
 ## 任务目标
 
@@ -47,6 +47,8 @@
    - `account.md`：账户与资金模型字段定义
    - `api.md`：sim-trading 对外暴露的 API 端点清单（供 decision、dashboard 调用）
 2. 须对照旧系统（J_BotQuant）梳理字段，只提取最小必要字段，不搬运旧逻辑。
+
+> 草稿区说明：由于 `shared/contracts/sim-trading/` 属于 P0 保护区且写入需 P0 Token，当前请先在草稿区 `shared/contracts/drafts/sim-trading/` 编写并校验下列草稿文件：`order.md`、`position.md`、`account.md`、`api.md`。草稿完成并经自校验后，项目架构师申请 P0 Token，将草稿移入 `shared/contracts/sim-trading/` 并完成终审与锁回。
 
 ### 阶段二：sim-trading 服务骨架定义（模拟交易 agent 执行，需 P1 Token）
 
