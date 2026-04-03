@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0003
 - 审核角色：项目架构师
-- 审核阶段：Phase1 正式建档 + 批次 A 终审 + P0 契约迁移终审 + 批次 B 终审
+- 审核阶段：Phase1 正式建档 + 批次 A 终审 + P0 契约迁移终审 + 批次 B 终审 + 首轮真实回测 Phase2 预审治理补充
 - 审核时间：2026-04-03
-- 审核结论：通过（建档合规；backtest 四份正式契约与 drafts 一致；批次 B 五个白名单文件核验通过；D-BT-01~05 未违反；未提前进入看板、Docker、远端交付；当前已达到“只差策略输入即可执行一次正式回测”的检查点；两枚 Token 已完成 lockback，当前状态均为 `locked`）
+- 审核结论：通过（建档合规；backtest 四份正式契约与 drafts 一致；批次 B 五个白名单文件核验通过；D-BT-01~05 未违反；未提前进入看板、Docker、远端交付；当前已达到“只差策略输入即可执行一次正式回测”的检查点；两枚 Token 已完成 lockback，当前状态均为 `locked`；首轮真实回测区间与首次总金额已完成冻结）
 
 ---
 
@@ -28,14 +28,9 @@
 - 项目架构师仅负责阶段一契约草稿与派发，不进入 `services/backtest/` 代码写入。✅
 - 回测 Agent 负责阶段二全部 Python 后端与部署文件，分批次派发。✅
 - `docker-compose.dev.yml` 与 `services/backtest/.env.example` 均为 P0 保护文件，需单独走 P0 Token，不随批次 C 代码并入。✅
-- 本轮建档与草稿区写入未触及任何 P0/P1 保护目录。✅
-
 ### 文件白名单核验
 
 - `docs/tasks/TASK-0003-*.md`：P-LOG 区，项目架构师可写。✅
-- `docs/reviews/TASK-0003-review.md`：P-LOG 区，项目架构师可写。✅
-- `docs/locks/TASK-0003-lock.md`：P-LOG 区，项目架构师可写。✅
-- `docs/rollback/TASK-0003-rollback.md`：P-LOG 区，项目架构师可写。✅
 - `docs/handoffs/TASK-0003-*.md`：P-LOG 区，项目架构师可写。✅
 - `shared/contracts/drafts/backtest/`：草稿区，当前批次可写，无需 Token。✅
 - `shared/contracts/backtest/`：P0 区，Jay.S 已为四份正式契约签发文件级 Token；本轮仅允许写入 `backtest_job.md`、`backtest_result.md`、`performance_metrics.md`、`api.md`。✅
@@ -190,9 +185,82 @@
 ## 下一步
 
 1. 向 Jay.S 汇报：回测主线已正式收口到 60%，当前只等待提供首轮真实策略模板实现与配套一体化 YAML 文件。
-2. 首轮真实回测前，在目标运行环境提供 TQSDK_AUTH_USERNAME / TQSDK_AUTH_PASSWORD。
-3. 在 Jay.S 看过首轮真实回测结果前，不进入看板、Docker、远端交付或新的跨服务实现。
+2. 当前已完成首轮真实回测日期与首次总金额冻结，可直接进入 R1 P1 Token 签发。
+3. 在 R2 正式执行前，目标运行环境需提供 TQSDK_AUTH_USERNAME / TQSDK_AUTH_PASSWORD，并确保正式 YAML 以不改内容方式进入 TQSDK_STRATEGY_YAML_DIR。
+4. 在 Jay.S 看过首轮真实回测结果前，不进入看板、Docker、远端交付或新的跨服务实现。
 
 批次 A 已锁回：2026-04-03，Atlas 已执行批次 A lockback，结果为 `locked`。
 P0 正式契约：2026-04-03 19:01:15 +0800 已锁回，当前状态为 `locked`。
 批次 B：2026-04-03 19:01:15 +0800 已锁回，当前状态为 `locked`。
+
+## 首轮真实回测预审结论（2026-04-03）
+
+### 任务归属判定
+
+- 结论：**继续归属 TASK-0003，不另开新任务。**
+- 理由：本轮工作仍属于回测主线从 60% 检查点推进到 75% 首轮真实回测完成的同一服务内闭环；Jay.S 当前提供的是 TASK-0003 明确等待的正式策略 YAML，而不是新的跨服务范围。
+
+### 正式输入冻结
+
+- 首次真实回测策略：`FC-224_v3_intraday_trend_cf605_5m`
+- 目标标的：`CZCE.CF605`
+- 频率：`5m`
+- 回测区间：`2024-04-03 至 2026-04-03`
+- 首次总金额（initial_capital）：`1000000 CNY`
+- 当前 YAML 为正式输入源，风控仍以 YAML 为准。
+- 首次真实回测必须纳入：手续费、滑点、总金额。
+- 看板继续后置，待首轮回测结果经 Jay.S 审阅后再启动。
+
+### 冻结理由
+
+1. 用户已明确要求“进行 2 年的回测”。
+2. 当前日期为 2026-04-03，因此按最近完整 2 年冻结为 2024-04-03 至 2026-04-03。
+3. 当前 backtest job 合约与现有骨架默认金额为 1000000.0，且用户未提供覆盖值，因此本轮先按 1000000 CNY 冻结。
+
+### 读后技术结论
+
+1. 当前 backtest 只有固定模板注册框架，没有 FC 模板实现，也没有最小因子库。
+2. 当前正式 YAML 结构为 `factors / market_filter / signal / transaction_costs / risk`，与现有 `template_id / params / risk` 协议不兼容。
+3. 当前策略最小必需因子与过滤项只需：MACD、RSI、VolumeRatio、ATR、ADX。
+4. 当前回测结果结构能生成内存报告，但尚未构成首轮真实回测所需的最小执行留痕。
+5. legacy 因子实现可只读参考公式，但本轮不得整包搬运。
+
+### 建议批次与 Token
+
+#### 批次 R1 — 因子 / 模板 / 解析接入
+
+- Token 类型：**P1**
+- 建议白名单：
+	1. `services/backtest/src/backtest/strategy_base.py`
+	2. `services/backtest/src/backtest/factor_registry.py`
+	3. `services/backtest/src/backtest/fc_224_strategy.py`
+	4. `services/backtest/tests/test_fc_224_strategy_loading.py`
+
+#### 批次 R2 — 首次真实回测执行与结果留痕
+
+- Token 类型：**P1**
+- 建议白名单：
+	1. `services/backtest/src/backtest/session.py`
+	2. `services/backtest/src/backtest/runner.py`
+	3. `services/backtest/src/backtest/result_builder.py`
+	4. `services/backtest/tests/test_fc_224_execution_trace.py`
+
+#### 可选批次 P0-X — 正式契约补录（仅在 Jay.S 明确要求时启用）
+
+- Token 类型：**P0**
+- 建议白名单：
+	1. `shared/contracts/backtest/backtest_job.md`
+	2. `shared/contracts/backtest/backtest_result.md`
+	3. `shared/contracts/backtest/api.md`
+- 预审判断：**当前不是首轮真实回测的必需前置。**
+
+### 仍存在的非 Token 前置条件
+
+1. 目标运行环境仍需准备 `TQSDK_AUTH_USERNAME / TQSDK_AUTH_PASSWORD`。
+2. 正式 YAML 需以不改内容的方式进入 `TQSDK_STRATEGY_YAML_DIR`。
+
+### 预审结论
+
+- **预审通过，可进入 Token 申请准备态。**
+- 当前建议路径：可直接进入 R1 P1 Token 签发，再在 R1 自校验与 handoff 通过后申请 R2 P1。
+- 在 Jay.S 看过首轮真实回测结果前，不启动看板、Docker、远端交付，也不提前展开 P0 契约补录。
