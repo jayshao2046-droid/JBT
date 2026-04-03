@@ -1,0 +1,28 @@
+{
+  "folders": [
+    {
+      "name": "JBT",
+      "path": "."
+    },
+    {
+      "name": "J_BotQuant_legacy",
+      "path": "/Users/jayshao/J_BotQuant"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.jbt": true,
+      "**/__pycache__": true,
+      "**/.pytest_cache": true,
+      "**/.mypy_cache": true,
+      "**/.ruff_cache": true
+    },
+    "search.exclude": {
+      "**/.jbt": true,
+      "**/__pycache__": true,
+      "**/.pytest_cache": true,
+      "**/.mypy_cache": true,
+      "**/.ruff_cache": true
+    }
+  }
+}

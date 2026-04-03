@@ -1,0 +1,66 @@
+services:
+  sim-trading:
+    build: ./services/sim-trading
+    ports:
+      - "8101:8101"
+    environment:
+      JBT_SERVICE_NAME: sim-trading
+      JBT_SERVICE_PORT: "8101"
+    volumes:
+      - ./services/sim-trading:/app
+      - ./services/sim-trading/runtime:/runtime
+
+  live-trading:
+    build: ./services/live-trading
+    ports:
+      - "8102:8102"
+    environment:
+      JBT_SERVICE_NAME: live-trading
+      JBT_SERVICE_PORT: "8102"
+    volumes:
+      - ./services/live-trading:/app
+      - ./services/live-trading/runtime:/runtime
+
+  backtest:
+    build: ./services/backtest
+    ports:
+      - "8103:8103"
+    environment:
+      JBT_SERVICE_NAME: backtest
+      JBT_SERVICE_PORT: "8103"
+    volumes:
+      - ./services/backtest:/app
+      - ./services/backtest/runtime:/runtime
+
+  decision:
+    build: ./services/decision
+    ports:
+      - "8104:8104"
+    environment:
+      JBT_SERVICE_NAME: decision
+      JBT_SERVICE_PORT: "8104"
+    volumes:
+      - ./services/decision:/app
+      - ./services/decision/runtime:/runtime
+
+  data:
+    build: ./services/data
+    ports:
+      - "8105:8105"
+    environment:
+      JBT_SERVICE_NAME: data
+      JBT_SERVICE_PORT: "8105"
+    volumes:
+      - ./services/data:/app
+      - ./services/data/runtime:/runtime
+
+  dashboard:
+    build: ./services/dashboard
+    ports:
+      - "8106:8106"
+    environment:
+      JBT_SERVICE_NAME: dashboard
+      JBT_SERVICE_PORT: "8106"
+    volumes:
+      - ./services/dashboard:/app
+      - ./services/dashboard/runtime:/runtime
