@@ -2,7 +2,7 @@
 name: "看板"
 description: "JBT 看板专家。适用场景：运维看板、查询聚合、状态展示、前端视图、只读 API 集成"
 tools: [read, edit, search, execute]
-model: "GPT-5.4"
+model: "claude-sonnet-4-6-high"
 ---
 
 # 看板 Agent — JBT 看板专家

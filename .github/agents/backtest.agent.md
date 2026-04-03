@@ -2,7 +2,7 @@
 name: "回测"
 description: "JBT 回测专家。适用场景：历史回测、参数扫描、绩效评估、权益曲线、报告接口"
 tools: [read, edit, search, execute]
-model: "GPT-5.4"
+model: "claude-sonnet-4-6-high"
 ---
 
 # 回测 Agent — JBT 回测专家

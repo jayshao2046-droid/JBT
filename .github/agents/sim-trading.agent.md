@@ -2,7 +2,7 @@
 name: "模拟交易"
 description: "JBT 模拟交易专家。适用场景：SimNow、模拟交易 API、订单管理、成交回报、资金持仓、执行风控、账本"
 tools: [read, edit, search, execute]
-model: "GPT-5.4"
+model: "claude-sonnet-4-6-high"
 ---
 
 # 模拟交易 Agent — JBT 模拟交易专家

@@ -2,7 +2,7 @@
 name: "数据"
 description: "JBT 数据专家。适用场景：数据采集、清洗、标准化、供数 API、存储策略、调度"
 tools: [read, edit, search, execute]
-model: "GPT-5.4"
+model: "claude-sonnet-4-6-high"
 ---
 
 # 数据 Agent — JBT 数据专家

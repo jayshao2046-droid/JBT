@@ -2,7 +2,7 @@
 name: "实盘交易"
 description: "JBT 实盘交易专家。适用场景：实盘账户、订单执行、持仓管理、成交回报、实盘风控、账本"
 tools: [read, edit, search, execute]
-model: "GPT-5.4"
+model: "claude-sonnet-4-6-high"
 ---
 
 # 实盘交易 Agent — JBT 实盘交易专家
