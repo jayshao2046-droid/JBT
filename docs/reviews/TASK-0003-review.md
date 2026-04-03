@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0003
 - 审核角色：项目架构师
-- 审核阶段：Phase1 正式建档 + 批次 A 终审 + P0 契约迁移终审 + 批次 B 终审 + 首轮真实回测 Phase2 预审治理补充 + 批次 R1 终审 + 批次 R2 终审 + 批次 R2 锁回补记 + 批次 R3 补充预审
+- 审核阶段：Phase1 正式建档 + 批次 A 终审 + P0 契约迁移终审 + 批次 B 终审 + 首轮真实回测 Phase2 预审治理补充 + 批次 R1 终审 + 批次 R2 终审 + 批次 R2 锁回补记 + 批次 R3 补充预审 + 批次 R3 终审 + 批次 R3 锁回补记
 - 审核时间：2026-04-03
-- 审核结论：通过（建档合规；backtest 四份正式契约与 drafts 一致；批次 B 五个白名单文件核验通过；D-BT-01~05 未违反；未提前进入看板、Docker、远端交付；当前已达到“只差策略输入即可执行一次正式回测”的检查点；两枚 Token 已完成 lockback，当前状态均为 `locked`；首轮真实回测区间与首次总金额已完成冻结；批次 R1 四个白名单文件核验通过，未把 `tqsdk` 扩展成额外采集依赖，未新增不必要依赖，保持 R2 基于 `TqBacktest` 的接入方向；批次 R2 服务代码实际写入仅限四个白名单文件，仍保持 `TqApi + TqSim + TqBacktest + TqAuth` 在线回测主路径，未引入本地数据采集路径或额外回测包，手续费、滑点、总金额已纳入最小结果留痕；Atlas 已执行 R2 lockback，当前状态为 `locked`；首轮真实回测已实际运行一次，但结果为 `completed`、`final_equity=1000000`、`total_trades=0`，根因确认为 FC-224 模板尚未进入 `wait_update + TargetPosTask` 真实执行循环；当前结果不得作为正式首轮结果交付；最小 R3 已冻结为 3 文件 P1 批次，可直接进入签发准备）
+- 审核结论：通过（建档合规；backtest 四份正式契约与 drafts 一致；批次 B 五个白名单文件核验通过；D-BT-01~05 未违反；未提前进入看板、Docker、远端交付；当前已达到“只差策略输入即可执行一次正式回测”的检查点；两枚 Token 已完成 lockback，当前状态均为 `locked`；首轮真实回测区间与首次总金额已完成冻结；批次 R1 四个白名单文件核验通过，未把 `tqsdk` 扩展成额外采集依赖，未新增不必要依赖，保持 R2 基于 `TqBacktest` 的接入方向；批次 R2 服务代码实际写入仅限四个白名单文件，仍保持 `TqApi + TqSim + TqBacktest + TqAuth` 在线回测主路径，未引入本地数据采集路径或额外回测包，手续费、滑点、总金额已纳入最小结果留痕；Atlas 已执行 R2 lockback，当前状态为 `locked`；首轮真实回测已实际运行一次，但结果为 `completed`、`final_equity=1000000`、`total_trades=0`，根因确认为 FC-224 模板尚未进入 `wait_update + TargetPosTask` 真实执行循环；当前结果不得作为正式首轮结果交付；最小 R3 已冻结为 3 文件 P1 批次；批次 R3 三个白名单文件现已完成终审，继续保持在线 TqBacktest 主路径，未引入本地数据采集路径，`completed + total_trades=0` 伪正式结果已被拦截；原 R3 token 已过期，Atlas 已使用同范围 replacement token 完成 lockback，当前状态为 `locked`；R3 已锁回，回测主线已推进到 75%，首轮真实回测完成，可供 Jay.S 审阅）
 
 ---
 
@@ -377,3 +377,34 @@ P0 正式契约：2026-04-03 19:01:15 +0800 已锁回，当前状态为 `locked`
 1. **TASK-0003 继续沿用，不另开任务。**
 2. **R3 已完成最小治理预审与白名单冻结。**
 3. **当前可以直接进入 R3 的 P1 Token 签发准备。**
+
+## 批次 R3 终审结论（2026-04-03）
+
+### Token 与范围核验
+
+- 批次 R3 P1 Token 已完成 validate，token_id 摘要：`tok-80a3f58a-0803-40a8-96c4-b720e220f37c`。
+- 以 `git diff --name-only -- services/backtest` 复核后，`services/backtest/` 当前改动仅限 `services/backtest/src/backtest/fc_224_strategy.py`、`services/backtest/src/backtest/runner.py`、`services/backtest/tests/test_fc_224_execution_trace.py` 三个白名单文件。
+- 额外发生的 P-LOG 写入仅有 `docs/handoffs/TASK-0003-回测批次R3-真实执行循环交接.md` 与 `docs/prompts/agents/回测提示词.md`，均属于回测 Agent 自有 handoff / 私有 prompt，不构成 P1 越权。
+- 未触碰 `session.py`、`strategy_base.py`、`result_builder.py`、`services/backtest/src/api/**`、`services/backtest/README.md`、`shared/contracts/**`、dashboard、Docker、远端交付或其他服务目录。✅
+
+### 在线主路径与本地路径复核
+
+- `fc_224_strategy.py` 在既有会话抽象之上继续消费 `wait_update()`、`get_quote()`、`get_kline_serial()` 与 `TargetPosTask`，保持官方在线执行模型。✅
+- `runner.py` 仅在现有结果收口路径增加 FC-224 的零成交正式结果兜底，没有改写会话来源、行情来源或回测入口。✅
+- 本批未新增 requirements、pyproject、安装脚本或额外回测依赖；未引入 CSV / Parquet / Tushare / 跨服务取数回放路径。✅
+
+### 问题收口复核
+
+- `fc_224_strategy.py` 已进入 `wait_update() + TargetPosTask` 真实执行循环，并把信号判定从“最新未完成 bar”切换到“上一根已完成 bar”，避免 `VolumeRatio` 被未收盘 bar 长期压成 0。✅
+- `runner.py` 已明确拦截 FC-224 真实执行循环路径上的 `completed` 且 `total_trades=0` 结果，并将其改判为 failed，禁止作为正式首轮结果交付。✅
+- `tests/test_fc_224_execution_trace.py` 已覆盖“真实执行循环产生非零成交”和“零成交 completed 被拦截”为 failed 两条 R3 关键链路。✅
+- 架构师独立复核：`./.venv/bin/pytest services/backtest/tests/test_fc_224_strategy_loading.py services/backtest/tests/test_fc_224_execution_trace.py -q` 结果为 `6 passed`。✅
+- 冻结输入下的实际重跑结果已更新为 `status=completed`、`total_trades=6`、`final_equity=999877.0`、`max_drawdown=0.000258`；当前 FC-224 不再是“completed + zero trades”的伪正式结果。✅
+
+### Lockback 收口
+
+- 架构终审通过。
+- 原批次 R3 token_id `tok-80a3f58a-0803-40a8-96c4-b720e220f37c` 已过期；Atlas 已为同范围补签 replacement token `tok-140ed4de-4195-4d43-afe1-ca4350ece67c` 并完成 lockback。
+- lockback 结果：review-id `REVIEW-TASK-0003-R3`，summary `TASK-0003 批次R3完成，终审通过，执行锁回`，结果 `approved`，Token 当前状态 `locked`。
+- 进度口径：**R3 已锁回，回测主线已从 60% 推进到 75%“首轮真实回测完成，可供 Jay.S 审阅”。**
+- 后续边界：在 Jay.S 看过首轮真实回测结果前，仍不得进入看板、Docker、远端交付或新的跨服务实现。

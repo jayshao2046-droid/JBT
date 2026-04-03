@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Union
@@ -262,8 +262,42 @@ class OnlineBacktestRunner:
     ) -> BacktestReport:
         _ = snapshot
         _ = strategy_definition
+        report = self._reject_zero_trade_fc_224_result(report)
         self._result_builder.write_report(report)
         return report
+
+    def _reject_zero_trade_fc_224_result(
+        self,
+        report: BacktestReport,
+    ) -> BacktestReport:
+        if report.strategy_template_id != FIRST_REAL_FC_224_SPEC.strategy_template_id:
+            return report
+        if "execution_loop=wait_update_target_pos" not in report.notes:
+            return report
+        if report.status != "completed" or report.total_trades > 0:
+            return report
+
+        failure_reason = (
+            "FC-224 首轮真实回测 completed 且 total_trades=0，判定为策略执行逻辑未闭环，禁止作为正式首轮结果交付"
+        )
+        report_summary = report.report_summary
+        if "status=completed" in report_summary:
+            report_summary = report_summary.replace("status=completed", "status=failed", 1)
+        else:
+            report_summary = f"{report_summary}; status=failed"
+        if f"failure_reason={failure_reason}" not in report_summary:
+            report_summary = f"{report_summary}; failure_reason={failure_reason}"
+
+        notes = list(report.notes)
+        notes.append("formal_result_rejected=true")
+        notes.append("formal_result_rejected_reason=execution_loop_not_closed")
+        return replace(
+            report,
+            status="failed",
+            failure_reason=failure_reason,
+            notes=notes,
+            report_summary=report_summary,
+        )
 
     def _validate_frozen_first_real_backtest(
         self,
