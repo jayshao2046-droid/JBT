@@ -19,6 +19,7 @@
 
 ## 影响文件（建档阶段，本批次）
 
+- `docs/tasks/TASK-0003-backtest-Phase1-正式建档.md`（新增）
 - `docs/tasks/TASK-0003-backtest-全开发任务拆解与契约登记.md`
 - `docs/reviews/TASK-0003-review.md`
 - `docs/locks/TASK-0003-lock.md`
@@ -30,6 +31,8 @@
 - `shared/contracts/drafts/backtest/backtest_result.md`
 - `shared/contracts/drafts/backtest/performance_metrics.md`
 - `shared/contracts/drafts/backtest/api.md`
+- `services/backtest/.env.example`（D-BT-02 授权更新，架构师执行）
+- `services/backtest/README.md`（口径修正，随批次 A P1 Token 由回测 Agent 执行）
 
 ## 影响文件（阶段一正式迁移，待补填）
 
