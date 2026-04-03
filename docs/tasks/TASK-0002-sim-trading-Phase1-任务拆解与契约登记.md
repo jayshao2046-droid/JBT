@@ -29,26 +29,29 @@
   - `shared/contracts/sim-trading/`：**是（P0 保护区，需 Jay.S 为项目架构师签发 Token）**
   - `services/sim-trading/src/`、`services/sim-trading/configs/`：**是（P1 保护区，需 Jay.S 为模拟交易 agent 签发 Token）**
 - 计划验证方式：
+  - 草稿文件通过项目架构师阶段一自校验
+  - P0 Token 申请对象与目标文件清单完整可执行
   - 契约文件通过项目架构师预审与终审
   - sim-trading 骨架可在本地独立启动（有最小健康检查）
   - 无跨服务目录读写
   - 无旧系统代码直接复制
--- 当前状态：执行中（阶段一：草稿区）
+- 当前状态：待 P0 Token（阶段一草稿与自校验已完成）
 
 ## 任务目标
 
-本任务分为两个执行阶段，本轮建档仅完成阶段一的预审准备；阶段二须等 Jay.S 审批后方可开始。
+本任务分为两个执行阶段。当前仅执行阶段一的草稿区完善与自校验；阶段二须等阶段一终审通过且 Jay.S 提供 P1 Token 后方可开始。
 
-### 阶段一：契约初稿登记（项目架构师执行，需 P0 Token）
+### 阶段一：契约草稿完善与 P0 Token 申请前准备（项目架构师执行）
 
-1. 在 `shared/contracts/sim-trading/` 建立以下初稿文件：
+1. 在 `shared/contracts/drafts/sim-trading/` 完善以下草稿文件：
    - `order.md`：订单模型字段定义（最小必要字段）
    - `position.md`：持仓模型字段定义
    - `account.md`：账户与资金模型字段定义
    - `api.md`：sim-trading 对外暴露的 API 端点清单（供 decision、dashboard 调用）
-2. 须对照旧系统（J_BotQuant）梳理字段，只提取最小必要字段，不搬运旧逻辑。
+2. 须对照旧系统（J_BotQuant）梳理字段口径，只提取最小必要字段，不搬运旧逻辑。
+3. 草稿完成后，在账本区补写阶段一自校验结论与 P0 Token 申请清单。
 
-> 草稿区说明：由于 `shared/contracts/sim-trading/` 属于 P0 保护区且写入需 P0 Token，当前请先在草稿区 `shared/contracts/drafts/sim-trading/` 编写并校验下列草稿文件：`order.md`、`position.md`、`account.md`、`api.md`。草稿完成并经自校验后，项目架构师申请 P0 Token，将草稿移入 `shared/contracts/sim-trading/` 并完成终审与锁回。
+> 草稿区说明：`shared/contracts/drafts/sim-trading/` 仅用于阶段一草稿完善与自校验；当前不得把草稿迁入 `shared/contracts/sim-trading/`。草稿完成并经自校验后，项目架构师向 Jay.S 申请 P0 Token，再执行正式迁移与终审。
 
 ### 阶段二：sim-trading 服务骨架定义（模拟交易 agent 执行，需 P1 Token）
 
@@ -92,19 +95,37 @@
 
 ### 风险 R5：TASK-0001 遗留未提交账本文件
 
-- 描述：TASK-0001 的 6 个账本更新文件（lock、rollback、review、task、公共 prompt、私有 prompt）在初始提交后补写，尚未提交到 Git。
-- 影响：当前仍处于工作树有改动但未记录到 Git 的状态。
-- 消除方案：在 TASK-0002 建档提交中一并提交，使用提交信息 `docs: finalize TASK-0001 records and open TASK-0002`。
+- 描述：历史遗留风险已消除，本项仅保留作为闭环留痕。
+- 影响：无。
+- 消除方案：已在提交 `6585b1d` 中与 TASK-0002 建档一并落地，不再构成当前风险。
+
+## 阶段一当前草稿对象
+
+- `shared/contracts/drafts/sim-trading/order.md`
+- `shared/contracts/drafts/sim-trading/position.md`
+- `shared/contracts/drafts/sim-trading/account.md`
+- `shared/contracts/drafts/sim-trading/api.md`
+
+## P0 Token 申请对象（已可申请）
+
+- `shared/contracts/sim-trading/order.md`
+- `shared/contracts/sim-trading/position.md`
+- `shared/contracts/sim-trading/account.md`
+- `shared/contracts/sim-trading/api.md`
 
 ## 交付标准
 
-1. ⏳ Jay.S 审批 TASK-0002 方案（前置条件）
-2. ⏳ `shared/contracts/sim-trading/` 初稿登记（审批通过后，需 P0 Token）
-3. ⏳ `services/sim-trading/` 服务骨架（需 P1 Token，由模拟交易 agent 执行）
-4. ⏳ sim-trading 骨架本地可独立启动（健康检查 200）
-5. ⏳ TASK-0002 终审与锁回完成
+1. ✅ Jay.S 已批准 TASK-0002 进入阶段一草稿区执行
+2. ✅ `shared/contracts/drafts/sim-trading/` 四份草稿已完善并完成自校验
+3. ✅ P0 Token 申请对象与目标文件清单已确认
+4. ⏳ `shared/contracts/sim-trading/` 正式登记（待 Jay.S 提供 P0 Token）
+5. ⏳ `services/sim-trading/` 服务骨架（需 P1 Token，由模拟交易 agent 执行）
+6. ⏳ sim-trading 骨架本地可独立启动（健康检查 200）
+7. ⏳ TASK-0002 终审与锁回完成
 
 ## 时间记录
 
 - 任务建档时间：2026-04-03
-- 当前状态：预审完成，等待 Jay.S 审批后进入执行态
+- 阶段一执行批准：2026-04-03
+- 阶段一草稿与自校验完成：2026-04-03
+- 当前状态：等待 Jay.S 提供 P0 Token 后进入正式迁移
