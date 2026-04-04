@@ -1,5 +1,5 @@
 // 浏览器端使用相对路径（Next.js rewrites 代理到后端），服务端使用可配置绝对地址
-const SERVER_BASE = process.env.BACKEND_BASE_URL || 'http://localhost:8004'
+const SERVER_BASE = process.env.BACKEND_BASE_URL || 'http://localhost:8103'
 const BASE = typeof window !== 'undefined' ? '' : SERVER_BASE
 const DEFAULT_TIMEOUT = 5000
 
@@ -158,7 +158,7 @@ export function friendlyError(err: any) {
   if (!err) return '未知错误'
   const msg = String(err.message || err || '')
   if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('AbortError')) {
-    return '资源或网络加载失败，请检查后端服务（http://localhost:8004）并重试'
+    return '资源或网络加载失败，请检查后端服务（http://localhost:8103）并重试'
   }
   if (msg.match(/\b404\b/)) return '资源未找到（404）'
   if (msg.match(/\b500\b/)) return '服务器内部错误（500）'
