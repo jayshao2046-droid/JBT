@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 if __package__:
     from ..core.settings import get_settings
@@ -31,6 +32,11 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(jobs_router)
+
+    @app.get("/", include_in_schema=False)
+    async def root_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/docs")
+
     return app
 
 
