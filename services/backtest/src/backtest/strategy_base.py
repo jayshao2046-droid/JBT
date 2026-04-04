@@ -529,17 +529,22 @@ StrategyTemplateType = TypeVar("StrategyTemplateType", bound=FixedTemplateStrate
 class StrategyTemplateRegistry:
     def __init__(self) -> None:
         self._templates: Dict[str, Type[FixedTemplateStrategy]] = {}
+        self._fallback_template: Optional[Type[FixedTemplateStrategy]] = None
 
     def register(self, template_cls: Type[StrategyTemplateType]) -> Type[StrategyTemplateType]:
         template_id = getattr(template_cls, "template_id", "")
         if not isinstance(template_id, str) or not template_id.strip():
             raise StrategyConfigError("strategy template must declare a non-empty template_id")
         self._templates[template_id.strip()] = template_cls
+        if getattr(template_cls, "accepts_any_template_id", False):
+            self._fallback_template = template_cls
         return template_cls
 
     def resolve(self, template_id: str) -> Type[FixedTemplateStrategy]:
         _load_builtin_templates()
         template = self._templates.get(template_id)
+        if template is None and self._fallback_template is not None:
+            return self._fallback_template
         if template is None:
             raise StrategyInputRequiredError(
                 f"策略模板 {template_id} 尚未注册，当前已到达需要 Jay.S 提供策略输入的检查点"
@@ -563,13 +568,16 @@ def register_strategy_template(
 def _load_builtin_templates() -> None:
     try:
         if __package__:
-            from . import fc_224_strategy as builtin_strategy
+            from . import fc_224_strategy as builtin_fc_224_strategy
+            from . import generic_factor_strategy as builtin_generic_strategy
         else:
-            import fc_224_strategy as builtin_strategy
+            import fc_224_strategy as builtin_fc_224_strategy
+            import generic_factor_strategy as builtin_generic_strategy
     except ImportError:
         return
 
-    _ = builtin_strategy
+    _ = builtin_fc_224_strategy
+    _ = builtin_generic_strategy
 
 
 _load_builtin_templates()
