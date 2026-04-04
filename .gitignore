@@ -14,3 +14,8 @@ services/*/logs/
 services/*/.env
 services/*/*.sqlite
 services/*/*.db
+
+# Node.js / Next.js
+node_modules/
+.next/
+out/

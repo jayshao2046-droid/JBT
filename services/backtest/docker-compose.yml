@@ -32,7 +32,7 @@ services:
 
   backtest-dashboard:
     build:
-      context: "./V0-backtext 看板"   # 构建上下文为看板目录
+      context: "./backtest_web"      # 正确看板目录（已替换旧 V0 模板）
       dockerfile: Dockerfile
     image: jbt-backtest-dashboard:latest
     container_name: backtest-dashboard
