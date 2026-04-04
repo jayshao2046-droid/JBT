@@ -27,9 +27,14 @@
 
 ## 3. 当前任务输入口径
 
-1. `POST /api/v1/jobs` 当前执行路径采用“固定模板 + 用户上传参数 + 一体化 YAML 风控文件”。
-2. `strategy_id` 指向固定策略模板；用户上传的一体化 YAML 文件负责提供策略参数与风控参数。
-3. YAML 上传、挂载与解析属于 backtest 服务自身运行约束，不在本契约中展开跨服务实现。
+1. `POST /api/v1/jobs` 当前执行路径采用"策略模板 + 用户上传参数 + 一体化 YAML 风控文件"。
+2. `strategy_template_id` 指向策略模板，支持两类口径：
+   - `fc_224_strategy`：FC-224 固定策略模板（单策略固定实现，向后兼容保留）。
+   - 任意泛化模板 ID（如 `generic_factor_strategy`）：通过因子注册表动态装载对应因子组合，
+     自 TASK-0005 起生效；注册表路径见 `services/backtest/src/strategies/factor_registry.py`。
+3. 因子注册表（`factor_registry.py`）维护 `factor_id → FactorClass` 映射，
+   新增因子只需向注册表登记，无需修改策略调度链。
+4. YAML 上传、挂载与解析属于 backtest 服务自身运行约束，不在本契约中展开跨服务实现。
 
 ## 4. 端点详情
 
