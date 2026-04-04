@@ -5,15 +5,9 @@
 # ────────────────────────────────────────────────
 FROM python:3.11-slim
 
-# 系统依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
-# 安装 Python 依赖（固定版本）
+# 安装 Python 依赖（固定版本，预编译 wheel 无需 gcc）
 RUN pip install --no-cache-dir \
     fastapi==0.128.8 \
     "uvicorn[standard]==0.39.0" \

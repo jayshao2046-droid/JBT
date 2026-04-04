@@ -3,7 +3,6 @@
 # 服务: backtest-api (8103) + backtest-dashboard (3001)
 # restart: always — 看板必须常驻，断电重启自动恢复
 # ────────────────────────────────────────────────
-version: "3.9"
 
 services:
   backtest-api:
