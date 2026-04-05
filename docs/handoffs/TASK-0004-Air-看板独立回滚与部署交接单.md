@@ -34,7 +34,8 @@
 11. Jay.S 追加要求“清除 Air 上老的 backtest，只留 jbt-backtest”后，已先 `docker compose -f docker-compose.dev.yml build backtest`，随后停止并删除 legacy 容器 `backtest-api`，再执行 `docker compose -f docker-compose.dev.yml up -d --no-deps backtest`，由 `JBT-BACKTEST-8103` 正式接管 8103。
 12. 由于 `backtest-web` 镜像内部的 Next rewrites 仍编译为 `http://backtest-api:8103`，已补执行 `docker compose -f docker-compose.dev.yml build --build-arg BACKEND_BASE_URL=http://backtest:8103 backtest-web` 与 `docker compose -f docker-compose.dev.yml up -d --no-deps backtest-web`，使 3001 代理彻底切到 JBT 后端。
 13. 旧网络 `backtest_backtest-net` 已删除；当前 Air 上仅剩 `JBT-BACKTEST-8103` 与 `JBT-BACKTEST-WEB-3001` 两个回测相关容器。
-14. 当前验证结果：`curl http://127.0.0.1:8103/api/strategies` 返回 200，`curl http://127.0.0.1:3001/api/strategies` 返回 200；但 `JBT-BACKTEST-8103` 仍显示 `unhealthy`，高概率是现有 compose healthcheck 路径与实际服务健康路由不一致，属于后续单独修正项。
+14. 当前验证结果：`curl http://127.0.0.1:8103/api/strategies` 返回 200，`curl http://127.0.0.1:3001/api/strategies` 返回 200；初次切换后 `JBT-BACKTEST-8103` 仍显示 `unhealthy`，最终定位为现有 compose 与镜像 healthcheck 均探测 `http://localhost:8103/api/health`，但服务只注册了 `/api/v1/health`。
+15. 已在 JBT 后端补充 `/api/health` 兼容健康路由，同时保留 `/api/v1/health` 不变；代码同步到 Air 后重启 `JBT-BACKTEST-8103`，当前 `curl http://127.0.0.1:8103/api/health` 返回 200，容器状态已恢复为 `healthy`，`curl http://127.0.0.1:3001/api/backtest/summary` 也维持 200。
 
 ## Air 部署前检查项
 
@@ -78,4 +79,4 @@
 1. 现在 Air 上已经切换到新的 `JBT-BACKTEST-WEB-3001`，3001 返回 200，8103 后端保持健康未动。
 2. 当前可用回滚点是 `jbt-backtest-web:rollback-202604060256`，真回滚时只恢复看板容器，不会把后端一起带回去。
 3. JBT 代码已经正式推送到 GitHub origin；当前仓内 `origin` 指向 GitHub，`local` 保留本地备份 remote。
-4. Air 上现已不再保留 legacy `backtest-api` 与 `backtest_backtest-net`；运行态只剩 JBT backtest 栈。
+4. Air 上现已不再保留 legacy `backtest-api` 与 `backtest_backtest-net`；运行态只剩 JBT backtest 栈，且 `JBT-BACKTEST-8103` 已恢复为 `healthy`。

@@ -221,11 +221,15 @@ def test_app_keeps_v1_health_and_jobs_skeleton_routes() -> None:
     app = create_app()
     route_paths = {route.path for route in app.router.routes}
 
+    assert "/api/health" in route_paths
     assert "/api/v1/health" in route_paths
     assert "/api/v1/jobs" in route_paths
     assert "/api/v1/jobs/{job_id}" in route_paths
 
     client = TestClient(app)
+
+    compat_health_response = client.get("/api/health")
+    assert compat_health_response.status_code == 200
 
     health_response = client.get("/api/v1/health")
     assert health_response.status_code == 200

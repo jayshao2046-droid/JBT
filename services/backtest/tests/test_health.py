@@ -14,6 +14,7 @@ from services.backtest.src.main import app
 
 def test_app_exposes_health_route() -> None:
     route_paths = {route.path for route in app.router.routes}
+    assert "/api/health" in route_paths
     assert "/api/v1/health" in route_paths
 
 
@@ -28,4 +29,5 @@ def test_healthcheck_returns_backtest_metadata() -> None:
 def test_create_app_returns_fastapi_instance() -> None:
     instance = create_app()
     assert instance.title == "JBT Backtest Service"
+    assert any(route.path == "/api/health" for route in instance.router.routes)
     assert any(route.path == "/api/v1/health" for route in instance.router.routes)

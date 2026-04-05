@@ -8,7 +8,7 @@ if __package__:
 else:
     from core.settings import get_settings
 
-router = APIRouter(prefix="/api/v1", tags=["health"])
+router = APIRouter(tags=["health"])
 
 
 class HealthResponse(BaseModel):
@@ -20,7 +20,8 @@ class HealthResponse(BaseModel):
     risk_config_source: str
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.get("/api/health", response_model=HealthResponse)
+@router.get("/api/v1/health", response_model=HealthResponse)
 def healthcheck() -> HealthResponse:
     settings = get_settings()
     return HealthResponse(
