@@ -9,7 +9,7 @@
 - 任务 ID：TASK-0004
 - 来源 Agent：Atlas
 - 目标角色：Jay.S、项目架构师、回测 Agent
-- 当前状态：Air 看板单服务部署已完成；git 远端推送受阻于仓库未配置 remote
+- 当前状态：Air 看板单服务部署与 API 500 修复均已完成；JBT 已正式推送到 GitHub origin
 - 当前交付基线：`5690c74`（`feat(backtest): finalize TASK-0008 fixes and docker prep`）
 
 ## 本次冻结口径
@@ -22,13 +22,15 @@
 ## 实际执行结果
 
 1. 本地文档补录已提交为 `fb65f5f`：`docs(backtest): record Air dashboard rollback handoff`。
-2. `git push` 未执行成功，原因是当前 JBT 仓库未配置任何 remote。
+2. 已将 JBT 的 `origin` 正式切到 GitHub 仓库 `https://github.com/jayshao2046-droid/JBT.git`，并完成 `main` 首次推送；本地 bare 仓库保留为 `local` 备份 remote。
 3. 代码已通过 rsync 同步到 Air：`~/botquant-backtest-prod/`。
 4. Air 上旧看板容器实际名称为 `backtest-dashboard`，状态为 `Up 35 hours (unhealthy)`，并占用 3001 端口。
 5. 已先为旧容器生成回滚镜像：`jbt-backtest-web:rollback-202604060256`。
 6. 已移除旧 `backtest-dashboard` 与失败创建的 `JBT-BACKTEST-WEB-3001`，随后重新执行 `docker compose -f docker-compose.dev.yml up -d --no-deps backtest-web`。
 7. 新容器 `JBT-BACKTEST-WEB-3001` 已启动成功，`curl -I http://127.0.0.1:3001` 返回 `HTTP/1.1 200 OK`。
 8. Air 上后端容器 `backtest-api` 保持 `Up 35 hours (healthy)`，本轮未被重建或重启。
+9. 后续远端看板出现 API 500，经核对并非后端宕机，而是 `JBT-BACKTEST-WEB-3001` 位于 `botquant-backtest-prod_default`，`backtest-api` 位于 `backtest_backtest-net`，且看板容器内 `BACKEND_BASE_URL=http://backtest:8103` 无法解析到现网后端。
+10. 已执行 `docker network connect --alias backtest botquant-backtest-prod_default backtest-api`，把现网后端补接到看板网络并增加 `backtest` 别名；修复后 `curl http://127.0.0.1:3001/api/strategies` 返回 `HTTP/1.1 200 OK`，远端 500 已消失。
 
 ## Air 部署前检查项
 
@@ -71,4 +73,4 @@
 
 1. 现在 Air 上已经切换到新的 `JBT-BACKTEST-WEB-3001`，3001 返回 200，8103 后端保持健康未动。
 2. 当前可用回滚点是 `jbt-backtest-web:rollback-202604060256`，真回滚时只恢复看板容器，不会把后端一起带回去。
-3. git 远端推送这一步还没做成，因为 JBT 仓库当前没有配置 remote；如果你要我补推，需要先给出目标远端名或 URL。
+3. JBT 代码已经正式推送到 GitHub origin；当前仓内 `origin` 指向 GitHub，`local` 保留本地备份 remote。
