@@ -9,7 +9,7 @@
 - 任务 ID：TASK-0004
 - 来源 Agent：Atlas
 - 目标角色：Jay.S、项目架构师、回测 Agent
-- 当前状态：Air 看板单服务部署与 API 500 修复均已完成；JBT 已正式推送到 GitHub origin
+- 当前状态：Air 上 legacy backtest 已清理，当前仅保留 JBT backtest 运行栈；JBT 已正式推送到 GitHub origin
 - 当前交付基线：`5690c74`（`feat(backtest): finalize TASK-0008 fixes and docker prep`）
 
 ## 本次冻结口径
@@ -31,6 +31,10 @@
 8. Air 上后端容器 `backtest-api` 保持 `Up 35 hours (healthy)`，本轮未被重建或重启。
 9. 后续远端看板出现 API 500，经核对并非后端宕机，而是 `JBT-BACKTEST-WEB-3001` 位于 `botquant-backtest-prod_default`，`backtest-api` 位于 `backtest_backtest-net`，且看板容器内 `BACKEND_BASE_URL=http://backtest:8103` 无法解析到现网后端。
 10. 已执行 `docker network connect --alias backtest botquant-backtest-prod_default backtest-api`，把现网后端补接到看板网络并增加 `backtest` 别名；修复后 `curl http://127.0.0.1:3001/api/strategies` 返回 `HTTP/1.1 200 OK`，远端 500 已消失。
+11. Jay.S 追加要求“清除 Air 上老的 backtest，只留 jbt-backtest”后，已先 `docker compose -f docker-compose.dev.yml build backtest`，随后停止并删除 legacy 容器 `backtest-api`，再执行 `docker compose -f docker-compose.dev.yml up -d --no-deps backtest`，由 `JBT-BACKTEST-8103` 正式接管 8103。
+12. 由于 `backtest-web` 镜像内部的 Next rewrites 仍编译为 `http://backtest-api:8103`，已补执行 `docker compose -f docker-compose.dev.yml build --build-arg BACKEND_BASE_URL=http://backtest:8103 backtest-web` 与 `docker compose -f docker-compose.dev.yml up -d --no-deps backtest-web`，使 3001 代理彻底切到 JBT 后端。
+13. 旧网络 `backtest_backtest-net` 已删除；当前 Air 上仅剩 `JBT-BACKTEST-8103` 与 `JBT-BACKTEST-WEB-3001` 两个回测相关容器。
+14. 当前验证结果：`curl http://127.0.0.1:8103/api/strategies` 返回 200，`curl http://127.0.0.1:3001/api/strategies` 返回 200；但 `JBT-BACKTEST-8103` 仍显示 `unhealthy`，高概率是现有 compose healthcheck 路径与实际服务健康路由不一致，属于后续单独修正项。
 
 ## Air 部署前检查项
 
@@ -74,3 +78,4 @@
 1. 现在 Air 上已经切换到新的 `JBT-BACKTEST-WEB-3001`，3001 返回 200，8103 后端保持健康未动。
 2. 当前可用回滚点是 `jbt-backtest-web:rollback-202604060256`，真回滚时只恢复看板容器，不会把后端一起带回去。
 3. JBT 代码已经正式推送到 GitHub origin；当前仓内 `origin` 指向 GitHub，`local` 保留本地备份 remote。
+4. Air 上现已不再保留 legacy `backtest-api` 与 `backtest_backtest-net`；运行态只剩 JBT backtest 栈。
