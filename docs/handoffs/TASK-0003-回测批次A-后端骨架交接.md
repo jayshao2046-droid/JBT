@@ -17,7 +17,7 @@
 2. `jobs.py` 已明确采用“固定策略模板 + 用户上传一体化 YAML 文件”的任务创建入口，并限制第一阶段只接受期货回测。
 3. 所有风控来源已在接口骨架和 README 口径中明确为 YAML，未写入任何硬编码风控参数。
 4. `README.md` 已对齐当前已确认口径：在线回测主路径、固定模板 + 用户参数、一体化 YAML 风控、回测后推送决策端、同机同 compose 部署。
-5. 未触碰 `tests/`、`configs/`、`src/backtest/session.py`、`runner.py`、`strategy_base.py`、`result_builder.py`、`shared/contracts/**` 与 `V0-backtext 看板/`。
+5. 未触碰 `tests/`、`configs/`、`src/backtest/session.py`、`runner.py`、`strategy_base.py`、`result_builder.py`、`shared/contracts/**` 与 `backtest_web/`。
 
 ## 实际修改文件
 

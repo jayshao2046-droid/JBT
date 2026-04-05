@@ -104,7 +104,7 @@
 - 批次 B P1 Token 已签发，token_id 摘要：tok-60193dc1-e1be-459b-8133-c49e454adc0c。
 - 服务代码实际写入仅落在五个白名单文件：services/backtest/src/backtest/session.py、services/backtest/src/backtest/runner.py、services/backtest/src/backtest/strategy_base.py、services/backtest/src/backtest/result_builder.py、services/backtest/tests/test_health.py。
 - 额外发生的 P-LOG 写入仅有 docs/handoffs/TASK-0003-回测批次B-在线回测引擎交接.md 与 docs/prompts/agents/回测提示词.md，均属于回测 Agent 自有 handoff / 私有 prompt，不构成 P1 越权。
-- 未触碰 shared/contracts/**、services/backtest/src/api/**、services/backtest/src/main.py、services/backtest/src/core/settings.py、services/backtest/README.md、services/backtest/configs/**、services/backtest/V0-backtext 看板/**、docker-compose.dev.yml、services/dashboard/**、services/decision/** 或任何远端交付文件。✅
+- 未触碰 shared/contracts/**、services/backtest/src/api/**、services/backtest/src/main.py、services/backtest/src/core/settings.py、services/backtest/README.md、services/backtest/configs/**、services/backtest/backtest_web/**、docker-compose.dev.yml、services/dashboard/**、services/decision/** 或任何远端交付文件。✅
 
 ### D-BT-01 ~ D-BT-05 终审复核
 
@@ -155,7 +155,7 @@
 - 批次 A P1 Token 已签发，token_id 摘要：`tok-311d1a36-0cff-4141-939a-e96acadb9a38`。
 - 服务代码实际写入仅落在六个白名单文件：`services/backtest/src/main.py`、`services/backtest/src/api/app.py`、`services/backtest/src/api/routes/health.py`、`services/backtest/src/api/routes/jobs.py`、`services/backtest/src/core/settings.py`、`services/backtest/README.md`。
 - 额外发生的 P-LOG 写入仅有 `docs/handoffs/TASK-0003-回测批次A-后端骨架交接.md` 与 `docs/prompts/agents/回测提示词.md`，均属于回测 Agent 自有 handoff / 私有 prompt，同样符合 `WORKFLOW.md`，不构成越权。
-- 未触碰 `shared/contracts/**`、`services/backtest/tests/**`、`services/backtest/configs/**`、`services/backtest/src/backtest/**`、`services/backtest/V0-backtext 看板/**` 或批次 B/C 白名单外文件。
+- 未触碰 `shared/contracts/**`、`services/backtest/tests/**`、`services/backtest/configs/**`、`services/backtest/src/backtest/**`、`services/backtest/backtest_web/**` 或批次 B/C 白名单外文件。
 
 ### D-BT-01 ~ D-BT-05 终审复核
 

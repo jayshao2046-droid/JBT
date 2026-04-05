@@ -1,12 +1,34 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+import math
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from math import inf, sqrt
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
+
+
+def _safe_json_dumps(obj: Any, **kwargs: Any) -> str:
+    """Serialize obj to JSON, replacing NaN/Infinity with null to produce valid JSON."""
+
+    def _default(o: Any) -> Any:
+        if isinstance(o, float) and not math.isfinite(o):
+            return None
+        raise TypeError(f"Object of type {type(o).__name__} is not JSON serializable")
+
+    # Walk the object and sanitize NaN/Infinity inline
+    def _sanitize(o: Any) -> Any:
+        if isinstance(o, float):
+            return None if not math.isfinite(o) else o
+        if isinstance(o, dict):
+            return {k: _sanitize(v) for k, v in o.items()}
+        if isinstance(o, list):
+            return [_sanitize(v) for v in o]
+        return o
+
+    return json.dumps(_sanitize(obj), **kwargs)
 
 if __package__:
     from .strategy_base import (
@@ -88,6 +110,9 @@ class BacktestReport:
     notes: List[str]
     report_summary: str
     failure_reason: Optional[str] = None
+    transaction_cost_summary: Dict[str, Any] = field(default_factory=dict)
+    trades: List[Dict[str, Any]] = field(default_factory=list)
+    tqsdk_snapshot: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         payload = asdict(self)
@@ -115,6 +140,9 @@ class BacktestReport:
             }
             for violation in self.risk_summary.violations
         ]
+        # Ensure tqsdk_snapshot is always present
+        if "tqsdk_snapshot" not in payload:
+            payload["tqsdk_snapshot"] = {}
         return payload
 
 
@@ -133,12 +161,14 @@ class BacktestResultBuilder:
         job: BacktestJobSnapshot,
         strategy_definition: StrategyDefinition,
         artifacts: StrategyExecutionArtifacts,
+        transaction_costs_override: Optional[Dict[str, Any]] = None,
     ) -> BacktestReport:
         return self._build_report(
             job=job,
             status="completed",
             strategy_definition=strategy_definition,
             artifacts=artifacts,
+            transaction_costs_override=transaction_costs_override,
         )
 
     def build_failed(
@@ -181,7 +211,7 @@ class BacktestResultBuilder:
             report_dir.mkdir(parents=True, exist_ok=True)
             report_file = report_dir / "report.json"
             report_file.write_text(
-                json.dumps(report.to_dict(), ensure_ascii=False, indent=2),
+                _safe_json_dumps(report.to_dict(), ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
         except OSError:
@@ -196,6 +226,7 @@ class BacktestResultBuilder:
         artifacts: StrategyExecutionArtifacts,
         strategy_definition: Optional[StrategyDefinition],
         failure_reason: Optional[str] = None,
+        transaction_costs_override: Optional[Dict[str, Any]] = None,
     ) -> BacktestReport:
         completed_at = artifacts.completed_at or datetime.now().astimezone()
         equity_curve = list(artifacts.equity_curve)
@@ -221,7 +252,8 @@ class BacktestResultBuilder:
         relative_dir = PurePosixPath(job.job_id)
         strategy_name = self._resolve_strategy_name(job, strategy_definition)
         timeframe = self._resolve_timeframe(strategy_definition)
-        transaction_costs = self._build_transaction_costs(strategy_definition)
+        transaction_costs = self._build_transaction_costs(strategy_definition, transaction_costs_override=transaction_costs_override)
+        transaction_cost_summary = self._build_transaction_cost_summary(transaction_costs, metrics.total_trades)
 
         return BacktestReport(
             result_id=str(uuid4()),
@@ -258,6 +290,12 @@ class BacktestResultBuilder:
                 failure_reason=failure_reason,
             ),
             failure_reason=failure_reason,
+            transaction_cost_summary=transaction_cost_summary,
+            trades=list(artifacts.trade_records),
+            tqsdk_snapshot={
+                "account": dict(artifacts.tqsdk_account_snapshot),
+                "position": dict(artifacts.tqsdk_position_snapshot),
+            },
         )
 
     def _build_metrics(
@@ -384,6 +422,7 @@ class BacktestResultBuilder:
     def _build_transaction_costs(
         self,
         strategy_definition: Optional[StrategyDefinition],
+        transaction_costs_override: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         if strategy_definition is None:
             return {
@@ -392,11 +431,59 @@ class BacktestResultBuilder:
             }
 
         raw_costs = strategy_definition.transaction_costs
+        if not raw_costs and transaction_costs_override:
+            return {
+                "slippage_per_unit": _coerce_optional_number(transaction_costs_override.get("slippage_per_unit")),
+                "commission_per_lot_round_turn": _coerce_optional_number(
+                    transaction_costs_override.get("commission_per_lot_round_turn")
+                ),
+            }
         return {
             "slippage_per_unit": _coerce_optional_number(raw_costs.get("slippage_per_unit")),
             "commission_per_lot_round_turn": _coerce_optional_number(
                 raw_costs.get("commission_per_lot_round_turn")
             ),
+        }
+
+    def _build_transaction_cost_summary(
+        self,
+        transaction_costs: Dict[str, Any],
+        total_trades: int,
+    ) -> Dict[str, Any]:
+        """Compute aggregate transaction cost statistics from per-unit rates and total trade count."""
+        slippage_per_unit = transaction_costs.get("slippage_per_unit")
+        commission_per_lot = transaction_costs.get("commission_per_lot_round_turn")
+
+        total_slippage: Optional[float] = None
+        total_commission: Optional[float] = None
+        total_cost: Optional[float] = None
+
+        if slippage_per_unit is not None:
+            # Each round-trip has an open fill and a close fill (2 fills in one round-turn)
+            total_slippage = round(float(slippage_per_unit) * 2.0 * total_trades, 4)
+        if commission_per_lot is not None:
+            total_commission = round(float(commission_per_lot) * total_trades, 4)
+
+        if total_slippage is not None and total_commission is not None:
+            total_cost = round(total_slippage + total_commission, 4)
+        elif total_slippage is not None:
+            total_cost = total_slippage
+        elif total_commission is not None:
+            total_cost = total_commission
+
+        avg_cost_per_trade: Optional[float] = None
+        if total_cost is not None and total_trades > 0:
+            avg_cost_per_trade = round(total_cost / total_trades, 4)
+
+        return {
+            "total_trades": total_trades,
+            "slippage_per_unit": slippage_per_unit,
+            "commission_per_lot_round_turn": commission_per_lot,
+            "total_slippage_estimated": total_slippage,
+            "total_commission_estimated": total_commission,
+            "total_cost_estimated": total_cost,
+            "avg_cost_per_trade_estimated": avg_cost_per_trade,
+            "note": "slippage 按每手双边（开仓+平仓）估算，commission 按每笔回合计" if total_cost is not None else "transaction_costs 未配置，成本记为零",
         }
 
     def _build_report_summary(

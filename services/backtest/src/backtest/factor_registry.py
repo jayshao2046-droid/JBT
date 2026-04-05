@@ -11,42 +11,6 @@ except ImportError:
 
 FactorCalculator = Callable[[List[Dict[str, Any]], Dict[str, Any]], List[Dict[str, Any]]]
 
-OFFICIAL_FACTOR_BASELINE = (
-    "ADX",
-    "ATR",
-    "BollingerBands",
-    "CCI",
-    "DEMA",
-    "EMA",
-    "Ichimoku",
-    "MACD",
-    "MFI",
-    "OBV",
-    "ParabolicSAR",
-    "RSI",
-    "SMA",
-    "Supertrend",
-    "VolumeRatio",
-    "VWAP",
-    "WilliamsR",
-    "GarmanKlass",
-    "HistoricalVol",
-    "ImpliedVolatility",
-    "VolatilityFactor",
-    "BasisSpread",
-    "CointResidual",
-    "SpreadCrosscommodity",
-    "SpreadCrossperiod",
-    "SpreadRatio",
-    "ZScoreSpread",
-    "NewsSentiment",
-    "SocialSentiment",
-    "SentimentFactor",
-    "InventoryFactor",
-    "OpenInterestFactor",
-    "WarehouseReceiptFactor",
-)
-
 
 @dataclass(frozen=True)
 class FactorResult:
@@ -186,7 +150,7 @@ def _require_positive_float(value: Any, *, label: str) -> float:
         coerced = float(value)
     except (TypeError, ValueError) as exc:
         raise StrategyConfigError(f"{label} must be a positive number") from exc
-    if coerced <= 0:
+    if not math.isfinite(coerced) or coerced <= 0:
         raise StrategyConfigError(f"{label} must be a positive number")
     return coerced
 
@@ -203,55 +167,11 @@ def _read_number(bar: Mapping[str, Any], key: str, *, label: str) -> float:
         raise StrategyConfigError(f"bars[{key}] must be numeric for {label}") from exc
 
 
-def _append_candidate_keys(target: List[str], raw_value: Any) -> None:
-    if isinstance(raw_value, str) and raw_value.strip():
-        target.append(raw_value.strip())
-        return
-    if isinstance(raw_value, Sequence) and not isinstance(raw_value, (str, bytes, bytearray)):
-        for item in raw_value:
-            if isinstance(item, str) and item.strip():
-                target.append(item.strip())
-
-
-def _candidate_keys(
-    params: Mapping[str, Any],
-    *default_keys: str,
-    param_keys: Sequence[str] = ("column",),
-) -> List[str]:
-    keys: List[str] = []
-    for param_key in param_keys:
-        _append_candidate_keys(keys, params.get(param_key))
-    for default_key in default_keys:
-        _append_candidate_keys(keys, default_key)
-
-    deduped: List[str] = []
-    seen = set()
-    for key in keys:
-        if key not in seen:
-            seen.add(key)
-            deduped.append(key)
-    return deduped
-
-
-def _read_optional_number_from_keys(
-    bar: Mapping[str, Any],
-    keys: Sequence[str],
-    *,
-    label: str,
-) -> Optional[float]:
-    for key in keys:
-        if key not in bar:
-            continue
-        value = bar[key]
-        if value in {None, ""}:
-            continue
-        if isinstance(value, bool):
-            raise StrategyConfigError(f"bars[{key}] must be numeric for {label}")
-        try:
-            return float(value)
-        except (TypeError, ValueError) as exc:
-            raise StrategyConfigError(f"bars[{key}] must be numeric for {label}") from exc
-    return None
+def _read_column_name(value: Any, *, label: str, default: str) -> str:
+    candidate = default if value is None else value
+    if not isinstance(candidate, str) or not candidate.strip():
+        raise StrategyConfigError(f"{label} must be a non-empty string")
+    return candidate.strip()
 
 
 def _ema(values: Sequence[Optional[float]], period: int) -> List[Optional[float]]:
@@ -277,31 +197,12 @@ def _rolling_mean(values: Sequence[float], period: int) -> List[Optional[float]]
     running_total = 0.0
 
     for value in values:
-        value = float(value)
-        window.append(value)
-        running_total += value
+        window.append(float(value))
+        running_total += float(value)
         if len(window) > period:
             running_total -= window.pop(0)
         if len(window) == period:
             result.append(running_total / period)
-        else:
-            result.append(None)
-    return result
-
-
-def _rolling_sum(values: Sequence[float], period: int) -> List[Optional[float]]:
-    result: List[Optional[float]] = []
-    window: List[float] = []
-    running_total = 0.0
-
-    for value in values:
-        value = float(value)
-        window.append(value)
-        running_total += value
-        if len(window) > period:
-            running_total -= window.pop(0)
-        if len(window) == period:
-            result.append(running_total)
         else:
             result.append(None)
     return result
@@ -348,176 +249,90 @@ def _rolling_max(values: Sequence[float], period: int) -> List[Optional[float]]:
     return result
 
 
-def _build_rows(
-    bars: Sequence[Mapping[str, Any]],
-    **series_map: Sequence[Any],
-) -> List[Dict[str, Any]]:
-    rows: List[Dict[str, Any]] = []
-    for index, bar in enumerate(bars):
-        row = {"timestamp": bar["timestamp"]}
-        for key, series in series_map.items():
-            row[key] = series[index]
-        rows.append(row)
-    return rows
+def _rolling_sum(values: Sequence[float], period: int) -> List[Optional[float]]:
+    result: List[Optional[float]] = []
+    window: List[float] = []
+    running_total = 0.0
+
+    for value in values:
+        numeric = float(value)
+        window.append(numeric)
+        running_total += numeric
+        if len(window) > period:
+            running_total -= window.pop(0)
+        result.append(running_total if len(window) == period else None)
+    return result
 
 
-def _close_series(bars: Sequence[Mapping[str, Any]], *, label: str) -> List[float]:
-    return [_read_number(bar, "close", label=label) for bar in bars]
+def _rolling_mean_optional(
+    values: Sequence[Optional[float]],
+    period: int,
+) -> List[Optional[float]]:
+    result: List[Optional[float]] = []
+    window: List[Optional[float]] = []
 
-
-def _open_series(bars: Sequence[Mapping[str, Any]], *, label: str) -> List[float]:
-    return [_read_number(bar, "open", label=label) for bar in bars]
-
-
-def _high_series(bars: Sequence[Mapping[str, Any]], *, label: str) -> List[float]:
-    return [_read_number(bar, "high", label=label) for bar in bars]
-
-
-def _low_series(bars: Sequence[Mapping[str, Any]], *, label: str) -> List[float]:
-    return [_read_number(bar, "low", label=label) for bar in bars]
-
-
-def _volume_series(bars: Sequence[Mapping[str, Any]], *, label: str) -> List[float]:
-    return [_read_number(bar, "volume", label=label) for bar in bars]
-
-
-def _typical_price_series(bars: Sequence[Mapping[str, Any]], *, label: str) -> List[float]:
-    highs = _high_series(bars, label=label)
-    lows = _low_series(bars, label=label)
-    closes = _close_series(bars, label=label)
-    return [(high + low + close) / 3.0 for high, low, close in zip(highs, lows, closes)]
-
-
-def _true_range_series(bars: Sequence[Mapping[str, Any]], *, label: str) -> List[float]:
-    trs: List[float] = []
-    previous_close: Optional[float] = None
-    for bar in bars:
-        high = _read_number(bar, "high", label=label)
-        low = _read_number(bar, "low", label=label)
-        close = _read_number(bar, "close", label=label)
-        if previous_close is None:
-            true_range = high - low
+    for value in values:
+        window.append(None if value is None else float(value))
+        if len(window) > period:
+            window.pop(0)
+        if len(window) == period and all(item is not None for item in window):
+            result.append(sum(float(item) for item in window) / period)
         else:
-            true_range = max(high - low, abs(high - previous_close), abs(low - previous_close))
-        trs.append(true_range)
-        previous_close = close
-    return trs
+            result.append(None)
+    return result
 
 
-def _spread_values(
-    bars: Sequence[Mapping[str, Any]],
-    params: Mapping[str, Any],
-    *,
-    label: str,
-    explicit_keys: Sequence[str],
-    reference_keys: Sequence[str],
-    mode: str = "difference",
-) -> List[float]:
-    explicit_candidates = _candidate_keys(
-        params,
-        *explicit_keys,
-        param_keys=("column", "spread_column", "value_column"),
-    )
-    reference_candidates = _candidate_keys(
-        params,
-        *reference_keys,
-        param_keys=("reference_column", "pair_column", "spot_column", "benchmark_column"),
-    )
-    hedge_ratio = float(params.get("hedge_ratio", 1.0))
+def _rolling_weighted_mean(
+    values: Sequence[Optional[float]],
+    period: int,
+) -> List[Optional[float]]:
+    result: List[Optional[float]] = []
+    window: List[Optional[float]] = []
+    weights = [float(index + 1) for index in range(period)]
+    total_weight = sum(weights)
 
-    values: List[float] = []
-    for bar in bars:
-        explicit_value = _read_optional_number_from_keys(bar, explicit_candidates, label=label)
-        if explicit_value is not None:
-            values.append(explicit_value)
-            continue
-
-        reference_value = _read_optional_number_from_keys(bar, reference_candidates, label=label)
-        if reference_value is None:
-            values.append(0.0)
-            continue
-
-        close = _read_number(bar, "close", label=label)
-        if mode == "ratio":
-            values.append(0.0 if reference_value == 0 else close / reference_value - 1.0)
+    for value in values:
+        window.append(None if value is None else float(value))
+        if len(window) > period:
+            window.pop(0)
+        if len(window) == period and all(item is not None for item in window):
+            numeric_window = [float(item) for item in window]
+            result.append(
+                sum(item * weight for item, weight in zip(numeric_window, weights)) / total_weight
+            )
         else:
-            values.append(close - hedge_ratio * reference_value)
-    return values
+            result.append(None)
+    return result
 
 
-def _single_column_values(
-    bars: Sequence[Mapping[str, Any]],
-    params: Mapping[str, Any],
-    *,
-    label: str,
-    default_keys: Sequence[str],
-    neutral_value: float = 0.0,
-) -> List[float]:
-    candidates = _candidate_keys(
-        params,
-        *default_keys,
-        param_keys=("column", "value_column", "source_column"),
-    )
-    values: List[float] = []
-    for bar in bars:
-        value = _read_optional_number_from_keys(bar, candidates, label=label)
-        values.append(neutral_value if value is None else value)
-    return values
+@factor_registry.register("SMA")
+def _calculate_sma(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 5), label="SMA.period")
+    source = _read_column_name(params.get("source"), label="SMA.source", default="close")
+    values = [_read_number(bar, source, label="SMA") for bar in bars]
+    averages = _rolling_mean(values, period)
+    return [
+        {
+            "timestamp": bar["timestamp"],
+            "sma": average,
+        }
+        for bar, average in zip(bars, averages)
+    ]
 
 
-def _change_factor_rows(
-    bars: Sequence[Mapping[str, Any]],
-    params: Mapping[str, Any],
-    *,
-    label: str,
-    output_key: str,
-    explicit_keys: Sequence[str],
-    raw_keys: Sequence[str],
-) -> List[Dict[str, Any]]:
-    explicit_candidates = _candidate_keys(
-        params,
-        *explicit_keys,
-        param_keys=("column", "factor_column", "value_column"),
-    )
-    raw_candidates = _candidate_keys(
-        params,
-        *raw_keys,
-        param_keys=("raw_column", "source_column", "base_column"),
-    )
-
-    factor_values: List[float] = []
-    raw_values: List[float] = []
-    delta_values: List[Optional[float]] = []
-    previous_raw: Optional[float] = None
-
-    for bar in bars:
-        explicit_value = _read_optional_number_from_keys(bar, explicit_candidates, label=label)
-        raw_value = _read_optional_number_from_keys(bar, raw_candidates, label=label)
-
-        if explicit_value is not None:
-            factor_value = explicit_value
-        elif raw_value is not None and previous_raw not in {None, 0.0}:
-            factor_value = (raw_value - previous_raw) / abs(previous_raw)
-        elif raw_value is not None and previous_raw is not None:
-            factor_value = raw_value - previous_raw
-        else:
-            factor_value = 0.0
-
-        delta = None if raw_value is None or previous_raw is None else raw_value - previous_raw
-        factor_values.append(factor_value)
-        raw_values.append(0.0 if raw_value is None else raw_value)
-        delta_values.append(delta)
-        if raw_value is not None:
-            previous_raw = raw_value
-
-    return _build_rows(
-        bars,
-        **{
-            output_key: factor_values,
-            f"{output_key}_raw": raw_values,
-            f"{output_key}_delta": delta_values,
-        },
-    )
+@factor_registry.register("EMA")
+def _calculate_ema(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 5), label="EMA.period")
+    source = _read_column_name(params.get("source"), label="EMA.source", default="close")
+    values = [_read_number(bar, source, label="EMA") for bar in bars]
+    averages = _ema(values, period)
+    return [
+        {
+            "timestamp": bar["timestamp"],
+            "ema": average,
+        }
+        for bar, average in zip(bars, averages)
+    ]
 
 
 @factor_registry.register("MACD")
@@ -525,8 +340,9 @@ def _calculate_macd(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[
     fast = _require_positive_int(params.get("fast", 12), label="MACD.fast")
     slow = _require_positive_int(params.get("slow", 26), label="MACD.slow")
     signal = _require_positive_int(params.get("signal", 9), label="MACD.signal")
+    source = _read_column_name(params.get("source"), label="MACD.source", default="close")
 
-    closes = _close_series(bars, label="MACD")
+    closes = [_read_number(bar, source, label="MACD") for bar in bars]
     ema_fast = _ema(closes, fast)
     ema_slow = _ema(closes, slow)
     macd_line = [
@@ -534,22 +350,28 @@ def _calculate_macd(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[
         for fast_value, slow_value in zip(ema_fast, ema_slow)
     ]
     signal_line = _ema(macd_line, signal)
-    histogram = [
-        None if macd_value is None or signal_value is None else macd_value - signal_value
-        for macd_value, signal_value in zip(macd_line, signal_line)
-    ]
-    return _build_rows(
-        bars,
-        macd_line=macd_line,
-        macd_signal=signal_line,
-        macd_hist=histogram,
-    )
+
+    rows: List[Dict[str, Any]] = []
+    for bar, macd_value, signal_value in zip(bars, macd_line, signal_line):
+        histogram = None
+        if macd_value is not None and signal_value is not None:
+            histogram = macd_value - signal_value
+        rows.append(
+            {
+                "timestamp": bar["timestamp"],
+                "macd_line": macd_value,
+                "macd_signal": signal_value,
+                "macd_hist": histogram,
+            }
+        )
+    return rows
 
 
 @factor_registry.register("RSI")
 def _calculate_rsi(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
     period = _require_positive_int(params.get("period", 14), label="RSI.period")
-    closes = _close_series(bars, label="RSI")
+    source = _read_column_name(params.get("source"), label="RSI.source", default="close")
+    closes = [_read_number(bar, source, label="RSI") for bar in bars]
 
     changes: List[float] = [0.0]
     for previous, current in zip(closes, closes[1:]):
@@ -560,10 +382,9 @@ def _calculate_rsi(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[D
     avg_gain = _ema(gains, period)
     avg_loss = _ema(losses, period)
 
-    rsi_values: List[Optional[float]] = []
-    slopes: List[Optional[float]] = []
+    rows: List[Dict[str, Any]] = []
     previous_rsi: Optional[float] = None
-    for gain_value, loss_value in zip(avg_gain, avg_loss):
+    for bar, gain_value, loss_value in zip(bars, avg_gain, avg_loss):
         if gain_value is None or loss_value is None:
             rsi_value = None
         elif loss_value == 0:
@@ -578,10 +399,14 @@ def _calculate_rsi(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[D
         if rsi_value is not None:
             previous_rsi = rsi_value
 
-        rsi_values.append(rsi_value)
-        slopes.append(slope)
-
-    return _build_rows(bars, rsi=rsi_values, rsi_slope=slopes)
+        rows.append(
+            {
+                "timestamp": bar["timestamp"],
+                "rsi": rsi_value,
+                "rsi_slope": slope,
+            }
+        )
+    return rows
 
 
 @factor_registry.register("VolumeRatio")
@@ -590,28 +415,61 @@ def _calculate_volume_ratio(
     params: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
     period = _require_positive_int(params.get("period", 5), label="VolumeRatio.period")
-    volumes = _volume_series(bars, label="VolumeRatio")
-    averages = _rolling_mean(volumes, period)
-    ratios = [
-        None if average in {None, 0.0} else volume / average
-        for volume, average in zip(volumes, averages)
-    ]
-    return _build_rows(bars, volume_ratio=ratios)
+    source = _read_column_name(params.get("source"), label="VolumeRatio.source", default="volume")
+    volumes = [_read_number(bar, source, label="VolumeRatio") for bar in bars]
+    rolling_mean = _rolling_mean(volumes, period)
+
+    rows: List[Dict[str, Any]] = []
+    for bar, volume, average in zip(bars, volumes, rolling_mean):
+        ratio = None
+        if average not in {None, 0.0}:
+            ratio = volume / average
+        rows.append(
+            {
+                "timestamp": bar["timestamp"],
+                "volume_ratio": ratio,
+            }
+        )
+    return rows
 
 
 @factor_registry.register("ATR")
 def _calculate_atr(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
     period = _require_positive_int(params.get("period", 14), label="ATR.period")
-    atr_values = _ema(_true_range_series(bars, label="ATR"), period)
-    return _build_rows(bars, atr=atr_values)
+    high_key = _read_column_name(params.get("high"), label="ATR.high", default="high")
+    low_key = _read_column_name(params.get("low"), label="ATR.low", default="low")
+    close_key = _read_column_name(params.get("close"), label="ATR.close", default="close")
+    trs: List[float] = []
+    previous_close: Optional[float] = None
+
+    for bar in bars:
+        high = _read_number(bar, high_key, label="ATR")
+        low = _read_number(bar, low_key, label="ATR")
+        close = _read_number(bar, close_key, label="ATR")
+        high_low = high - low
+        if previous_close is None:
+            true_range = high_low
+        else:
+            true_range = max(high_low, abs(high - previous_close), abs(low - previous_close))
+        trs.append(true_range)
+        previous_close = close
+
+    atr_values = _ema(trs, period)
+    return [
+        {
+            "timestamp": bar["timestamp"],
+            "atr": atr_value,
+        }
+        for bar, atr_value in zip(bars, atr_values)
+    ]
 
 
 @factor_registry.register("ADX")
 def _calculate_adx(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
     period = _require_positive_int(params.get("period", 14), label="ADX.period")
-    highs = _high_series(bars, label="ADX")
-    lows = _low_series(bars, label="ADX")
-    closes = _close_series(bars, label="ADX")
+    high_key = _read_column_name(params.get("high"), label="ADX.high", default="high")
+    low_key = _read_column_name(params.get("low"), label="ADX.low", default="low")
+    close_key = _read_column_name(params.get("close"), label="ADX.close", default="close")
     trs: List[float] = []
     plus_dm: List[float] = []
     minus_dm: List[float] = []
@@ -620,13 +478,18 @@ def _calculate_adx(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[D
     previous_low: Optional[float] = None
     previous_close: Optional[float] = None
 
-    for high, low, close in zip(highs, lows, closes):
+    for bar in bars:
+        high = _read_number(bar, high_key, label="ADX")
+        low = _read_number(bar, low_key, label="ADX")
+        close = _read_number(bar, close_key, label="ADX")
+
         if previous_close is None or previous_high is None or previous_low is None:
             trs.append(high - low)
             plus_dm.append(0.0)
             minus_dm.append(0.0)
         else:
             trs.append(max(high - low, abs(high - previous_close), abs(low - previous_close)))
+
             up_move = high - previous_high
             down_move = previous_low - low
             plus_dm.append(up_move if up_move > down_move and up_move > 0 else 0.0)
@@ -651,751 +514,1004 @@ def _calculate_adx(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[D
         dx_values.append(0.0 if denominator == 0 else abs(plus_di - minus_di) / denominator * 100.0)
 
     adx_values = _ema(dx_values, period)
-    return _build_rows(bars, adx=adx_values)
-
-
-@factor_registry.register("EMA")
-def _calculate_ema_factor(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    period = _require_positive_int(params.get("period", 20), label="EMA.period")
-    closes = _close_series(bars, label="EMA")
-    ema_values = _ema(closes, period)
-    gap_values = [
-        None if ema_value is None else close - ema_value
-        for close, ema_value in zip(closes, ema_values)
+    return [
+        {
+            "timestamp": bar["timestamp"],
+            "adx": adx_value,
+        }
+        for bar, adx_value in zip(bars, adx_values)
     ]
-    return _build_rows(bars, ema=ema_values, ema_gap=gap_values)
-
-
-@factor_registry.register("SMA")
-def _calculate_sma_factor(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    period = _require_positive_int(params.get("period", 20), label="SMA.period")
-    closes = _close_series(bars, label="SMA")
-    sma_values = _rolling_mean(closes, period)
-    gaps = [
-        None if sma_value is None else close - sma_value
-        for close, sma_value in zip(closes, sma_values)
-    ]
-    return _build_rows(bars, sma=sma_values, sma_gap=gaps)
-
-
-@factor_registry.register("DEMA")
-def _calculate_dema_factor(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    period = _require_positive_int(params.get("period", 20), label="DEMA.period")
-    closes = _close_series(bars, label="DEMA")
-    ema_one = _ema(closes, period)
-    ema_two = _ema(ema_one, period)
-    dema_values = [
-        None if ema_a is None or ema_b is None else 2.0 * ema_a - ema_b
-        for ema_a, ema_b in zip(ema_one, ema_two)
-    ]
-    return _build_rows(bars, dema=dema_values)
 
 
 @factor_registry.register("BollingerBands")
-def _calculate_bollinger_bands(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
+def _calculate_bollinger_bands(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
     period = _require_positive_int(params.get("period", 20), label="BollingerBands.period")
-    stddev_multiplier = _require_positive_float(
-        params.get("stddev", params.get("multiplier", 2.0)),
+    std_multiplier = _require_positive_float(
+        params.get("stddev", params.get("std_dev", params.get("multiplier", 2.0))),
         label="BollingerBands.stddev",
     )
-    closes = _close_series(bars, label="BollingerBands")
-    means = _rolling_mean(closes, period)
-    stds = _rolling_std(closes, period)
+    source = _read_column_name(params.get("source"), label="BollingerBands.source", default="close")
+    values = [_read_number(bar, source, label="BollingerBands") for bar in bars]
+    means = _rolling_mean(values, period)
+    stds = _rolling_std(values, period)
 
-    upper_band: List[Optional[float]] = []
-    lower_band: List[Optional[float]] = []
-    bandwidth: List[Optional[float]] = []
-    percent_b: List[Optional[float]] = []
-    for close, mean, std in zip(closes, means, stds):
-        if mean is None or std is None:
-            upper_band.append(None)
-            lower_band.append(None)
-            bandwidth.append(None)
-            percent_b.append(None)
-            continue
-        upper = mean + stddev_multiplier * std
-        lower = mean - stddev_multiplier * std
-        width = None if mean == 0 else (upper - lower) / abs(mean)
-        band_range = upper - lower
-        band_position = None if band_range == 0 else (close - lower) / band_range
-        upper_band.append(upper)
-        lower_band.append(lower)
-        bandwidth.append(width)
-        percent_b.append(band_position)
+    rows: List[Dict[str, Any]] = []
+    for bar, close, mean, std in zip(bars, values, means, stds):
+        upper = None
+        lower = None
+        bb_position = None
+        if mean is not None and std is not None:
+            upper = mean + std_multiplier * std
+            lower = mean - std_multiplier * std
+            if close <= lower:
+                bb_position = "lower_band"
+            elif close >= upper:
+                bb_position = "upper_band"
+            else:
+                bb_position = "inside_band"
+        rows.append(
+            {
+                "timestamp": bar["timestamp"],
+                "bollinger_mid": mean,
+                "bollinger_upper": upper,
+                "bollinger_lower": lower,
+                "bb_position": bb_position,
+            }
+        )
+    return rows
 
-    return _build_rows(
-        bars,
-        bollinger_mid=means,
-        bollinger_upper=upper_band,
-        bollinger_lower=lower_band,
-        bollinger_width=bandwidth,
-        bollinger_percent_b=percent_b,
+
+@factor_registry.register("DonchianBreakout")
+def _calculate_donchian_breakout(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    entry_period = _require_positive_int(
+        params.get("entry_period", params.get("period", 20)),
+        label="DonchianBreakout.entry_period",
     )
+    exit_period = _require_positive_int(
+        params.get("exit_period", max(1, entry_period // 2)),
+        label="DonchianBreakout.exit_period",
+    )
+    high_key = _read_column_name(params.get("high"), label="DonchianBreakout.high", default="high")
+    low_key = _read_column_name(params.get("low"), label="DonchianBreakout.low", default="low")
+    highs = [_read_number(bar, high_key, label="DonchianBreakout") for bar in bars]
+    lows = [_read_number(bar, low_key, label="DonchianBreakout") for bar in bars]
+    entry_highs = _rolling_max(highs, entry_period)
+    entry_lows = _rolling_min(lows, entry_period)
+    exit_highs = _rolling_max(highs, exit_period)
+    exit_lows = _rolling_min(lows, exit_period)
+
+    return [
+        {
+            "timestamp": bar["timestamp"],
+            "donchian_high": entry_high,
+            "donchian_low": entry_low,
+            "donchian_exit_high": exit_high,
+            "donchian_exit_low": exit_low,
+        }
+        for bar, entry_high, entry_low, exit_high, exit_low in zip(
+            bars,
+            entry_highs,
+            entry_lows,
+            exit_highs,
+            exit_lows,
+        )
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Migrated from J_BotQuant legacy factors (reversal, volatility, volume_price,
+# trend extras) — pure-Python implementations, no external dependencies
+# ---------------------------------------------------------------------------
+
+@factor_registry.register("WilliamsR")
+def _calculate_williams_r(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Williams %R oscillator. Returns: williams_r (range -100..0)."""
+    period = _require_positive_int(params.get("period", 14), label="WilliamsR.period")
+    highs = [_read_number(bar, "high", label="WilliamsR") for bar in bars]
+    lows = [_read_number(bar, "low", label="WilliamsR") for bar in bars]
+    closes = [_read_number(bar, "close", label="WilliamsR") for bar in bars]
+    roll_high = _rolling_max(highs, period)
+    roll_low = _rolling_min(lows, period)
+    rows: List[Dict[str, Any]] = []
+    for bar, close, hh, ll in zip(bars, closes, roll_high, roll_low):
+        value = None
+        if hh is not None and ll is not None and (hh - ll) != 0:
+            value = (hh - close) / (hh - ll) * -100.0
+        rows.append({"timestamp": bar["timestamp"], "williams_r": value})
+    return rows
+
+
+@factor_registry.register("KDJ")
+def _calculate_kdj(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """KDJ Stochastic — K, D, J lines. J = 3K - 2D.
+    Returns: kdj_k, kdj_d, kdj_j per bar.
+    """
+    k_period = _require_positive_int(params.get("k_period", 9), label="KDJ.k_period")
+    d_period = _require_positive_int(params.get("d_period", 3), label="KDJ.d_period")
+    j_smooth = _require_positive_int(params.get("j_smooth", 3), label="KDJ.j_smooth")
+    highs = [_read_number(bar, "high", label="KDJ") for bar in bars]
+    lows = [_read_number(bar, "low", label="KDJ") for bar in bars]
+    closes = [_read_number(bar, "close", label="KDJ") for bar in bars]
+    roll_high = _rolling_max(highs, k_period)
+    roll_low = _rolling_min(lows, k_period)
+
+    rsv: List[Optional[float]] = []
+    for close, hh, ll in zip(closes, roll_high, roll_low):
+        if hh is None or ll is None or (hh - ll) == 0:
+            rsv.append(None)
+        else:
+            rsv.append((close - ll) / (hh - ll) * 100.0)
+
+    k_values = _ema(rsv, d_period)
+    d_values = _ema(k_values, j_smooth)
+
+    rows: List[Dict[str, Any]] = []
+    for bar, k, d in zip(bars, k_values, d_values):
+        j = None if k is None or d is None else 3.0 * k - 2.0 * d
+        rows.append({"timestamp": bar["timestamp"], "kdj_k": k, "kdj_d": d, "kdj_j": j})
+    return rows
 
 
 @factor_registry.register("CCI")
 def _calculate_cci(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Commodity Channel Index. Returns: cci."""
     period = _require_positive_int(params.get("period", 20), label="CCI.period")
-    typical_prices = _typical_price_series(bars, label="CCI")
-    averages = _rolling_mean(typical_prices, period)
+    highs = [_read_number(bar, "high", label="CCI") for bar in bars]
+    lows = [_read_number(bar, "low", label="CCI") for bar in bars]
+    closes = [_read_number(bar, "close", label="CCI") for bar in bars]
+    typical = [(h + l + c) / 3.0 for h, l, c in zip(highs, lows, closes)]
+    tp_ma = _rolling_mean(typical, period)
 
-    cci_values: List[Optional[float]] = []
-    for index, typical_price in enumerate(typical_prices):
-        average = averages[index]
-        if average is None or index + 1 < period:
-            cci_values.append(None)
-            continue
-        window = typical_prices[index + 1 - period : index + 1]
-        mean_deviation = sum(abs(value - average) for value in window) / period
-        if mean_deviation == 0:
-            cci_values.append(0.0)
-            continue
-        cci_values.append((typical_price - average) / (0.015 * mean_deviation))
-
-    return _build_rows(bars, cci=cci_values)
-
-
-@factor_registry.register("Ichimoku")
-def _calculate_ichimoku(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    conversion_period = _require_positive_int(
-        params.get("conversion_period", 9),
-        label="Ichimoku.conversion_period",
-    )
-    base_period = _require_positive_int(
-        params.get("base_period", 26),
-        label="Ichimoku.base_period",
-    )
-    span_b_period = _require_positive_int(
-        params.get("span_b_period", 52),
-        label="Ichimoku.span_b_period",
-    )
-    highs = _high_series(bars, label="Ichimoku")
-    lows = _low_series(bars, label="Ichimoku")
-    closes = _close_series(bars, label="Ichimoku")
-    conversion_high = _rolling_max(highs, conversion_period)
-    conversion_low = _rolling_min(lows, conversion_period)
-    base_high = _rolling_max(highs, base_period)
-    base_low = _rolling_min(lows, base_period)
-    span_b_high = _rolling_max(highs, span_b_period)
-    span_b_low = _rolling_min(lows, span_b_period)
-
-    conversion_line = [
-        None if high is None or low is None else (high + low) / 2.0
-        for high, low in zip(conversion_high, conversion_low)
-    ]
-    base_line = [
-        None if high is None or low is None else (high + low) / 2.0
-        for high, low in zip(base_high, base_low)
-    ]
-    span_a = [
-        None if conversion is None or base is None else (conversion + base) / 2.0
-        for conversion, base in zip(conversion_line, base_line)
-    ]
-    span_b = [
-        None if high is None or low is None else (high + low) / 2.0
-        for high, low in zip(span_b_high, span_b_low)
-    ]
-    cloud_bias: List[Optional[int]] = []
-    for close, leading_a, leading_b in zip(closes, span_a, span_b):
-        if leading_a is None or leading_b is None:
-            cloud_bias.append(None)
-            continue
-        cloud_top = max(leading_a, leading_b)
-        cloud_bottom = min(leading_a, leading_b)
-        if close > cloud_top:
-            cloud_bias.append(1)
-        elif close < cloud_bottom:
-            cloud_bias.append(-1)
-        else:
-            cloud_bias.append(0)
-
-    return _build_rows(
-        bars,
-        ichimoku_conversion=conversion_line,
-        ichimoku_base=base_line,
-        ichimoku_span_a=span_a,
-        ichimoku_span_b=span_b,
-        ichimoku_cloud_bias=cloud_bias,
-    )
-
-
-@factor_registry.register("MFI")
-def _calculate_mfi(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
-    period = _require_positive_int(params.get("period", 14), label="MFI.period")
-    typical_prices = _typical_price_series(bars, label="MFI")
-    volumes = _volume_series(bars, label="MFI")
-    raw_money_flow = [price * volume for price, volume in zip(typical_prices, volumes)]
-
-    positive_flow = [0.0]
-    negative_flow = [0.0]
-    for previous_price, current_price, flow in zip(
-        typical_prices,
-        typical_prices[1:],
-        raw_money_flow[1:],
-    ):
-        if current_price > previous_price:
-            positive_flow.append(flow)
-            negative_flow.append(0.0)
-        elif current_price < previous_price:
-            positive_flow.append(0.0)
-            negative_flow.append(flow)
-        else:
-            positive_flow.append(0.0)
-            negative_flow.append(0.0)
-
-    positive_totals = _rolling_sum(positive_flow, period)
-    negative_totals = _rolling_sum(negative_flow, period)
-    mfi_values: List[Optional[float]] = []
-    for positive_total, negative_total in zip(positive_totals, negative_totals):
-        if positive_total is None or negative_total is None:
-            mfi_values.append(None)
-            continue
-        if negative_total == 0:
-            mfi_values.append(50.0 if positive_total == 0 else 100.0)
-            continue
-        money_ratio = positive_total / negative_total
-        mfi_values.append(100.0 - 100.0 / (1.0 + money_ratio))
-
-    return _build_rows(bars, mfi=mfi_values)
+    rows: List[Dict[str, Any]] = []
+    window: List[float] = []
+    for bar, tp, ma in zip(bars, typical, tp_ma):
+        window.append(tp)
+        if len(window) > period:
+            window.pop(0)
+        cci_value = None
+        if ma is not None and len(window) == period:
+            mad = sum(abs(v - ma) for v in window) / period
+            if mad != 0:
+                cci_value = (tp - ma) / (0.015 * mad)
+        rows.append({"timestamp": bar["timestamp"], "cci": cci_value})
+    return rows
 
 
 @factor_registry.register("OBV")
 def _calculate_obv(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
-    _ = params
-    closes = _close_series(bars, label="OBV")
-    volumes = _volume_series(bars, label="OBV")
-    obv_values: List[float] = []
-    running_value = 0.0
-
-    for index, (close, volume) in enumerate(zip(closes, volumes)):
-        if index == 0:
-            obv_values.append(running_value)
-            continue
-        previous_close = closes[index - 1]
-        if close > previous_close:
-            running_value += volume
-        elif close < previous_close:
-            running_value -= volume
-        obv_values.append(running_value)
-
-    return _build_rows(bars, obv=obv_values)
-
-
-@factor_registry.register("ParabolicSAR")
-def _calculate_parabolic_sar(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    step = _require_positive_float(params.get("step", 0.02), label="ParabolicSAR.step")
-    max_step = _require_positive_float(
-        params.get("max_step", 0.2),
-        label="ParabolicSAR.max_step",
-    )
-    if max_step < step:
-        raise StrategyConfigError("ParabolicSAR.max_step must be greater than or equal to step")
-
-    highs = _high_series(bars, label="ParabolicSAR")
-    lows = _low_series(bars, label="ParabolicSAR")
-    closes = _close_series(bars, label="ParabolicSAR")
-    if not bars:
-        return []
-
-    sar_values: List[float] = [lows[0]]
-    trend_values: List[int] = [0]
-    if len(bars) == 1:
-        return _build_rows(bars, parabolic_sar=sar_values, parabolic_trend=trend_values)
-
-    uptrend = closes[1] >= closes[0]
-    sar = min(lows[0], lows[1]) if uptrend else max(highs[0], highs[1])
-    extreme_point = max(highs[0], highs[1]) if uptrend else min(lows[0], lows[1])
-    acceleration = step
-    sar_values.append(sar)
-    trend_values.append(1 if uptrend else -1)
-
-    for index in range(2, len(bars)):
-        sar = sar + acceleration * (extreme_point - sar)
-        if uptrend:
-            sar = min(sar, lows[index - 1], lows[index - 2])
-            if lows[index] < sar:
-                uptrend = False
-                sar = extreme_point
-                extreme_point = lows[index]
-                acceleration = step
-            else:
-                if highs[index] > extreme_point:
-                    extreme_point = highs[index]
-                    acceleration = min(max_step, acceleration + step)
-        else:
-            sar = max(sar, highs[index - 1], highs[index - 2])
-            if highs[index] > sar:
-                uptrend = True
-                sar = extreme_point
-                extreme_point = highs[index]
-                acceleration = step
-            else:
-                if lows[index] < extreme_point:
-                    extreme_point = lows[index]
-                    acceleration = min(max_step, acceleration + step)
-
-        sar_values.append(sar)
-        trend_values.append(1 if uptrend else -1)
-
-    return _build_rows(bars, parabolic_sar=sar_values, parabolic_trend=trend_values)
-
-
-@factor_registry.register("Supertrend")
-def _calculate_supertrend(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    period = _require_positive_int(params.get("period", 10), label="Supertrend.period")
-    multiplier = _require_positive_float(
-        params.get("multiplier", 3.0),
-        label="Supertrend.multiplier",
-    )
-    highs = _high_series(bars, label="Supertrend")
-    lows = _low_series(bars, label="Supertrend")
-    closes = _close_series(bars, label="Supertrend")
-    atr_values = [row["atr"] for row in _calculate_atr(bars, {"period": period})]
-    final_upper: List[Optional[float]] = []
-    final_lower: List[Optional[float]] = []
-    supertrend_values: List[Optional[float]] = []
-    direction_values: List[Optional[int]] = []
-
-    for index, (high, low, close, atr_value) in enumerate(zip(highs, lows, closes, atr_values)):
-        if atr_value is None:
-            final_upper.append(None)
-            final_lower.append(None)
-            supertrend_values.append(None)
-            direction_values.append(None)
-            continue
-
-        hl2 = (high + low) / 2.0
-        basic_upper = hl2 + multiplier * atr_value
-        basic_lower = hl2 - multiplier * atr_value
-        if index == 0 or final_upper[-1] is None or final_lower[-1] is None:
-            upper = basic_upper
-            lower = basic_lower
-            supertrend = None
-        else:
-            previous_upper = final_upper[-1]
-            previous_lower = final_lower[-1]
-            previous_close = closes[index - 1]
-            upper = basic_upper if basic_upper < previous_upper or previous_close > previous_upper else previous_upper
-            lower = basic_lower if basic_lower > previous_lower or previous_close < previous_lower else previous_lower
-
-            previous_supertrend = supertrend_values[-1]
-            if previous_supertrend is None:
-                supertrend = lower if close >= lower else upper
-            elif previous_supertrend == previous_upper:
-                supertrend = upper if close <= upper else lower
-            else:
-                supertrend = lower if close >= lower else upper
-
-        direction = None if supertrend is None else (1 if supertrend == lower else -1)
-        final_upper.append(upper)
-        final_lower.append(lower)
-        supertrend_values.append(supertrend)
-        direction_values.append(direction)
-
-    return _build_rows(
-        bars,
-        supertrend=supertrend_values,
-        supertrend_direction=direction_values,
-        supertrend_upper=final_upper,
-        supertrend_lower=final_lower,
-    )
+    """On-Balance Volume. Returns: obv (cumulative signed volume)."""
+    closes = [_read_number(bar, "close", label="OBV") for bar in bars]
+    volumes = [_read_number(bar, "volume", label="OBV") for bar in bars]
+    obv = 0.0
+    rows: List[Dict[str, Any]] = []
+    for i, (bar, close, vol) in enumerate(zip(bars, closes, volumes)):
+        if i > 0:
+            prev = closes[i - 1]
+            obv += vol if close > prev else (-vol if close < prev else 0.0)
+        rows.append({"timestamp": bar["timestamp"], "obv": obv})
+    return rows
 
 
 @factor_registry.register("VWAP")
 def _calculate_vwap(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
-    _ = params
-    typical_prices = _typical_price_series(bars, label="VWAP")
-    volumes = _volume_series(bars, label="VWAP")
-    cumulative_price_volume = 0.0
-    cumulative_volume = 0.0
-    vwap_values: List[Optional[float]] = []
-    deviations: List[Optional[float]] = []
-
-    for typical_price, volume, bar in zip(typical_prices, volumes, bars):
-        cumulative_price_volume += typical_price * volume
-        cumulative_volume += volume
-        vwap_value = None if cumulative_volume == 0 else cumulative_price_volume / cumulative_volume
+    """Volume Weighted Average Price (session cumulative). Returns: vwap."""
+    cum_tp_vol = 0.0
+    cum_vol = 0.0
+    rows: List[Dict[str, Any]] = []
+    for bar in bars:
+        high = _read_number(bar, "high", label="VWAP")
+        low = _read_number(bar, "low", label="VWAP")
         close = _read_number(bar, "close", label="VWAP")
-        deviation = None if vwap_value is None else close - vwap_value
-        vwap_values.append(vwap_value)
-        deviations.append(deviation)
+        vol = _read_number(bar, "volume", label="VWAP")
+        tp = (high + low + close) / 3.0
+        cum_tp_vol += tp * vol
+        cum_vol += vol
+        vwap = cum_tp_vol / cum_vol if cum_vol != 0 else None
+        rows.append({"timestamp": bar["timestamp"], "vwap": vwap})
+    return rows
 
-    return _build_rows(bars, vwap=vwap_values, vwap_deviation=deviations)
 
+@factor_registry.register("MFI")
+def _calculate_mfi(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Money Flow Index (0-100). Returns: mfi."""
+    period = _require_positive_int(params.get("period", 14), label="MFI.period")
+    rows: List[Dict[str, Any]] = []
+    tps: List[float] = []
+    raw_mfs: List[float] = []
+    for bar in bars:
+        h = _read_number(bar, "high", label="MFI")
+        l = _read_number(bar, "low", label="MFI")
+        c = _read_number(bar, "close", label="MFI")
+        v = _read_number(bar, "volume", label="MFI")
+        tp = (h + l + c) / 3.0
+        tps.append(tp)
+        raw_mfs.append(tp * v)
 
-@factor_registry.register("WilliamsR")
-def _calculate_williams_r(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    period = _require_positive_int(params.get("period", 14), label="WilliamsR.period")
-    highs = _high_series(bars, label="WilliamsR")
-    lows = _low_series(bars, label="WilliamsR")
-    closes = _close_series(bars, label="WilliamsR")
-    highest_high = _rolling_max(highs, period)
-    lowest_low = _rolling_min(lows, period)
-    values: List[Optional[float]] = []
-    for close, high, low in zip(closes, highest_high, lowest_low):
-        if high is None or low is None:
-            values.append(None)
+    for i, bar in enumerate(bars):
+        if i < period:
+            rows.append({"timestamp": bar["timestamp"], "mfi": None})
             continue
-        denominator = high - low
-        values.append(0.0 if denominator == 0 else -100.0 * (high - close) / denominator)
-    return _build_rows(bars, williams_r=values)
+        window_tp = tps[i - period + 1:i + 1]
+        window_mf = raw_mfs[i - period + 1:i + 1]
+        pos_sum = sum(mf for j, mf in enumerate(window_mf) if j > 0 and window_tp[j] > window_tp[j - 1])
+        neg_sum = sum(mf for j, mf in enumerate(window_mf) if j > 0 and window_tp[j] < window_tp[j - 1])
+        mfi = 100.0 - 100.0 / (1.0 + pos_sum / neg_sum) if neg_sum != 0 else 100.0
+        rows.append({"timestamp": bar["timestamp"], "mfi": mfi})
+    return rows
 
 
-@factor_registry.register("GarmanKlass")
-def _calculate_garman_klass(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    period = _require_positive_int(params.get("period", 20), label="GarmanKlass.period")
-    annualization = _require_positive_int(
-        params.get("annualization", 252),
-        label="GarmanKlass.annualization",
+@factor_registry.register("ATRTrailingStop")
+def _calculate_atr_trailing_stop(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """ATR-based trailing stop level and direction.
+    Returns: atr_trail_stop, atr_trail_direction (+1 bullish / -1 bearish).
+    """
+    period = _require_positive_int(params.get("period", 14), label="ATRTrailingStop.period")
+    multiplier = _require_positive_float(
+        params.get("multiplier", params.get("atr_multiplier", 2.0)),
+        label="ATRTrailingStop.multiplier",
     )
-    opens = _open_series(bars, label="GarmanKlass")
-    highs = _high_series(bars, label="GarmanKlass")
-    lows = _low_series(bars, label="GarmanKlass")
-    closes = _close_series(bars, label="GarmanKlass")
-    variance_terms: List[float] = []
-    for open_price, high, low, close in zip(opens, highs, lows, closes):
-        safe_open = max(open_price, 1e-12)
-        safe_high = max(high, 1e-12)
-        safe_low = max(low, 1e-12)
-        safe_close = max(close, 1e-12)
-        high_low_term = math.log(safe_high / safe_low)
-        close_open_term = math.log(safe_close / safe_open)
-        variance = 0.5 * high_low_term ** 2 - (2.0 * math.log(2.0) - 1.0) * close_open_term ** 2
-        variance_terms.append(max(variance, 0.0))
+    high_key = _read_column_name(params.get("high"), label="ATRTrailingStop.high", default="high")
+    low_key = _read_column_name(params.get("low"), label="ATRTrailingStop.low", default="low")
+    close_key = _read_column_name(params.get("close"), label="ATRTrailingStop.close", default="close")
 
-    mean_variance = _rolling_mean(variance_terms, period)
-    values = [
-        None if item is None else math.sqrt(max(item, 0.0) * annualization)
-        for item in mean_variance
-    ]
-    return _build_rows(bars, garman_klass_vol=values)
+    trs: List[float] = []
+    previous_close: Optional[float] = None
+    for bar in bars:
+        h = _read_number(bar, high_key, label="ATRTrailingStop")
+        l = _read_number(bar, low_key, label="ATRTrailingStop")
+        c = _read_number(bar, close_key, label="ATRTrailingStop")
+        tr = max(h - l, abs(h - previous_close) if previous_close else 0, abs(l - previous_close) if previous_close else 0)
+        trs.append(tr)
+        previous_close = c
+
+    atr_values = _ema(trs, period)
+    closes = [_read_number(bar, close_key, label="ATRTrailingStop") for bar in bars]
+
+    trail_stop: Optional[float] = None
+    direction = 1
+    rows: List[Dict[str, Any]] = []
+    for bar, close, atr in zip(bars, closes, atr_values):
+        if atr is None:
+            rows.append({"timestamp": bar["timestamp"], "atr_trail_stop": None, "atr_trail_direction": None})
+            continue
+        band = multiplier * atr
+        if trail_stop is None:
+            trail_stop = close - band
+            direction = 1
+        else:
+            if direction == 1:
+                new_stop = close - band
+                trail_stop = max(trail_stop, new_stop)
+                if close < trail_stop:
+                    direction = -1
+                    trail_stop = close + band
+            else:
+                new_stop = close + band
+                trail_stop = min(trail_stop, new_stop)
+                if close > trail_stop:
+                    direction = 1
+                    trail_stop = close - band
+        rows.append({"timestamp": bar["timestamp"], "atr_trail_stop": trail_stop, "atr_trail_direction": float(direction)})
+    return rows
 
 
 @factor_registry.register("HistoricalVol")
-def _calculate_historical_vol(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
+def _calculate_historical_vol(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Historical (log-return) volatility. Returns: hist_vol."""
     period = _require_positive_int(params.get("period", 20), label="HistoricalVol.period")
-    annualization = _require_positive_int(
-        params.get("annualization", 252),
-        label="HistoricalVol.annualization",
-    )
-    closes = _close_series(bars, label="HistoricalVol")
-    log_returns = [0.0]
-    for previous_close, current_close in zip(closes, closes[1:]):
-        safe_previous = max(previous_close, 1e-12)
-        safe_current = max(current_close, 1e-12)
-        log_returns.append(math.log(safe_current / safe_previous))
+    closes = [_read_number(bar, "close", label="HistoricalVol") for bar in bars]
+    log_rets: List[Optional[float]] = [None]
+    for i in range(1, len(closes)):
+        prev = closes[i - 1]
+        cur = closes[i]
+        if prev > 0 and cur > 0:
+            log_rets.append(math.log(cur / prev))
+        else:
+            log_rets.append(None)
+    vol_values = _rolling_std([r if r is not None else 0.0 for r in log_rets], period)
+    rows: List[Dict[str, Any]] = []
+    for bar, vol in zip(bars, vol_values):
+        rows.append({"timestamp": bar["timestamp"], "hist_vol": vol})
+    return rows
 
-    std_values = _rolling_std(log_returns, period)
-    historical_vol = [
-        None if std_value is None else std_value * math.sqrt(annualization)
-        for std_value in std_values
+
+@factor_registry.register("EMA_Cross")
+def _calculate_ema_cross(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """EMA crossover: fast EMA minus slow EMA.
+    Returns: ema_cross (positive = fast above slow = bullish).
+    """
+    fast = _require_positive_int(params.get("fast_period", params.get("fast", 10)), label="EMA_Cross.fast_period")
+    slow = _require_positive_int(params.get("slow_period", params.get("slow", 20)), label="EMA_Cross.slow_period")
+    source = _read_column_name(params.get("source"), label="EMA_Cross.source", default="close")
+    values = [_read_number(bar, source, label="EMA_Cross") for bar in bars]
+    ema_fast = _ema(values, fast)
+    ema_slow = _ema(values, slow)
+    rows: List[Dict[str, Any]] = []
+    for bar, ef, es in zip(bars, ema_fast, ema_slow):
+        cross = None if ef is None or es is None else ef - es
+        rows.append({"timestamp": bar["timestamp"], "ema_cross": cross, "ema_fast": ef, "ema_slow": es})
+    return rows
+
+
+@factor_registry.register("EMA_Slope")
+def _calculate_ema_slope(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Normalized EMA slope (first difference / previous EMA).
+    Returns: ema_slope.
+    """
+    period = _require_positive_int(params.get("period", 20), label="EMA_Slope.period")
+    source = _read_column_name(params.get("source"), label="EMA_Slope.source", default="close")
+    values = [_read_number(bar, source, label="EMA_Slope") for bar in bars]
+    ema_vals = _ema(values, period)
+    rows: List[Dict[str, Any]] = []
+    prev_ema: Optional[float] = None
+    for bar, ema in zip(bars, ema_vals):
+        slope = None
+        if ema is not None and prev_ema is not None and prev_ema != 0:
+            slope = (ema - prev_ema) / prev_ema
+        if ema is not None:
+            prev_ema = ema
+        rows.append({"timestamp": bar["timestamp"], "ema_slope": slope})
+    return rows
+
+
+@factor_registry.register("DEMA")
+def _calculate_dema(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Double Exponential Moving Average. DEMA = 2*EMA - EMA(EMA).
+    Returns: dema.
+    """
+    period = _require_positive_int(params.get("period", 20), label="DEMA.period")
+    source = _read_column_name(params.get("source"), label="DEMA.source", default="close")
+    values = [_read_number(bar, source, label="DEMA") for bar in bars]
+    ema1 = _ema(values, period)
+    ema2 = _ema(ema1, period)
+    rows: List[Dict[str, Any]] = []
+    for bar, e1, e2 in zip(bars, ema1, ema2):
+        dema = None if e1 is None or e2 is None else 2.0 * e1 - e2
+        rows.append({"timestamp": bar["timestamp"], "dema": dema})
+    return rows
+
+
+@factor_registry.register("ParabolicSAR")
+def _calculate_parabolic_sar(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Parabolic SAR. Returns: psar (stop-and-reverse price), psar_direction (+1 long / -1 short)."""
+    af_start = _require_positive_float(params.get("af_start", 0.02), label="ParabolicSAR.af_start")
+    af_max = _require_positive_float(params.get("af_max", 0.2), label="ParabolicSAR.af_max")
+    highs = [_read_number(bar, "high", label="ParabolicSAR") for bar in bars]
+    lows = [_read_number(bar, "low", label="ParabolicSAR") for bar in bars]
+    closes = [_read_number(bar, "close", label="ParabolicSAR") for bar in bars]
+    n = len(closes)
+    if n < 2:
+        return [{"timestamp": bar["timestamp"], "psar": None, "psar_direction": None} for bar in bars]
+
+    sar = [0.0] * n
+    direction = [1] * n
+    sar[0] = lows[0]
+    ep = highs[0]
+    af = af_start
+
+    for i in range(1, n):
+        prev_sar = sar[i - 1]
+        prev_dir = direction[i - 1]
+        if prev_dir == 1:
+            new_sar = prev_sar + af * (ep - prev_sar)
+            new_sar = min(new_sar, lows[i - 1])
+            if i >= 2:
+                new_sar = min(new_sar, lows[i - 2])
+            if new_sar > lows[i]:
+                direction[i] = -1
+                sar[i] = ep
+                ep = lows[i]
+                af = af_start
+            else:
+                direction[i] = 1
+                sar[i] = new_sar
+                if highs[i] > ep:
+                    ep = highs[i]
+                    af = min(af + af_start, af_max)
+        else:
+            new_sar = prev_sar + af * (ep - prev_sar)
+            new_sar = max(new_sar, highs[i - 1])
+            if i >= 2:
+                new_sar = max(new_sar, highs[i - 2])
+            if new_sar < highs[i]:
+                direction[i] = 1
+                sar[i] = ep
+                ep = highs[i]
+                af = af_start
+            else:
+                direction[i] = -1
+                sar[i] = new_sar
+                if lows[i] < ep:
+                    ep = lows[i]
+                    af = min(af + af_start, af_max)
+
+    return [
+        {"timestamp": bar["timestamp"], "psar": sar[i], "psar_direction": float(direction[i])}
+        for i, bar in enumerate(bars)
     ]
-    return _build_rows(bars, historical_vol=historical_vol)
 
 
-@factor_registry.register("ImpliedVolatility")
-def _calculate_implied_volatility(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    neutral_value = float(params.get("neutral_value", 0.0))
-    values = _single_column_values(
-        bars,
-        params,
-        label="ImpliedVolatility",
-        default_keys=("implied_volatility", "implied_vol", "iv"),
-        neutral_value=neutral_value,
-    )
-    return _build_rows(bars, implied_volatility=values)
+@factor_registry.register("Supertrend")
+def _calculate_supertrend(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Supertrend band indicator. Returns: supertrend_stop, supertrend_direction (+1 bullish / -1 bearish)."""
+    period = _require_positive_int(params.get("period", 10), label="Supertrend.period")
+    multiplier = _require_positive_float(params.get("multiplier", 3.0), label="Supertrend.multiplier")
+    highs = [_read_number(bar, "high", label="Supertrend") for bar in bars]
+    lows = [_read_number(bar, "low", label="Supertrend") for bar in bars]
+    closes = [_read_number(bar, "close", label="Supertrend") for bar in bars]
+    n = len(closes)
 
+    trs: List[float] = []
+    prev_c: Optional[float] = None
+    for h, l, c in zip(highs, lows, closes):
+        tr = max(h - l, abs(h - prev_c) if prev_c else 0, abs(l - prev_c) if prev_c else 0)
+        trs.append(tr)
+        prev_c = c
 
-@factor_registry.register("VolatilityFactor")
-def _calculate_volatility_factor(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    explicit_values = _single_column_values(
-        bars,
-        params,
-        label="VolatilityFactor",
-        default_keys=("volatility_factor",),
-        neutral_value=float("nan"),
-    )
-    historical_vol = [
-        row["historical_vol"]
-        for row in _calculate_historical_vol(bars, {"period": params.get("period", 20)})
-    ]
-    garman_klass = [
-        row["garman_klass_vol"]
-        for row in _calculate_garman_klass(bars, {"period": params.get("period", 20)})
-    ]
-    implied_vol = [
-        row["implied_volatility"]
-        for row in _calculate_implied_volatility(bars, params)
-    ]
-    factor_values: List[float] = []
-    for explicit_value, hv_value, gk_value, iv_value in zip(
-        explicit_values,
-        historical_vol,
-        garman_klass,
-        implied_vol,
-    ):
-        if not math.isnan(explicit_value):
-            factor_values.append(explicit_value)
+    atr_values = _ema(trs, period)
+    hl_avg = [(h + l) / 2.0 for h, l in zip(highs, lows)]
+
+    supertrend = [0.0] * n
+    direction = [1] * n
+
+    for i in range(period, n):
+        atr = atr_values[i]
+        if atr is None:
             continue
-        candidates = [value for value in (hv_value, gk_value, iv_value) if value is not None]
-        factor_values.append(sum(candidates) / len(candidates) if candidates else 0.0)
-    return _build_rows(
-        bars,
-        volatility_factor=factor_values,
-        historical_vol=historical_vol,
-        garman_klass_vol=garman_klass,
-        implied_volatility=implied_vol,
+        upper = hl_avg[i] + multiplier * atr
+        lower = hl_avg[i] - multiplier * atr
+        if i == period:
+            if closes[i] <= upper:
+                supertrend[i] = upper
+                direction[i] = -1
+            else:
+                supertrend[i] = lower
+                direction[i] = 1
+        else:
+            prev_st = supertrend[i - 1]
+            prev_dir = direction[i - 1]
+            if prev_dir == 1:
+                lower = max(lower, prev_st)
+                if closes[i] < lower:
+                    supertrend[i] = upper
+                    direction[i] = -1
+                else:
+                    supertrend[i] = lower
+                    direction[i] = 1
+            else:
+                upper = min(upper, prev_st)
+                if closes[i] > upper:
+                    supertrend[i] = lower
+                    direction[i] = 1
+                else:
+                    supertrend[i] = upper
+                    direction[i] = -1
+
+    return [
+        {"timestamp": bar["timestamp"], "supertrend_stop": supertrend[i], "supertrend_direction": float(direction[i])}
+        for i, bar in enumerate(bars)
+    ]
+
+
+@factor_registry.register("Ichimoku")
+def _calculate_ichimoku(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Ichimoku Cloud. Returns: tenkan_sen, kijun_sen, senkou_a, senkou_b, ichimoku_signal."""
+    tenkan = _require_positive_int(params.get("tenkan", 9), label="Ichimoku.tenkan")
+    kijun = _require_positive_int(params.get("kijun", 26), label="Ichimoku.kijun")
+    senkou_b_period = _require_positive_int(params.get("senkou_b", 52), label="Ichimoku.senkou_b")
+    highs = [_read_number(bar, "high", label="Ichimoku") for bar in bars]
+    lows = [_read_number(bar, "low", label="Ichimoku") for bar in bars]
+    closes = [_read_number(bar, "close", label="Ichimoku") for bar in bars]
+
+    def _midpoint(h_list: List[float], l_list: List[float], p: int) -> List[Optional[float]]:
+        roll_h = _rolling_max(h_list, p)
+        roll_l = _rolling_min(l_list, p)
+        return [
+            None if rh is None or rl is None else (rh + rl) / 2.0
+            for rh, rl in zip(roll_h, roll_l)
+        ]
+
+    tenkan_vals = _midpoint(highs, lows, tenkan)
+    kijun_vals = _midpoint(highs, lows, kijun)
+    senkou_b_vals = _midpoint(highs, lows, senkou_b_period)
+
+    rows: List[Dict[str, Any]] = []
+    for bar, close, tk, kj, sb in zip(bars, closes, tenkan_vals, kijun_vals, senkou_b_vals):
+        sa = None if tk is None or kj is None else (tk + kj) / 2.0
+        signal = None if kj is None else (close - kj)
+        rows.append({
+            "timestamp": bar["timestamp"],
+            "tenkan_sen": tk,
+            "kijun_sen": kj,
+            "senkou_a": sa,
+            "senkou_b": sb,
+            "ichimoku_signal": signal,
+        })
+    return rows
+
+
+@factor_registry.register("WMA")
+def _calculate_wma(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 20), label="WMA.period")
+    source = _read_column_name(params.get("source"), label="WMA.source", default="close")
+    values = [_read_number(bar, source, label="WMA") for bar in bars]
+    wma_values = _rolling_weighted_mean(values, period)
+    return [
+        {
+            "timestamp": bar["timestamp"],
+            "wma": wma_value,
+        }
+        for bar, wma_value in zip(bars, wma_values)
+    ]
+
+
+@factor_registry.register("HMA")
+def _calculate_hma(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 20), label="HMA.period")
+    source = _read_column_name(params.get("source"), label="HMA.source", default="close")
+    values = [_read_number(bar, source, label="HMA") for bar in bars]
+    half_period = max(1, period // 2)
+    sqrt_period = max(1, int(math.sqrt(period)))
+    wma_half = _rolling_weighted_mean(values, half_period)
+    wma_full = _rolling_weighted_mean(values, period)
+    bridge_values = [
+        None if half_value is None or full_value is None else 2.0 * half_value - full_value
+        for half_value, full_value in zip(wma_half, wma_full)
+    ]
+    hma_values = _rolling_weighted_mean(bridge_values, sqrt_period)
+    return [
+        {
+            "timestamp": bar["timestamp"],
+            "hma": hma_value,
+        }
+        for bar, hma_value in zip(bars, hma_values)
+    ]
+
+
+@factor_registry.register("TEMA")
+def _calculate_tema(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 20), label="TEMA.period")
+    source = _read_column_name(params.get("source"), label="TEMA.source", default="close")
+    values = [_read_number(bar, source, label="TEMA") for bar in bars]
+    ema1 = _ema(values, period)
+    ema2 = _ema(ema1, period)
+    ema3 = _ema(ema2, period)
+    rows: List[Dict[str, Any]] = []
+    for bar, first, second, third in zip(bars, ema1, ema2, ema3):
+        tema = None if first is None or second is None or third is None else 3.0 * first - 3.0 * second + third
+        rows.append({"timestamp": bar["timestamp"], "tema": tema})
+    return rows
+
+
+@factor_registry.register("Stochastic")
+def _calculate_stochastic(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    k_period = _require_positive_int(params.get("k_period", 14), label="Stochastic.k_period")
+    d_period = _require_positive_int(params.get("d_period", 3), label="Stochastic.d_period")
+    smooth_k = _require_positive_int(
+        params.get("smooth_k", params.get("smooth", 1)),
+        label="Stochastic.smooth_k",
     )
+    high_key = _read_column_name(params.get("high"), label="Stochastic.high", default="high")
+    low_key = _read_column_name(params.get("low"), label="Stochastic.low", default="low")
+    close_key = _read_column_name(params.get("close"), label="Stochastic.close", default="close")
+    highs = [_read_number(bar, high_key, label="Stochastic") for bar in bars]
+    lows = [_read_number(bar, low_key, label="Stochastic") for bar in bars]
+    closes = [_read_number(bar, close_key, label="Stochastic") for bar in bars]
+    roll_high = _rolling_max(highs, k_period)
+    roll_low = _rolling_min(lows, k_period)
+
+    raw_k_values: List[Optional[float]] = []
+    for close, highest, lowest in zip(closes, roll_high, roll_low):
+        if highest is None or lowest is None or highest == lowest:
+            raw_k_values.append(None)
+        else:
+            raw_k_values.append((close - lowest) / (highest - lowest) * 100.0)
+
+    stoch_k_values = raw_k_values if smooth_k == 1 else _rolling_mean_optional(raw_k_values, smooth_k)
+    stoch_d_values = _rolling_mean_optional(stoch_k_values, d_period)
+    rows: List[Dict[str, Any]] = []
+    for bar, stoch_k, stoch_d in zip(bars, stoch_k_values, stoch_d_values):
+        rows.append({"timestamp": bar["timestamp"], "stoch_k": stoch_k, "stoch_d": stoch_d})
+    return rows
 
 
-@factor_registry.register("BasisSpread")
-def _calculate_basis_spread(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    values = _spread_values(
-        bars,
-        params,
-        label="BasisSpread",
-        explicit_keys=("basis_spread",),
-        reference_keys=("spot_price", "spot_close", "cash_close"),
+@factor_registry.register("StochasticRSI")
+def _calculate_stochastic_rsi(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    source = _read_column_name(params.get("source"), label="StochasticRSI.source", default="close")
+    rsi_period = _require_positive_int(params.get("rsi_period", 14), label="StochasticRSI.rsi_period")
+    stoch_period = _require_positive_int(
+        params.get("stoch_period", 14),
+        label="StochasticRSI.stoch_period",
     )
-    return _build_rows(bars, basis_spread=values)
+    k_period = _require_positive_int(params.get("k_period", 3), label="StochasticRSI.k_period")
+    d_period = _require_positive_int(params.get("d_period", 3), label="StochasticRSI.d_period")
+    rsi_rows = factor_registry.calculate("RSI", bars, {"source": source, "period": rsi_period}).rows
+    rsi_values = [row.get("rsi") for row in rsi_rows]
 
+    raw_values: List[Optional[float]] = []
+    window: List[Optional[float]] = []
+    for rsi_value in rsi_values:
+        window.append(rsi_value)
+        if len(window) > stoch_period:
+            window.pop(0)
+        if len(window) == stoch_period and all(item is not None for item in window):
+            numeric_window = [float(item) for item in window]
+            highest = max(numeric_window)
+            lowest = min(numeric_window)
+            if highest == lowest:
+                raw_values.append(0.0)
+            else:
+                raw_values.append((float(rsi_value) - lowest) / (highest - lowest) * 100.0)
+        else:
+            raw_values.append(None)
 
-@factor_registry.register("CointResidual")
-def _calculate_coint_residual(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    values = _spread_values(
-        bars,
-        params,
-        label="CointResidual",
-        explicit_keys=("coint_residual",),
-        reference_keys=("pair_close", "benchmark_close", "reference_close"),
-    )
-    return _build_rows(bars, coint_residual=values)
-
-
-@factor_registry.register("SpreadCrosscommodity")
-def _calculate_spread_crosscommodity(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    values = _spread_values(
-        bars,
-        params,
-        label="SpreadCrosscommodity",
-        explicit_keys=("spread_crosscommodity",),
-        reference_keys=("crosscommodity_close", "pair_close", "benchmark_close"),
-    )
-    return _build_rows(bars, spread_crosscommodity=values)
-
-
-@factor_registry.register("SpreadCrossperiod")
-def _calculate_spread_crossperiod(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    values = _spread_values(
-        bars,
-        params,
-        label="SpreadCrossperiod",
-        explicit_keys=("spread_crossperiod",),
-        reference_keys=("crossperiod_close", "far_close", "next_contract_close", "pair_close"),
-    )
-    return _build_rows(bars, spread_crossperiod=values)
-
-
-@factor_registry.register("SpreadRatio")
-def _calculate_spread_ratio(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    values = _spread_values(
-        bars,
-        params,
-        label="SpreadRatio",
-        explicit_keys=("spread_ratio",),
-        reference_keys=("pair_close", "crosscommodity_close", "far_close", "benchmark_close"),
-        mode="ratio",
-    )
-    return _build_rows(bars, spread_ratio=values)
-
-
-@factor_registry.register("ZScoreSpread")
-def _calculate_zscore_spread(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    period = _require_positive_int(params.get("period", 20), label="ZScoreSpread.period")
-    explicit_candidates = _candidate_keys(
-        params,
-        "zscore_spread",
-        param_keys=("column", "value_column"),
-    )
-    explicit_values: List[Optional[float]] = []
-    for bar in bars:
-        explicit_values.append(
-            _read_optional_number_from_keys(bar, explicit_candidates, label="ZScoreSpread")
+    stochrsi_k_values = _rolling_mean_optional(raw_values, k_period)
+    stochrsi_d_values = _rolling_mean_optional(stochrsi_k_values, d_period)
+    rows: List[Dict[str, Any]] = []
+    for bar, stochrsi_k, stochrsi_d in zip(bars, stochrsi_k_values, stochrsi_d_values):
+        rows.append(
+            {
+                "timestamp": bar["timestamp"],
+                "stochrsi_k": stochrsi_k,
+                "stochrsi_d": stochrsi_d,
+            }
         )
+    return rows
 
-    spread_values = _spread_values(
-        bars,
-        params,
-        label="ZScoreSpread",
-        explicit_keys=("spread_value", "basis_spread", "spread_crosscommodity", "spread_crossperiod", "coint_residual"),
-        reference_keys=("pair_close", "crosscommodity_close", "far_close", "benchmark_close", "spot_price"),
+
+@factor_registry.register("ROC")
+def _calculate_roc(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 12), label="ROC.period")
+    source = _read_column_name(params.get("source"), label="ROC.source", default="close")
+    values = [_read_number(bar, source, label="ROC") for bar in bars]
+    rows: List[Dict[str, Any]] = []
+    for index, (bar, value) in enumerate(zip(bars, values)):
+        roc = None
+        if index >= period and values[index - period] != 0:
+            roc = (value - values[index - period]) / values[index - period] * 100.0
+        rows.append({"timestamp": bar["timestamp"], "roc": roc})
+    return rows
+
+
+@factor_registry.register("MOM")
+def _calculate_mom(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 10), label="MOM.period")
+    source = _read_column_name(params.get("source"), label="MOM.source", default="close")
+    values = [_read_number(bar, source, label="MOM") for bar in bars]
+    rows: List[Dict[str, Any]] = []
+    for index, (bar, value) in enumerate(zip(bars, values)):
+        momentum = None if index < period else value - values[index - period]
+        rows.append({"timestamp": bar["timestamp"], "mom": momentum})
+    return rows
+
+
+@factor_registry.register("CMO")
+def _calculate_cmo(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 14), label="CMO.period")
+    source = _read_column_name(params.get("source"), label="CMO.source", default="close")
+    values = [_read_number(bar, source, label="CMO") for bar in bars]
+    changes = [0.0]
+    for previous, current in zip(values, values[1:]):
+        changes.append(current - previous)
+
+    rows: List[Dict[str, Any]] = []
+    for index, bar in enumerate(bars):
+        cmo = None
+        if index >= period:
+            window = changes[index - period + 1:index + 1]
+            up_sum = sum(max(change, 0.0) for change in window)
+            down_sum = sum(max(-change, 0.0) for change in window)
+            denominator = up_sum + down_sum
+            cmo = 0.0 if denominator == 0 else (up_sum - down_sum) / denominator * 100.0
+        rows.append({"timestamp": bar["timestamp"], "cmo": cmo})
+    return rows
+
+
+@factor_registry.register("KeltnerChannel")
+def _calculate_keltner_channel(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    source = _read_column_name(params.get("source"), label="KeltnerChannel.source", default="close")
+    ema_period = _require_positive_int(
+        params.get("ema_period", params.get("period", 20)),
+        label="KeltnerChannel.ema_period",
     )
-    means = _rolling_mean(spread_values, period)
-    stds = _rolling_std(spread_values, period)
-    zscores: List[float] = []
-    for explicit_value, spread_value, mean, std in zip(explicit_values, spread_values, means, stds):
-        if explicit_value is not None:
-            zscores.append(explicit_value)
-            continue
-        if mean is None or std in {None, 0.0}:
-            zscores.append(0.0)
-            continue
-        zscores.append((spread_value - mean) / std)
-
-    return _build_rows(bars, zscore_spread=zscores, spread_value=spread_values)
-
-
-@factor_registry.register("NewsSentiment")
-def _calculate_news_sentiment(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    values = _single_column_values(
-        bars,
-        params,
-        label="NewsSentiment",
-        default_keys=("news_sentiment", "news_sentiment_score", "news_score"),
+    atr_period = _require_positive_int(
+        params.get("atr_period", ema_period),
+        label="KeltnerChannel.atr_period",
     )
-    return _build_rows(bars, news_sentiment=values)
-
-
-@factor_registry.register("SocialSentiment")
-def _calculate_social_sentiment(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    values = _single_column_values(
-        bars,
-        params,
-        label="SocialSentiment",
-        default_keys=("social_sentiment", "social_sentiment_score", "social_score"),
+    multiplier = _require_positive_float(
+        params.get("multiplier", 2.0),
+        label="KeltnerChannel.multiplier",
     )
-    return _build_rows(bars, social_sentiment=values)
-
-
-@factor_registry.register("SentimentFactor")
-def _calculate_sentiment_factor(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    explicit_values = _single_column_values(
+    high_key = _read_column_name(params.get("high"), label="KeltnerChannel.high", default="high")
+    low_key = _read_column_name(params.get("low"), label="KeltnerChannel.low", default="low")
+    close_key = _read_column_name(params.get("close"), label="KeltnerChannel.close", default="close")
+    mid_rows = factor_registry.calculate("EMA", bars, {"source": source, "period": ema_period}).rows
+    atr_rows = factor_registry.calculate(
+        "ATR",
         bars,
-        params,
-        label="SentimentFactor",
-        default_keys=("sentiment_factor", "sentiment"),
-        neutral_value=float("nan"),
-    )
-    news_values = [row["news_sentiment"] for row in _calculate_news_sentiment(bars, params)]
-    social_values = [row["social_sentiment"] for row in _calculate_social_sentiment(bars, params)]
-    factor_values: List[float] = []
-    for explicit_value, news_value, social_value in zip(explicit_values, news_values, social_values):
-        if not math.isnan(explicit_value):
-            factor_values.append(explicit_value)
-            continue
-        candidates = [value for value in (news_value, social_value) if value is not None]
-        factor_values.append(sum(candidates) / len(candidates) if candidates else 0.0)
-    return _build_rows(
+        {"high": high_key, "low": low_key, "close": close_key, "period": atr_period},
+    ).rows
+
+    rows: List[Dict[str, Any]] = []
+    for bar, mid_row, atr_row in zip(bars, mid_rows, atr_rows):
+        middle = mid_row.get("ema")
+        atr_value = atr_row.get("atr")
+        upper = None if middle is None or atr_value is None else middle + multiplier * atr_value
+        lower = None if middle is None or atr_value is None else middle - multiplier * atr_value
+        rows.append(
+            {
+                "timestamp": bar["timestamp"],
+                "keltner_mid": middle,
+                "keltner_upper": upper,
+                "keltner_lower": lower,
+            }
+        )
+    return rows
+
+
+@factor_registry.register("NTR")
+def _calculate_ntr(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 14), label="NTR.period")
+    scale = _require_positive_float(params.get("scale", 100.0), label="NTR.scale")
+    high_key = _read_column_name(params.get("high"), label="NTR.high", default="high")
+    low_key = _read_column_name(params.get("low"), label="NTR.low", default="low")
+    close_key = _read_column_name(params.get("close"), label="NTR.close", default="close")
+    closes = [_read_number(bar, close_key, label="NTR") for bar in bars]
+    atr_rows = factor_registry.calculate(
+        "ATR",
         bars,
-        sentiment_factor=factor_values,
-        news_sentiment=news_values,
-        social_sentiment=social_values,
-    )
+        {"high": high_key, "low": low_key, "close": close_key, "period": period},
+    ).rows
+    rows: List[Dict[str, Any]] = []
+    for bar, close, atr_row in zip(bars, closes, atr_rows):
+        atr_value = atr_row.get("atr")
+        ntr = None if atr_value is None or close == 0 else atr_value / close * scale
+        rows.append({"timestamp": bar["timestamp"], "ntr": ntr})
+    return rows
 
 
-@factor_registry.register("InventoryFactor")
-def _calculate_inventory_factor(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    return _change_factor_rows(
-        bars,
-        params,
-        label="InventoryFactor",
-        output_key="inventory_factor",
-        explicit_keys=("inventory_factor",),
-        raw_keys=("inventory", "inventory_level", "stocks"),
-    )
+@factor_registry.register("Aroon")
+def _calculate_aroon(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 25), label="Aroon.period")
+    high_key = _read_column_name(params.get("high"), label="Aroon.high", default="high")
+    low_key = _read_column_name(params.get("low"), label="Aroon.low", default="low")
+    highs = [_read_number(bar, high_key, label="Aroon") for bar in bars]
+    lows = [_read_number(bar, low_key, label="Aroon") for bar in bars]
+    rows: List[Dict[str, Any]] = []
+
+    for index, bar in enumerate(bars):
+        aroon_up = None
+        aroon_down = None
+        oscillator = None
+        if index + 1 >= period:
+            high_window = highs[index - period + 1:index + 1]
+            low_window = lows[index - period + 1:index + 1]
+            highest = max(high_window)
+            lowest = min(low_window)
+            periods_since_high = period - 1 - max(
+                idx for idx, value in enumerate(high_window) if value == highest
+            )
+            periods_since_low = period - 1 - max(
+                idx for idx, value in enumerate(low_window) if value == lowest
+            )
+            aroon_up = (period - periods_since_high) / period * 100.0
+            aroon_down = (period - periods_since_low) / period * 100.0
+            oscillator = aroon_up - aroon_down
+        rows.append(
+            {
+                "timestamp": bar["timestamp"],
+                "aroon_up": aroon_up,
+                "aroon_down": aroon_down,
+                "aroon_oscillator": oscillator,
+            }
+        )
+    return rows
 
 
-@factor_registry.register("OpenInterestFactor")
-def _calculate_open_interest_factor(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    return _change_factor_rows(
-        bars,
-        params,
-        label="OpenInterestFactor",
-        output_key="open_interest_factor",
-        explicit_keys=("open_interest_factor",),
-        raw_keys=("open_interest", "oi"),
-    )
+@factor_registry.register("TRIX")
+def _calculate_trix(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 15), label="TRIX.period")
+    signal_period = _require_positive_int(params.get("signal", 9), label="TRIX.signal")
+    source = _read_column_name(params.get("source"), label="TRIX.source", default="close")
+    values = [_read_number(bar, source, label="TRIX") for bar in bars]
+    ema1 = _ema(values, period)
+    ema2 = _ema(ema1, period)
+    ema3 = _ema(ema2, period)
+
+    trix_values: List[Optional[float]] = [None]
+    for previous, current in zip(ema3, ema3[1:]):
+        if previous in {None, 0.0} or current is None:
+            trix_values.append(None)
+        else:
+            trix_values.append((current - previous) / previous * 100.0)
+
+    signal_values = _ema(trix_values, signal_period)
+    rows: List[Dict[str, Any]] = []
+    for bar, trix_value, signal_value in zip(bars, trix_values, signal_values):
+        rows.append(
+            {
+                "timestamp": bar["timestamp"],
+                "trix": trix_value,
+                "trix_signal": signal_value,
+            }
+        )
+    return rows
 
 
-@factor_registry.register("WarehouseReceiptFactor")
-def _calculate_warehouse_receipt_factor(
-    bars: List[Dict[str, Any]],
-    params: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    return _change_factor_rows(
-        bars,
-        params,
-        label="WarehouseReceiptFactor",
-        output_key="warehouse_receipt_factor",
-        explicit_keys=("warehouse_receipt_factor",),
-        raw_keys=("warehouse_receipt", "warehouse_receipts", "receipt_inventory"),
-    )
+@factor_registry.register("LinReg")
+def _calculate_linreg(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 14), label="LinReg.period")
+    source = _read_column_name(params.get("source"), label="LinReg.source", default="close")
+    values = [_read_number(bar, source, label="LinReg") for bar in bars]
+    x_values = list(range(period))
+    x_sum = sum(x_values)
+    x_sq_sum = sum(value * value for value in x_values)
+    denominator = period * x_sq_sum - x_sum * x_sum
+    rows: List[Dict[str, Any]] = []
+
+    for index, bar in enumerate(bars):
+        reg_value = None
+        slope = None
+        r_squared = None
+        if index + 1 >= period and denominator != 0:
+            window = values[index - period + 1:index + 1]
+            y_sum = sum(window)
+            xy_sum = sum(x * y for x, y in zip(x_values, window))
+            slope = (period * xy_sum - x_sum * y_sum) / denominator
+            intercept = (y_sum - slope * x_sum) / period
+            reg_value = intercept + slope * (period - 1)
+            mean_y = y_sum / period
+            fitted = [intercept + slope * x for x in x_values]
+            ss_tot = sum((value - mean_y) ** 2 for value in window)
+            ss_res = sum((value - fit) ** 2 for value, fit in zip(window, fitted))
+            r_squared = 1.0 if ss_tot == 0 else max(0.0, min(1.0, 1.0 - ss_res / ss_tot))
+        rows.append(
+            {
+                "timestamp": bar["timestamp"],
+                "linreg": reg_value,
+                "linreg_slope": slope,
+                "linreg_r2": r_squared,
+            }
+        )
+    return rows
+
+
+@factor_registry.register("ChaikinAD")
+def _calculate_chaikin_ad(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    high_key = _read_column_name(params.get("high"), label="ChaikinAD.high", default="high")
+    low_key = _read_column_name(params.get("low"), label="ChaikinAD.low", default="low")
+    close_key = _read_column_name(params.get("close"), label="ChaikinAD.close", default="close")
+    volume_key = _read_column_name(params.get("volume"), label="ChaikinAD.volume", default="volume")
+    ad_value = 0.0
+    rows: List[Dict[str, Any]] = []
+
+    for bar in bars:
+        high = _read_number(bar, high_key, label="ChaikinAD")
+        low = _read_number(bar, low_key, label="ChaikinAD")
+        close = _read_number(bar, close_key, label="ChaikinAD")
+        volume = _read_number(bar, volume_key, label="ChaikinAD")
+        spread = high - low
+        money_flow_multiplier = 0.0 if spread == 0 else ((close - low) - (high - close)) / spread
+        ad_value += money_flow_multiplier * volume
+        rows.append({"timestamp": bar["timestamp"], "chaikin_ad": ad_value})
+    return rows
+
+
+@factor_registry.register("CMF")
+def _calculate_cmf(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 20), label="CMF.period")
+    high_key = _read_column_name(params.get("high"), label="CMF.high", default="high")
+    low_key = _read_column_name(params.get("low"), label="CMF.low", default="low")
+    close_key = _read_column_name(params.get("close"), label="CMF.close", default="close")
+    volume_key = _read_column_name(params.get("volume"), label="CMF.volume", default="volume")
+    money_flow_volume: List[float] = []
+    volumes: List[float] = []
+
+    for bar in bars:
+        high = _read_number(bar, high_key, label="CMF")
+        low = _read_number(bar, low_key, label="CMF")
+        close = _read_number(bar, close_key, label="CMF")
+        volume = _read_number(bar, volume_key, label="CMF")
+        spread = high - low
+        multiplier = 0.0 if spread == 0 else ((close - low) - (high - close)) / spread
+        money_flow_volume.append(multiplier * volume)
+        volumes.append(volume)
+
+    mfv_sum = _rolling_sum(money_flow_volume, period)
+    volume_sum = _rolling_sum(volumes, period)
+    rows: List[Dict[str, Any]] = []
+    for bar, current_mfv_sum, current_volume_sum in zip(bars, mfv_sum, volume_sum):
+        cmf = None
+        if current_mfv_sum is not None and current_volume_sum not in {None, 0.0}:
+            cmf = current_mfv_sum / current_volume_sum
+        rows.append({"timestamp": bar["timestamp"], "cmf": cmf})
+    return rows
+
+
+@factor_registry.register("PVT")
+def _calculate_pvt(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    close_key = _read_column_name(params.get("close"), label="PVT.close", default="close")
+    volume_key = _read_column_name(params.get("volume"), label="PVT.volume", default="volume")
+    closes = [_read_number(bar, close_key, label="PVT") for bar in bars]
+    volumes = [_read_number(bar, volume_key, label="PVT") for bar in bars]
+    pvt = 0.0
+    rows: List[Dict[str, Any]] = []
+
+    for index, (bar, close, volume) in enumerate(zip(bars, closes, volumes)):
+        if index > 0 and closes[index - 1] != 0:
+            pvt += volume * (close - closes[index - 1]) / closes[index - 1]
+        rows.append({"timestamp": bar["timestamp"], "pvt": pvt})
+    return rows
+
+
+@factor_registry.register("Stdev")
+def _calculate_stdev(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 20), label="Stdev.period")
+    source = _read_column_name(params.get("source"), label="Stdev.source", default="close")
+    values = [_read_number(bar, source, label="Stdev") for bar in bars]
+    std_values = _rolling_std(values, period)
+    return [
+        {
+            "timestamp": bar["timestamp"],
+            "stdev": std_value,
+        }
+        for bar, std_value in zip(bars, std_values)
+    ]
+
+
+@factor_registry.register("ZScore")
+def _calculate_zscore(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 20), label="ZScore.period")
+    source = _read_column_name(params.get("source"), label="ZScore.source", default="close")
+    values = [_read_number(bar, source, label="ZScore") for bar in bars]
+    means = _rolling_mean(values, period)
+    stds = _rolling_std(values, period)
+    rows: List[Dict[str, Any]] = []
+    for bar, value, mean, std in zip(bars, values, means, stds):
+        zscore = None if mean is None or std in {None, 0.0} else (value - mean) / std
+        rows.append({"timestamp": bar["timestamp"], "zscore": zscore})
+    return rows
+
+
+@factor_registry.register("BullBearPower")
+def _calculate_bull_bear_power(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 13), label="BullBearPower.period")
+    high_key = _read_column_name(params.get("high"), label="BullBearPower.high", default="high")
+    low_key = _read_column_name(params.get("low"), label="BullBearPower.low", default="low")
+    close_key = _read_column_name(params.get("close"), label="BullBearPower.close", default="close")
+    ema_rows = factor_registry.calculate("EMA", bars, {"source": close_key, "period": period}).rows
+    highs = [_read_number(bar, high_key, label="BullBearPower") for bar in bars]
+    lows = [_read_number(bar, low_key, label="BullBearPower") for bar in bars]
+    rows: List[Dict[str, Any]] = []
+
+    for bar, high, low, ema_row in zip(bars, highs, lows, ema_rows):
+        ema_value = ema_row.get("ema")
+        bull_power = None if ema_value is None else high - ema_value
+        bear_power = None if ema_value is None else low - ema_value
+        rows.append(
+            {
+                "timestamp": bar["timestamp"],
+                "bull_power": bull_power,
+                "bear_power": bear_power,
+            }
+        )
+    return rows
+
+
+@factor_registry.register("DPO")
+def _calculate_dpo(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    period = _require_positive_int(params.get("period", 20), label="DPO.period")
+    source = _read_column_name(params.get("source"), label="DPO.source", default="close")
+    values = [_read_number(bar, source, label="DPO") for bar in bars]
+    sma_values = _rolling_mean(values, period)
+    lag = period // 2 + 1
+    rows: List[Dict[str, Any]] = []
+
+    for index, (bar, sma_value) in enumerate(zip(bars, sma_values)):
+        reference_index = index - lag
+        dpo = None
+        if sma_value is not None and reference_index >= 0:
+            dpo = values[reference_index] - sma_value
+        rows.append({"timestamp": bar["timestamp"], "dpo": dpo})
+    return rows
+    return rows

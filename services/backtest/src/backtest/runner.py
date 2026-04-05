@@ -72,6 +72,7 @@ class BacktestJobInput:
     end_date: date
     initial_capital: float
     metadata: Dict[str, Any] = field(default_factory=dict)
+    transaction_costs_override: Optional[Dict[str, float]] = field(default=None)
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "BacktestJobInput":
@@ -177,33 +178,52 @@ class OnlineBacktestRunner:
                 expected_template_id=job.strategy_template_id,
             )
             self._validate_frozen_first_real_backtest(job, strategy_definition)
-            transaction_costs = self._read_transaction_costs(strategy_definition)
+            transaction_costs = self._read_transaction_costs(strategy_definition, override=job.transaction_costs_override)
             template_cls = self._template_registry.resolve(strategy_definition.template_id)
             session_config = self._session_manager.build_config_from_job(job)
-            with self._session_manager.open_session(session_config) as session:
-                apply_transaction_costs = getattr(self._session_manager, "apply_transaction_costs", None)
-                transaction_cost_notes = []
-                if callable(apply_transaction_costs):
-                    transaction_cost_notes = list(
-                        apply_transaction_costs(
-                            session,
-                            symbol=job.symbol,
-                            transaction_costs=transaction_costs,
+            artifacts = None
+            try:
+                with self._session_manager.open_session(session_config) as session:
+                    apply_transaction_costs = getattr(self._session_manager, "apply_transaction_costs", None)
+                    transaction_cost_notes = []
+                    if callable(apply_transaction_costs):
+                        transaction_cost_notes = list(
+                            apply_transaction_costs(
+                                session,
+                                symbol=job.symbol,
+                                transaction_costs=transaction_costs,
+                            )
                         )
+                    runtime_context = StrategyRuntimeContext(
+                        job_id=job.job_id,
+                        symbol=job.symbol,
+                        initial_capital=job.initial_capital,
+                        strategy_config=strategy_definition,
+                        settings=self._settings,
+                        session=session,
+                        submitted_at=datetime.now().astimezone(),
                     )
-                runtime_context = StrategyRuntimeContext(
-                    job_id=job.job_id,
-                    symbol=job.symbol,
-                    initial_capital=job.initial_capital,
-                    strategy_config=strategy_definition,
-                    settings=self._settings,
-                    session=session,
-                    submitted_at=datetime.now().astimezone(),
+                    strategy = template_cls(runtime_context)
+                    artifacts = strategy.run()
+                    artifacts.notes.extend(transaction_cost_notes)
+                    if transaction_costs.get("_defaulted"):
+                        artifacts.notes.append("transaction_costs_defaulted=true")
+                    elif transaction_costs.get("_from_override"):
+                        artifacts.notes.append(
+                            f"transaction_costs_from_override="
+                            f"slippage={transaction_costs['slippage_per_unit']},"
+                            f"commission={transaction_costs['commission_per_lot_round_turn']}"
+                        )
+            except BaseException as exc:
+                if not _is_tqsdk_backtest_finished_exception(exc):
+                    raise
+            if artifacts is None:
+                from .strategy_base import StrategyExecutionArtifacts
+                artifacts = StrategyExecutionArtifacts(
+                    notes=["backtest_finished_before_strategy_execution"],
                 )
-                strategy = template_cls(runtime_context)
-                artifacts = strategy.run()
-                artifacts.notes.extend(transaction_cost_notes)
-            report = self._result_builder.build(snapshot, strategy_definition, artifacts)
+                artifacts.completed_at = datetime.now().astimezone()
+            report = self._result_builder.build(snapshot, strategy_definition, artifacts, transaction_costs_override=job.transaction_costs_override)
         except StrategyInputRequiredError as exc:
             report = self._result_builder.build_strategy_input_required(
                 snapshot,
@@ -327,7 +347,7 @@ class OnlineBacktestRunner:
                 f"timeframe_minutes must be {FIRST_REAL_FC_224_SPEC.timeframe_minutes}"
             )
 
-        transaction_costs = self._read_transaction_costs(strategy_definition)
+        transaction_costs = self._read_transaction_costs(strategy_definition, override=job.transaction_costs_override)
         if not _is_close(
             transaction_costs["slippage_per_unit"],
             FIRST_REAL_FC_224_SPEC.slippage_per_unit,
@@ -346,12 +366,24 @@ class OnlineBacktestRunner:
         if mismatches:
             raise StrategyConfigError("首轮真实回测冻结输入不匹配: " + "; ".join(mismatches))
 
-    def _read_transaction_costs(self, strategy_definition: StrategyDefinition) -> Dict[str, float]:
+    def _read_transaction_costs(self, strategy_definition: StrategyDefinition, override: Optional[Dict[str, float]] = None) -> Dict[str, float]:
         transaction_costs = strategy_definition.transaction_costs
         if not transaction_costs:
-            raise StrategyConfigError(
-                "strategy YAML must contain transaction_costs for formal backtest execution"
-            )
+            if override:
+                return {
+                    "slippage_per_unit": _coerce_non_negative_float(
+                        override.get("slippage_per_unit", 0.0),
+                        label="transaction_costs.slippage_per_unit",
+                    ),
+                    "commission_per_lot_round_turn": _coerce_non_negative_float(
+                        override.get("commission_per_lot_round_turn", 0.0),
+                        label="transaction_costs.commission_per_lot_round_turn",
+                    ),
+                    "_from_override": True,
+                }
+            # Legacy strategies without transaction_costs: use zero-cost defaults.
+            # Callers can inspect the "transaction_costs_defaulted=true" note in the report.
+            return {"slippage_per_unit": 0.0, "commission_per_lot_round_turn": 0.0, "_defaulted": True}
         return {
             "slippage_per_unit": _coerce_non_negative_float(
                 transaction_costs.get("slippage_per_unit"),
@@ -411,3 +443,9 @@ def _coerce_non_negative_float(value: Any, *, label: str) -> float:
 
 def _is_close(left: float, right: float, *, tolerance: float = 1e-9) -> bool:
     return abs(left - right) <= tolerance
+
+
+def _is_tqsdk_backtest_finished_exception(exc: BaseException) -> bool:
+    if type(exc).__name__ == "BacktestFinished":
+        return True
+    return str(exc).strip() in {"回测结束", "回测结束。"}

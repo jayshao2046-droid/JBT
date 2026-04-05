@@ -24,9 +24,9 @@
 
 ## 影响文件（开发阶段，待 Token 后）
 
-1. `services/backtest/V0-backtext 看板/app/page.tsx`
-2. `services/backtest/V0-backtext 看板/app/agent-network/page.tsx`
-3. `services/backtest/V0-backtext 看板/app/operations/page.tsx`
+1. `services/backtest/backtest_web/app/page.tsx`
+2. `services/backtest/backtest_web/app/agent-network/page.tsx`
+3. `services/backtest/backtest_web/app/operations/page.tsx`
 4. 对应执行 Agent 的私有 prompt
 5. 对应开发 handoff 文件
 

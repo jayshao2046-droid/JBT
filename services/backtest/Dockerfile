@@ -1,32 +1,41 @@
-# ────────────────────────────────────────────────
-# JBT Backtest API — 生产 Docker 镜像
-# 端口: 8103
-# 环境变量: 参见 .env.example
-# ────────────────────────────────────────────────
-FROM python:3.11-slim
+# ─── Stage 1: 依赖安装 ────────────────────────────────────────────────────────
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/python:3.11-slim AS builder
 
 WORKDIR /app
 
-# 安装 Python 依赖（固定版本，预编译 wheel 无需 gcc）
-RUN pip install --no-cache-dir \
-    fastapi==0.128.8 \
-    "uvicorn[standard]==0.39.0" \
-    tqsdk==3.9.1 \
-    pydantic==2.12.5 \
-    websockets==15.0.1 \
-    python-multipart
+# 安装系统依赖（tqsdk 编译时需要）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ libffi-dev libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# 再复制源码（变更频率高，放后面）
-COPY services/backtest/src/ ./services/backtest/src/
-COPY shared/ ./shared/
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+# ─── Stage 2: 运行镜像 ───────────────────────────────────────────────────────
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/python:3.11-slim AS runner
+
+WORKDIR /app
+
+# 从 builder 复制依赖
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# 复制源码
+COPY src/ ./src/
+COPY configs/ ./configs/
+
+# 运行时目录由 docker-compose 挂载卷创建，此处仅预建空目录作为 fallback
+RUN mkdir -p /runtime/strategies /runtime/results /runtime/backtests /runtime/reports
 
 ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
+ENV JBT_SERVICE_NAME=backtest
+ENV JBT_SERVICE_PORT=8103
 
 EXPOSE 8103
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8103/api/v1/health')"
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8103/api/health')" || exit 1
 
-CMD ["python", "-m", "uvicorn", "services.backtest.src.api.app:app", \
-     "--host", "0.0.0.0", "--port", "8103", "--log-level", "info"]
+CMD ["python3", "-m", "uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8103"]

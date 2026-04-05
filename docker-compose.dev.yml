@@ -1,6 +1,7 @@
 services:
   sim-trading:
     build: ./services/sim-trading
+    container_name: JBT-SIM-TRADING-8101
     ports:
       - "8101:8101"
     environment:
@@ -12,6 +13,7 @@ services:
 
   live-trading:
     build: ./services/live-trading
+    container_name: JBT-LIVE-TRADING-8102
     ports:
       - "8102:8102"
     environment:
@@ -23,17 +25,44 @@ services:
 
   backtest:
     build: ./services/backtest
+    container_name: JBT-BACKTEST-8103
     ports:
       - "8103:8103"
     environment:
       JBT_SERVICE_NAME: backtest
       JBT_SERVICE_PORT: "8103"
+      TQSDK_STRATEGY_YAML_DIR: /runtime/strategies
+      BACKTEST_RESULT_DIR: /runtime/results
+      BACKTEST_STORAGE_PATH: /runtime/backtests
+      BACKTEST_REPORT_PATH: /runtime/reports
+      # 以下敏感变量须在 .env 中覆盖，不要写入此文件
+      # TQSDK_AUTH_USERNAME:
+      # TQSDK_AUTH_PASSWORD:
     volumes:
       - ./services/backtest:/app
       - ./services/backtest/runtime:/runtime
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8103/api/health')"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  backtest-web:
+    build: ./services/backtest/backtest_web
+    container_name: JBT-BACKTEST-WEB-3001
+    ports:
+      - "3001:3001"
+    environment:
+      BACKEND_BASE_URL: http://backtest:8103
+      NODE_ENV: production
+    depends_on:
+      backtest:
+        condition: service_healthy
 
   decision:
     build: ./services/decision
+    container_name: JBT-DECISION-8104
     ports:
       - "8104:8104"
     environment:
@@ -45,6 +74,7 @@ services:
 
   data:
     build: ./services/data
+    container_name: JBT-DATA-8105
     ports:
       - "8105:8105"
     environment:
@@ -56,6 +86,7 @@ services:
 
   dashboard:
     build: ./services/dashboard
+    container_name: JBT-DASHBOARD-8106
     ports:
       - "8106:8106"
     environment:

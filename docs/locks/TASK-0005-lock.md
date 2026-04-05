@@ -3,6 +3,62 @@
 ## Lock 信息
 
 - 任务 ID：TASK-0005
+- 阶段：backtest 容器命名预审
+- 执行 Agent：
+  - 项目架构师（P-LOG 治理文件）
+  - 回测 Agent（建议执行主体，`services/backtest/docker-compose.yml`，待 Jay.S P1 Token）
+- Token 摘要：
+  - P-LOG 协同账本区文件：不需要文件级 Token
+  - `services/backtest/docker-compose.yml`：本轮业务写入需要单 Agent、单任务、单文件 P1 Token；当前会话可记录为“待本轮即时执行确认”
+
+## 治理文件白名单（本轮已使用）
+
+1. `docs/tasks/TASK-0005-backtest-容器命名规范统一.md`
+2. `docs/reviews/TASK-0005-review.md`
+3. `docs/locks/TASK-0005-lock.md`
+4. `docs/rollback/TASK-0005-rollback.md`
+5. `docs/handoffs/TASK-0005-backtest-容器命名交接单.md`
+6. `docs/prompts/公共项目提示词.md`
+7. `docs/prompts/agents/项目架构师提示词.md`
+
+## 业务文件白名单（待 Jay.S P1 Token）
+
+1. `services/backtest/docker-compose.yml`
+
+## 当前继续锁定的相关文件
+
+1. `docker-compose.dev.yml`
+2. `services/backtest/Dockerfile`
+3. `services/backtest/backtest_web/**`
+4. `services/backtest/.env.example`
+5. `services/backtest/src/**`
+6. `services/backtest/tests/**`
+7. `shared/contracts/**`
+8. 其他全部非白名单文件
+
+## 锁控说明
+
+1. 本轮只允许改 Compose 中的 `container_name` 字段，不允许顺带修改 `image`、`ports`、`environment`、`depends_on`、`healthcheck`、网络或卷配置。
+2. 命名规范冻结为：API `JBT-BACKTEST-8103`，Dashboard `JBT-BACKTEST-3001`。
+3. 当前运行中的临时 API 容器 `botquant-backtest-api:8004` 可作为执行态例外更名为 `JBT-BACKTEST-8004`，但该例外不进入仓内业务文件白名单。
+4. 若执行中发现需要新增第 2 个业务文件，原 Token 立即失效，必须重新提交补充预审。
+
+## 当前状态
+
+- 预审状态：已通过
+- Token 状态：待本轮即时执行确认
+- 解锁时间：N/A
+- 失效时间：N/A
+- 锁回时间：N/A
+- lockback 结果：N/A
+
+## 结论
+
+**TASK-0005 当前已完成范围冻结与锁控留痕；可直接申请 `services/backtest/docker-compose.yml` 的单文件 P1 Token。**# TASK-0005 Lock 记录
+
+## Lock 信息
+
+- 任务 ID：TASK-0005
 - review-id：REVIEW-TASK-0005-A / REVIEW-TASK-0005-B / REVIEW-TASK-0005-C
 - 阶段：全量因子接入与模板解冻：批次 A、批次 B、批次 C 均已完成、终审通过并已锁回；TASK-0005 全三批次闭环
 - 执行 Agent：

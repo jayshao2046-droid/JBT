@@ -2,21 +2,22 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
 
 if __package__:
     from ..core.settings import get_settings
+    from .routes.backtest import router as backtest_router
     from .routes.health import router as health_router
     from .routes.jobs import router as jobs_router
-    from .routes.strategies import router as strategies_router
-    from .routes.backtest import router as backtest_router
-    from .routes.system import router as system_router
+    from .routes.strategy import router as strategy_router
+    from .routes.support import ensure_compat_state
+    from .routes.support import router as support_router
 else:
+    from api.routes.backtest import router as backtest_router
     from api.routes.health import router as health_router
     from api.routes.jobs import router as jobs_router
-    from api.routes.strategies import router as strategies_router
-    from api.routes.backtest import router as backtest_router
-    from api.routes.system import router as system_router
+    from api.routes.strategy import router as strategy_router
+    from api.routes.support import ensure_compat_state
+    from api.routes.support import router as support_router
     from core.settings import get_settings
 
 
@@ -36,16 +37,12 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    ensure_compat_state(app)
     app.include_router(health_router)
     app.include_router(jobs_router)
-    app.include_router(strategies_router)
     app.include_router(backtest_router)
-    app.include_router(system_router)
-
-    @app.get("/", include_in_schema=False)
-    async def root_redirect() -> RedirectResponse:
-        return RedirectResponse(url="/docs")
-
+    app.include_router(strategy_router)
+    app.include_router(support_router)
     return app
 
 

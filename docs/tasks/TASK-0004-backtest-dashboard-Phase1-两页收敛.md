@@ -12,7 +12,7 @@
 
 ## 一、任务目标
 
-在 `services/backtest/V0-backtext 看板/` 目录内，将现有 Next.js 原型收敛为仅保留两类页面：
+在 `services/backtest/backtest_web/` 目录内，将现有 Next.js 原型收敛为仅保留两类页面：
 
 1. 策略管理
 2. 回测详情
@@ -40,7 +40,7 @@
 
 ### 强制边界
 
-1. 本轮只允许落在 `services/backtest/V0-backtext 看板/`。
+1. 本轮只允许落在 `services/backtest/backtest_web/`。
 2. 不得扩展到 `services/backtest/src/**`、`services/backtest/tests/**`、`shared/contracts/**`、`docker-compose.dev.yml`、`.env.example`、其他服务目录。
 3. 本轮不允许删除现有非目标页面文件，除非后续补充预审证明“不删无法达成目标”。
 4. 若执行中发现需要新增第 4 个业务文件，必须重新提交补充预审，未经复审不得扩白名单。
@@ -64,17 +64,17 @@
 
 ### P1 业务文件白名单
 
-1. `services/backtest/V0-backtext 看板/app/page.tsx`
-2. `services/backtest/V0-backtext 看板/app/agent-network/page.tsx`
-3. `services/backtest/V0-backtext 看板/app/operations/page.tsx`
+1. `services/backtest/backtest_web/app/page.tsx`
+2. `services/backtest/backtest_web/app/agent-network/page.tsx`
+3. `services/backtest/backtest_web/app/operations/page.tsx`
 
 ### 当前明确不纳入白名单的文件
 
-1. `services/backtest/V0-backtext 看板/app/layout.tsx`
-2. `services/backtest/V0-backtext 看板/package.json`
-3. `services/backtest/V0-backtext 看板/app/command-center/page.tsx`
-4. `services/backtest/V0-backtext 看板/app/intelligence/page.tsx`
-5. `services/backtest/V0-backtext 看板/app/systems/page.tsx`
+1. `services/backtest/backtest_web/app/layout.tsx`
+2. `services/backtest/backtest_web/package.json`
+3. `services/backtest/backtest_web/app/command-center/page.tsx`
+4. `services/backtest/backtest_web/app/intelligence/page.tsx`
+5. `services/backtest/backtest_web/app/systems/page.tsx`
 6. 其余 `components/**`、`lib/**`、样式与配置文件
 
 ### 不纳入白名单的理由

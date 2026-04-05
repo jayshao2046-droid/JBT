@@ -3,6 +3,44 @@ const SERVER_BASE = process.env.BACKEND_BASE_URL || 'http://localhost:8103'
 const BASE = typeof window !== 'undefined' ? '' : SERVER_BASE
 const DEFAULT_TIMEOUT = 5000
 
+function formatErrorDetail(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+
+  if (Array.isArray(value)) {
+    return value.map((item) => formatErrorDetail(item)).filter(Boolean).join('; ')
+  }
+
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const parts: string[] = []
+    const preferredKeys = ['message', 'reason', 'hint', 'errors']
+
+    for (const key of preferredKeys) {
+      if (!(key in record)) continue
+      const rendered = formatErrorDetail(record[key])
+      if (!rendered) continue
+      parts.push(key === 'errors' ? `${key}: ${rendered}` : rendered)
+    }
+
+    if (parts.length === 0) {
+      for (const [key, item] of Object.entries(record)) {
+        const rendered = formatErrorDetail(item)
+        if (rendered) parts.push(`${key}: ${rendered}`)
+      }
+    }
+
+    return parts.join('; ')
+  }
+
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
 async function fetchWithTimeout(input: RequestInfo, init: RequestInit = {}, timeout = DEFAULT_TIMEOUT) {
   const controller = new AbortController()
   const id = setTimeout(() => controller.abort(), timeout)
@@ -14,8 +52,11 @@ async function fetchWithTimeout(input: RequestInfo, init: RequestInit = {}, time
       try {
         const ct = (res.headers.get('content-type') || '').toLowerCase()
         if (ct.includes('application/json')) {
-          const j = await res.clone().json()
-          detail = String(j?.detail || j?.message || JSON.stringify(j))
+          const payload = await res.clone().json()
+          const primary = payload && typeof payload === 'object' && 'detail' in payload
+            ? (payload as { detail?: unknown }).detail
+            : payload
+          detail = formatErrorDetail(primary) || formatErrorDetail(payload)
         } else {
           detail = (await res.clone().text()).trim()
         }
@@ -63,7 +104,7 @@ export async function getResults() {
 }
 
 export async function runBacktest(payload: any) {
-  const r = await fetchWithRetry(`${BASE}/api/backtest/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+  const r = await fetchWithRetry(`${BASE}/api/backtest/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, 1, 600000)
   return r.json()
 }
 
@@ -105,6 +146,27 @@ export async function getResultEquity(taskId: string) {
 export async function getResultTrades(taskId: string) {
   const r = await fetchWithRetry(`${BASE}/api/backtest/results/${encodeURIComponent(taskId)}/trades`, { method: 'GET' })
   return r.json()
+}
+
+export async function downloadBacktestReport(taskId: string, strategyName?: string) {
+  const r = await fetchWithRetry(`${BASE}/api/backtest/results/${encodeURIComponent(taskId)}/report`, { method: 'GET' })
+  const blob = await r.blob()
+  const disposition = r.headers.get('content-disposition') || ''
+  const matched = disposition.match(/filename="?([^";]+)"?/)?.[1]
+  const fallbackName = `${(strategyName || taskId).replace(/[^\w.-]+/g, '_')}_${taskId}.report.json`
+  const filename = matched ? decodeURIComponent(matched) : fallbackName
+
+  if (typeof window === 'undefined') {
+    return { blob, filename }
+  }
+
+  const url = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 0)
+  return { filename }
 }
 
 export async function getProgress(taskId: string) {
@@ -158,7 +220,7 @@ export function friendlyError(err: any) {
   if (!err) return '未知错误'
   const msg = String(err.message || err || '')
   if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('AbortError')) {
-    return '资源或网络加载失败，请检查后端服务（http://localhost:8103）并重试'
+    return '资源或网络加载失败，请检查 JBT backtest 正式后端（http://localhost:8103）并重试'
   }
   if (msg.match(/\b404\b/)) return '资源未找到（404）'
   if (msg.match(/\b500\b/)) return '服务器内部错误（500）'
@@ -289,5 +351,6 @@ export default {
   isStrategyApproved,
   revokeApprovedStrategy,
   markStrategyDelivered,
+  downloadBacktestReport,
   friendlyError,
 }

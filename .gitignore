@@ -8,6 +8,7 @@ venv/
 *.pyc
 *.pyo
 .jbt/
+.jbt-local/
 
 services/*/runtime/
 services/*/logs/
@@ -19,3 +20,4 @@ services/*/*.db
 node_modules/
 .next/
 out/
+*.tsbuildinfo

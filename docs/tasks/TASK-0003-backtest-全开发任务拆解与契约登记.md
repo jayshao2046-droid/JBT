@@ -95,7 +95,7 @@
 
 ### 阶段三：看板 API 联调（待 Jay.S 单独确认）
 
-- 参考 `services/backtest/V0-backtext 看板/` 中的 Next.js 原型（5 个视图页面）
+- 参考 `services/backtest/backtest_web/` 中的 Next.js 原型（5 个视图页面）
 - 将看板前端与后端 API 端点对接（批次 A/B 完成后）
 - **本阶段在 Jay.S 单独给出调整要求后独立派发，不与阶段二混并**
 
@@ -107,7 +107,7 @@
 |---|---|---|
 | Q1 | 首个可运行策略模板：最小 SMA+TargetPosTask 官方示例，还是用户上传参数+固定策略模板？ | 决定 strategy_base.py 接口设计 |
 | Q2 | TqAuth 认证凭证注入方式（决定 .env.example 字段，影响 P0 申请范围） | 影响批次 C 前的 P0 申请 |
-| Q3 | `V0-backtext 看板/` 目录是否改名为 `dashboard/`（P1 操作，影响 Dockerfile 路径） | 阶段三目录结构 |
+| Q3 | `backtest_web/` 目录是否改名为 `dashboard/`（P1 操作，影响 Dockerfile 路径） | 阶段三目录结构 |
 | Q4 | 阶段三看板联调：作为 TASK-0003 子阶段，还是独立 TASK-0004？ | 任务边界 |
 | Q5 | 回测结果首阶段持久化方式：JSON+Parquet（沿用 legacy 归档模式）还是 SQLite/DuckDB？ | result_builder.py 设计 |
 

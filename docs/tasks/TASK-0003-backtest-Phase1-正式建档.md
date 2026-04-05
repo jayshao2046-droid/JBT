@@ -130,7 +130,7 @@
 
 ### 禁止写入（本阶段）
 
-- `services/backtest/src/`、`tests/`、`configs/`、`V0-backtext 看板/`（等 P1 Token）
+- `services/backtest/src/`、`tests/`、`configs/`、`backtest_web/`（等 P1 Token）
 - `shared/contracts/backtest/` 白名单之外其他文件
 - `shared/contracts/drafts/backtest-to-decision/`（D-BT-04，批次 B 后另行建档）
 - `docker-compose.dev.yml`（等批次 C 前单独 P0 Token）

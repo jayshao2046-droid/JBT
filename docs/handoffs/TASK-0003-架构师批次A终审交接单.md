@@ -13,7 +13,7 @@
 
 ## 终审结论
 
-1. 服务代码实际写入仅限批次 A 六个白名单文件，未触碰批次 B/C、`shared/contracts/**`、`tests/`、`configs/` 或 `V0-backtext 看板/`。
+1. 服务代码实际写入仅限批次 A 六个白名单文件，未触碰批次 B/C、`shared/contracts/**`、`tests/`、`configs/` 或 `backtest_web/`。
 2. `jobs.py` 已明确体现“固定策略模板 + 用户上传一体化 YAML 文件”，并把风控来源固定为 YAML；未启用股票路径，未硬编码止损、最大回撤、仓位上限等风控指标。
 3. `README.md` 已与当前公共口径一致：在线回测主路径、固定模板 + 用户参数、一体化 YAML 风控、回测后推送决策端、同机同 compose。
 4. 静态复核通过：VS Code 诊断无错误，5 个 Python 文件 `py_compile` 通过。
