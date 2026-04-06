@@ -1,8 +1,15 @@
 import logging
 import os
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
+
+# --- 加载 .env（如存在）---
+_env_file = Path(__file__).parent.parent / ".env"
+if _env_file.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_env_file, override=False)
 
 from src.api.router import router
 

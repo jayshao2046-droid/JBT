@@ -1,9 +1,16 @@
-from typing import Any, Dict, Optional
+import os
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/v1", tags=["sim-trading"])
+
+# ---------- SimNow Gateway 单例 ----------
+_gateway = None   # type: Any   # SimNowGateway | None
+
+def _get_gateway():
+    return _gateway
 
 # ---------- 内存状态（骨架阶段，重启重置）----------
 _system_state: Dict[str, Any] = {
@@ -120,16 +127,102 @@ def save_ctp_config(req: CtpConfigRequest):
 
 @router.post("/ctp/connect")
 def ctp_connect():
-    # 骨架阶段：模拟连接成功
-    _system_state["ctp_md_connected"] = True
-    _system_state["ctp_td_connected"] = True
-    return {"result": "connected (skeleton mock)", "state": _system_state}
+    global _gateway
+    import logging
+    from src.gateway.simnow import SimNowGateway, _CTP_AVAILABLE
+
+    if not _CTP_AVAILABLE:
+        raise HTTPException(status_code=503, detail="openctp-ctp not installed")
+
+    broker_id = _system_state.get("ctp_broker_id") or os.getenv("SIMNOW_BROKER_ID", "9999")
+    user_id   = _system_state.get("ctp_user_id")   or os.getenv("SIMNOW_USER_ID", "")
+    password  = os.getenv("SIMNOW_PASSWORD", "")
+    md_front  = _system_state.get("ctp_md_front")  or os.getenv("SIMNOW_MD_FRONT", "tcp://180.168.146.187:10131")
+    td_front  = _system_state.get("ctp_td_front")  or os.getenv("SIMNOW_TRADE_FRONT", "tcp://180.168.146.187:10130")
+
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id not configured")
+
+    # 先断开旧连接
+    if _gateway is not None:
+        try:
+            _gateway.disconnect()
+        except Exception:
+            pass
+
+    # 全量合约列表（取 risk_presets key 作为订阅品种前缀，实际主连后缀由前端处理）
+    instruments = list(_risk_presets.keys())
+
+    _gateway = SimNowGateway(
+        broker_id=broker_id,
+        user_id=user_id,
+        password=password,
+        md_front=md_front,
+        td_front=td_front,
+        instruments=instruments,
+    )
+    _gateway.connect()
+
+    # 等待最多 5 秒确认连接
+    import time
+    for _ in range(10):
+        st = _gateway.status
+        if st["md_connected"] or st["td_connected"]:
+            break
+        time.sleep(0.5)
+
+    st = _gateway.status
+    _system_state["ctp_md_connected"] = st["md_connected"]
+    _system_state["ctp_td_connected"] = st["td_connected"]
+
+    return {
+        "result": "connecting",
+        "md": st["md"],
+        "td": st["td"],
+        "md_connected": st["md_connected"],
+        "td_connected": st["td_connected"],
+    }
 
 @router.post("/ctp/disconnect")
 def ctp_disconnect():
+    global _gateway
+    if _gateway is not None:
+        try:
+            _gateway.disconnect()
+        except Exception:
+            pass
+        _gateway = None
     _system_state["ctp_md_connected"] = False
     _system_state["ctp_td_connected"] = False
     return {"result": "disconnected", "state": _system_state}
+
+
+@router.get("/ctp/status")
+def ctp_status():
+    """实时 CTP 连接状态（md + td 独立状态）"""
+    if _gateway is None:
+        return {"md": "disconnected", "td": "disconnected",
+                "md_connected": False, "td_connected": False}
+    st = _gateway.status
+    # 同步回 system_state
+    _system_state["ctp_md_connected"] = st["md_connected"]
+    _system_state["ctp_td_connected"] = st["td_connected"]
+    return st
+
+
+@router.get("/ticks")
+def get_ticks(symbols: str = ""):
+    """
+    获取最新 tick 数据。
+    ?symbols=rb,cu,au  — 指定品种逗号分隔；不传返回全量
+    """
+    if _gateway is None:
+        return {"ticks": {}, "source": "none"}
+    all_t = _gateway.all_ticks()
+    if symbols:
+        wanted = {s.strip().upper() for s in symbols.split(",")}
+        all_t = {k: v for k, v in all_t.items() if k.upper() in wanted}
+    return {"ticks": all_t, "source": "ctp", "count": len(all_t)}
 
 # ---------- 品种风控预设 ----------
 @router.get("/risk-presets")
