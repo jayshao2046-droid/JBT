@@ -366,7 +366,7 @@ export default function RiskControlPage() {
               </ResponsiveContainer>
             </div>
             {/* 警戒线说明 */}
-            <div className="mt-4 grid grid-cols-3 gap-4 text-xs">
+            <div className="mt-4 grid grid-cols-2 gap-4 text-xs">
               <div>
                 <div className="w-4 h-0.5 bg-yellow-500 mb-1"></div>
                 <p className="text-neutral-400">2% 黄线</p>
@@ -374,9 +374,6 @@ export default function RiskControlPage() {
               <div>
                 <div className="w-4 h-0.5 bg-red-500 mb-1"></div>
                 <p className="text-neutral-400">3% 红线</p>
-              </div>
-              <div>
-                <p className="text-neutral-400">当前: <span className="text-orange-400">+600</span></p>
               </div>
             </div>
           </CardContent>
