@@ -67,12 +67,17 @@
 
 ### 批次 D（P1，系统级风控联动层）
 
-- 状态：pending_token
+- 状态：locked
 - 保护路径：`services/backtest/**`
-- 白名单模板示例：
-  1. `services/backtest/src/**`
-  2. `services/backtest/tests/**`
-- token_id：pending
+- 白名单文件：
+  1. `services/backtest/src/backtest/local_engine.py`（修改：equity_curve 序列化 + risk_event 联动）
+  2. `services/backtest/src/backtest/risk_engine.py`（新建：统一风控执行层）
+  3. `services/backtest/tests/test_risk_engine.py`（新建）
+- token_id：`tok-62909012-2bbf-4f38-aa36-0ed247faffb4`
+- 签发时间：2026-04-07
+- 执行 Agent：回测
+- lockback 结果：approved（review-id: REVIEW-TASK-0018-D）
+- commit：`4a96c5b`
 
 ### 批次 E（P1，backtest_web 引擎选择控件与执行入口）
 
