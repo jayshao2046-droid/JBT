@@ -12,7 +12,7 @@
 
 ## 一、任务目标
 
-为 SimNow 主线建立独立的风控通知链路，冻结“独立飞书 + 独立邮件”的正式边界、最小事件结构与敏感信息治理规则。
+为 SimNow 主线建立独立的风控通知链路，冻结“独立飞书 + 独立邮件”的正式边界、最小事件结构、即时通知补充批次与敏感信息治理规则。
 
 本任务当前轮次只做预审，不写任何服务代码。
 
@@ -91,14 +91,30 @@
 2. 单通道失败时，另一通道仍应按规则继续发送。
 3. 当双通道均失败时，系统至少进入“拒绝新开仓”或更严格模式。
 
+### 4. 即时通知补充批次冻结
+
+1. 用户新增的“即时飞书 / 邮件告警”继续归入 `TASK-0014`，不新开任务号。
+2. 补充批次 A1：通知 bootstrap 与风险钩子闭环，保护级别冻结为 **P1**；建议白名单：
+	- `services/sim-trading/src/main.py`
+	- `services/sim-trading/src/risk/guards.py`
+	- `services/sim-trading/src/notifier/dispatcher.py`
+	- `services/sim-trading/tests/test_risk_hooks.py`
+	- `services/sim-trading/tests/test_notifier.py`
+3. 补充批次 A2：系统事件来源接线，保护级别冻结为 **P1**；建议白名单：
+	- `services/sim-trading/src/api/router.py`
+	- `services/sim-trading/src/gateway/simnow.py`
+	- 最多 2 个 `services/sim-trading/tests/**` 测试文件
+4. 执行顺序冻结为 `TASK-0014-A1` → `TASK-0014-A2`；A2 不得先于 A1 启动。
+
 ---
 
 ## 六、Token / 保护级别策略
 
 1. 当前轮次：P-LOG，仅治理账本，不申请代码 Token。
-2. 未来若修改 `services/sim-trading/src/**` 或 `services/sim-trading/tests/**`：**P1**。
-3. 未来若修改 `services/sim-trading/.env.example` 以补充通知字段占位：**P0**。
-4. 未来若需要新增跨服务通知事件契约到 `shared/contracts/**`：**P0**。
+2. 补充批次 A1 若落地：`services/sim-trading/src/main.py`、`src/risk/guards.py`、`src/notifier/dispatcher.py` 与对应测试文件均按 **P1** 处理。
+3. 补充批次 A2 若落地：`services/sim-trading/src/api/router.py`、`src/gateway/simnow.py` 与最多 2 个测试文件按 **P1** 处理。
+4. 若后续需要在 `services/sim-trading/.env.example` 中补充通知字段占位：**P0**。
+5. 若未来需要新增跨服务通知事件契约到 `shared/contracts/**`：**P0**。
 
 ---
 
@@ -106,7 +122,9 @@
 
 1. 飞书 webhook、邮箱账号、邮箱密码、SMTP 鉴权字段只能作为运行时 Secret 注入，不得写入 Git、`.env.example` 或治理账本。
 2. `.env.example` 只能写占位符和字段说明，不能写真实 webhook、真实邮箱地址或真实密码。
-3. J_BotQuant 只提供凭证来源与接入方式，账本中不得出现真实秘密值。
+3. Jay.S 已明确允许 legacy `J_BotQuant/.env` 只作为“凭证来源”参考，账本中不得出现真实秘密值。
+4. 推荐采用部署侧 env mapping / fallback，把 legacy 变量映射到 JBT 运行时环境。
+5. 不得在服务代码中耦合 `/Users/jayshao/J_BotQuant/.env` 路径，不得把真实 Secret 读写逻辑写入 Git。
 
 ---
 
@@ -114,8 +132,9 @@
 
 1. 独立飞书 + 独立邮件双通道已冻结为正式治理口径。
 2. P0 / P1 / P2 的最小事件字段与失败收口逻辑已冻结。
-3. 已明确该任务不复用 backtest 或其他服务的默认通知配置。
-4. 已明确真实通知凭证不得入库。
+3. 已明确即时通知继续归入 `TASK-0014` 的补充批次 A1 / A2。
+4. 已明确该任务不复用 backtest 或其他服务的默认通知配置。
+5. 已明确 legacy `.env` 仅可作为部署侧凭证来源，真实通知凭证不得入库。
 
 ---
 
@@ -123,4 +142,5 @@
 
 1. **`TASK-0014` 正式成立。**
 2. **C 风控通知必须作为独立任务推进，不得并入 `TASK-0010` 或 `TASK-0017`。**
-3. **在补充文件级白名单前，本任务暂不进入代码 Token 申请。**
+3. **即时通知继续归入 `TASK-0014` 的补充批次 A1 / A2，当前状态均为 `pending_token`。**
+4. **legacy `J_BotQuant/.env` 只可作为部署侧凭证来源，不得把外部路径耦合进服务代码。**
