@@ -82,6 +82,8 @@ export interface RiskPreset {
   daily_loss_pct: number
   price_dev_pct: number
   enabled: boolean
+  commission: number
+  slippage_ticks: number
 }
 
 export const simApi = {

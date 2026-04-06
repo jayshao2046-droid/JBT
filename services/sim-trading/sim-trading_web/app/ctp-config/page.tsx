@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,6 +43,27 @@ export default function CtpConfigPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [activePreset, setActivePreset] = useState(0)
+  const [autoSwitch, setAutoSwitch] = useState(true)
+  const autoSwitchRef = useRef(true)
+
+  // 判断是否在交易时段
+  const isTradingHours = useCallback(() => {
+    const d = new Date()
+    const mins = d.getHours() * 60 + d.getMinutes()
+    return (
+      (mins >= 9 * 60 && mins < 11 * 60 + 30) ||
+      (mins >= 13 * 60 + 30 && mins < 15 * 60) ||
+      (mins >= 21 * 60 && mins < 23 * 60 + 30)
+    )
+  }, [])
+
+  const autoSelectPreset = useCallback(() => {
+    if (!autoSwitchRef.current) return
+    const idx = isTradingHours() ? 1 : 0   // 1=交易时段, 0=7×24
+    setActivePreset(idx)
+    const p = CTP_PRESETS[idx]
+    setForm(f => ({ ...f, broker_id: p.broker_id, md_front: p.md_front, td_front: p.td_front }))
+  }, [isTradingHours])
 
   const loadState = async () => {
     setIsLoading(true)
@@ -65,11 +86,28 @@ export default function CtpConfigPage() {
 
   useEffect(() => { loadState() }, [])
 
+  // 自动时段切换：挂载时立即选一次，之后每分钟检查
+  useEffect(() => {
+    autoSelectPreset()
+    const t = setInterval(autoSelectPreset, 60_000)
+    return () => clearInterval(t)
+  }, [autoSelectPreset])
+
   const applyPreset = (idx: number) => {
+    // 手动点击 → 关闭自动切换
+    autoSwitchRef.current = false
+    setAutoSwitch(false)
     const p = CTP_PRESETS[idx]
     setActivePreset(idx)
     setForm(f => ({ ...f, broker_id: p.broker_id, md_front: p.md_front, td_front: p.td_front }))
-    toast.info(`已切换至 ${p.label} 前置地址`)
+    toast.info(`已切换至 ${p.label} 前置地址（手动模式）`)
+  }
+
+  const enableAutoSwitch = () => {
+    autoSwitchRef.current = true
+    setAutoSwitch(true)
+    autoSelectPreset()
+    toast.info("已启用交易时段自动切换")
   }
 
   const handleSave = async () => {
@@ -164,7 +202,24 @@ export default function CtpConfigPage() {
       {/* 前置地址预设 */}
       <Card className="bg-neutral-900 border-neutral-700">
         <CardHeader>
-          <CardTitle className="text-sm font-medium text-neutral-300">前置地址快速切换</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium text-neutral-300">前置地址快速切换</CardTitle>
+            <div className="flex items-center gap-2">
+              {autoSwitch ? (
+                <Badge className="bg-green-900/30 text-green-400 border border-green-700/40 text-xs">
+                  自动 · {isTradingHours() ? "交易时段" : "非交易时段"}
+                </Badge>
+              ) : (
+                <>
+                  <Badge className="bg-neutral-700 text-neutral-400 border-none text-xs">手动模式</Badge>
+                  <Button size="sm" variant="ghost" onClick={enableAutoSwitch}
+                    className="text-xs text-orange-400 hover:text-orange-300 h-6 px-2">
+                    恢复自动
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           {CTP_PRESETS.map((p, i) => (

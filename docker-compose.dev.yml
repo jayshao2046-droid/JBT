@@ -7,9 +7,28 @@ services:
     environment:
       JBT_SERVICE_NAME: sim-trading
       JBT_SERVICE_PORT: "8101"
+      # SimNow CTP 前置地址（生产登录时段用交易时段前置）
+      SIMNOW_MD_FRONT: tcp://180.168.146.187:10131
+      SIMNOW_TD_FRONT: tcp://180.168.146.187:10130
+      SIMNOW_BROKER_ID: "9999"
+      # 账户信息从 .env 注入：SIMNOW_USER_ID / SIMNOW_PASSWORD
+    env_file:
+      - path: .env
+        required: false
     volumes:
       - ./services/sim-trading:/app
       - ./services/sim-trading/runtime:/runtime
+
+  sim-trading-web:
+    build: ./services/sim-trading/sim-trading_web
+    container_name: JBT-SIM-TRADING-WEB-3002
+    ports:
+      - "3002:3002"
+    environment:
+      BACKEND_BASE_URL: http://sim-trading:8101
+      NODE_ENV: production
+    depends_on:
+      - sim-trading
 
   live-trading:
     build: ./services/live-trading

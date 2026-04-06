@@ -12,11 +12,23 @@ import { simApi, type RiskPreset } from "@/lib/sim-api"
 type PresetRow = RiskPreset & { symbol: string; editing: boolean; dirty: boolean }
 
 const EXCHANGES: Record<string, string> = {
-  RB: "上期所", HC: "上期所", CU: "上期所", AL: "上期所", ZN: "上期所",
-  AU: "上期所", AG: "上期所", RU: "上期所",
-  I: "大商所", J: "大商所", JM: "大商所", M: "大商所", Y: "大商所",
-  A: "大商所", C: "大商所", L: "大商所", PP: "大商所",
-  SC: "上期能源", IF: "中金所", IC: "中金所",
+  // SHFE 上期所
+  RB: "上期所", HC: "上期所", SS: "上期所", SP: "上期所", CU: "上期所", AL: "上期所",
+  ZN: "上期所", PB: "上期所", NI: "上期所", SN: "上期所", BC: "上期所", AU: "上期所",
+  AG: "上期所", FU: "上期所", BU: "上期所", RU: "上期所", NR: "上期所",
+  // DCE 大商所
+  I: "大商所", J: "大商所", JM: "大商所", A: "大商所", B: "大商所", M: "大商所",
+  Y: "大商所", P: "大商所", C: "大商所", CS: "大商所", RR: "大商所", LH: "大商所",
+  V: "大商所", L: "大商所", PP: "大商所", EG: "大商所", EB: "大商所", PG: "大商所",
+  // CZCE 郑商所
+  CF: "郑商所", CY: "郑商所", SR: "郑商所", AP: "郑商所", CJ: "郑商所", OI: "郑商所",
+  RM: "郑商所", RS: "郑商所", PK: "郑商所", SM: "郑商所", SF: "郑商所", TA: "郑商所",
+  MA: "郑商所", FG: "郑商所", SA: "郑商所", UR: "郑商所", PF: "郑商所", PX: "郑商所",
+  // CFFEX 中金所
+  IF: "中金所", IC: "中金所", IH: "中金所", IM: "中金所", T: "中金所",
+  TF: "中金所", TS: "中金所", TL: "中金所",
+  // INE 上海能源 / GFEX 广期所
+  SC: "上海能源", LU: "上海能源", SI: "广期所", LC: "广期所",
 }
 
 export default function RiskPresetsPage() {
@@ -60,6 +72,8 @@ export default function RiskPresetsPage() {
         daily_loss_pct: Number(row.daily_loss_pct),
         price_dev_pct: Number(row.price_dev_pct),
         enabled: row.enabled,
+        commission: Number(row.commission),
+        slippage_ticks: Number(row.slippage_ticks),
       })
       setRows(rows.map(r => r.symbol === row.symbol ? { ...r, dirty: false } : r))
       toast.success(`${row.name}（${row.symbol}）风控预设已保存`)
@@ -137,6 +151,8 @@ export default function RiskPresetsPage() {
                   <th className="text-left py-3 px-4 text-xs text-neutral-400">最大持仓(手)</th>
                   <th className="text-left py-3 px-4 text-xs text-neutral-400">日亏限额(%)</th>
                   <th className="text-left py-3 px-4 text-xs text-neutral-400">价格偏离(%)</th>
+                  <th className="text-left py-3 px-4 text-xs text-neutral-400">手续费(元/手)</th>
+                  <th className="text-left py-3 px-4 text-xs text-neutral-400">滑点(Tick)</th>
                   <th className="text-left py-3 px-4 text-xs text-neutral-400">操作</th>
                 </tr>
               </thead>
@@ -217,6 +233,28 @@ export default function RiskPresetsPage() {
                         step={0.1}
                         onChange={e => update(row.symbol, "price_dev_pct", e.target.value)}
                         className="w-20 h-7 bg-neutral-800 border-neutral-600 text-white text-xs text-center"
+                      />
+                    </td>
+                    {/* 手续费 */}
+                    <td className="py-3 px-4">
+                      <Input
+                        type="number"
+                        value={row.commission}
+                        min={0}
+                        step={0.5}
+                        onChange={e => update(row.symbol, "commission", e.target.value)}
+                        className="w-20 h-7 bg-neutral-800 border-neutral-600 text-white text-xs text-center"
+                      />
+                    </td>
+                    {/* 滑点 */}
+                    <td className="py-3 px-4">
+                      <Input
+                        type="number"
+                        value={row.slippage_ticks}
+                        min={0}
+                        max={5}
+                        onChange={e => update(row.symbol, "slippage_ticks", e.target.value)}
+                        className="w-16 h-7 bg-neutral-800 border-neutral-600 text-white text-xs text-center"
                       />
                     </td>
                     {/* 保存 */}

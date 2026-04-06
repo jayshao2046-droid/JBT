@@ -25,7 +25,7 @@ export default function TradingDashboard() {
   const [serviceOnline, setServiceOnline] = useState(false)
   const [ctpMd, setCtpMd] = useState(false)
   const [ctpTd, setCtpTd] = useState(false)
-  const [lastUpdate, setLastUpdate] = useState(new Date())
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [togglingSwitch, setTogglingSwitch] = useState(false)
 
   // 交易日历
@@ -111,9 +111,9 @@ export default function TradingDashboard() {
           {/* 导航菜单 */}
           <nav className="space-y-1 flex-1">
             {[
-              { id: "market",        icon: BarChart2,   label: "行情报价" },
               { id: "intelligence",  icon: ShieldAlert, label: "风控监控" },
               { id: "operations",    icon: TrendingUp,  label: "交易终端" },
+              { id: "market",        icon: BarChart2,   label: "行情报价" },
               { id: "risk-presets",  icon: Shield,      label: "品种风控" },
               { id: "ctp-config",    icon: PlugZap,     label: "CTP 配置" },
             ].map(item => (
@@ -171,12 +171,7 @@ export default function TradingDashboard() {
                       {ctpTd ? "●" : "○"}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span>预设:</span>
-                    <Badge className="bg-orange-900/30 text-orange-400 border-none text-xs px-1 py-0">
-                      {activePreset}
-                    </Badge>
-                  </div>
+
                   {/* 全局交易开关 */}
                   <div className="flex items-center justify-between pt-1 border-t border-neutral-700">
                     <span className={tradingEnabled ? "text-green-400" : "text-red-400"}>
@@ -225,7 +220,7 @@ export default function TradingDashboard() {
           </div>
           <div className="flex items-center gap-4">
             <span className="text-xs text-neutral-500">
-              更新: {lastUpdate.toLocaleTimeString("zh-CN")}
+              更新: {lastUpdate?.toLocaleTimeString("zh-CN") ?? "--"}
             </span>
             <Button variant="ghost" size="icon" className="text-neutral-400 hover:text-orange-500 hover:bg-neutral-700">
               <Bell className="w-4 h-4" />

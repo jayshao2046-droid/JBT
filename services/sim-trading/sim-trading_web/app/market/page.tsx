@@ -47,7 +47,7 @@ function fmtTurnover(v: number) {
 export default function MarketPage() {
   const [ticks, setTicks] = useState<Record<string, TickData>>({})
   const [activeTab, setActiveTab] = useState(0)
-  const [now, setNow] = useState(() => new Date())
+  const [now, setNow] = useState<Date | null>(null)
   const [ctpStatus, setCtpStatus] = useState<"disconnected" | "connecting" | "live">("disconnected")
 
   // 自动连接 CTP + 秒级轮询 /ticks
@@ -183,7 +183,7 @@ export default function MarketPage() {
           )}
           {/* 时间 */}
           <span className="font-mono text-neutral-600 tabular-nums">
-            {now.toLocaleTimeString("zh-CN")}
+            {now?.toLocaleTimeString("zh-CN") ?? "--"}
           </span>
         </div>
       </div>
@@ -302,7 +302,7 @@ export default function MarketPage() {
           : <span className="text-neutral-500">● CTP 未连接</span>
         }
         <span className="ml-auto font-mono tabular-nums">
-          {now.toLocaleTimeString("zh-CN")}
+          {now?.toLocaleTimeString("zh-CN") ?? "--"}
         </span>
       </div>
     </div>

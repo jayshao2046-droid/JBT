@@ -34,7 +34,7 @@ import { isTradingDay, getTodayHolidayName } from "@/lib/holidays-cn"
 export default function RiskControlPage() {
   const [selectedAlert, setSelectedAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [lastUpdate, setLastUpdate] = useState(new Date())
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [l1Status, setL1Status] = useState("pass") // pass, warning, alert
   const [l2Status, setL2Status] = useState("pass")
   const [l3Status, setL3Status] = useState("pass")
@@ -236,7 +236,7 @@ export default function RiskControlPage() {
 
       {/* 更新时间 */}
           <div className="text-xs text-neutral-500 text-right">
-        最后更新: {lastUpdate.toLocaleString("zh-CN")}
+        最后更新: {lastUpdate?.toLocaleString("zh-CN") ?? "--"}
       </div>
 
       {/* 全局门闸状态 */}
@@ -245,7 +245,8 @@ export default function RiskControlPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-neutral-400 mb-1">L1 门闸状态</p>
+                <p className="text-xs text-neutral-400 mb-0.5">L1 门闸状态</p>
+                <p className="text-[10px] text-neutral-600 mb-1">下单前同步规则校验 · 纯本地规则引擎</p>
                 <p className="text-lg font-bold">
                   {l1Status === "pass" && <span className="text-green-400">✓ 通过</span>}
                   {l1Status === "warning" && <span className="text-yellow-400">⚠ 警告</span>}
@@ -261,7 +262,8 @@ export default function RiskControlPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-neutral-400 mb-1">L2 巡检状态</p>
+                <p className="text-xs text-neutral-400 mb-0.5">L2 巡检状态</p>
+                <p className="text-[10px] text-neutral-600 mb-1">持续监控账户风险 · 亏损/保证金/频率</p>
                 <p className="text-lg font-bold text-orange-400">✓ 运行中</p>
               </div>
               <Gauge className="w-8 h-8 text-orange-400" />
@@ -273,7 +275,8 @@ export default function RiskControlPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-neutral-400 mb-1">L3 审计状态</p>
+                <p className="text-xs text-neutral-400 mb-0.5">L3 审计状态</p>
+                <p className="text-[10px] text-neutral-600 mb-1">最终熔断保护 · 硬熔断不可绕过</p>
                 <p className="text-lg font-bold text-white">✓ 正常</p>
               </div>
               <CheckCircle className="w-8 h-8 text-white" />
@@ -289,7 +292,9 @@ export default function RiskControlPage() {
             onClick={() => setExpandedL1(!expandedL1)}
             className="w-full flex items-center justify-between hover:text-white transition-colors"
           >
-            <CardTitle className="text-sm font-medium text-neutral-300">L1 准入检查矩阵 (10项)</CardTitle>
+            <CardTitle className="text-sm font-medium text-neutral-300">L1 准入检查矩阵 (10项)
+              <span className="ml-2 text-[10px] text-neutral-600 font-normal">下单前同步执行，任一不通则废单、结果立即反馈</span>
+            </CardTitle>
             <ChevronDown className={`w-4 h-4 transition-transform ${expandedL1 ? "rotate-180" : ""}`} />
           </button>
         </CardHeader>
@@ -457,12 +462,6 @@ export default function RiskControlPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-neutral-300">Sim 专属阈值配置</h3>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-neutral-500">当前预设:</span>
-                <Badge className="bg-orange-900/30 text-orange-400 border-none text-xs">
-                  {serviceStage !== "--" ? "sim_50w" : "未连接"}
-                </Badge>
-              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>

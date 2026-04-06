@@ -26,26 +26,76 @@ _system_state: Dict[str, Any] = {
 }
 
 _risk_presets: Dict[str, Any] = {
-    "RB": {"name": "螺纹钢",  "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": True},
-    "HC": {"name": "热卷",    "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": True},
-    "CU": {"name": "沪铜",    "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": True},
-    "AL": {"name": "沪铝",    "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": True},
-    "ZN": {"name": "沪锌",    "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False},
-    "AU": {"name": "黄金",    "max_lots": 5,  "max_position": 10, "daily_loss_pct": 1.0, "price_dev_pct": 0.5, "enabled": False},
-    "AG": {"name": "白银",    "max_lots": 10, "max_position": 20, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False},
-    "I":  {"name": "铁矿石",  "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False},
-    "J":  {"name": "焦炭",    "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False},
-    "JM": {"name": "焦煤",    "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False},
-    "M":  {"name": "豆粕",    "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False},
-    "Y":  {"name": "豆油",    "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False},
-    "A":  {"name": "大豆",    "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False},
-    "C":  {"name": "玉米",    "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False},
-    "L":  {"name": "聚乙烯",  "max_lots": 10, "max_position": 20, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False},
-    "PP": {"name": "聚丙烯",  "max_lots": 10, "max_position": 20, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False},
-    "RU": {"name": "天然橡胶","max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False},
-    "SC": {"name": "原油",    "max_lots": 3,  "max_position": 10, "daily_loss_pct": 1.0, "price_dev_pct": 0.5, "enabled": False},
-    "IF": {"name": "沪深300", "max_lots": 3,  "max_position": 5,  "daily_loss_pct": 1.0, "price_dev_pct": 0.3, "enabled": False},
-    "IC": {"name": "中证500", "max_lots": 3,  "max_position": 5,  "daily_loss_pct": 1.0, "price_dev_pct": 0.3, "enabled": False},
+    # ── SHFE 上期所 ────────────────────────────────────────
+    "RB":  {"name": "螺纹钢",    "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": True,  "commission": 1.0,  "slippage_ticks": 1},
+    "HC":  {"name": "热卷",      "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": True,  "commission": 1.0,  "slippage_ticks": 1},
+    "SS":  {"name": "不锈钢",    "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 5.0,  "slippage_ticks": 1},
+    "SP":  {"name": "纸浆",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "CU":  {"name": "沪铜",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": True,  "commission": 5.0,  "slippage_ticks": 1},
+    "AL":  {"name": "沪铝",      "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "ZN":  {"name": "沪锌",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "PB":  {"name": "沪铅",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "NI":  {"name": "沪镍",      "max_lots": 3,  "max_position": 10, "daily_loss_pct": 1.0, "price_dev_pct": 0.5, "enabled": False, "commission": 6.0,  "slippage_ticks": 1},
+    "SN":  {"name": "沪锡",      "max_lots": 3,  "max_position": 10, "daily_loss_pct": 1.0, "price_dev_pct": 0.5, "enabled": False, "commission": 10.0, "slippage_ticks": 1},
+    "BC":  {"name": "国际铜",    "max_lots": 3,  "max_position": 10, "daily_loss_pct": 1.0, "price_dev_pct": 0.5, "enabled": False, "commission": 8.0,  "slippage_ticks": 1},
+    "AU":  {"name": "沪金",      "max_lots": 5,  "max_position": 10, "daily_loss_pct": 1.0, "price_dev_pct": 0.5, "enabled": False, "commission": 10.0, "slippage_ticks": 1},
+    "AG":  {"name": "沪银",      "max_lots": 10, "max_position": 20, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 5.0,  "slippage_ticks": 1},
+    "FU":  {"name": "燃料油",    "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 5.0,  "slippage_ticks": 1},
+    "BU":  {"name": "沥青",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "RU":  {"name": "天然橡胶",  "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "NR":  {"name": "20号胶",    "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    # ── DCE 大商所 ─────────────────────────────────────────
+    "I":   {"name": "铁矿石",    "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 1.0,  "slippage_ticks": 1},
+    "J":   {"name": "焦炭",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 1.0,  "slippage_ticks": 1},
+    "JM":  {"name": "焦煤",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 1.0,  "slippage_ticks": 1},
+    "A":   {"name": "大豆一号",  "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 2.0,  "slippage_ticks": 1},
+    "B":   {"name": "大豆二号",  "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 1.0,  "slippage_ticks": 1},
+    "M":   {"name": "豆粕",      "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 1.5,  "slippage_ticks": 1},
+    "Y":   {"name": "豆油",      "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 2.5,  "slippage_ticks": 1},
+    "P":   {"name": "棕榈油",    "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 2.5,  "slippage_ticks": 1},
+    "C":   {"name": "玉米",      "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 1.2,  "slippage_ticks": 1},
+    "CS":  {"name": "玉米淀粉",  "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 1.5,  "slippage_ticks": 1},
+    "RR":  {"name": "粳米",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 1.5,  "slippage_ticks": 1},
+    "LH":  {"name": "生猪",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 5.0,  "slippage_ticks": 1},
+    "V":   {"name": "PVC",       "max_lots": 10, "max_position": 20, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 1.5,  "slippage_ticks": 1},
+    "L":   {"name": "聚乙烯",    "max_lots": 10, "max_position": 20, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 1.5,  "slippage_ticks": 1},
+    "PP":  {"name": "聚丙烯",    "max_lots": 10, "max_position": 20, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 1.5,  "slippage_ticks": 1},
+    "EG":  {"name": "乙二醇",    "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "EB":  {"name": "苯乙烯",    "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "PG":  {"name": "液化气",    "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    # ── CZCE 郑商所 ────────────────────────────────────────
+    "CF":  {"name": "棉花",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "CY":  {"name": "棉纱",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "SR":  {"name": "白糖",      "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 2.5,  "slippage_ticks": 1},
+    "AP":  {"name": "苹果",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "CJ":  {"name": "红枣",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "OI":  {"name": "菜油",      "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 2.5,  "slippage_ticks": 1},
+    "RM":  {"name": "菜粕",      "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 1.5,  "slippage_ticks": 1},
+    "RS":  {"name": "油菜籽",    "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 2.0,  "slippage_ticks": 1},
+    "PK":  {"name": "花生",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "SM":  {"name": "锰硅",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "SF":  {"name": "硅铁",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "TA":  {"name": "PTA",       "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "MA":  {"name": "甲醇",      "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 1.5,  "slippage_ticks": 1},
+    "FG":  {"name": "玻璃",      "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 1.5,  "slippage_ticks": 1},
+    "SA":  {"name": "纯碱",      "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 1.5,  "slippage_ticks": 1},
+    "UR":  {"name": "尿素",      "max_lots": 10, "max_position": 30, "daily_loss_pct": 2.0, "price_dev_pct": 1.0, "enabled": False, "commission": 1.5,  "slippage_ticks": 1},
+    "PF":  {"name": "短纤",      "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "PX":  {"name": "对二甲苯",  "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    # ── CFFEX 中金所 ───────────────────────────────────────
+    "IF":  {"name": "沪深300",   "max_lots": 3,  "max_position": 5,  "daily_loss_pct": 1.0, "price_dev_pct": 0.3, "enabled": False, "commission": 23.0, "slippage_ticks": 1},
+    "IC":  {"name": "中证500",   "max_lots": 3,  "max_position": 5,  "daily_loss_pct": 1.0, "price_dev_pct": 0.3, "enabled": False, "commission": 17.0, "slippage_ticks": 1},
+    "IH":  {"name": "上证50",    "max_lots": 3,  "max_position": 5,  "daily_loss_pct": 1.0, "price_dev_pct": 0.3, "enabled": False, "commission": 12.0, "slippage_ticks": 1},
+    "IM":  {"name": "中证1000",  "max_lots": 3,  "max_position": 5,  "daily_loss_pct": 1.0, "price_dev_pct": 0.3, "enabled": False, "commission": 10.0, "slippage_ticks": 1},
+    "T":   {"name": "10年国债",  "max_lots": 5,  "max_position": 15, "daily_loss_pct": 0.5, "price_dev_pct": 0.2, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    "TF":  {"name": "5年国债",   "max_lots": 5,  "max_position": 15, "daily_loss_pct": 0.5, "price_dev_pct": 0.2, "enabled": False, "commission": 2.0,  "slippage_ticks": 1},
+    "TS":  {"name": "2年国债",   "max_lots": 5,  "max_position": 15, "daily_loss_pct": 0.5, "price_dev_pct": 0.2, "enabled": False, "commission": 1.5,  "slippage_ticks": 1},
+    "TL":  {"name": "30年国债",  "max_lots": 5,  "max_position": 15, "daily_loss_pct": 0.5, "price_dev_pct": 0.2, "enabled": False, "commission": 3.0,  "slippage_ticks": 1},
+    # ── INE 上海能源 + GFEX 广期所 ────────────────────────
+    "SC":  {"name": "原油",      "max_lots": 3,  "max_position": 10, "daily_loss_pct": 1.0, "price_dev_pct": 0.5, "enabled": False, "commission": 20.0, "slippage_ticks": 1},
+    "LU":  {"name": "低硫燃料油","max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 5.0,  "slippage_ticks": 1},
+    "SI":  {"name": "工业硅",    "max_lots": 5,  "max_position": 15, "daily_loss_pct": 1.5, "price_dev_pct": 0.8, "enabled": False, "commission": 5.0,  "slippage_ticks": 1},
+    "LC":  {"name": "碳酸锂",    "max_lots": 3,  "max_position": 10, "daily_loss_pct": 1.0, "price_dev_pct": 0.5, "enabled": False, "commission": 10.0, "slippage_ticks": 1},
 }
 
 # ---------- 请求模型 ----------
@@ -66,6 +116,8 @@ class RiskPresetUpdateRequest(BaseModel):
     daily_loss_pct: float
     price_dev_pct: float
     enabled: bool
+    commission: float = 1.0
+    slippage_ticks: int = 1
 
 # ---------- 基础状态 ----------
 @router.get("/status")

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,9 +25,9 @@ import { toast } from "sonner"
 
 export default function SimNowTradingTerminal() {
   const [isLoading, setIsLoading] = useState(false)
-  const [lastUpdate, setLastUpdate] = useState(new Date())
   const [pauseTrading, setPauseTrading] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const updateRef = useRef<HTMLSpanElement>(null)
 
   // 账户状态
   const [accountState, setAccountState] = useState<any>(null)
@@ -63,30 +63,64 @@ export default function SimNowTradingTerminal() {
 
   // 权益曲线数据（CTP 连接后从后端更新）
   const [equityCurveData, setEquityCurveData] = useState<any[]>([])
+  const [equityPeriod, setEquityPeriod] = useState<"day"|"week"|"month"|"year"|"all">("day")
 
-  // 后端轮询（10s）
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const [h, pos, ord, acct] = await Promise.all([
-          simApi.health(),
-          simApi.positions(),
-          simApi.orders(),
-          fetch("/api/sim/api/v1/account").then(r => r.ok ? r.json() : null).catch(() => null),
-        ])
-        setBackendOnline(h.status === "ok")
-        setPositions((pos as any).positions ?? [])
-        setOrderStream((ord as any).orders ?? [])
-        if (acct !== null) setAccountState(acct)
-      } catch {
-        setBackendOnline(false)
-      }
-      setLastUpdate(new Date())
-    }
-    poll()
-    const t = setInterval(poll, 10000)
-    return () => clearInterval(t)
+  // 当前合约 5 档盘口
+  const [orderBook, setOrderBook] = useState<any>(null)
+
+  // 判断当前是否在交易时段（期货：09:00-11:30 / 13:30-15:00 / 21:00-23:30）
+  const isTradingHours = useCallback(() => {
+    const d = new Date()
+    const mins = d.getHours() * 60 + d.getMinutes()
+    return (
+      (mins >= 9 * 60 && mins < 11 * 60 + 30) ||
+      (mins >= 13 * 60 + 30 && mins < 15 * 60) ||
+      (mins >= 21 * 60 && mins < 23 * 60 + 30)
+    )
   }, [])
+
+  // 轮询函数
+  const poll = useCallback(async () => {
+    try {
+      const [h, pos, ord, acct, ticksRes] = await Promise.all([
+        simApi.health(),
+        simApi.positions(),
+        simApi.orders(),
+        fetch("/api/sim/api/v1/account").then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch("/api/sim/api/v1/ticks").then(r => r.ok ? r.json() : null).catch(() => null),
+      ])
+      setBackendOnline(h.status === "ok")
+      setPositions((pos as any).positions ?? [])
+      setOrderStream((ord as any).orders ?? [])
+      if (acct !== null) setAccountState(acct)
+      if (ticksRes?.ticks) {
+        // 取第一个有数据的 tick 做盘口展示
+        const entries = Object.entries<any>(ticksRes.ticks)
+        if (entries.length > 0) {
+          const [, t] = entries[0]
+          setOrderBook(t)
+        }
+      }
+    } catch {
+      setBackendOnline(false)
+    }
+    // 直写 DOM，不触发 React re-render
+    if (updateRef.current) {
+      updateRef.current.textContent = new Date().toLocaleString("zh-CN")
+    }
+  }, [])
+
+  // 自适应间隔：交易时段 3s，否则 30s
+  useEffect(() => {
+    poll()
+    let timer: ReturnType<typeof setTimeout>
+    const schedule = () => {
+      const delay = isTradingHours() ? 3000 : 30000
+      timer = setTimeout(() => { poll(); schedule() }, delay)
+    }
+    schedule()
+    return () => clearTimeout(timer)
+  }, [poll, isTradingHours])
 
   const handlePlaceOrder = () => {
     setOrderError("")
@@ -158,7 +192,7 @@ export default function SimNowTradingTerminal() {
 
       {/* 更新时间 */}
       <div className="text-xs text-neutral-500 text-right">
-        最后更新: {lastUpdate.toLocaleString("zh-CN")}
+        最后更新: <span ref={updateRef}>--</span>
       </div>
 
       {/* 账户概览 - 大字体卡片 */}
@@ -166,16 +200,16 @@ export default function SimNowTradingTerminal() {
         <Card className="bg-neutral-900 border-neutral-700">
           <CardContent className="p-4">
             <p className="text-xs text-neutral-400 mb-1">动态权益</p>
-            <p className="text-2xl font-bold text-white font-mono">
+            <p className="text-2xl font-bold text-white font-mono transition-[color] duration-300">
               {accountState?.equity != null ? `¥${accountState.equity.toLocaleString()}` : "--"}
             </p>
           </CardContent>
         </Card>
 
-        <Card className={`bg-neutral-900 border ${(accountState?.floating_pnl ?? 0) >= 0 ? "border-green-600" : "border-red-600"}`}>
+        <Card className={`bg-neutral-900 border transition-colors duration-300 ${(accountState?.floating_pnl ?? 0) >= 0 ? "border-green-600" : "border-red-600"}`}>
           <CardContent className="p-4">
             <p className="text-xs text-neutral-400 mb-1">浮动盈亏</p>
-            <p className={`text-2xl font-bold font-mono ${(accountState?.floating_pnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
+            <p className={`text-2xl font-bold font-mono transition-[color] duration-300 ${(accountState?.floating_pnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
               {accountState?.floating_pnl != null
                 ? `${accountState.floating_pnl >= 0 ? "+" : ""}¥${accountState.floating_pnl.toLocaleString()}`
                 : "--"}
@@ -186,7 +220,7 @@ export default function SimNowTradingTerminal() {
         <Card className="bg-neutral-900 border-neutral-700">
           <CardContent className="p-4">
             <p className="text-xs text-neutral-400 mb-1">可用资金</p>
-            <p className="text-2xl font-bold text-white font-mono">
+            <p className="text-2xl font-bold text-white font-mono transition-[color] duration-300">
               {accountState?.available != null ? `¥${accountState.available.toLocaleString()}` : "--"}
             </p>
           </CardContent>
@@ -201,14 +235,48 @@ export default function SimNowTradingTerminal() {
           </CardContent>
         </Card>
 
-        <Card className={`bg-neutral-900 border ${(accountState?.margin_rate ?? 0) > 70 ? "border-red-600" : "border-yellow-600"}`}>
+        <Card className={`bg-neutral-900 border transition-colors duration-300 ${(accountState?.margin_rate ?? 0) > 70 ? "border-red-600" : "border-yellow-600"}`}>
           <CardContent className="p-4">
             <p className="text-xs text-neutral-400 mb-1">保证金率</p>
-            <p className={`text-2xl font-bold font-mono ${(accountState?.margin_rate ?? 0) > 70 ? "text-red-400" : "text-yellow-400"}`}>
+            <p className={`text-2xl font-bold font-mono transition-[color] duration-300 ${(accountState?.margin_rate ?? 0) > 70 ? "text-red-400" : "text-yellow-400"}`}>
               {accountState?.margin_rate != null ? `${accountState.margin_rate}%` : "--"}
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* 系统净收益统计行 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-neutral-900 border border-neutral-700 rounded p-3">
+          <p className="text-xs text-neutral-500 mb-1">初始资金</p>
+          <p className="text-sm font-mono text-neutral-300">
+            {accountState?.initial_balance != null ? `¥${accountState.initial_balance.toLocaleString()}` : "--"}
+          </p>
+        </div>
+        <div className="bg-neutral-900 border border-neutral-700 rounded p-3">
+          <p className="text-xs text-neutral-500 mb-1">累计手续费</p>
+          <p className="text-sm font-mono text-red-400">
+            {accountState?.total_commission != null ? `-¥${accountState.total_commission.toLocaleString()}` : "--"}
+          </p>
+        </div>
+        <div className="bg-neutral-900 border border-neutral-700 rounded p-3">
+          <p className="text-xs text-neutral-500 mb-1">累计滑点损耗</p>
+          <p className="text-sm font-mono text-red-400">
+            {accountState?.total_slippage != null ? `-¥${accountState.total_slippage.toLocaleString()}` : "--"}
+          </p>
+        </div>
+        <div className="bg-neutral-900 border border-neutral-700 rounded p-3">
+          <p className="text-xs text-neutral-500 mb-1">系统净收益</p>
+          <p className={`text-sm font-mono transition-[color] duration-300 ${
+            accountState?.net_pnl != null
+              ? accountState.net_pnl >= 0 ? "text-green-400" : "text-red-400"
+              : "text-neutral-400"
+          }`}>
+            {accountState?.net_pnl != null
+              ? `${accountState.net_pnl >= 0 ? "+" : ""}¥${accountState.net_pnl.toLocaleString()}`
+              : "--"}
+          </p>
+        </div>
       </div>
 
       {/* 下单面板 + 权益曲线 */}
@@ -218,8 +286,30 @@ export default function SimNowTradingTerminal() {
           <CardHeader>
             <CardTitle className="text-sm font-medium text-neutral-300">快速下单</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
+            {/* 5 档盘口 */}
+            <div className="rounded bg-neutral-800/60 p-2 text-xs font-mono">
+              <div className="flex justify-between text-neutral-500 mb-1 px-1">
+                <span>价格</span><span>买量</span><span>卖量</span>
+              </div>
+              {[5,4,3,2,1].map(i => (
+                <div key={`ask${i}`} className="flex justify-between py-0.5 px-1 text-red-300">
+                  <span>{orderBook ? (orderBook[`ask${i}`] ?? "--") : "--"}</span>
+                  <span className="text-neutral-500">--</span>
+                  <span>{orderBook ? (orderBook[`ask_vol${i}`] ?? "--") : "--"}</span>
+                </div>
+              ))}
+              <div className="border-t border-neutral-600 my-1" />
+              {[1,2,3,4,5].map(i => (
+                <div key={`bid${i}`} className="flex justify-between py-0.5 px-1 text-green-300">
+                  <span>{orderBook ? (orderBook[`bid${i}`] ?? "--") : "--"}</span>
+                  <span>{orderBook ? (orderBook[`bid_vol${i}`] ?? "--") : "--"}</span>
+                  <span className="text-neutral-500">--</span>
+                </div>
+              ))}
+            </div>
             {/* 品种选择 */}
+            <div className="space-y-3">
             <div>
               <label className="text-xs text-neutral-400 block mb-2">品种</label>
               <select
@@ -349,13 +439,28 @@ export default function SimNowTradingTerminal() {
                 <p className="text-xs text-red-400">{orderError}</p>
               </div>
             )}
+            </div>{/* end inner space-y-3 */}
           </CardContent>
         </Card>
 
         {/* 权益曲线 */}
         <Card className="bg-neutral-900 border-neutral-700 lg:col-span-3">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-neutral-300">实时权益曲线</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-neutral-300">实时权益曲线</CardTitle>
+              <div className="flex gap-1">
+                {(["day","week","month","year","all"] as const).map(p => (
+                  <button key={p} onClick={() => setEquityPeriod(p)}
+                    className={`text-xs px-2 py-0.5 rounded transition-colors ${
+                      equityPeriod === p
+                        ? "bg-orange-600 text-white"
+                        : "text-neutral-400 hover:text-white hover:bg-neutral-700"
+                    }`}>
+                    {p === "day" ? "日" : p === "week" ? "周" : p === "month" ? "月" : p === "year" ? "年" : "全部"}
+                  </button>
+                ))}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="h-64">
