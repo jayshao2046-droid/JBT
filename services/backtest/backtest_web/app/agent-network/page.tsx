@@ -1781,7 +1781,8 @@ export default function StrategyManagementPage() {
               </div>
               <div className="rounded-lg p-3 border border-cyan-700/30 bg-neutral-900/70">
                 <label className="text-xs text-cyan-300 block mb-1">日亏损限制</label>
-                <Input value={systemConfig.dailyLossLimit} onChange={(event) => updateSystemConfig("dailyLossLimit", event.target.value)} className="bg-neutral-900 border-neutral-600 text-white" />
+                <Input value={formatPercentInput(systemConfig.dailyLossLimit)} onChange={(event) => updateSystemConfig("dailyLossLimit", parsePercentInput(event.target.value))} className="bg-neutral-900 border-neutral-600 text-white" />
+                <p className="text-[10px] text-neutral-500 mt-1">按百分比输入，当前保存值 {formatDecimalAsPercent(systemConfig.dailyLossLimit)}</p>
               </div>
               <div className="rounded-lg p-3 border border-cyan-700/30 bg-neutral-900/70">
                 <label className="text-xs text-cyan-300 block mb-1">最大回撤</label>

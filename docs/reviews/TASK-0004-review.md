@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0004
 - 审核角色：项目架构师
-- 审核阶段：看板阶段预审 + 2026-04-04 Token 签发补充确认
-- 审核时间：2026-04-03；2026-04-04 补充
-- 审核结论：通过（范围冻结为 `services/backtest/backtest_web/` 内两页收敛；预审最小业务白名单为 3 文件；2026-04-04 已补充确认 Jay.S 实际签发范围收敛为 2 文件，并完成前后端联动语义冻结）
+- 审核阶段：看板阶段预审 + 2026-04-04 Token 签发补充确认 + 2026-04-06 单文件补充预审 + 2026-04-06 单文件补充终审
+- 审核时间：2026-04-03；2026-04-04 补充；2026-04-06 补充；2026-04-06 终审
+- 审核结论：通过（范围冻结为 `services/backtest/backtest_web/` 内两页收敛；预审最小业务白名单为 3 文件；2026-04-04 已补充确认 Jay.S 实际签发范围收敛为 2 文件，并完成前后端联动语义冻结；2026-04-06 已补充冻结为 `app/agent-network/page.tsx` 单文件百分比交互收口，并已完成终审与锁回）
 
 ---
 
@@ -150,3 +150,46 @@
 1. 本地自校验通过：`services/backtest/src/backtest/generic_strategy.py`、`services/backtest/backtest_web/app/agent-network/page.tsx`、`services/backtest/tests/test_generic_strategy_pipeline.py` 静态诊断为 0。
 2. 回归测试要求冻结为：补充 `generic_strategy` 收尾异常回归用例，确保 `BacktestFinished` 在最终快照 / finish 阶段不会再把正式回测误收口为 failed。
 3. 终审结论：通过，可以进入锁回。
+
+## 十二、2026-04-06 单文件补充预审（日亏损限制百分比输入收口）
+
+1. 补充预审成立，原因是当前需求仅落在 `services/backtest/backtest_web/app/agent-network/page.tsx` 单文件，且其本质仍属于 `TASK-0004` 的 backtest 看板前端交互收口，不构成 `TASK-0008` 的正式引擎泛化或正式报告导出任务。
+2. 任务号结论冻结为：**继续归属 `TASK-0004`**。本次不得改挂 `TASK-0008`，因为 `TASK-0008` 当前冻结的是更大批次白名单与不同执行主体口径，若误复用将扩大风险半径。
+3. 本轮最小业务文件白名单冻结为 1 个文件：`services/backtest/backtest_web/app/agent-network/page.tsx`。
+4. 执行主体冻结为：**回测 Agent**。本轮不接受 Atlas 直修口径，也不接受扩展到第 2 个业务文件。
+5. 变更语义冻结为：仅把“日亏损限制”前端输入 / 显示方式统一为与“最大回撤”一致的百分比口径；YAML 内部保存值仍必须保持 `0..1` 原始比例小数，不改变执行语义。
+6. 本轮明确禁止扩展到：
+   - `services/backtest/backtest_web/app/operations/page.tsx`
+   - `services/backtest/backtest_web/app/page.tsx`
+   - `services/backtest/backtest_web/src/**`
+   - `services/backtest/src/**`
+   - `shared/contracts/**`
+7. 验收标准冻结为：
+   - 输入 `0.7` 时，保存值必须为 `0.007`
+   - 重新读取 `0.007` 时，显示值必须为 `0.7`
+   - `maxDrawdown` 现有百分比交互不得回归
+   - `positionFraction` 现有行为不得回归
+8. 风险冻结为：不得顺手改摘要文案、后端解析、helper、operations 页面联动或其他风控字段；一旦执行中证明必须新增第 2 个业务文件，当前补充范围立即失效，必须回交补充预审。
+9. 约束引用：`TASK-0008` 中“用户未来导入的策略不得变更任何一个数字或符号，必须按 YAML 原值执行”的冻结语义，本轮作为执行约束继续生效；但其任务号、白名单与执行主体不转移到本轮。
+10. 当前执行口径可按“Jay.S 当前会话授权 + 本节单文件冻结范围”准备实施；按要求不在 review 中伪造 `token_id`。
+
+## 十三、2026-04-06 单文件补充终审结论（日亏损限制百分比输入收口）
+
+1. 终审取证来源已交叉核验：
+   - `docs/reviews/TASK-0004-review.md` 与 `docs/locks/TASK-0004-lock.md` 的单文件补充预审范围一致，均冻结为 `services/backtest/backtest_web/app/agent-network/page.tsx`。
+   - `docs/prompts/agents/回测提示词.md` 已记录本轮仅修改 `app/agent-network/page.tsx`，且未扩展到 `app/operations/page.tsx`、`src/**`、后端或 contract。
+   - 本轮只读诊断结果确认：`services/backtest/backtest_web/app/agent-network/page.tsx` 与 `docs/prompts/agents/回测提示词.md` 均为 `No errors found`。
+2. 单文件语义闭环核验通过：
+   - 读取链路：`buildSystemConfigFromYaml()` 继续从 `risk.daily_loss_limit` / `risk.daily_loss_limit_yuan` 读取原始比例小数，未改为百分比持久化。
+   - 输入链路：`dailyLossLimit` 已改为与 `maxDrawdown` 一致，使用 `formatPercentInput()` 展示、`parsePercentInput()` 回写。
+   - 写出链路：`buildSystemRiskBlock()` 继续直接写出 `config.dailyLossLimit.trim()`，保持 YAML/state 的 `0..1` 比例小数语义。
+   - 因此输入 `0.7` 时，`parsePercentInput()` 会写回 `0.007`；读取 `0.007` 时，`formatPercentInput()` 会显示 `0.7`；`formatDecimalAsPercent()` 同步展示当前保存值 `0.7%`，语义闭环成立。
+3. 白名单边界核验通过：未发现本轮扩展到以下任一范围：
+   - `services/backtest/backtest_web/app/operations/page.tsx`
+   - `services/backtest/backtest_web/app/page.tsx`
+   - `services/backtest/backtest_web/src/**`
+   - `services/backtest/src/**`
+   - `shared/contracts/**`
+4. 回归约束核验通过：`maxDrawdown` 仍沿用既有百分比输入实现；`positionFraction` 现有百分比输入实现未被回退。
+5. 终审结论：通过，无阻断项；本轮单文件补充已满足“只动 1 个业务文件、白名单未越界、输入/保存/读取语义闭环成立”的验收标准。
+6. 锁回结论：可以锁回，并应立即恢复 `services/backtest/backtest_web/app/agent-network/page.tsx` 的锁定状态；后续如需再次修改该文件，必须重新补充预审与解锁。
