@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import {
   ChevronRight, ShieldAlert, TrendingUp, Bell, RefreshCw,
-  Shield, Settings, Calendar, PlugZap,
+  Shield, Settings, Calendar, PlugZap, BarChart2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +12,7 @@ import OperationsPage from "./operations/page"
 import IntelligencePage from "./intelligence/page"
 import RiskPresetsPage from "./risk-presets/page"
 import CtpConfigPage from "./ctp-config/page"
+import MarketPage from "./market/page"
 import { simApi } from "@/lib/sim-api"
 import { isTradingDay, getTodayHolidayName } from "@/lib/holidays-cn"
 
@@ -75,6 +76,7 @@ export default function TradingDashboard() {
   }
 
   const sectionNames: Record<string, string> = {
+    market: "行情报价",
     operations: "交易终端",
     intelligence: "风控监控",
     "risk-presets": "品种风控",
@@ -109,6 +111,7 @@ export default function TradingDashboard() {
           {/* 导航菜单 */}
           <nav className="space-y-1 flex-1">
             {[
+              { id: "market",        icon: BarChart2,   label: "行情报价" },
               { id: "intelligence",  icon: ShieldAlert, label: "风控监控" },
               { id: "operations",    icon: TrendingUp,  label: "交易终端" },
               { id: "risk-presets",  icon: Shield,      label: "品种风控" },
@@ -240,6 +243,7 @@ export default function TradingDashboard() {
 
         {/* 页面内容 */}
         <div className="flex-1 overflow-auto">
+          {activeSection === "market"       && <MarketPage />}
           {activeSection === "operations"   && <OperationsPage />}
           {activeSection === "intelligence" && <IntelligencePage />}
           {activeSection === "risk-presets" && <RiskPresetsPage />}
