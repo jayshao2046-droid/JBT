@@ -27,6 +27,7 @@ import {
   ComposedChart,
   Bar,
 } from "recharts"
+import { simApi } from "@/lib/sim-api"
 
 export default function RiskControlPage() {
   const [selectedAlert, setSelectedAlert] = useState(null)
@@ -37,6 +38,9 @@ export default function RiskControlPage() {
   const [l3Status, setL3Status] = useState("pass")
   const [expandedL1, setExpandedL1] = useState(true)
   const [showFusePanel, setShowFusePanel] = useState(false)
+  // 后端连接状态
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null)
+  const [serviceStage, setServiceStage] = useState("--")
   const [simConfig, setSimConfig] = useState({
     dailyLossLimit: 2.0,
     continuousLossLimit: 5,
@@ -158,11 +162,24 @@ export default function RiskControlPage() {
 
   const handleRefresh = () => {
     setIsLoading(true)
-    setTimeout(() => {
-      setLastUpdate(new Date())
-      setIsLoading(false)
-    }, 500)
+    Promise.all([simApi.health(), simApi.positions(), simApi.orders()])
+      .then(([h, _pos, _ord]) => {
+        setBackendOnline(h.status === "ok")
+        setServiceStage((h as any).service ?? "--")
+      })
+      .catch(() => setBackendOnline(false))
+      .finally(() => {
+        setLastUpdate(new Date())
+        setIsLoading(false)
+      })
   }
+
+  // 后端轮询（10s）
+  useEffect(() => {
+    handleRefresh()
+    const t = setInterval(handleRefresh, 10000)
+    return () => clearInterval(t)
+  }, [])
 
   const handleSaveSimConfig = () => {
     // TODO: 连接到 trading_api:8003 WebSocket，下发配置
@@ -190,6 +207,15 @@ export default function RiskControlPage() {
         <div>
           <h1 className="text-2xl font-bold text-white tracking-wider">风控监控中心</h1>
           <p className="text-sm text-neutral-400">L1/L2/L3 多层级风控门闸实时监测</p>
+          <div className="mt-1">
+            {backendOnline === null ? (
+              <Badge variant="outline" className="text-xs border-neutral-600 text-neutral-500">● 连接中...</Badge>
+            ) : backendOnline ? (
+              <Badge variant="outline" className="text-xs border-green-600 text-green-400">● API 在线</Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs border-red-600 text-red-400">● API 离线</Badge>
+            )}
+          </div>
         </div>
         <div className="flex gap-2">
           <Button

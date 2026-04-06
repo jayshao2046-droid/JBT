@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,6 +20,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
+import { simApi } from "@/lib/sim-api"
 
 export default function SimNowTradingTerminal() {
   const [isLoading, setIsLoading] = useState(false)
@@ -57,66 +58,13 @@ export default function SimNowTradingTerminal() {
   ]
 
   // 持仓
-  const [positions] = useState([
-    {
-      id: 1,
-      contract: "螺纹钢2510",
-      direction: "buy",
-      quantity: 5,
-      avgPrice: 3842,
-      currentPrice: 3875,
-      floatPnl: 1650,
-      stopLoss: 3800,
-      takeProfit: 3920,
-      touched: false,
-    },
-    {
-      id: 2,
-      contract: "沪铜2509",
-      direction: "sell",
-      quantity: 3,
-      avgPrice: 78600,
-      currentPrice: 78450,
-      floatPnl: 4500,
-      stopLoss: 78800,
-      takeProfit: 78200,
-      touched: false,
-    },
-  ])
+  const [positions, setPositions] = useState<any[]>([])
 
   // 订单/成交流
-  const [orderStream] = useState([
-    {
-      id: "ORD-001",
-      time: "14:32:45",
-      contract: "螺纹钢2510",
-      action: "买开",
-      price: 3875,
-      quantity: 5,
-      status: "已成交",
-      reason: null,
-    },
-    {
-      id: "ORD-002",
-      time: "14:28:12",
-      contract: "沪铜2509",
-      action: "卖开",
-      price: 78450,
-      quantity: 3,
-      status: "已成交",
-      reason: null,
-    },
-    {
-      id: "ORD-003",
-      time: "14:25:30",
-      contract: "豆粕2509",
-      action: "买开",
-      price: 3128,
-      quantity: 2,
-      status: "废单",
-      reason: "触达日亏限额 1.8%",
-    },
-  ])
+  const [orderStream, setOrderStream] = useState<any[]>([])
+
+  // 后端状态
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null)
 
   // 权益曲线数据
   const equityCurveData = [
@@ -128,6 +76,28 @@ export default function SimNowTradingTerminal() {
     { time: "14:00", equity: 510200 },
     { time: "14:30", equity: 512500 },
   ]
+
+  // 后端轮询（10s）
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const [h, pos, ord] = await Promise.all([
+          simApi.health(),
+          simApi.positions(),
+          simApi.orders(),
+        ])
+        setBackendOnline(h.status === "ok")
+        setPositions((pos as any).positions ?? [])
+        setOrderStream((ord as any).orders ?? [])
+      } catch {
+        setBackendOnline(false)
+      }
+      setLastUpdate(new Date())
+    }
+    poll()
+    const t = setInterval(poll, 10000)
+    return () => clearInterval(t)
+  }, [])
 
   const handlePlaceOrder = () => {
     setOrderError("")
@@ -459,7 +429,9 @@ export default function SimNowTradingTerminal() {
                 </tr>
               </thead>
               <tbody>
-                {positions.map((position) => (
+                {positions.length === 0 ? (
+                  <tr><td colSpan={8} className="text-center text-neutral-500 py-8">骨架阶段 · 暂无持仓数据</td></tr>
+                ) : positions.map((position) => (
                   <tr
                     key={position.id}
                     className={`border-b border-neutral-800 ${
@@ -546,7 +518,9 @@ export default function SimNowTradingTerminal() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2 max-h-48 overflow-y-auto">
-            {orderStream.map((order) => (
+            {orderStream.length === 0 ? (
+              <div className="text-center text-neutral-500 py-6">骨架阶段 · 暂无订单记录</div>
+            ) : orderStream.map((order) => (
               <div
                 key={order.id}
                 className={`border rounded p-2 text-xs flex justify-between items-start ${

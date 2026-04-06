@@ -1,15 +1,36 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ChevronRight, ShieldAlert, TrendingUp, Bell, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import OperationsPage from "./operations/page"
 import IntelligencePage from "./intelligence/page"
+import { simApi } from "@/lib/sim-api"
 
 export default function TradingDashboard() {
   const [activeSection, setActiveSection] = useState("intelligence")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [globalSwitch, setGlobalSwitch] = useState(true)
+  const [serviceStage, setServiceStage] = useState("--")
+  const [serviceOnline, setServiceOnline] = useState(false)
+  const [lastUpdate, setLastUpdate] = useState(new Date())
+
+  const fetchStatus = async () => {
+    try {
+      const [health, status] = await Promise.all([simApi.health(), simApi.status()])
+      setServiceOnline(health.status === "ok")
+      setServiceStage(status.stage ?? "--")
+    } catch {
+      setServiceOnline(false)
+    }
+    setLastUpdate(new Date())
+  }
+
+  useEffect(() => {
+    fetchStatus()
+    const t = setInterval(fetchStatus, 10000)
+    return () => clearInterval(t)
+  }, [])
 
   const sectionNames: Record<string, string> = {
     operations: "交易终端",
@@ -70,7 +91,13 @@ export default function TradingDashboard() {
           {!sidebarCollapsed && (
             <div className="mt-4 p-3 bg-neutral-800 border border-neutral-700 rounded">
               <div className="text-xs text-neutral-400 space-y-2">
-                <div>阶段: <span className="text-green-400 font-mono">sim_50w</span></div>
+                <div className="flex items-center gap-2">
+                  <span>后端:</span>
+                  <span className={serviceOnline ? "text-green-400 font-mono" : "text-red-400 font-mono"}>
+                    {serviceOnline ? "● 在线" : "● 离线"}
+                  </span>
+                </div>
+                <div>阶段: <span className="text-green-400 font-mono">{serviceStage}</span></div>
                 <div className="flex items-center gap-2">
                   <span>全局开关:</span>
                   <button
@@ -106,7 +133,7 @@ export default function TradingDashboard() {
           </div>
           <div className="flex items-center gap-4">
             <span className="text-xs text-neutral-500">
-              最后更新: {new Date().toLocaleString("zh-CN")}
+              最后更新: {lastUpdate.toLocaleString("zh-CN")}
             </span>
             <Button
               variant="ghost"
@@ -119,6 +146,7 @@ export default function TradingDashboard() {
               variant="ghost"
               size="icon"
               className="text-neutral-400 hover:text-orange-500 hover:bg-neutral-700"
+              onClick={fetchStatus}
             >
               <RefreshCw className="w-4 h-4" />
             </Button>
