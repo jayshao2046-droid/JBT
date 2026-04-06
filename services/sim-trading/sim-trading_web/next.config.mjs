@@ -7,10 +7,11 @@ const nextConfig = {
     unoptimized: true,
   },
   async rewrites() {
+    const backendBase = process.env.BACKEND_BASE_URL ?? "http://localhost:8101"
     return [
       {
         source: "/api/sim/:path*",
-        destination: "http://localhost:8101/:path*",
+        destination: `${backendBase}/:path*`,
       },
     ]
   },
