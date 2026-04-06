@@ -3,14 +3,22 @@ test_notifier.py — TASK-0014 P1
 pytest 测试：飞书通道 / 邮件通道 / Dispatcher 双通道失败阻单 / 字段完整性
 """
 import dataclasses
-import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
+from src.main import app, bootstrap_notifier_dispatcher
 from src.notifier.dispatcher import NotifierDispatcher, RiskEvent, SystemRiskState
+from src.notifier.dispatcher import bootstrap_dispatcher, clear_dispatcher, get_dispatcher
 from src.notifier.feishu import FeishuNotifier
 from src.notifier.email import EmailNotifier
+
+
+@pytest.fixture(autouse=True)
+def _reset_dispatcher():
+    clear_dispatcher()
+    yield
+    clear_dispatcher()
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +95,29 @@ def test_dispatcher_one_fail_not_blocked():
 
     assert state == SystemRiskState.FEISHU_FAILED
     assert dispatcher.is_orders_blocked() is False
+
+
+def test_bootstrap_dispatcher_returns_singleton(monkeypatch):
+    """bootstrap_dispatcher 应返回可复用的进程内单例。"""
+    monkeypatch.setenv("NOTIFY_FEISHU_ENABLED", "false")
+    monkeypatch.setenv("NOTIFY_EMAIL_ENABLED", "false")
+
+    first = bootstrap_dispatcher()
+    second = bootstrap_dispatcher()
+
+    assert first is second
+    assert get_dispatcher() is first
+
+
+def test_main_bootstrap_registers_dispatcher_on_app_state(monkeypatch):
+    """main.py bootstrap 应把 dispatcher 同时注册到全局单例和 app.state。"""
+    monkeypatch.setenv("NOTIFY_FEISHU_ENABLED", "false")
+    monkeypatch.setenv("NOTIFY_EMAIL_ENABLED", "false")
+
+    dispatcher = bootstrap_notifier_dispatcher(force=True)
+
+    assert get_dispatcher() is dispatcher
+    assert app.state.notifier_dispatcher is dispatcher
 
 
 # ---------------------------------------------------------------------------

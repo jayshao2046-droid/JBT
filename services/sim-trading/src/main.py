@@ -12,6 +12,7 @@ if _env_file.exists():
     load_dotenv(_env_file, override=False)
 
 from src.api.router import router
+from src.notifier.dispatcher import bootstrap_dispatcher
 
 # --- 日志初始化 ---
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -27,10 +28,23 @@ app = FastAPI(title="sim-trading", version="0.1.0-skeleton")
 app.include_router(router)
 
 
+def bootstrap_notifier_dispatcher(force: bool = False):
+    """初始化通知 dispatcher，并挂到 app.state 供风险钩子/路由复用。"""
+    dispatcher = bootstrap_dispatcher(force=force)
+    app.state.notifier_dispatcher = dispatcher
+    logger.info("Notifier dispatcher bootstrapped")
+    return dispatcher
+
+
 @app.get("/health", tags=["infra"])
 def health_check():
     """健康检查端点，供 Docker / 负载均衡探活使用。"""
     return {"status": "ok", "service": "sim-trading"}
+
+
+@app.on_event("startup")
+def bootstrap_notifications():
+    bootstrap_notifier_dispatcher(force=True)
 
 
 @app.on_event("startup")

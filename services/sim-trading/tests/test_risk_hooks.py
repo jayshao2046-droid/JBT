@@ -1,8 +1,22 @@
-# TASK-0010-C: risk hooks skeleton test
-
 import pytest
+from unittest.mock import MagicMock
 
-from src.risk.guards import RiskGuards
+from src.notifier.dispatcher import (
+    NotifierDispatcher,
+    SystemRiskState,
+    clear_dispatcher,
+    register_dispatcher,
+)
+from src.notifier.email import EmailNotifier
+from src.notifier.feishu import FeishuNotifier
+from src.risk.guards import RiskGuards, emit_alert
+
+
+@pytest.fixture(autouse=True)
+def _reset_dispatcher():
+    clear_dispatcher()
+    yield
+    clear_dispatcher()
 
 
 def test_risk_guards_instantiation():
@@ -27,6 +41,54 @@ def test_risk_guards_has_emit_alert():
     """RiskGuards 存在 emit_alert 方法。"""
     guards = RiskGuards()
     assert hasattr(guards, "emit_alert")
+
+
+def test_emit_alert_without_dispatcher_returns_none(monkeypatch):
+    """未 bootstrap dispatcher 时，emit_alert 应安全跳过，不抛异常。"""
+    monkeypatch.setenv("STAGE", "sim")
+
+    guards = RiskGuards()
+    state = guards.emit_alert("P1", "dispatcher missing")
+
+    assert state is None
+
+
+def test_emit_alert_dispatches_minimal_risk_event(monkeypatch):
+    """emit_alert 应将 level/message/context 映射为最小 RiskEvent 并经双通道发送。"""
+    monkeypatch.setenv("STAGE", "live")
+
+    feishu = MagicMock(spec=FeishuNotifier)
+    feishu.send.return_value = True
+    email = MagicMock(spec=EmailNotifier)
+    email.send.return_value = True
+    register_dispatcher(NotifierDispatcher(feishu, email))
+
+    state = emit_alert(
+        "p2",
+        "margin threshold reached",
+        {
+            "account_id": "ACC-001",
+            "symbol": "IF2406",
+            "trace_id": "TRACE-001",
+        },
+    )
+
+    assert state == SystemRiskState.NORMAL
+
+    event = feishu.send.call_args.args[0]
+    assert event.task_id == "TASK-0014"
+    assert event.stage_preset == "live"
+    assert event.risk_level == "P2"
+    assert event.account_id == "ACC-001"
+    assert event.strategy_id == ""
+    assert event.symbol == "IF2406"
+    assert event.signal_id == ""
+    assert event.trace_id == "TRACE-001"
+    assert event.event_code == "RISK_ALERT"
+    assert event.reason == "margin threshold reached"
+
+    email_event = email.send.call_args.args[0]
+    assert email_event == event
 
 
 # TODO: 断网/断数据源下本地缓存行为验证

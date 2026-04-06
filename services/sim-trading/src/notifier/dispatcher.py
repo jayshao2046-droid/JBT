@@ -5,11 +5,14 @@ Dual-channel dispatch with risk state tracking.
 import enum
 import logging
 from dataclasses import dataclass
+from typing import Optional
 
 from .feishu import FeishuNotifier
 from .email import EmailNotifier
 
 logger = logging.getLogger(__name__)
+
+_dispatcher_singleton: Optional["NotifierDispatcher"] = None
 
 
 @dataclass
@@ -88,3 +91,30 @@ class NotifierDispatcher:
     def is_orders_blocked(self) -> bool:
         """当双通道均失败时返回 True，上层调用方应拒绝新开仓。"""
         return self._state == SystemRiskState.ORDERS_BLOCKED
+
+
+def register_dispatcher(dispatcher: "NotifierDispatcher") -> "NotifierDispatcher":
+    """注册进程内 dispatcher，供风控钩子复用。"""
+    global _dispatcher_singleton
+    _dispatcher_singleton = dispatcher
+    return dispatcher
+
+
+def get_dispatcher() -> Optional["NotifierDispatcher"]:
+    """获取当前进程内 dispatcher；未 bootstrap 时返回 None。"""
+    return _dispatcher_singleton
+
+
+def clear_dispatcher() -> None:
+    """测试或重建场景下清空进程内 dispatcher。"""
+    global _dispatcher_singleton
+    _dispatcher_singleton = None
+
+
+def bootstrap_dispatcher(*, force: bool = False) -> "NotifierDispatcher":
+    """按环境变量初始化双通道 dispatcher，并注册为进程内单例。"""
+    current = get_dispatcher()
+    if current is not None and not force:
+        return current
+    dispatcher = NotifierDispatcher(FeishuNotifier(), EmailNotifier())
+    return register_dispatcher(dispatcher)
