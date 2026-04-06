@@ -1,0 +1,583 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import {
+  ShieldAlert,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  ChevronDown,
+  Gauge,
+  AlertOctagon,
+} from "lucide-react"
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ComposedChart,
+  Bar,
+} from "recharts"
+
+export default function RiskControlPage() {
+  const [selectedAlert, setSelectedAlert] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [lastUpdate, setLastUpdate] = useState(new Date())
+  const [l1Status, setL1Status] = useState("pass") // pass, warning, alert
+  const [l2Status, setL2Status] = useState("pass")
+  const [l3Status, setL3Status] = useState("pass")
+  const [expandedL1, setExpandedL1] = useState(true)
+  const [showFusePanel, setShowFusePanel] = useState(false)
+  const [simConfig, setSimConfig] = useState({
+    dailyLossLimit: 2.0,
+    continuousLossLimit: 5,
+    marginWarning: 60,
+    marginAlert: 70,
+  })
+
+  // L1 检查项目（10项）
+  const l1Checks = [
+    {
+      id: "contract_whitelist",
+      name: "合约白名单",
+      status: "pass",
+      lastReject: null,
+    },
+    {
+      id: "time_segment",
+      name: "交易时段",
+      status: "pass",
+      lastReject: null,
+    },
+    {
+      id: "market_freshness",
+      name: "行情新鲜度 <2s",
+      status: "pass",
+      lastReject: "2025/06/25 14:02 - 行情超时 2.5s",
+    },
+    {
+      id: "signal_ttl",
+      name: "信号时效 ≤3s",
+      status: "pass",
+      lastReject: null,
+    },
+    {
+      id: "idempotency",
+      name: "幂等性校验",
+      status: "pass",
+      lastReject: null,
+    },
+    {
+      id: "version",
+      name: "程序版本一致",
+      status: "pass",
+      lastReject: null,
+    },
+    {
+      id: "account_health",
+      name: "账户健康度",
+      status: "warning",
+      lastReject: "保证金率 42%",
+    },
+    {
+      id: "position_limit",
+      name: "持仓上限",
+      status: "pass",
+      lastReject: null,
+    },
+    {
+      id: "price_valid",
+      name: "价格合理性",
+      status: "pass",
+      lastReject: null,
+    },
+    {
+      id: "frequency",
+      name: "下单频率",
+      status: "pass",
+      lastReject: null,
+    },
+  ]
+
+  // L2 盈亏数据
+  const l2PnlData = [
+    { time: "09:30", pnl: 0, loss: 0 },
+    { time: "10:00", pnl: 500, loss: 0 },
+    { time: "11:00", pnl: 200, loss: 0 },
+    { time: "12:00", pnl: -800, loss: -800 },
+    { time: "13:30", pnl: -1200, loss: -1200 },
+    { time: "14:00", pnl: -500, loss: -500 },
+    { time: "15:00", pnl: 600, loss: 0 },
+  ]
+
+  // 告警列表
+  const alerts = [
+    {
+      id: 1,
+      level: "严重",
+      message: "保证金率触及 70% 警告线",
+      time: "2025/06/25 14:32",
+      status: "active",
+    },
+    {
+      id: 2,
+      level: "警告",
+      message: "今日亏损 1.2% 超过 0.5% 预警",
+      time: "2025/06/25 13:45",
+      status: "active",
+    },
+    {
+      id: 3,
+      level: "提醒",
+      message: "连续 2 笔交易亏损，建议检查策略",
+      time: "2025/06/25 12:10",
+      status: "active",
+    },
+  ]
+
+  // 计算 L1 整体状态
+  useEffect(() => {
+    const failCount = l1Checks.filter((c) => c.status !== "pass").length
+    if (failCount >= 3) {
+      setL1Status("alert")
+    } else if (failCount >= 1) {
+      setL1Status("warning")
+    } else {
+      setL1Status("pass")
+    }
+  }, [])
+
+  const handleRefresh = () => {
+    setIsLoading(true)
+    setTimeout(() => {
+      setLastUpdate(new Date())
+      setIsLoading(false)
+    }, 500)
+  }
+
+  const handleSaveSimConfig = () => {
+    // TODO: 连接到 trading_api:8003 WebSocket，下发配置
+    alert("Sim 配置已下发到交易引擎")
+    handleRefresh()
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pass":
+        return "bg-green-900/20 text-green-400 border-green-600/50"
+      case "warning":
+        return "bg-yellow-900/20 text-yellow-400 border-yellow-600/50"
+      case "alert":
+        return "bg-red-900/20 text-red-400 border-red-600/50"
+      default:
+        return "bg-neutral-900/20 text-neutral-400 border-neutral-600/50"
+    }
+  }
+
+  return (
+    <div className="p-6 space-y-6 bg-neutral-950 min-h-screen">
+      {/* 头部 */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-wider">风控监控中心</h1>
+          <p className="text-sm text-neutral-400">L1/L2/L3 多层级风控门闸实时监测</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleRefresh}
+            variant="ghost"
+            className="text-neutral-400 hover:text-orange-500 hover:bg-neutral-800"
+            disabled={isLoading}
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            onClick={() => setShowFusePanel(!showFusePanel)}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            <AlertOctagon className="w-4 h-4 mr-2" />
+            熔断恢复
+          </Button>
+        </div>
+      </div>
+
+      {/* 更新时间 */}
+          <div className="text-xs text-neutral-500 text-right">
+        最后更新: {lastUpdate.toLocaleString("zh-CN")}
+      </div>
+
+      {/* 全局门闸状态 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className={`bg-neutral-900 border ${l1Status === "alert" ? "border-red-600" : l1Status === "warning" ? "border-yellow-600" : "border-green-600"}`}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-neutral-400 mb-1">L1 门闸状态</p>
+                <p className="text-lg font-bold">
+                  {l1Status === "pass" && <span className="text-green-400">✓ 通过</span>}
+                  {l1Status === "warning" && <span className="text-yellow-400">⚠ 警告</span>}
+                  {l1Status === "alert" && <span className="text-red-400">✕ 拦截</span>}
+                </p>
+              </div>
+              <ShieldAlert className={`w-8 h-8 ${l1Status === "alert" ? "text-red-400" : l1Status === "warning" ? "text-yellow-400" : "text-green-400"}`} />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={`bg-neutral-900 border ${l2Status === "alert" ? "border-red-600" : "border-orange-600"}`}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-neutral-400 mb-1">L2 巡检状态</p>
+                <p className="text-lg font-bold text-orange-400">✓ 运行中</p>
+              </div>
+              <Gauge className="w-8 h-8 text-orange-400" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={`bg-neutral-900 border ${l3Status === "alert" ? "border-red-600" : "border-neutral-600"}`}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-neutral-400 mb-1">L3 审计状态</p>
+                <p className="text-lg font-bold text-white">✓ 正常</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-white" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* L1 检查矩阵 */}
+      <Card className="bg-neutral-900 border-neutral-700">
+        <CardHeader>
+          <button
+            onClick={() => setExpandedL1(!expandedL1)}
+            className="w-full flex items-center justify-between hover:text-white transition-colors"
+          >
+            <CardTitle className="text-sm font-medium text-neutral-300">L1 准入检查矩阵 (10项)</CardTitle>
+            <ChevronDown className={`w-4 h-4 transition-transform ${expandedL1 ? "rotate-180" : ""}`} />
+          </button>
+        </CardHeader>
+        {expandedL1 && (
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+              {l1Checks.map((check) => (
+                <div
+                  key={check.id}
+                  className={`border rounded p-3 ${getStatusColor(check.status)} cursor-pointer hover:opacity-80 transition-opacity`}
+                  onClick={() => check.lastReject && setSelectedAlert(check)}
+                >
+                  <div className="flex items-start gap-2 mb-1">
+                    {check.status === "pass" ? (
+                      <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    ) : check.status === "warning" ? (
+                      <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    ) : (
+                      <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{check.name}</p>
+                      {check.lastReject && (
+                        <p className="text-xs opacity-75 mt-1 truncate">{check.lastReject}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* L2 仪表板 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* 盈亏曲线 */}
+        <Card className="bg-neutral-900 border-neutral-700 lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-neutral-300">L2 日内盈亏曲线</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={l2PnlData}>
+                  <defs>
+                    <linearGradient id="pnlGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#404040" />
+                  <XAxis dataKey="time" stroke="#737373" />
+                  <YAxis stroke="#737373" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      border: "1px solid #404040",
+                      borderRadius: "4px",
+                    }}
+                    labelStyle={{ color: "#fff" }}
+                  />
+                  <Bar dataKey="loss" fill="#ef4444" radius={[0, 0, 0, 0]} opacity={0.3} />
+                  <Line type="monotone" dataKey="pnl" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+            {/* 警戒线说明 */}
+            <div className="mt-4 grid grid-cols-3 gap-4 text-xs">
+              <div>
+                <div className="w-4 h-0.5 bg-yellow-500 mb-1"></div>
+                <p className="text-neutral-400">2% 黄线</p>
+              </div>
+              <div>
+                <div className="w-4 h-0.5 bg-red-500 mb-1"></div>
+                <p className="text-neutral-400">3% 红线</p>
+              </div>
+              <div>
+                <p className="text-neutral-400">当前: <span className="text-orange-400">+600</span></p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 连续亏损计数 + 保证金水位 - 与左侧曲线高度一致 */}
+        <div className="flex flex-col gap-4 h-full">
+          <Card className="bg-neutral-900 border-neutral-700 flex-1">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-medium text-neutral-300">连续亏损计数</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="text-3xl font-bold text-white">2 / 5</div>
+              <Progress value={40} className="h-2 bg-neutral-800" />
+              <p className="text-xs text-neutral-400">触达上限将触发 L2 熔断</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-neutral-900 border-neutral-700 flex-1">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-medium text-neutral-300">保证金水位</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-neutral-400">当前</span>
+                  <span className="font-bold text-yellow-400">60%</span>
+                </div>
+                <Progress value={60} className="h-3 bg-gradient-to-r from-green-900 via-yellow-900 to-red-900" />
+              </div>
+              <div className="grid grid-cols-3 gap-1 text-xs">
+                <div className="text-green-400">60%</div>
+                <div className="text-yellow-400">70%</div>
+                <div className="text-red-400">80%</div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* L3 & Sim 配置 */}
+      <Card className="bg-neutral-900 border-neutral-700">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium text-neutral-300">L3 & Sim 配置区</CardTitle>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-neutral-700 text-neutral-400 hover:bg-neutral-800 text-xs"
+              onClick={() => alert("打开日志查看...")}
+            >
+              查看日志
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* 熔断恢复面板 */}
+          {showFusePanel && (
+            <div className="bg-red-900/20 border border-red-600/50 rounded p-4 space-y-3">
+              <p className="text-sm text-red-400 font-medium">⚠ 熔断恢复面板</p>
+              <p className="text-xs text-red-300">此操作将重置所有 L1/L2 计数器。二次确认必需。</p>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="bg-red-600 hover:bg-red-700 text-white flex-1"
+                  onClick={() => {
+                    alert("熔断已重置，系统恢复正常")
+                    setShowFusePanel(false)
+                  }}
+                >
+                  确认恢复
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-neutral-700 text-neutral-400 hover:bg-neutral-800 flex-1"
+                  onClick={() => setShowFusePanel(false)}
+                >
+                  取消
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Sim 专属配置 */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium text-neutral-300">Sim 专属阈值配置</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="text-xs text-neutral-400 block mb-2">日亏限额 (%)</label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={simConfig.dailyLossLimit}
+                  onChange={(e) =>
+                    setSimConfig({
+                      ...simConfig,
+                      dailyLossLimit: parseFloat(e.target.value),
+                    })
+                  }
+                  className="bg-neutral-800 border-neutral-700 text-white text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-400 block mb-2">连续亏损上限 (笔)</label>
+                <Input
+                  type="number"
+                  value={simConfig.continuousLossLimit}
+                  onChange={(e) =>
+                    setSimConfig({
+                      ...simConfig,
+                      continuousLossLimit: parseInt(e.target.value),
+                    })
+                  }
+                  className="bg-neutral-800 border-neutral-700 text-white text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-400 block mb-2">保证金预警 (%)</label>
+                <Input
+                  type="number"
+                  value={simConfig.marginWarning}
+                  onChange={(e) =>
+                    setSimConfig({
+                      ...simConfig,
+                      marginWarning: parseInt(e.target.value),
+                    })
+                  }
+                  className="bg-neutral-800 border-neutral-700 text-white text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-400 block mb-2">保证金警告 (%)</label>
+                <Input
+                  type="number"
+                  value={simConfig.marginAlert}
+                  onChange={(e) =>
+                    setSimConfig({
+                      ...simConfig,
+                      marginAlert: parseInt(e.target.value),
+                    })
+                  }
+                  className="bg-neutral-800 border-neutral-700 text-white text-sm"
+                />
+              </div>
+            </div>
+            <Button
+              onClick={handleSaveSimConfig}
+              className="bg-green-600 hover:bg-green-700 text-white w-full"
+            >
+              下发配置到交易引擎
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 风控告警 + 交易日历 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="bg-neutral-900 border-neutral-700">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-neutral-300">实时告警 ({alerts.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 max-h-64 overflow-y-auto">
+            {alerts.map((alert) => (
+              <div
+                key={alert.id}
+                className={`border rounded p-3 cursor-pointer transition-colors ${getStatusColor("alert")}`}
+              >
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{alert.message}</p>
+                    <p className="text-xs text-opacity-70 mt-1">{alert.time}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* 交易日历 */}
+        <Card className="bg-neutral-900 border-neutral-700">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-neutral-300">交易日历</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-7 gap-1 text-center text-xs">
+              {["一", "二", "三", "四", "五", "六", "日"].map((day) => (
+                <div key={day} className="text-neutral-500 py-1">{day}</div>
+              ))}
+              {/* 本月日期 */}
+              {Array.from({ length: 30 }, (_, i) => i + 1).map((day) => {
+                const isToday = day === 6
+                const isTradingDay = day !== 7 && day !== 8 && day !== 14 && day !== 15 && day !== 21 && day !== 22 && day !== 28 && day !== 29
+                const hasProfit = isTradingDay && [1, 2, 3, 5].includes(day)
+                const hasLoss = isTradingDay && day === 4
+                return (
+                  <div
+                    key={day}
+                    className={`py-1 rounded text-xs ${
+                      isToday
+                        ? "bg-orange-500 text-white font-bold"
+                        : hasProfit
+                        ? "bg-green-900/30 text-green-400"
+                        : hasLoss
+                        ? "bg-red-900/30 text-red-400"
+                        : isTradingDay
+                        ? "text-neutral-300"
+                        : "text-neutral-600"
+                    }`}
+                  >
+                    {day}
+                  </div>
+                )
+              })}
+            </div>
+            <div className="mt-4 flex items-center gap-4 text-xs">
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 bg-green-900/30 rounded"></div>
+                <span className="text-neutral-400">盈利日</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 bg-red-900/30 rounded"></div>
+                <span className="text-neutral-400">亏损日</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 bg-orange-500 rounded"></div>
+                <span className="text-neutral-400">今日</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}

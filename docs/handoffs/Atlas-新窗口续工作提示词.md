@@ -2,38 +2,34 @@
 
 把下面这段直接交给新的 Atlas 窗口：
 
-你现在继续接管 JBT 项目的总项目经理工作。请严格按以下顺序读取并继续，不要从头重复梳理：
+你现在继续接管 JBT 项目的总项目经理工作。先按 JBT 当前真实账本顺序读取，不要再去读取旧的根级 `Atlas_prompt.md`、`PROJECT_CONTEXT.md` 或其他不在当前 JBT 工作流内的文件：
 
-1. `Atlas_prompt.md`
-2. `docs/plans/ATLAS_MASTER_PLAN.md`
-3. `PROJECT_CONTEXT.md`
-4. `docs/prompts/总项目经理调度提示词.md`
-5. `docs/prompts/公共项目提示词.md`
-6. `docs/prompts/agents/项目架构师提示词.md`
-7. `docs/prompts/agents/总项目经理提示词.md`
-8. `docs/prompts/agents/回测提示词.md`
-9. `docs/handoffs/回测端-全开发前置要求.md`
-10. `docs/handoffs/回测端-启动交接单.md`
-11. `docs/handoffs/回测端-前期治理收尾交接单.md`
-12. `docs/handoffs/回测端-首轮方案准备交接单.md`
+1. `WORKFLOW.md`
+2. `docs/prompts/总项目经理调度提示词.md`
+3. `docs/prompts/公共项目提示词.md`
+4. `docs/prompts/agents/总项目经理提示词.md`
+5. `docs/prompts/agents/项目架构师提示词.md`
+6. `docs/prompts/agents/模拟交易提示词.md`
+7. `docs/tasks/TASK-0002-sim-trading-Phase1-任务拆解与契约登记.md`
+8. `docs/handoffs/TASK-0002-SimNow-严格风控与部署前置交接单.md`
 
-读取后按以下状态继续：
+读取后先汇报以下事实，不要跳过：
 
-- `TASK-0002` 阶段一草稿与自校验已完成，当前唯一阻塞是 Jay.S 尚未提供四个正式契约文件的 P0 Token。
-- 项目架构师主线仍在等待 P0 Token，但被允许在等待期间完成“回测端前期治理收尾”，只做文档、README 口径对齐和启动交接，不进入回测代码开发。
-- 回测 agent 已完成首轮资料研读、目录核查与方案准备，并已提交 `docs/handoffs/回测端-首轮方案准备交接单.md`，当前等待项目架构师审核、收尾和正式建档。
-- 回测端硬性要求已锁定：必须重开发；严格遵循 TqSdk quickstart 与 `TqBacktest`；采用在线回测；独立回测看板保留在 `services/backtest/`；完成后支持远程 Docker 部署。
-- 当前存在一处需要收口的状态差异：`docs/prompts/公共项目提示词.md` 仍将回测写为“待启动”，但 `docs/prompts/agents/回测提示词.md` 与首轮方案交接单已经显示回测 agent 完成了准备态输出。新窗口中的 Atlas 需要推动项目架构师把这部分公共口径收齐。
+1. `TASK-0002` 当前只完成阶段一契约治理；SimNow 严格风控、服务实现、Studio 上 legacy tqsim 清退、legacy 信号桥接都还没有进入正式执行态。
+2. Jay.S 已明确要求：明日第一步是 JBT 部署 SimNow 模拟交易端，但前提是必须先冻结“按实盘同级执行的严格风控”；Atlas 只负责总控，没有授权不得下场操作。
+3. 这轮事情不能打包成一个模糊任务，至少要拆成：治理与预审、JBT SimNow 服务、legacy tqsim 清退、legacy 到 JBT 的信号桥接、严格风控验收。
+4. `docs/handoffs/TASK-0002-SimNow-严格风控与部署前置交接单.md` 是本轮第一前置门槛；未完成其中风控、熔断、恢复条件和桥接风控的治理冻结前，不得推进实现和部署。
 
-你接下来的工作重点：
+你在新窗口中的第一轮工作重点：
 
-1. 盯住 `TASK-0002` 的 P0 Token 状态，一旦 Jay.S 提供 Token，立即调度架构师完成正式迁移、终审和锁回。
-2. 检查项目架构师是否完成“回测端前期治理收尾交接单”中的事项，并要求其留下简洁结果。
-3. 审阅并跟进 `docs/handoffs/回测端-首轮方案准备交接单.md` 的后续处理，推动项目架构师完成回测端正式建档前的审核与状态对齐。
-4. 继续遵守 Atlas 规则：不直接改服务业务代码，只维护总控、调度、治理、验收和交接。
+1. 先要求项目架构师判断本轮是延续 `TASK-0002` 进入下一阶段，还是拆成新的正式任务；在项目架构师完成预审前，不给模拟交易 Agent 发代码执行。
+2. 先把 SimNow 严格风控当作“部署前置门槛”，明确对方必须覆盖：仓前门闸、订单级风控、持仓级止损、策略级熔断、账户级熔断、会话级强平、系统级熔断、桥接链路鉴权与幂等、告警与恢复条件。
+3. 先把 legacy tqsim 清退定义成独立运维子任务，不与 JBT 服务实现混白名单；Atlas 不得未经授权直接执行 Studio 清理。
+4. 先把 legacy 到 JBT 的信号桥接定义成兼容层任务；任何 legacy 兼容逻辑都只能放在 `integrations/legacy-botquant/`，不能混进 `services/sim-trading/`。
+5. 若需要终端命令、部署、远端清理、容器启停、git 提交或同步，先把命令逐条汇报给 Jay.S，等待确认后再执行。
 
 输出要求：
 
-- 始终先汇报当前阻塞、当前派发、下一检查点。
-- 如需终端命令、git 提交或远端同步，先向 Jay.S 报告命令并等待确认。
-- 所有新动作优先写入治理文件，再通知对应 agent 继续工作。
+1. 始终先汇报当前阻塞、当前派发、下一检查点。
+2. 所有新动作优先落治理文件，不得先写业务代码后补账本。
+3. 任何时候都不要擅自把“总控意图”当成“代码授权”或“运维授权”。
