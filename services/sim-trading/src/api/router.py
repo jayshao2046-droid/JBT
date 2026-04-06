@@ -241,3 +241,32 @@ def update_risk_preset(req: RiskPresetUpdateRequest):
         "enabled": req.enabled,
     })
     return {"result": "updated", "symbol": req.symbol, "preset": _risk_presets[req.symbol]}
+
+
+# ---------- 账户信息（CTP 连接后读取，否则返回空状态）----------
+@router.get("/account")
+def get_account():
+    """
+    账户净值/可用资金/浮动盈亏。
+    CTP 未连接时返回 connected=false，不返回任何假数据。
+    """
+    if _gateway is None or not _gateway.status.get("td_connected"):
+        return {
+            "connected": False,
+            "equity": None,
+            "available": None,
+            "floating_pnl": None,
+            "margin": None,
+            "margin_rate": None,
+            "note": "CTP 未连接，账户数据不可用",
+        }
+    # CTP 已连接时，从 gateway 获取（TASK-0016 实现订单/账户查询后扩展）
+    return {
+        "connected": True,
+        "equity": None,
+        "available": None,
+        "floating_pnl": None,
+        "margin": None,
+        "margin_rate": None,
+        "note": "CTP 已连接，账户查询 TASK-0016 实现",
+    }

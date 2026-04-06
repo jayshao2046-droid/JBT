@@ -71,7 +71,7 @@ export default function RiskControlPage() {
       id: "market_freshness",
       name: "行情新鲜度 <2s",
       status: "pass",
-      lastReject: "2025/06/25 14:02 - 行情超时 2.5s",
+      lastReject: null,
     },
     {
       id: "signal_ttl",
@@ -94,8 +94,8 @@ export default function RiskControlPage() {
     {
       id: "account_health",
       name: "账户健康度",
-      status: "warning",
-      lastReject: "保证金率 42%",
+      status: "pass",
+      lastReject: null,
     },
     {
       id: "position_limit",
@@ -118,40 +118,10 @@ export default function RiskControlPage() {
   ]
 
   // L2 盈亏数据
-  const l2PnlData = [
-    { time: "09:30", pnl: 0, loss: 0 },
-    { time: "10:00", pnl: 500, loss: 0 },
-    { time: "11:00", pnl: 200, loss: 0 },
-    { time: "12:00", pnl: -800, loss: -800 },
-    { time: "13:30", pnl: -1200, loss: -1200 },
-    { time: "14:00", pnl: -500, loss: -500 },
-    { time: "15:00", pnl: 600, loss: 0 },
-  ]
+  const [l2PnlData, setL2PnlData] = useState<any[]>([])
 
   // 告警列表
-  const alerts = [
-    {
-      id: 1,
-      level: "严重",
-      message: "保证金率触及 70% 警告线",
-      time: "2025/06/25 14:32",
-      status: "active",
-    },
-    {
-      id: 2,
-      level: "警告",
-      message: "今日亏损 1.2% 超过 0.5% 预警",
-      time: "2025/06/25 13:45",
-      status: "active",
-    },
-    {
-      id: 3,
-      level: "提醒",
-      message: "连续 2 笔交易亏损，建议检查策略",
-      time: "2025/06/25 12:10",
-      status: "active",
-    },
-  ]
+  const [alerts, setAlerts] = useState<any[]>([])
 
   // 计算 L1 整体状态
   useEffect(() => {

@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react"
-import { RefreshCw, TrendingUp, TrendingDown, Wifi, WifiOff } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { RefreshCw, Wifi, WifiOff } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ALL_CONTRACTS, WATCHLISTS, FuturesContract, fmtPrice } from "@/lib/contracts"
 
@@ -22,74 +22,6 @@ interface TickData {
   turnover: number    // 成交额（亿元）
   velocity: number    // 涨速（%/s）
   prevLast: number    // 上一 tick，用于闪烁
-}
-
-// ─── 初始化模拟行情 ───────────────────────────────────────────────────────────
-
-function buildInitialTicks(): Record<string, TickData> {
-  const map: Record<string, TickData> = {}
-  for (const c of ALL_CONTRACTS) {
-    // 开盘价在基准价 ±0.3% 随机浮动
-    const open = c.basePrice * (1 + (Math.random() - 0.5) * 0.006)
-    const last = open
-    const volBase = Math.random() * 50 + 10
-    map[c.symbol] = {
-      symbol: c.symbol,
-      last,
-      open: c.basePrice,
-      high: last * (1 + Math.random() * 0.003),
-      low: last * (1 - Math.random() * 0.003),
-      bid: last - c.tick,
-      ask: last + c.tick,
-      change: last - c.basePrice,
-      changePct: ((last - c.basePrice) / c.basePrice) * 100,
-      volume: volBase,
-      curVol: Math.floor(Math.random() * 200 + 5),
-      turnover: (volBase * c.basePrice * 10) / 100_000_000,
-      velocity: 0,
-      prevLast: last,
-    }
-  }
-  return map
-}
-
-// ─── 行情模拟引擎（每秒更新）────────────────────────────────────────────────
-
-function simulateTick(
-  prev: Record<string, TickData>,
-  contracts: FuturesContract[],
-): Record<string, TickData> {
-  const next = { ...prev }
-  for (const c of contracts) {
-    const t = prev[c.symbol]
-    if (!t) continue
-
-    // 随机游走：偏向均值回归
-    const revert = (c.basePrice - t.last) / c.basePrice   // 均值回归力
-    const rand = (Math.random() - 0.49 + revert * 0.3) * c.tick * 3
-    const newLast = Math.max(
-      t.last + rand,
-      c.basePrice * 0.85, // 最低不跌过基准 15%
-    )
-    const snapped = Math.round(newLast / c.tick) * c.tick
-    const curVol = Math.floor(Math.random() * 600 + 1)
-    next[c.symbol] = {
-      ...t,
-      last: snapped,
-      prevLast: t.last,
-      high: Math.max(t.high, snapped),
-      low: Math.min(t.low, snapped),
-      bid: snapped - c.tick,
-      ask: snapped + c.tick,
-      change: snapped - t.open,
-      changePct: ((snapped - t.open) / t.open) * 100,
-      curVol,
-      volume: t.volume + curVol / 10_000,
-      turnover: t.turnover + (curVol * snapped) / 100_000_000,
-      velocity: ((snapped - t.last) / t.last) * 100,
-    }
-  }
-  return next
 }
 
 // ─── 工具 ────────────────────────────────────────────────────────────────────
@@ -113,22 +45,76 @@ function fmtTurnover(v: number) {
 // ─── 主组件 ──────────────────────────────────────────────────────────────────
 
 export default function MarketPage() {
-  const [ticks, setTicks] = useState<Record<string, TickData>>(() => buildInitialTicks())
+  const [ticks, setTicks] = useState<Record<string, TickData>>({})
   const [activeTab, setActiveTab] = useState(0)
   const [now, setNow] = useState(() => new Date())
-  const [paused, setPaused] = useState(false)
-  const pausedRef = useRef(paused)
-  pausedRef.current = paused
+  const [ctpStatus, setCtpStatus] = useState<"disconnected" | "connecting" | "live">("disconnected")
 
-  // 秒级更新行情
+  // 自动连接 CTP + 秒级轮询 /ticks
   useEffect(() => {
-    const id = setInterval(() => {
-      if (!pausedRef.current) {
-        setTicks(prev => simulateTick(prev, ALL_CONTRACTS))
+    let mounted = true
+    let intervalId: ReturnType<typeof setInterval>
+
+    setCtpStatus("connecting")
+    fetch("/api/sim/api/v1/ctp/connect", { method: "POST" }).catch(() => {})
+
+    intervalId = setInterval(async () => {
+      if (!mounted) return
+      try {
+        const [ticksRes, statusRes] = await Promise.all([
+          fetch("/api/sim/api/v1/ticks"),
+          fetch("/api/sim/api/v1/ctp/status"),
+        ])
+
+        setNow(new Date())
+
+        if (statusRes.ok) {
+          const s = await statusRes.json()
+          if (mounted) setCtpStatus(s.md_connected ? "live" : "connecting")
+        }
+
+        if (ticksRes.ok) {
+          const data = await ticksRes.json()
+          const rawTicks: Record<string, any> = data.ticks ?? {}
+          if (Object.keys(rawTicks).length > 0 && mounted) {
+            setTicks(prev => {
+              const next = { ...prev }
+              for (const [sym, raw] of Object.entries<any>(rawTicks)) {
+                const prevTick = prev[sym]
+                const prevClose = raw.prev_close ?? 0
+                const last = raw.last ?? 0
+                next[sym] = {
+                  symbol: sym,
+                  last,
+                  open: raw.open ?? 0,
+                  high: raw.high ?? 0,
+                  low: raw.low ?? 0,
+                  bid: raw.bid ?? 0,
+                  ask: raw.ask ?? 0,
+                  change: prevClose > 0 ? last - prevClose : 0,
+                  changePct: prevClose > 0 ? ((last - prevClose) / prevClose) * 100 : 0,
+                  volume: (raw.volume ?? 0) / 10_000,
+                  curVol: 0,
+                  turnover: (raw.turnover ?? 0) / 100_000_000,
+                  velocity: prevTick
+                    ? ((last - prevTick.last) / (prevTick.last || 1)) * 100
+                    : 0,
+                  prevLast: prevTick?.last ?? last,
+                }
+              }
+              return next
+            })
+          }
+        }
+      } catch {
+        if (mounted) setCtpStatus("disconnected")
       }
-      setNow(new Date())
     }, 1000)
-    return () => clearInterval(id)
+
+    return () => {
+      mounted = false
+      clearInterval(intervalId)
+    }
   }, [])
 
   const watchlist = WATCHLISTS[activeTab]
@@ -179,18 +165,22 @@ export default function MarketPage() {
             <span className="mx-1 text-neutral-600">/</span>
             <span className="text-green-400 font-mono">{stats.dn}↓</span>
           </span>
-          {/* 骨架阶段标记 */}
-          <Badge className="bg-amber-900/30 text-amber-400 border border-amber-700/40 text-xs">
-            骨架 · 模拟行情
-          </Badge>
-          {/* 暂停/恢复 */}
-          <button
-            onClick={() => setPaused(p => !p)}
-            className="flex items-center gap-1 text-neutral-500 hover:text-white transition-colors"
-          >
-            {paused ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-            {paused ? "恢复" : "暂停"}
-          </button>
+          {/* CTP 连接状态 */}
+          {ctpStatus === "live" && (
+            <Badge className="bg-green-900/30 text-green-400 border border-green-700/40 text-xs flex items-center gap-1">
+              <Wifi className="w-3 h-3" />SimNow 实时
+            </Badge>
+          )}
+          {ctpStatus === "connecting" && (
+            <Badge className="bg-amber-900/30 text-amber-400 border border-amber-700/40 text-xs flex items-center gap-1">
+              <RefreshCw className="w-3 h-3 animate-spin" />连接中…
+            </Badge>
+          )}
+          {ctpStatus === "disconnected" && (
+            <Badge className="bg-neutral-800/60 text-neutral-400 border border-neutral-600 text-xs flex items-center gap-1">
+              <WifiOff className="w-3 h-3" />未连接
+            </Badge>
+          )}
           {/* 时间 */}
           <span className="font-mono text-neutral-600 tabular-nums">
             {now.toLocaleTimeString("zh-CN")}
@@ -225,12 +215,11 @@ export default function MarketPage() {
           <tbody>
             {contracts.map((c, idx) => {
               const t = ticks[c.symbol]
-              if (!t) return null
-              const up = t.changePct > 0.005
-              const dn = t.changePct < -0.005
+              const up = (t?.changePct ?? 0) > 0.005
+              const dn = (t?.changePct ?? 0) < -0.005
               // A 股：红涨绿跌
               const priceColor = up ? "text-red-400" : dn ? "text-green-400" : "text-neutral-300"
-              const flash = t.last !== t.prevLast
+              const flash = t ? t.last !== t.prevLast : false
               return (
                 <tr
                   key={c.symbol}
@@ -243,41 +232,41 @@ export default function MarketPage() {
                   <td className="px-2 py-1.5 text-neutral-200">{c.name}</td>
                   {/* 最新 */}
                   <td className={`px-2 py-1.5 text-right font-mono font-medium tabular-nums ${priceColor}`}>
-                    {fmtPrice(t.last, c.tick)}
+                    {t ? fmtPrice(t.last, c.tick) : "--"}
                   </td>
                   {/* 涨幅 */}
                   <td className={`px-2 py-1.5 text-right font-mono tabular-nums ${priceColor}`}>
-                    {pct(t.changePct)}
+                    {t ? pct(t.changePct) : "--"}
                   </td>
                   {/* 涨跌 */}
                   <td className={`px-2 py-1.5 text-right font-mono tabular-nums ${priceColor}`}>
-                    {t.change >= 0 ? "+" : ""}{fmtPrice(t.change, c.tick)}
+                    {t ? <>{t.change >= 0 ? "+" : ""}{fmtPrice(t.change, c.tick)}</> : "--"}
                   </td>
                   {/* 成交量 */}
                   <td className="px-2 py-1.5 text-right font-mono text-neutral-300 tabular-nums">
-                    {fmtVol(t.volume)}
+                    {t ? fmtVol(t.volume) : "--"}
                   </td>
                   {/* 现量 */}
                   <td className="px-2 py-1.5 text-right font-mono text-neutral-400 tabular-nums">
-                    {t.curVol}手
+                    {t ? `${t.curVol}手` : "--"}
                   </td>
                   {/* 买一价 — 绿色（买方出价，价格低） */}
                   <td className="px-2 py-1.5 text-right font-mono text-green-400 tabular-nums">
-                    {fmtPrice(t.bid, c.tick)}
+                    {t ? fmtPrice(t.bid, c.tick) : <span className="text-neutral-600">--</span>}
                   </td>
                   {/* 卖一价 — 红色（卖方挂单，价格高） */}
                   <td className="px-2 py-1.5 text-right font-mono text-red-400 tabular-nums">
-                    {fmtPrice(t.ask, c.tick)}
+                    {t ? fmtPrice(t.ask, c.tick) : <span className="text-neutral-600">--</span>}
                   </td>
                   {/* 涨速 */}
                   <td className={`px-2 py-1.5 text-right font-mono tabular-nums ${
-                    t.velocity > 0 ? "text-red-400" : t.velocity < 0 ? "text-green-400" : "text-neutral-500"
+                    (t?.velocity ?? 0) > 0 ? "text-red-400" : (t?.velocity ?? 0) < 0 ? "text-green-400" : "text-neutral-500"
                   }`}>
-                    {t.velocity > 0 ? "+" : ""}{t.velocity.toFixed(3)}%
+                    {t ? `${t.velocity > 0 ? "+" : ""}${t.velocity.toFixed(3)}%` : "--"}
                   </td>
                   {/* 成交额 */}
                   <td className="px-2 py-1.5 text-right font-mono text-neutral-400 tabular-nums">
-                    {fmtTurnover(t.turnover)}
+                    {t ? fmtTurnover(t.turnover) : "--"}
                   </td>
                   {/* 交易所 */}
                   <td className="px-2 py-1.5 text-neutral-500">{c.exchange}</td>
@@ -285,15 +274,15 @@ export default function MarketPage() {
                   <td className="px-2 py-1.5 text-neutral-500">{c.sector}</td>
                   {/* 最高 — 红 */}
                   <td className="px-2 py-1.5 text-right font-mono text-red-400/80 tabular-nums">
-                    {fmtPrice(t.high, c.tick)}
+                    {t ? fmtPrice(t.high, c.tick) : "--"}
                   </td>
                   {/* 最低 — 绿 */}
                   <td className="px-2 py-1.5 text-right font-mono text-green-400/80 tabular-nums">
-                    {fmtPrice(t.low, c.tick)}
+                    {t ? fmtPrice(t.low, c.tick) : "--"}
                   </td>
                   {/* 开盘 */}
                   <td className="px-2 py-1.5 text-right font-mono text-neutral-500 tabular-nums">
-                    {fmtPrice(t.open, c.tick)}
+                    {t ? fmtPrice(t.open, c.tick) : "--"}
                   </td>
                 </tr>
               )
@@ -306,12 +295,14 @@ export default function MarketPage() {
       <div className="shrink-0 px-4 py-1.5 bg-neutral-900 border-t border-neutral-700 flex items-center gap-4 text-xs text-neutral-600">
         <span>共 {contracts.length} 个品种</span>
         <span className="text-neutral-700">·</span>
-        <span>CTP 接入前使用模拟行情 · 连接 CTP 后自动切换实时数据</span>
-        <span className="ml-auto">
-          {paused
-            ? <span className="text-amber-400">⏸ 已暂停更新</span>
-            : <span className="text-green-400">● 秒级更新中</span>
-          }
+        {ctpStatus === "live"
+          ? <span className="text-green-400">● SimNow 实时行情</span>
+          : ctpStatus === "connecting"
+          ? <span className="text-amber-400">⟳ 等待 CTP 连接…</span>
+          : <span className="text-neutral-500">● CTP 未连接</span>
+        }
+        <span className="ml-auto font-mono tabular-nums">
+          {now.toLocaleTimeString("zh-CN")}
         </span>
       </div>
     </div>

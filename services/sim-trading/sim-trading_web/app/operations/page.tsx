@@ -30,13 +30,7 @@ export default function SimNowTradingTerminal() {
   const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   // 账户状态
-  const [accountState] = useState({
-    equity: 512500,
-    floatingPnl: 3250,
-    availableFunds: 412300,
-    riskLevel: 28,
-    marginRate: 58,
-  })
+  const [accountState, setAccountState] = useState<any>(null)
 
   // 下单参数
   const [orderParams, setOrderParams] = useState({
@@ -67,29 +61,23 @@ export default function SimNowTradingTerminal() {
   // 后端状态
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null)
 
-  // 权益曲线数据
-  const equityCurveData = [
-    { time: "09:30", equity: 500000 },
-    { time: "10:15", equity: 502000 },
-    { time: "11:00", equity: 505500 },
-    { time: "12:00", equity: 503200 },
-    { time: "13:00", equity: 508000 },
-    { time: "14:00", equity: 510200 },
-    { time: "14:30", equity: 512500 },
-  ]
+  // 权益曲线数据（CTP 连接后从后端更新）
+  const [equityCurveData, setEquityCurveData] = useState<any[]>([])
 
   // 后端轮询（10s）
   useEffect(() => {
     const poll = async () => {
       try {
-        const [h, pos, ord] = await Promise.all([
+        const [h, pos, ord, acct] = await Promise.all([
           simApi.health(),
           simApi.positions(),
           simApi.orders(),
+          fetch("/api/sim/api/v1/account").then(r => r.ok ? r.json() : null).catch(() => null),
         ])
         setBackendOnline(h.status === "ok")
         setPositions((pos as any).positions ?? [])
         setOrderStream((ord as any).orders ?? [])
+        if (acct !== null) setAccountState(acct)
       } catch {
         setBackendOnline(false)
       }
@@ -108,12 +96,7 @@ export default function SimNowTradingTerminal() {
       return
     }
 
-    if (accountState.riskLevel > 35) {
-      setOrderError("风险度超过 35%，拒绝下单")
-      return
-    }
-
-    if (accountState.marginRate > 80) {
+    if ((accountState?.margin_rate ?? 0) > 80) {
       setOrderError("保证金率触达 80%，无法开仓")
       return
     }
@@ -184,16 +167,18 @@ export default function SimNowTradingTerminal() {
           <CardContent className="p-4">
             <p className="text-xs text-neutral-400 mb-1">动态权益</p>
             <p className="text-2xl font-bold text-white font-mono">
-              ¥{accountState.equity.toLocaleString()}
+              {accountState?.equity != null ? `¥${accountState.equity.toLocaleString()}` : "--"}
             </p>
           </CardContent>
         </Card>
 
-        <Card className={`bg-neutral-900 border ${accountState.floatingPnl >= 0 ? "border-green-600" : "border-red-600"}`}>
+        <Card className={`bg-neutral-900 border ${(accountState?.floating_pnl ?? 0) >= 0 ? "border-green-600" : "border-red-600"}`}>
           <CardContent className="p-4">
             <p className="text-xs text-neutral-400 mb-1">浮动盈亏</p>
-            <p className={`text-2xl font-bold font-mono ${accountState.floatingPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-              {accountState.floatingPnl >= 0 ? "+" : ""}¥{accountState.floatingPnl.toLocaleString()}
+            <p className={`text-2xl font-bold font-mono ${(accountState?.floating_pnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
+              {accountState?.floating_pnl != null
+                ? `${accountState.floating_pnl >= 0 ? "+" : ""}¥${accountState.floating_pnl.toLocaleString()}`
+                : "--"}
             </p>
           </CardContent>
         </Card>
@@ -202,25 +187,25 @@ export default function SimNowTradingTerminal() {
           <CardContent className="p-4">
             <p className="text-xs text-neutral-400 mb-1">可用资金</p>
             <p className="text-2xl font-bold text-white font-mono">
-              ¥{accountState.availableFunds.toLocaleString()}
+              {accountState?.available != null ? `¥${accountState.available.toLocaleString()}` : "--"}
             </p>
           </CardContent>
         </Card>
 
-        <Card className={`bg-neutral-900 border ${accountState.riskLevel > 30 ? "border-orange-600" : "border-neutral-600"}`}>
+        <Card className="bg-neutral-900 border-neutral-600">
           <CardContent className="p-4">
             <p className="text-xs text-neutral-400 mb-1">风险度</p>
-            <p className={`text-2xl font-bold font-mono ${accountState.riskLevel > 30 ? "text-orange-400" : "text-white"}`}>
-              {accountState.riskLevel}%
+            <p className="text-2xl font-bold font-mono text-white">
+              --
             </p>
           </CardContent>
         </Card>
 
-        <Card className={`bg-neutral-900 border ${accountState.marginRate > 70 ? "border-red-600" : "border-yellow-600"}`}>
+        <Card className={`bg-neutral-900 border ${(accountState?.margin_rate ?? 0) > 70 ? "border-red-600" : "border-yellow-600"}`}>
           <CardContent className="p-4">
             <p className="text-xs text-neutral-400 mb-1">保证金率</p>
-            <p className={`text-2xl font-bold font-mono ${accountState.marginRate > 70 ? "text-red-400" : "text-yellow-400"}`}>
-              {accountState.marginRate}%
+            <p className={`text-2xl font-bold font-mono ${(accountState?.margin_rate ?? 0) > 70 ? "text-red-400" : "text-yellow-400"}`}>
+              {accountState?.margin_rate != null ? `${accountState.margin_rate}%` : "--"}
             </p>
           </CardContent>
         </Card>
@@ -292,7 +277,7 @@ export default function SimNowTradingTerminal() {
                 className="bg-neutral-800 border-neutral-700 text-white text-sm"
               />
               <p className="text-xs text-neutral-500 mt-1">
-                智能推荐: {Math.floor(accountState.availableFunds / 10000)} 手
+                智能推荐: {accountState?.available != null ? `${Math.floor(accountState.available / 10000)} 手` : "--"}
               </p>
             </div>
 
