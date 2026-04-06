@@ -7,6 +7,7 @@ import logging
 import os
 import urllib.request
 import urllib.error
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -18,6 +19,12 @@ _LEVEL_COLOR = {
     "P0": "red",
     "P1": "orange",
     "P2": "green",
+}
+
+_LEVEL_ICON = {
+    "P0": "🚨",
+    "P1": "⚠️",
+    "P2": "🔔",
 }
 
 
@@ -45,13 +52,15 @@ class FeishuNotifier:
             return False
 
         color = _LEVEL_COLOR.get(event.risk_level, "blue")
+        icon = _LEVEL_ICON.get(event.risk_level, "📋")
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         payload = {
             "msg_type": "interactive",
             "card": {
                 "header": {
                     "title": {
                         "tag": "plain_text",
-                        "content": f"[{event.stage_preset.upper()}-{event.risk_level}] {event.event_code}",
+                        "content": f"{icon} [{event.stage_preset.upper()}-{event.risk_level}] {event.event_code}",
                     },
                     "template": color,
                 },
@@ -61,19 +70,34 @@ class FeishuNotifier:
                         "text": {
                             "tag": "lark_md",
                             "content": (
-                                f"**task_id**: {event.task_id}\n"
-                                f"**stage_preset**: {event.stage_preset}\n"
-                                f"**risk_level**: {event.risk_level}\n"
-                                f"**account_id**: {event.account_id}\n"
-                                f"**strategy_id**: {event.strategy_id}\n"
-                                f"**symbol**: {event.symbol}\n"
-                                f"**signal_id**: {event.signal_id}\n"
-                                f"**trace_id**: {event.trace_id}\n"
-                                f"**event_code**: {event.event_code}\n"
-                                f"**reason**: {event.reason}"
+                                f"**账户:** {event.account_id or '-'}\n"
+                                f"**事件代码:** {event.event_code}\n"
+                                f"**原因:** {event.reason}"
                             ),
                         },
-                    }
+                    },
+                    {"tag": "hr"},
+                    {
+                        "tag": "div",
+                        "text": {
+                            "tag": "lark_md",
+                            "content": (
+                                f"**任务:** {event.task_id} | **环境:** {event.stage_preset} | **级别:** {event.risk_level}\n"
+                                f"**策略:** {event.strategy_id or '-'} | **品种:** {event.symbol or '-'}\n"
+                                f"**信号:** {event.signal_id or '-'} | **追踪:** {event.trace_id or '-'}"
+                            ),
+                        },
+                    },
+                    {"tag": "hr"},
+                    {
+                        "tag": "note",
+                        "elements": [
+                            {
+                                "tag": "plain_text",
+                                "content": f"JBT SimTrading | {ts}",
+                            }
+                        ],
+                    },
                 ],
             },
         }

@@ -54,23 +54,59 @@ class EmailNotifier:
             logger.error("EmailNotifier missing env vars: %s", missing)
             return False
 
-        subject = f"[SimTrading-{event.risk_level}] {event.event_code}: {event.symbol}"
+        level_icon = {"P0": "🚨", "P1": "⚠️", "P2": "🔔"}.get(event.risk_level, "📋")
+        header_color = {"P0": "#c0392b", "P1": "#e67e22", "P2": "#27ae60"}.get(event.risk_level, "#2980b9")
+        from datetime import datetime
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        subject = f"[JBT-SimTrading-{event.risk_level}] {event.event_code}"
         html_body = f"""
-<html><body>
-<h2>[{event.stage_preset.upper()}] {event.risk_level} — {event.event_code}</h2>
-<table border="1" cellpadding="4" cellspacing="0">
-  <tr><th>Field</th><th>Value</th></tr>
-  <tr><td>task_id</td><td>{event.task_id}</td></tr>
-  <tr><td>stage_preset</td><td>{event.stage_preset}</td></tr>
-  <tr><td>risk_level</td><td>{event.risk_level}</td></tr>
-  <tr><td>account_id</td><td>{event.account_id}</td></tr>
-  <tr><td>strategy_id</td><td>{event.strategy_id}</td></tr>
-  <tr><td>symbol</td><td>{event.symbol}</td></tr>
-  <tr><td>signal_id</td><td>{event.signal_id}</td></tr>
-  <tr><td>trace_id</td><td>{event.trace_id}</td></tr>
-  <tr><td>event_code</td><td>{event.event_code}</td></tr>
-  <tr><td>reason</td><td>{event.reason}</td></tr>
-</table>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body {{ font-family: -apple-system, Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }}
+  .card {{ background: #fff; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); max-width: 560px; margin: 0 auto; overflow: hidden; }}
+  .header {{ background: {header_color}; color: #fff; padding: 16px 20px; }}
+  .header h2 {{ margin: 0; font-size: 16px; font-weight: 600; }}
+  .header .sub {{ margin: 4px 0 0; font-size: 12px; opacity: .85; }}
+  .body {{ padding: 16px 20px; }}
+  .section-title {{ font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: .5px; margin: 0 0 8px; }}
+  table {{ width: 100%; border-collapse: collapse; }}
+  td {{ padding: 7px 10px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }}
+  td:first-child {{ color: #666; width: 110px; font-weight: 500; }}
+  td:last-child {{ color: #222; word-break: break-all; }}
+  .reason-row td:last-child {{ color: {header_color}; font-weight: 600; }}
+  .hr {{ border: none; border-top: 1px solid #eee; margin: 14px 0; }}
+  .footer {{ font-size: 11px; color: #aaa; padding: 10px 20px 14px; border-top: 1px solid #f0f0f0; }}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <h2>{level_icon} [{event.stage_preset.upper()}-{event.risk_level}] {event.event_code}</h2>
+    <div class="sub">JBT SimTrading 风险通知</div>
+  </div>
+  <div class="body">
+    <p class="section-title">核心信息</p>
+    <table>
+      <tr class="reason-row"><td>原因</td><td>{event.reason}</td></tr>
+      <tr><td>账户</td><td>{event.account_id or '-'}</td></tr>
+      <tr><td>事件代码</td><td>{event.event_code}</td></tr>
+      <tr><td>品种</td><td>{event.symbol or '-'}</td></tr>
+    </table>
+    <hr class="hr">
+    <p class="section-title">追踪信息</p>
+    <table>
+      <tr><td>任务</td><td>{event.task_id}</td></tr>
+      <tr><td>环境</td><td>{event.stage_preset}</td></tr>
+      <tr><td>风险等级</td><td>{event.risk_level}</td></tr>
+      <tr><td>策略</td><td>{event.strategy_id or '-'}</td></tr>
+      <tr><td>信号 ID</td><td>{event.signal_id or '-'}</td></tr>
+      <tr><td>追踪 ID</td><td>{event.trace_id or '-'}</td></tr>
+    </table>
+  </div>
+  <div class="footer">JBT SimTrading &nbsp;|&nbsp; {ts}</div>
+</div>
 </body></html>
 """
         msg = MIMEMultipart("alternative")
