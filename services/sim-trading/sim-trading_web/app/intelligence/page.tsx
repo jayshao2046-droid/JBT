@@ -46,6 +46,9 @@ export default function RiskControlPage() {
   // 告警历史（localStorage）
   const [alertHistory, setAlertHistory] = useState<Array<{id:number;message:string;time:string}>>([])
   const [showHistory, setShowHistory] = useState(false)
+  // L2 风控动态数据
+  const [consecutiveLosses, setConsecutiveLosses] = useState<number | null>(null)
+  const [marginLevel, setMarginLevel] = useState<number | null>(null)
   const [simConfig, setSimConfig] = useState({
     dailyLossLimit: 2.0,
     continuousLossLimit: 5,
@@ -386,8 +389,13 @@ export default function RiskControlPage() {
               <CardTitle className="text-xs font-medium text-neutral-300">连续亏损计数</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="text-3xl font-bold text-white">2 / 5</div>
-              <Progress value={40} className="h-2 bg-neutral-800" />
+              <div className="text-3xl font-bold text-white">
+                {consecutiveLosses !== null ? consecutiveLosses : "--"} / {simConfig.continuousLossLimit}
+              </div>
+              <Progress
+                value={consecutiveLosses !== null ? (consecutiveLosses / simConfig.continuousLossLimit) * 100 : 0}
+                className="h-2 bg-neutral-800"
+              />
               <p className="text-xs text-neutral-400">触达上限将触发 L2 熔断</p>
             </CardContent>
           </Card>
@@ -400,9 +408,15 @@ export default function RiskControlPage() {
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-neutral-400">当前</span>
-                  <span className="font-bold text-yellow-400">60%</span>
+                  <span className={`font-bold ${
+                    marginLevel === null ? "text-neutral-500" :
+                    marginLevel >= simConfig.marginAlert ? "text-red-400" :
+                    marginLevel >= simConfig.marginWarning ? "text-yellow-400" : "text-green-400"
+                  }`}>
+                    {marginLevel !== null ? `${marginLevel}%` : "--"}
+                  </span>
                 </div>
-                <Progress value={60} className="h-3 bg-gradient-to-r from-green-900 via-yellow-900 to-red-900" />
+                <Progress value={marginLevel ?? 0} className="h-3 bg-gradient-to-r from-green-900 via-yellow-900 to-red-900" />
               </div>
               <div className="grid grid-cols-3 gap-1 text-xs">
                 <div className="text-green-400">60%</div>

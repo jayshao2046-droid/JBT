@@ -12,17 +12,18 @@ _gateway = None   # type: Any   # SimNowGateway | None
 def _get_gateway():
     return _gateway
 
-# ---------- 内存状态（骨架阶段，重启重置）----------
+# ---------- 内存状态（从环境变量初始化，重启后 CTP 凭证自动恢复）----------
 _system_state: Dict[str, Any] = {
     "trading_enabled": True,
     "active_preset": "sim_50w",
     "paused_reason": None,
     "ctp_md_connected": False,
     "ctp_td_connected": False,
-    "ctp_broker_id": "",
-    "ctp_user_id": "",
-    "ctp_md_front": "tcp://180.168.146.187:10131",
-    "ctp_td_front": "tcp://180.168.146.187:10130",
+    "ctp_broker_id": os.getenv("SIMNOW_BROKER_ID", "9999"),
+    "ctp_user_id": os.getenv("SIMNOW_USER_ID", ""),
+    "ctp_password": os.getenv("SIMNOW_PASSWORD", ""),
+    "ctp_md_front": os.getenv("SIMNOW_MD_FRONT", "tcp://180.168.146.187:10131"),
+    "ctp_td_front": os.getenv("SIMNOW_TRADE_FRONT", "tcp://180.168.146.187:10130"),
 }
 
 _risk_presets: Dict[str, Any] = {
@@ -167,12 +168,19 @@ def set_preset(body: dict):
 # ---------- CTP 配置 ----------
 @router.get("/ctp/config")
 def get_ctp_config():
-    return {k: v for k, v in _system_state.items() if k.startswith("ctp_")}
+    return {
+        "broker_id": _system_state.get("ctp_broker_id", ""),
+        "user_id": _system_state.get("ctp_user_id", ""),
+        "password": "***" if _system_state.get("ctp_password") else "",
+        "md_front": _system_state.get("ctp_md_front", ""),
+        "td_front": _system_state.get("ctp_td_front", ""),
+    }
 
 @router.post("/ctp/config")
 def save_ctp_config(req: CtpConfigRequest):
     _system_state["ctp_broker_id"] = req.broker_id
     _system_state["ctp_user_id"] = req.user_id
+    _system_state["ctp_password"] = req.password
     _system_state["ctp_md_front"] = req.md_front
     _system_state["ctp_td_front"] = req.td_front
     return {"result": "ctp config saved"}
@@ -188,7 +196,7 @@ def ctp_connect():
 
     broker_id = _system_state.get("ctp_broker_id") or os.getenv("SIMNOW_BROKER_ID", "9999")
     user_id   = _system_state.get("ctp_user_id")   or os.getenv("SIMNOW_USER_ID", "")
-    password  = os.getenv("SIMNOW_PASSWORD", "")
+    password  = _system_state.get("ctp_password")   or os.getenv("SIMNOW_PASSWORD", "")
     md_front  = _system_state.get("ctp_md_front")  or os.getenv("SIMNOW_MD_FRONT", "tcp://180.168.146.187:10131")
     td_front  = _system_state.get("ctp_td_front")  or os.getenv("SIMNOW_TRADE_FRONT", "tcp://180.168.146.187:10130")
 

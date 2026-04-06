@@ -33,6 +33,21 @@ def health_check():
     return {"status": "ok", "service": "sim-trading"}
 
 
+@app.on_event("startup")
+async def auto_connect_ctp():
+    """启动时若环境变量中有 SimNow 凭证，自动尝试 CTP 连接（失败静默，不影响服务启动）。"""
+    user_id = os.getenv("SIMNOW_USER_ID", "")
+    if not user_id:
+        logger.info("SIMNOW_USER_ID not set, skipping auto-connect")
+        return
+    try:
+        from src.api.router import ctp_connect
+        result = ctp_connect()
+        logger.info("Auto CTP connect result: %s", result)
+    except Exception as exc:
+        logger.warning("Auto CTP connect failed (non-fatal): %s", exc)
+
+
 if __name__ == "__main__":
     port = int(os.getenv("SERVICE_PORT", "8101"))
     logger.info("Starting sim-trading on port %d", port)
