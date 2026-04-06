@@ -44,6 +44,11 @@ def _make_md_spi_class():
         def OnFrontDisconnected(self, nReason):
             logger.warning("[mdapi] disconnected reason=%d", nReason)
             self._on_status("md_disconnected")
+            try:
+                from src.risk.guards import emit_alert
+                emit_alert("P1", f"行情接口主动断开 reason={nReason}", {"event_code": "CTP_MD_DISCONNECTED", "stage_preset": "sim"})
+            except Exception:
+                pass
 
         def OnRspUserLogin(self, pRspUserLogin, pRspInfo, nRequestID, bIsLast):
             if pRspInfo and pRspInfo.ErrorID != 0:
@@ -68,6 +73,14 @@ def _make_md_spi_class():
                 "ask":           d.AskPrice1,
                 "bid_vol":       d.BidVolume1,
                 "ask_vol":       d.AskVolume1,
+                "bid2":          d.BidPrice2,  "ask2":  d.AskPrice2,
+                "bid_vol2":      d.BidVolume2, "ask_vol2": d.AskVolume2,
+                "bid3":          d.BidPrice3,  "ask3":  d.AskPrice3,
+                "bid_vol3":      d.BidVolume3, "ask_vol3": d.AskVolume3,
+                "bid4":          d.BidPrice4,  "ask4":  d.AskPrice4,
+                "bid_vol4":      d.BidVolume4, "ask_vol4": d.AskVolume4,
+                "bid5":          d.BidPrice5,  "ask5":  d.AskPrice5,
+                "bid_vol5":      d.BidVolume5, "ask_vol5": d.AskVolume5,
                 "volume":        d.Volume,
                 "turnover":      d.Turnover,
                 "open_interest": d.OpenInterest,
@@ -108,11 +121,21 @@ def _make_td_spi_class():
         def OnFrontDisconnected(self, nReason):
             logger.warning("[traderapi] disconnected reason=%d", nReason)
             self._on_status("td_disconnected")
+            try:
+                from src.risk.guards import emit_alert
+                emit_alert("P1", f"交易接口主动断开 reason={nReason}", {"event_code": "CTP_TD_DISCONNECTED", "stage_preset": "sim"})
+            except Exception:
+                pass
 
         def OnRspAuthenticate(self, p, pRspInfo, nRequestID, bIsLast):
             if pRspInfo and pRspInfo.ErrorID != 0:
                 logger.error("[traderapi] auth failed: %s", pRspInfo.ErrorMsg)
                 self._on_status("td_auth_failed")
+                try:
+                    from src.risk.guards import emit_alert
+                    emit_alert("P1", f"交易认证失败 {pRspInfo.ErrorMsg}", {"event_code": "CTP_TD_AUTH_FAILED", "stage_preset": "sim"})
+                except Exception:
+                    pass
                 return
             req = _tdmod.CThostFtdcReqUserLoginField()
             req.BrokerID = self._api._broker_id
@@ -124,6 +147,11 @@ def _make_td_spi_class():
             if pRspInfo and pRspInfo.ErrorID != 0:
                 logger.error("[traderapi] login failed: %s", pRspInfo.ErrorMsg)
                 self._on_status("td_login_failed")
+                try:
+                    from src.risk.guards import emit_alert
+                    emit_alert("P1", f"交易登录失败 {pRspInfo.ErrorMsg}", {"event_code": "CTP_TD_LOGIN_FAILED", "stage_preset": "sim"})
+                except Exception:
+                    pass
             else:
                 logger.info("[traderapi] login ok")
                 self._on_status("td_logged_in")

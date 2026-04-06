@@ -89,6 +89,13 @@ class FeishuNotifier:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 resp_body = resp.read().decode("utf-8")
                 logger.debug("Feishu response: %s", resp_body)
+            try:
+                resp_json = json.loads(resp_body)
+                if resp_json.get("code", 0) != 0:
+                    logger.error("FeishuNotifier API error code=%s msg=%s", resp_json.get("code"), resp_json.get("msg"))
+                    return False
+            except (json.JSONDecodeError, AttributeError):
+                pass
             return True
         except urllib.error.URLError as exc:
             logger.error("FeishuNotifier URLError for event %s: %s", event.event_code, exc)

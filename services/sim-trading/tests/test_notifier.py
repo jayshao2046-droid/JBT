@@ -54,6 +54,49 @@ def test_feishu_send_disabled_returns_true(monkeypatch):
     assert notifier.send(_make_event()) is True
 
 
+def test_feishu_send_api_error_code_returns_false(monkeypatch):
+    """飞书 API 返回 code!=0（如 19024）时 send() 应返回 False。"""
+    import io
+    import json
+    import urllib.request
+
+    monkeypatch.setenv("NOTIFY_FEISHU_ENABLED", "true")
+    monkeypatch.setenv("FEISHU_WEBHOOK_URL", "https://fake.example/hook")
+
+    class _FakeResp:
+        def read(self):
+            return json.dumps({"code": 19024, "msg": "Key Words Not Found"}).encode()
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            pass
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout: _FakeResp())
+    notifier = FeishuNotifier()
+    assert notifier.send(_make_event()) is False
+
+
+def test_feishu_send_api_success_code_returns_true(monkeypatch):
+    """飞书 API 返回 code=0 时 send() 应返回 True。"""
+    import json
+    import urllib.request
+
+    monkeypatch.setenv("NOTIFY_FEISHU_ENABLED", "true")
+    monkeypatch.setenv("FEISHU_WEBHOOK_URL", "https://fake.example/hook")
+
+    class _FakeResp:
+        def read(self):
+            return json.dumps({"code": 0, "msg": "success"}).encode()
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            pass
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout: _FakeResp())
+    notifier = FeishuNotifier()
+    assert notifier.send(_make_event()) is True
+
+
 # ---------------------------------------------------------------------------
 # EmailNotifier
 # ---------------------------------------------------------------------------
