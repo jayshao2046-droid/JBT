@@ -17,6 +17,11 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    from .risk_engine import RiskEngine, RiskParams
+except ImportError:
+    from risk_engine import RiskEngine, RiskParams  # type: ignore[no-redef]
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DataProvider 抽象（预留接口，用于批次 B 对接）
@@ -117,6 +122,11 @@ class LocalBacktestParams:
     timeframe_minutes: int = field(default=60)
     slippage_per_unit: float = field(default=0.0)
     commission_per_lot_round_turn: float = field(default=0.0)
+    strategy_id: str = field(default="unknown")
+    max_drawdown: float = field(default=1.0)
+    """最大回撤风控上限（比例）。>= 1.0 表示禁用。"""
+    daily_loss_limit: float = field(default=1.0)
+    """日亏损风控上限（相对初始资金比例）。>= 1.0 表示禁用。"""
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "LocalBacktestParams":
@@ -143,6 +153,9 @@ class LocalBacktestParams:
             timeframe_minutes=int(d.get("timeframe_minutes", 60)),
             slippage_per_unit=float(d.get("slippage_per_unit", 0.0)),
             commission_per_lot_round_turn=float(d.get("commission_per_lot_round_turn", 0.0)),
+            strategy_id=str(d.get("strategy_id") or "unknown"),
+            max_drawdown=float(d.get("max_drawdown", 1.0)),
+            daily_loss_limit=float(d.get("daily_loss_limit", 1.0)),
         )
 
 
@@ -225,6 +238,19 @@ class LocalBacktestEngine:
             for _ in trades
         )
 
+        # 序列化 equity_curve（符合 formal_report_v1 §6.2.3）
+        peak_eq = params.initial_capital
+        equity_curve_data: List[Dict[str, Any]] = []
+        for bar, eq_val in zip(bars, equity):
+            if eq_val > peak_eq:
+                peak_eq = eq_val
+            dd = (peak_eq - eq_val) / peak_eq if peak_eq > 0.0 else 0.0
+            equity_curve_data.append({
+                "bar_time": bar.timestamp.isoformat(),
+                "equity": round(eq_val, 2),
+                "drawdown": round(dd, 6),
+            })
+
         now_str = datetime.now(tz=timezone.utc).isoformat()
         return LocalBacktestReport(
             schema_version="formal_report_v1",
@@ -233,6 +259,7 @@ class LocalBacktestEngine:
             job={
                 "job_id": params.job_id,
                 "engine_type": "local",
+                "strategy_id": params.strategy_id,
                 "symbol": symbol,
                 "timeframe": f"{params.timeframe_minutes}m",
                 "start_date": params.start_date.isoformat(),
@@ -255,7 +282,7 @@ class LocalBacktestEngine:
             },
             risk_events=risk_events,
             artifacts={
-                "equity_curve": None,
+                "equity_curve": equity_curve_data,
                 "trades": None,
                 "positions": None,
             },
@@ -277,7 +304,6 @@ class LocalBacktestEngine:
         """
         equity_curve: List[float] = []
         trades: List[Dict[str, Any]] = []
-        risk_events: List[Dict[str, Any]] = []
         notes: List[str] = [
             "local_engine=MVP",
             "strategy=sma_crossover(fast=5,slow=20)",
@@ -288,7 +314,16 @@ class LocalBacktestEngine:
 
         if len(bars) < long_w + 1:
             notes.append("insufficient_bars_for_crossover")
-            return [params.initial_capital], trades, risk_events, notes
+            return [params.initial_capital], trades, [], notes
+
+        risk_engine = RiskEngine(
+            job_id=params.job_id,
+            initial_capital=params.initial_capital,
+            params=RiskParams(
+                max_drawdown=params.max_drawdown,
+                daily_loss_limit=params.daily_loss_limit,
+            ),
+        )
 
         capital = params.initial_capital
         position = 0       # +1=多头持仓, 0=空仓
@@ -298,6 +333,7 @@ class LocalBacktestEngine:
         for i, bar in enumerate(bars):
             if i < long_w:
                 equity_curve.append(capital)
+                risk_engine.check(bar.timestamp, capital)
                 continue
 
             # 当前 bar 与前一根 bar 的均线
@@ -309,8 +345,8 @@ class LocalBacktestEngine:
             cross_up = (short_prev <= long_prev) and (short_now > long_now)
             cross_dn = (short_prev >= long_prev) and (short_now < long_now)
 
-            if position == 0 and cross_up:
-                # 开多：收盘价 + 滑点
+            if position == 0 and cross_up and risk_engine.open_allowed:
+                # 开多：收盘价 + 滑点（仅风控未触发时允许开仓）
                 fill_price = bar.close + params.slippage_per_unit
                 entry_price = fill_price
                 position = 1
@@ -336,6 +372,7 @@ class LocalBacktestEngine:
             if mark_equity > peak_equity:
                 peak_equity = mark_equity
             equity_curve.append(mark_equity)
+            risk_engine.check(bar.timestamp, mark_equity)
 
         # 收盘若仍有持仓则按最后一根 bar 强平（MVP 简化）
         if position == 1 and bars:
@@ -353,7 +390,7 @@ class LocalBacktestEngine:
             if equity_curve:
                 equity_curve[-1] = capital
 
-        return equity_curve, trades, risk_events, notes
+        return equity_curve, trades, risk_engine.risk_events, notes
 
     @staticmethod
     def _calc_max_drawdown(equity: List[float]) -> float:
