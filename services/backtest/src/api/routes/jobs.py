@@ -9,8 +9,10 @@ from pydantic import BaseModel, Field
 
 if __package__:
     from ...core.settings import get_settings
+    from ...backtest.engine_router import EngineRouter, EngineTypeError
 else:
     from core.settings import get_settings
+    from backtest.engine_router import EngineRouter, EngineTypeError
 
 router = APIRouter(prefix="/api/v1", tags=["jobs"])
 
@@ -21,6 +23,10 @@ class BacktestJobCreateRequest(BaseModel):
     asset_type: Literal["futures"] = Field(
         default="futures",
         description="第一阶段只支持期货回测，股票适配器仅预留不启用。",
+    )
+    engine_type: Optional[str] = Field(
+        default=None,
+        description="回测引擎类型，允许值：tqsdk（默认）、local。",
     )
     strategy_template_id: str = Field(
         ...,
@@ -42,6 +48,7 @@ class BacktestJobCreateRequest(BaseModel):
 class BacktestJobResponse(BaseModel):
     job_id: UUID
     asset_type: Literal["futures"]
+    engine_type: str
     strategy_template_id: str
     strategy_yaml_filename: str
     symbol: str
@@ -51,7 +58,7 @@ class BacktestJobResponse(BaseModel):
     status: JobStatus
     strategy_mode: Literal["fixed_template_with_uploaded_yaml"]
     risk_config_source: Literal["yaml"]
-    execution_stage: Literal["batch_a_skeleton"]
+    execution_stage: Literal["batch_a_skeleton", "batch_c_local_engine"]
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -78,8 +85,20 @@ def _get_job_or_404(job_id: UUID) -> BacktestJobResponse:
     return job
 
 
+_router_instance = EngineRouter()
+
+
 @router.post("/jobs", response_model=BacktestJobResponse, status_code=status.HTTP_201_CREATED)
 def create_job(payload: BacktestJobCreateRequest) -> BacktestJobResponse:
+    # 引擎类型校验（不支持的值提前返回 422）
+    try:
+        resolved_engine_type = _router_instance.validate_engine_type(payload.engine_type)
+    except EngineTypeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
     settings = get_settings()
 
     if payload.end_date < payload.start_date:
@@ -94,9 +113,13 @@ def create_job(payload: BacktestJobCreateRequest) -> BacktestJobResponse:
         )
 
     now = _current_time()
+    execution_stage = (
+        "batch_c_local_engine" if resolved_engine_type == "local" else "batch_a_skeleton"
+    )
     job = BacktestJobResponse(
         job_id=uuid4(),
         asset_type=payload.asset_type,
+        engine_type=resolved_engine_type,
         strategy_template_id=payload.strategy_template_id,
         strategy_yaml_filename=payload.strategy_yaml_filename,
         symbol=payload.symbol,
@@ -106,7 +129,7 @@ def create_job(payload: BacktestJobCreateRequest) -> BacktestJobResponse:
         status="pending",
         strategy_mode="fixed_template_with_uploaded_yaml",
         risk_config_source="yaml",
-        execution_stage="batch_a_skeleton",
+        execution_stage=execution_stage,
         notes=payload.notes
         or "Batch A only registers the job; runtime execution will be wired in batch B.",
         created_at=now,
