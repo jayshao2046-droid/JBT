@@ -1,6 +1,7 @@
 services:
   sim-trading:
     build: ./services/sim-trading
+    platform: linux/amd64
     container_name: JBT-SIM-TRADING-8101
     ports:
       - "8101:8101"

@@ -14,9 +14,11 @@ FROM python:3.11-slim AS runner
 
 WORKDIR /app
 
-# C.UTF-8 内置于 glibc，无需安装 locales 包；CTP SDK locale 依赖由此满足
-ENV LANG=C.UTF-8
-ENV LC_ALL=C.UTF-8
+# CTP SDK .so 加载时需要 en_US.UTF-8 locale；locales-all 预编译全量 locale 数据，避免 glibc locale-archive 兼容问题
+RUN apt-get update && apt-get install -y --no-install-recommends locales-all \
+    && rm -rf /var/lib/apt/lists/*
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
