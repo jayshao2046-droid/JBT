@@ -4,13 +4,19 @@ FROM python:3.11-slim AS builder
 WORKDIR /app
 
 COPY requirements.txt .
+# openctp-ctp 仅有 amd64 wheel；arm64 环境跳过，运行时走 stub 模式
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+    && grep -v '^openctp-ctp' requirements.txt | pip install --no-cache-dir -r /dev/stdin \
+    && pip install --no-cache-dir openctp-ctp 2>/dev/null || echo "openctp-ctp not available on this platform, using stub mode"
 
 # ─── Stage 2: 运行镜像 ───────────────────────────────────────────────────────
 FROM python:3.11-slim AS runner
 
 WORKDIR /app
+
+# C.UTF-8 内置于 glibc，无需安装 locales 包；CTP SDK locale 依赖由此满足
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
