@@ -132,8 +132,29 @@
 
 ## 九、预审结论
 
+Jay.S 明确：当前所有看板不在 `services/dashboard/` 服务端开发，先在本地建立临时看板进行验证。
+
+### 变更结论
+
+1. **本轮不启用 `services/dashboard/**` 路径，不申请 P1 Token。**
+2. 临时看板直接基于 `services/sim-trading/参考文件/V0-模拟交易端 0406/` 在本地 `/tmp/jbt-sim-dashboard/` 独立运行。
+3. 临时看板已于 2026-04-06 成功启动，访问地址：`http://localhost:3000`。
+4. 不得将 `/tmp/jbt-sim-dashboard/` 的 node_modules、build 产物或运行态 log 写入 JBT Git 仓库。
+5. 未来若需将临时看板迁移为正式 `services/dashboard/**` 实现，必须重新补充预审与 P1 Token。
+
+### 当前临时看板状态
+
+- 部署路径：`/tmp/jbt-sim-dashboard/`（本地临时，不入 Git）
+- 启动命令：`cd /tmp/jbt-sim-dashboard && pnpm dev`
+- 访问地址：`http://localhost:3000`
+- 页面结构：侧边栏切换"风控监控 / 交易终端"，参考原型 Next.js 15 + React 19
+- 后续对接：API 目标为 `services/sim-trading` 健康/状态端点（`localhost:8101`）
+
+---
+
+## 九、预审结论
+
 1. **`TASK-0015` 正式成立。**
-2. **D 临时看板对接必须作为独立看板任务推进，且明确不等于 backtest 看板主线。**
-3. **Jay.S 已提供前端参考材料，`TASK-0015` 的“前端材料缺失”阻塞已解除。**
-4. **当前参考材料仅作为 `services/dashboard/**` 的后续正式实现输入，不等于正式实现目录，也不自动获得白名单或 Token。**
-5. **在补充 `services/dashboard/**` 文件级白名单并准备对应 Token 前，本任务仍不进入代码执行。**
+2. **D 临时看板对接不通过 `services/dashboard/**` 正式路径推进，而是在本地 `/tmp/jbt-sim-dashboard/` 临时运行验证。**
+3. **Jay.S 已提供前端参考材料，临时看板已成功启动，访问地址 `http://localhost:3000`。**
+4. **临时看板不入 Git，不申请代码 Token；未来若迁移到正式 `services/dashboard/**`，必须重新预审与解锁。**
