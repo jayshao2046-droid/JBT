@@ -10,6 +10,7 @@ import {
   X,
   AlertTriangle,
   Clock,
+  TrendingUp,
 } from "lucide-react"
 import {
   LineChart,
