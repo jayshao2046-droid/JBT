@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0007
 - 审核角色：项目架构师
-- 审核阶段：8004 正式后端并回预审
-- 审核时间：2026-04-04
-- 审核结论：通过（`TASK-0006` 已被历史任务占用，当前事项顺延为 `TASK-0007`；本轮必须先走 `shared/contracts/backtest/api.md` 的 P0 契约补登，再进入 backtest 正式后端并回与前端 `8004` 口径收口；当前最小实施拆为 3 个代码批次；`docker-compose.dev.yml`、`services/backtest/Dockerfile`、`src/backtest/**` 与 `TASK-0004` 两个 page 文件继续锁定）
+- 审核阶段：8004 正式后端并回预审；2026-04-06 补充批次 D 终审
+- 审核时间：2026-04-04（预审）；2026-04-06（补充批次 D 终审）
+- 审核结论：通过（`TASK-0006` 已被历史任务占用，当前事项顺延为 `TASK-0007`；本轮必须先走 `shared/contracts/backtest/api.md` 的 P0 契约补登，再进入 backtest 正式后端并回与前端 `8004` 口径收口；2026-04-06 补充批次 D 已完成单文件实施、只读核验、终审与锁回；本轮业务白名单未越界，远端 air 重建验证后 `/api/system/status` 不再返回 500；`docker-compose.dev.yml`、`services/backtest/Dockerfile`、`src/backtest/**` 与 `TASK-0004` 两个 page 文件继续锁定）
 
 ---
 
@@ -59,6 +59,10 @@
 1. `services/backtest/backtest_web/src/utils/api.ts`
 2. `services/backtest/backtest_web/next.config.mjs`
 
+### 补充批次 D：P1 白名单
+
+1. `services/backtest/backtest_web/Dockerfile`
+
 ### 当前不建议纳入的文件
 
 1. `shared/contracts/backtest/backtest_job.md`
@@ -72,7 +76,6 @@
 9. `services/backtest/backtest_web/app/page.tsx`
 10. `services/backtest/backtest_web/app/agent-network/page.tsx`
 11. `services/backtest/backtest_web/app/operations/page.tsx`
-12. `services/backtest/backtest_web/Dockerfile`
 
 ## 五、必须先契约后实现的判断依据
 
@@ -90,9 +93,40 @@
 | 批次 B 实施时发现需要改 `runner.py` / `result_builder.py` | P1 | 当前 Token 立即失效，返回架构师补充预审 |
 | 继续沿用 `localhost:8004` 前端默认口径，导致仍误连仓外容器 | P1 | 单独拆出批次 C，仅修 `src/utils/api.ts` 与 `next.config.mjs` |
 
-## 七、预审结论
+## 七、2026-04-06 补充预审：backtest-web 构建期代理目标热修
+
+1. `services/backtest/backtest_web/next.config.mjs` 会在构建期读取 `BACKEND_BASE_URL` 生成 `/api/*` rewrite destination。✅
+2. `services/backtest/backtest_web/Dockerfile` 当前默认 `ARG/ENV BACKEND_BASE_URL` 仍为 `http://backtest-api:8103`。✅
+3. 根级 `docker-compose.dev.yml` 的 backtest API 服务名为 `backtest`；若远端构建未显式覆盖该默认值，镜像会把 `/api/*` rewrite 到不存在的主机名，从而在远端表现为代理 500。✅
+4. 该问题应继续归属 `TASK-0007`，不新开 `TASK-0017`：因为它属于 backtest 单服务内 `8004/8103` 口径收口下的构建期代理目标热修，不是 SimNow Docker / Mini 部署治理事项。✅
+5. 补充批次 D 白名单必须冻结为单文件 `services/backtest/backtest_web/Dockerfile`，执行主体建议为回测 Agent。✅
+6. 变更语义必须冻结为：仅把 Dockerfile 中构建期 / 运行期 `BACKEND_BASE_URL` 默认值与 compose 服务名 `backtest:8103` 对齐；不得顺手修改 `docker-compose.dev.yml`、`next.config.mjs`、`src/utils/api.ts`、任何 page、任何后端文件。✅
+7. 若执行中证明需要第 2 个业务文件，当前补充范围立即失效，必须重新补充预审。✅
+8. 本补充批次验收冻结为：Docker build 默认目标不再是 `backtest-api:8103`，且远端重建 backtest-web 后，`/api/system/status` 或等价代理请求不再因主机名错误而返回 500。✅
+
+## 八、2026-04-06 当前会话即时执行确认补录
+
+1. Jay.S 已在当前会话以“远端 api 报错 500”明确确认：补充批次 D 立即进入执行态。✅
+2. 本次即时执行确认仅绑定回测 Agent，且白名单仍严格限于 `services/backtest/backtest_web/Dockerfile` 单文件。✅
+3. 本次补录按要求不记录 token_id，也不把当前会话即时执行确认表述为终审或锁回完成。✅
+4. 若补充批次 D 执行中证明需要第 2 个业务文件，当前授权立即失效，必须重新补充预审。✅
+5. 本次即时执行确认只解决“是否可立即实施”问题，不替代后续自校验、项目架构师终审与锁回。✅
+
+## 九、2026-04-06 补充批次 D 终审
+
+1. 只读核验确认：本轮业务写入仍严格限于 `services/backtest/backtest_web/Dockerfile` 单文件；`docs/prompts/agents/回测提示词.md` 的更新属于 P-LOG 流程同步，不构成业务白名单越界。✅
+2. 当前 Dockerfile 实际收口仍仅为两处默认值：构建期 `ARG BACKEND_BASE_URL` 与运行期 `ENV BACKEND_BASE_URL` 已统一从 `http://backtest-api:8103` 收口到 `http://backtest:8103`；未发现第 2 个业务文件被 reopen。✅
+3. 最小自校验已补核：`services/backtest/backtest_web/Dockerfile` 与 `docs/prompts/agents/回测提示词.md` 的诊断结果均为 `No errors found`。✅
+4. 远端验证已补核：air 端完成 backtest-web 单服务重建后，`http://127.0.0.1:3001/agent-network` 返回 200，`http://127.0.0.1:3001/api/system/status` 返回 200，且 API body 正常返回 JSON；此前由错误主机名引起的代理 500 已消失。✅
+5. 终审结论：补充批次 D 通过；当前可判定白名单未越界，且本轮问题已在单文件范围内闭环。✅
+6. 锁回结论：`services/backtest/backtest_web/Dockerfile` 当前已按补充批次 D 终审结论重新锁回；后续如需再次修改该文件，仍须重新补充预审，不得沿用本轮授权。✅
+
+## 十、当前结论
 
 1. **TASK-0007 预审通过。**
 2. **本轮必须按“批次 A 契约先行 → 批次 B 正式后端并回 → 批次 C 前端 8004 口径收口”的顺序推进。**
-3. **当前可进入 Jay.S 分批签发 Token 的准备态。**
-4. **运行态 `JBT-BACKTEST-8004` 清理不属于代码 Token 范围，需在代码批次终审锁回后单独确认。**
+3. **批次 B 与批次 C 当前仍处于 Jay.S 分批签发 Token 的准备态。**
+4. **2026-04-06 补充批次 D 已完成终审与锁回；业务白名单未越界，实际业务写入仍严格限于 `services/backtest/backtest_web/Dockerfile`。**
+5. **远端 air 重建验证已确认代理 500 消失；`/agent-network` 与 `/api/system/status` 当前均返回 200，且 API body 正常返回 JSON。**
+6. **后续如需再次修改 `services/backtest/backtest_web/Dockerfile`，必须重新补充预审，不得沿用本轮即时执行确认。**
+7. **运行态 `JBT-BACKTEST-8004` 清理不属于代码 Token 范围，需在代码批次终审锁回后单独确认。**

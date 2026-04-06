@@ -66,6 +66,10 @@
 7. 仓内实际存在的 compose 文件只有根级 `docker-compose.dev.yml`；仓内不存在 `services/backtest/docker-compose.yml`。
 8. 根级 `docker-compose.dev.yml` 虽已声明 `backtest` 服务与 `JBT-BACKTEST-8103` 容器名，但当前 `services/backtest/` 目录内不存在服务根 Dockerfile；因此“全 Docker 本地链修复”不应在本任务第一轮最小白名单中顺手展开。
 9. 当前有效 `TASK-0004` Token 只覆盖 `services/backtest/backtest_web/app/agent-network/page.tsx` 与 `services/backtest/backtest_web/app/operations/page.tsx`，对本任务后端/API/其他前端文件全部无效。
+10. `services/backtest/backtest_web/next.config.mjs` 在构建期读取 `BACKEND_BASE_URL` 生成 `/api/*` rewrite destination，因此镜像构建时的默认值会直接影响远端代理目标。
+11. `services/backtest/backtest_web/Dockerfile` 当前默认 `ARG BACKEND_BASE_URL` 与对应 `ENV BACKEND_BASE_URL` 仍为 `http://backtest-api:8103`。
+12. 根级 `docker-compose.dev.yml` 中 backtest API 服务名为 `backtest`，不是 `backtest-api`；若远端构建未显式覆盖 `BACKEND_BASE_URL`，则构建产物会把 `/api/*` rewrite 到不存在的主机名。
+13. 因此 2026-04-06 的最小补充修复应收敛为 `services/backtest/backtest_web/Dockerfile` 单文件，把构建期 / 运行期默认目标与 compose 服务名 `backtest:8103` 对齐；不得借机扩大到 compose、page、后端或其他前端文件。
 
 ---
 
@@ -73,13 +77,14 @@
 
 ### 是否必须拆批
 
-- **必须拆批，且至少拆为 3 个代码批次 + 1 个运行态后置动作。**
+- **必须拆批，当前冻结为 4 个代码批次 + 1 个运行态后置动作。**
 
 ### 拆批理由
 
 1. `shared/contracts/backtest/api.md` 属于 P0 保护区，必须先契约后实现，不能与服务代码混做。
 2. 当前最小后端并回范围已达到 5 文件边界，不能再混入前端代理口径修复。
 3. 仓内 `8004` 残留既包含正式 API 漂移，也包含前端默认代理与错误文案残留，必须分层收口。
+4. 远端 `/api/*` 代理 500 的根因已收敛到 backtest-web 镜像构建期默认目标主机名，与本地 dev / 页面代理口径不是同一文件族，必须额外拆出单文件补充批次，避免 reopen 既有批次 C。
 
 ### 批次 A：正式契约先行（P0）
 
@@ -126,8 +131,23 @@
 
 1. 本批不 reopen 当前 `TASK-0004` 两个 page 文件，也不纳入 `app/page.tsx`。
 2. 本批策略是“后端兼容现有页面”，而不是以 page 改造收口本任务。
-3. `services/backtest/backtest_web/Dockerfile` 当前已是 `backtest-api:8103` 口径，不纳入本批。
+3. `services/backtest/backtest_web/Dockerfile` 当前仍是 `backtest-api:8103` 口径，但不并入本批；该单文件仅在补充批次 D 中单独处理。
 4. 本批验收口径定义为“本地 dev / proxy 链收口”，不扩展成 root compose / Docker 全链修复。
+
+### 补充批次 D：backtest-web 构建期代理目标热修（P1）
+
+目标：仅修正 `services/backtest/backtest_web/Dockerfile` 中构建期 / 运行期 `BACKEND_BASE_URL` 默认值，使远端构建产物默认把 `/api/*` rewrite 到 `http://backtest:8103`，不再指向不存在的 `http://backtest-api:8103`。
+
+冻结白名单：
+
+1. `services/backtest/backtest_web/Dockerfile`
+
+说明：
+
+1. 本批只允许调整 `ARG BACKEND_BASE_URL` 与对应 `ENV BACKEND_BASE_URL` 默认值。
+2. 不得修改 `docker-compose.dev.yml`、`services/backtest/backtest_web/next.config.mjs`、`services/backtest/backtest_web/src/utils/api.ts`、任何 `app/**` page、任何后端文件或其他 Docker 文件。
+3. 若执行中证明必须新增第 2 个业务文件，当前补充范围立即失效，必须回到项目架构师重新补充预审。
+4. 本批验收以“Docker build 默认目标不再是 `backtest-api:8103` 而是 `backtest:8103`，且远端重建 backtest-web 后，`/api/system/status` 或等价代理请求不再因主机名错误而返回 500”为准。
 
 ### 运行态后置动作：8004 容器清理（非 Git 批次）
 
@@ -160,6 +180,10 @@
 1. `services/backtest/backtest_web/src/utils/api.ts`
 2. `services/backtest/backtest_web/next.config.mjs`
 
+### 补充批次 D：P1 白名单
+
+1. `services/backtest/backtest_web/Dockerfile`
+
 ### 当前明确继续锁定的相关文件
 
 1. `shared/contracts/backtest/backtest_job.md`
@@ -173,8 +197,7 @@
 9. `services/backtest/backtest_web/app/page.tsx`
 10. `services/backtest/backtest_web/app/agent-network/page.tsx`
 11. `services/backtest/backtest_web/app/operations/page.tsx`
-12. `services/backtest/backtest_web/Dockerfile`
-13. 其他全部非白名单文件
+12. 其他全部非白名单文件
 
 ---
 
@@ -184,7 +207,8 @@
 2. `services/backtest/src/api/**`、`services/backtest/tests/**`、`services/backtest/backtest_web/src/**` 属于本任务的 **P1** 实施区。
 3. `docker-compose.dev.yml` 属于 **P0** 保护区，但 **当前不纳入 TASK-0007 第一轮白名单**。
 4. `services/backtest/Dockerfile` 不属于当前冻结白名单；若 Jay.S 后续要求把 Docker 本地链一并修复，必须另开补充预审。
-5. **本任务涉及 `shared/contracts`，但当前最小触点仅 `shared/contracts/backtest/api.md` 单文件。**
+5. `services/backtest/backtest_web/Dockerfile` 在补充批次 D 中按 **P1** 处理，但语义严格冻结为“仅修正默认 `BACKEND_BASE_URL` 到 `http://backtest:8103`”；若需改动第 2 个业务文件，必须重做补充预审。
+6. **本任务涉及 `shared/contracts`，但当前最小触点仅 `shared/contracts/backtest/api.md` 单文件。**
 
 ---
 
@@ -195,6 +219,7 @@
 1. 批次 A：项目架构师
 2. 批次 B：回测 Agent
 3. 批次 C：回测 Agent
+4. 补充批次 D：回测 Agent
 
 ### Atlas 下一步应向 Jay.S 请求的精确 Token 申请口径
 
@@ -210,6 +235,10 @@
 
 请为回测 Agent 签发 `TASK-0007` 批次 C 的单 Agent、单任务、2 文件 P1 Token，允许修改文件仅 `services/backtest/backtest_web/src/utils/api.ts` 与 `services/backtest/backtest_web/next.config.mjs`，动作类型 `edit`，目的为把仓内默认后端代理与错误提示从 `localhost:8004` 收口到 JBT 正式后端口径；有效期 30 分钟；白名单外文件继续锁定。
 
+#### 补充批次 D（P1）
+
+请为回测 Agent 签发 `TASK-0007` 补充批次 D 的单 Agent、单任务、单文件 P1 Token，允许修改文件仅 `services/backtest/backtest_web/Dockerfile`，动作类型 `edit`，目的为把 backtest-web 镜像构建期 / 运行期 `BACKEND_BASE_URL` 默认值从 `http://backtest-api:8103` 收口到 `http://backtest:8103`，修复远端 `/api/*` rewrite 指向不存在主机名导致的代理 500；有效期 30 分钟；不得顺手修改 `docker-compose.dev.yml`、`next.config.mjs`、`src/utils/api.ts`、任何 page、任何后端文件；如需第 2 个业务文件，当前 Token 立即失效并返回补充预审。
+
 ### 运行态后置动作说明
 
 1. `JBT-BACKTEST-8004` 清理不进入代码 Token 申请，不得混入上述三批任何一枚 Token。
@@ -223,4 +252,6 @@
 2. **当前事项不得复用 TASK-0004 的 2 文件 Token，也不得按旧 `TASK-0006` 的 Docker 口径推进。**
 3. **本任务必须先契约后实现。**
 4. **第一轮最小实施不碰 `docker-compose.dev.yml`，不碰 `services/backtest/Dockerfile`，不修工作区级 Docker 缺口。**
-5. **代码批次完成并终审锁回后，运行态 `JBT-BACKTEST-8004` 再进入单独清理动作。**
+5. **补充批次 D 正式成立：仅允许回测 Agent 在 `services/backtest/backtest_web/Dockerfile` 单文件内把默认 `BACKEND_BASE_URL` 从 `http://backtest-api:8103` 收口到 `http://backtest:8103`。**
+6. **若补充批次 D 执行中需要第 2 个业务文件，当前补充预审立即失效，必须重新补白名单。**
+7. **代码批次完成并终审锁回后，运行态 `JBT-BACKTEST-8004` 再进入单独清理动作。**
