@@ -65,3 +65,55 @@
 - 运维管理接口
 
 这些能力待 sim-trading 骨架稳定后再评估是否纳入下一轮契约。
+
+## Bridge Ingest API（legacy 兼容桥接入口）
+
+### 入口信息
+
+| 字段 | 值 |
+|---|---|
+| 方法 | POST |
+| 路径 | /api/v1/bridge/ingest |
+| 目标服务 | integrations/legacy-botquant |
+| 保护级别 | P0 |
+| 认证方式 | 请求头 X-Auth-Key-Id + X-Signature（HMAC-SHA256） |
+
+### 使用限制
+
+1. **仅限 legacy J_BotQuant Studio 来源**，任何第三方源不得使用此入口。
+2. 每个 signal_id 只允许投递一次（幂等）。
+3. expires_at 超时信号直接 400 拒绝，不投递。
+4. 未携带 auth_key_id + signature 的请求直接 401 拒绝。
+5. 桥接层只负责接收、校验、映射、投递；不在此层新增择时过滤或信号重组。
+6. 实现代码只能落在 `integrations/legacy-botquant/**`，严禁写入 `services/sim-trading/**`。
+
+### 请求体
+
+详见 `bridge_signal.md`。
+
+### 正常响应
+
+```json
+{
+  "accepted": true,
+  "signal_id": "<来自请求体>",
+  "trace_id": "<来自请求体>",
+  "queued_at": "<ISO 8601 时间>"
+}
+```
+
+### 错误响应
+
+| HTTP 状态码 | 场景 |
+|---|---|
+| 400 | 字段缺失、格式错误、信号已过期（expires_at）、乱序 |
+| 401 | 鉴权失败或签名验证失败 |
+| 409 | signal_id 重复（已投递） |
+| 422 | risk_profile_hash 与当前风控版本不兼容 |
+| 503 | 下游 sim-trading 服务不可达，桥接暂时不可用 |
+
+### 告警规则
+
+1. 401 / 409 / 422 错误：P1 告警，记录 signal_id + source_system + trace_id。
+2. 503 连续 3 次：P0 告警，进入 Fail-Safe 拒绝后续信号。
+3. delivery_attempt 超过 3 次：P0 告警，不再重试，通知运维。
