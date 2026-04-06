@@ -100,6 +100,118 @@
 4. 本地正式引擎至少必须严格执行手续费、滑点、仓位规则、止损、止盈、移动止损、最大回撤、日亏损限制、强平时点与不隔夜等系统级参数，并在正式报告中保留可追溯性。
 5. 用户未来导入的策略，不允许因“适配正式引擎”而被服务端自动改写 YAML 原值；如参数无法执行，应显式返回失败原因，而不是隐式修正。
 
+## 6.2 双引擎字段冻结（TASK-0018 批次 A）
+
+### 6.2.1 engine_type 字段
+
+1. `engine_type` 为回测任务级强制字段，用于声明执行引擎。
+2. 允许值最小集合固定为：
+   - `tqsdk`：沿用既有 `TqApi(backtest=TqBacktest(...), auth=TqAuth(...))` 在线回测路径。
+   - `local`：本地自建回测执行路径。
+3. 默认值固定为 `tqsdk`。当请求未显式提供 `engine_type` 时，服务端按 `tqsdk` 处理，以保持既有路径兼容。
+4. 兼容层若使用 `task_id` 命名，仍需在语义上与正式层 `job_id + engine_type` 一一对应，不得丢失引擎来源。
+5. 除本契约另行升级外，不得新增第三种引擎值；新增引擎必须先改 `shared/contracts/**` 再改实现。
+
+### 6.2.2 系统级风控事件证据链结构（统一双引擎）
+
+1. 两种引擎必须复用同一系统级风控事件结构 `risk_event`，并在任务详情与报告导出中可追溯。
+2. `risk_event` 最小字段集合冻结如下：
+
+```json
+{
+  "event_id": "evt-20260407-0001",
+  "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "engine_type": "tqsdk",
+  "event_type": "system_risk",
+  "trigger_reason": "max_drawdown_limit_breached",
+  "threshold": {
+    "name": "max_drawdown",
+    "operator": ">=",
+    "value": 0.1,
+    "unit": "ratio"
+  },
+  "observed": {
+    "name": "current_drawdown",
+    "value": 0.127,
+    "unit": "ratio",
+    "sample_time": "2026-04-07T10:11:12Z"
+  },
+  "event_time": "2026-04-07T10:11:13Z",
+  "action": {
+    "decision": "force_flat",
+    "status": "executed",
+    "detail": "all_positions_closed"
+  }
+}
+```
+
+3. 字段语义冻结：
+   - `trigger_reason`：规则触发原因，必须是可审计字符串，不得为空。
+   - `threshold`：触发阈值对象，必须包含阈值名、比较算子、阈值值与单位。
+   - `observed`：观测值对象，必须包含观测名、观测值、单位与观测时间。
+   - `event_time`：事件判定时间（UTC ISO8601）。
+   - `engine_type`：事件归属引擎，必须与任务引擎一致。
+4. 任一风控动作（拒单、减仓、强平、暂停开仓、熔断）都必须通过该结构留痕，不得只在日志中存在。
+
+### 6.2.3 完整报告导出统一结构（支持 tqsdk/local）
+
+1. 正式报告导出采用统一根结构 `formal_report_v1`，两引擎必须遵循同一 schema。
+2. 最小结构冻结如下：
+
+```json
+{
+  "schema_version": "formal_report_v1",
+  "report_id": "rpt-20260407-0001",
+  "generated_at": "2026-04-07T10:12:00Z",
+  "job": {
+    "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "engine_type": "local",
+    "strategy_id": "FC-224_v3_intraday_trend_cf605_5m",
+    "symbol": "CZCE.CF605",
+    "timeframe": "5m",
+    "start_date": "2024-04-03",
+    "end_date": "2026-04-03",
+    "initial_capital": 1000000.0
+  },
+  "summary": {
+    "status": "completed",
+    "total_trades": 6,
+    "final_equity": 999877.0,
+    "max_drawdown": 0.000258,
+    "pnl": -123.0,
+    "win_rate": 0.5,
+    "sharpe": 0.0
+  },
+  "transaction_costs": {
+    "slippage_per_unit": 1.0,
+    "commission_per_lot_round_turn": 3.5,
+    "total_cost": 120.0
+  },
+  "risk_events": [
+    {
+      "event_id": "evt-20260407-0001",
+      "engine_type": "local",
+      "trigger_reason": "max_drawdown_limit_breached",
+      "threshold": {"name": "max_drawdown", "operator": ">=", "value": 0.1, "unit": "ratio"},
+      "observed": {"name": "current_drawdown", "value": 0.127, "unit": "ratio", "sample_time": "2026-04-07T10:11:12Z"},
+      "event_time": "2026-04-07T10:11:13Z"
+    }
+  ],
+  "artifacts": {
+    "equity_curve": "path-or-uri",
+    "trades": "path-or-uri",
+    "positions": "path-or-uri"
+  }
+}
+```
+
+3. 字段要求：
+   - `schema_version` 必须固定为 `formal_report_v1`，后续升级须显式版本化。
+   - `job.engine_type` 必须回写实际执行引擎，且只允许 `tqsdk`/`local`。
+   - `risk_events` 必须复用 6.2.2 的证据链语义，不得输出引擎私有且不可映射字段作为主字段。
+   - `summary` 与导出文件中的同名关键指标必须一致，不得出现 UI 与导出值不一致。
+4. 当某引擎暂不产生某类扩展指标时，可在扩展区补充，但不得删除统一主字段。
+
 ## 7. 正式 /api/v1 端点详情
 
 ### GET /api/v1/health
@@ -116,7 +228,7 @@
 
 ### POST /api/v1/jobs
 
-请求体：BacktestJob 创建字段（见 `backtest_job.md`）。当前执行口径下，`strategy_id` 指向固定策略模板；任务创建前应已有用户上传的一体化 YAML 文件，由 backtest 服务在运行目录中解析策略参数与风控参数。
+请求体：BacktestJob 创建字段（见 `backtest_job.md`）。当前执行口径下，`strategy_id` 指向固定策略模板；任务创建前应已有用户上传的一体化 YAML 文件，由 backtest 服务在运行目录中解析策略参数与风控参数。`engine_type` 为任务级强制语义字段，允许值仅 `tqsdk` / `local`，默认值 `tqsdk`。
 
 响应 201：BacktestJob 对象（status = pending）
 
