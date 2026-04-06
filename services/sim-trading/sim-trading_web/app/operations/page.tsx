@@ -444,8 +444,8 @@ export default function SimNowTradingTerminal() {
         </Card>
 
         {/* 权益曲线 */}
-        <Card className="bg-neutral-900 border-neutral-700 lg:col-span-3">
-          <CardHeader>
+        <Card className="bg-neutral-900 border-neutral-700 lg:col-span-3 flex flex-col">
+          <CardHeader className="shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium text-neutral-300">实时权益曲线</CardTitle>
               <div className="flex gap-1">
@@ -462,37 +462,45 @@ export default function SimNowTradingTerminal() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={equityCurveData}>
-                  <defs>
-                    <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#404040" />
-                  <XAxis dataKey="time" stroke="#737373" />
-                  <YAxis stroke="#737373" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#1f2937",
-                      border: "1px solid #404040",
-                      borderRadius: "4px",
-                    }}
-                    labelStyle={{ color: "#fff" }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="equity"
-                    stroke="#f97316"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+          <CardContent className="flex-1 flex flex-col min-h-0 pb-4">
+            {equityCurveData.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-neutral-600 gap-2 min-h-[240px]">
+                <TrendingUp className="w-10 h-10 opacity-20" />
+                <p className="text-sm">CTP 连接后开始记录权益曲线</p>
+                <p className="text-xs opacity-60">当前{equityPeriod === "day" ? "日" : equityPeriod === "week" ? "周" : equityPeriod === "month" ? "月" : equityPeriod === "year" ? "年" : "全部"}无数据</p>
+              </div>
+            ) : (
+              <div className="flex-1 min-h-[240px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={equityCurveData}>
+                    <defs>
+                      <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#404040" />
+                    <XAxis dataKey="time" stroke="#737373" />
+                    <YAxis stroke="#737373" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#1f2937",
+                        border: "1px solid #404040",
+                        borderRadius: "4px",
+                      }}
+                      labelStyle={{ color: "#fff" }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="equity"
+                      stroke="#f97316"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
