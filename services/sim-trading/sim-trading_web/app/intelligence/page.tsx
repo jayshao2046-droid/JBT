@@ -28,6 +28,8 @@ import {
   Bar,
 } from "recharts"
 import { simApi } from "@/lib/sim-api"
+import { toast } from "sonner"
+import { isTradingDay, getTodayHolidayName } from "@/lib/holidays-cn"
 
 export default function RiskControlPage() {
   const [selectedAlert, setSelectedAlert] = useState(null)
@@ -41,6 +43,9 @@ export default function RiskControlPage() {
   // 后端连接状态
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null)
   const [serviceStage, setServiceStage] = useState("--")
+  // 告警历史（localStorage）
+  const [alertHistory, setAlertHistory] = useState<Array<{id:number;message:string;time:string}>>([])
+  const [showHistory, setShowHistory] = useState(false)
   const [simConfig, setSimConfig] = useState({
     dailyLossLimit: 2.0,
     continuousLossLimit: 5,
@@ -160,6 +165,29 @@ export default function RiskControlPage() {
     }
   }, [])
 
+  // 从 localStorage 恢复告警历史（最多 100 条）
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("jbt_alert_history")
+      if (raw) setAlertHistory(JSON.parse(raw))
+    } catch {}
+  }, [])
+
+  // 将当前告警同步进历史
+  useEffect(() => {
+    if (alerts.length === 0) return
+    try {
+      const existing: any[] = JSON.parse(localStorage.getItem("jbt_alert_history") ?? "[]")
+      const existingIds = new Set(existing.map((x: any) => x.id))
+      const newOnes = alerts.filter((a) => !existingIds.has(a.id))
+      if (newOnes.length > 0) {
+        const merged = [...existing, ...newOnes].slice(-100)
+        localStorage.setItem("jbt_alert_history", JSON.stringify(merged))
+        setAlertHistory(merged)
+      }
+    } catch {}
+  }, [alerts])
+
   const handleRefresh = () => {
     setIsLoading(true)
     Promise.all([simApi.health(), simApi.positions(), simApi.orders()])
@@ -183,7 +211,7 @@ export default function RiskControlPage() {
 
   const handleSaveSimConfig = () => {
     // TODO: 连接到 trading_api:8003 WebSocket，下发配置
-    alert("Sim 配置已下发到交易引擎")
+    toast.success("配置已下发到交易引擎（骨架阶段占位）")
     handleRefresh()
   }
 
@@ -420,7 +448,7 @@ export default function RiskControlPage() {
               size="sm"
               variant="outline"
               className="border-neutral-700 text-neutral-400 hover:bg-neutral-800 text-xs"
-              onClick={() => alert("打开日志查看...")}
+              onClick={() => toast.info("日志查看功能将在 TASK-0016 实现")}
             >
               查看日志
             </Button>
@@ -437,7 +465,7 @@ export default function RiskControlPage() {
                   size="sm"
                   className="bg-red-600 hover:bg-red-700 text-white flex-1"
                   onClick={() => {
-                    alert("熔断已重置，系统恢复正常")
+                    toast.success("熔断已重置，系统恢复正常")
                     setShowFusePanel(false)
                   }}
                 >
@@ -457,7 +485,15 @@ export default function RiskControlPage() {
 
           {/* Sim 专属配置 */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-neutral-300">Sim 专属阈值配置</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-neutral-300">Sim 专属阈值配置</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-neutral-500">当前预设:</span>
+                <Badge className="bg-orange-900/30 text-orange-400 border-none text-xs">
+                  {serviceStage !== "--" ? "sim_50w" : "未连接"}
+                </Badge>
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label className="text-xs text-neutral-400 block mb-2">日亏限额 (%)</label>
@@ -531,10 +567,34 @@ export default function RiskControlPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-neutral-900 border-neutral-700">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-neutral-300">实时告警 ({alerts.length})</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-neutral-300">
+                实时告警 ({alerts.length})
+              </CardTitle>
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className="text-xs text-neutral-500 hover:text-orange-400 transition-colors"
+              >
+                {showHistory ? "隐藏历史" : `历史(${alertHistory.length})`}
+              </button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3 max-h-64 overflow-y-auto">
-            {alerts.map((alert) => (
+            {showHistory ? (
+              alertHistory.length === 0 ? (
+                <p className="text-xs text-neutral-500 text-center py-4">暂无历史告警</p>
+              ) : (
+                alertHistory.slice().reverse().map((h) => (
+                  <div key={h.id} className="border border-neutral-700 rounded p-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-neutral-300">{h.message}</span>
+                      <span className="text-neutral-600">{h.time}</span>
+                    </div>
+                  </div>
+                ))
+              )
+            ) : (
+            alerts.map((alert) => (
               <div
                 key={alert.id}
                 className={`border rounded p-3 cursor-pointer transition-colors ${getStatusColor("alert")}`}
@@ -547,60 +607,82 @@ export default function RiskControlPage() {
                   </div>
                 </div>
               </div>
-            ))}
+            ))
+            )}
           </CardContent>
         </Card>
 
         {/* 交易日历 */}
         <Card className="bg-neutral-900 border-neutral-700">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-neutral-300">交易日历</CardTitle>
+            <CardTitle className="text-sm font-medium text-neutral-300">交易日历（中国节假日同步）</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-7 gap-1 text-center text-xs">
-              {["一", "二", "三", "四", "五", "六", "日"].map((day) => (
-                <div key={day} className="text-neutral-500 py-1">{day}</div>
-              ))}
-              {/* 本月日期 */}
-              {Array.from({ length: 30 }, (_, i) => i + 1).map((day) => {
-                const isToday = day === 6
-                const isTradingDay = day !== 7 && day !== 8 && day !== 14 && day !== 15 && day !== 21 && day !== 22 && day !== 28 && day !== 29
-                const hasProfit = isTradingDay && [1, 2, 3, 5].includes(day)
-                const hasLoss = isTradingDay && day === 4
-                return (
-                  <div
-                    key={day}
-                    className={`py-1 rounded text-xs ${
-                      isToday
-                        ? "bg-orange-500 text-white font-bold"
-                        : hasProfit
-                        ? "bg-green-900/30 text-green-400"
-                        : hasLoss
-                        ? "bg-red-900/30 text-red-400"
-                        : isTradingDay
-                        ? "text-neutral-300"
-                        : "text-neutral-600"
-                    }`}
-                  >
-                    {day}
+            {(() => {
+              const today = new Date()
+              const y = today.getFullYear()
+              const m = today.getMonth()
+              const firstDay = new Date(y, m, 1).getDay() // 0=Sun
+              const firstMon = (firstDay + 6) % 7         // adjust to Mon=0
+              const daysInMonth = new Date(y, m + 1, 0).getDate()
+              const todayDate = today.getDate()
+              const cells: (number | null)[] = [
+                ...Array(firstMon).fill(null),
+                ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+              ]
+              return (
+                <>
+                  <div className="grid grid-cols-7 gap-1 text-center text-xs mb-1">
+                    {["一","二","三","四","五","六","日"].map(d => (
+                      <div key={d} className="text-neutral-500 py-1">{d}</div>
+                    ))}
+                    {cells.map((day, idx) => {
+                      if (!day) return <div key={`e-${idx}`} />
+                      const d = new Date(y, m, day)
+                      const isToday = day === todayDate
+                      const trading = isTradingDay(d)
+                      const hn = getTodayHolidayName(d)
+                      return (
+                        <div
+                          key={day}
+                          title={hn ? hn : trading ? "交易日" : "休市"}
+                          className={`py-1 rounded text-xs cursor-default ${
+                            isToday
+                              ? "bg-orange-500 text-white font-bold"
+                              : !trading
+                              ? hn
+                                ? "bg-red-900/30 text-red-500"
+                                : "text-neutral-600"
+                              : "text-neutral-300 hover:bg-neutral-700/50"
+                          }`}
+                        >
+                          {day}
+                        </div>
+                      )
+                    })}
                   </div>
-                )
-              })}
-            </div>
-            <div className="mt-4 flex items-center gap-4 text-xs">
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-green-900/30 rounded"></div>
-                <span className="text-neutral-400">盈利日</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-red-900/30 rounded"></div>
-                <span className="text-neutral-400">亏损日</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-orange-500 rounded"></div>
-                <span className="text-neutral-400">今日</span>
-              </div>
-            </div>
+                  <div className="mt-3 flex items-center gap-4 text-xs flex-wrap">
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-orange-500 rounded" />
+                      <span className="text-neutral-400">今日</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-red-900/30 border border-red-700/50 rounded" />
+                      <span className="text-neutral-400">法定节假日</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 border border-neutral-700 rounded" />
+                      <span className="text-neutral-500">周末/休市</span>
+                    </div>
+                  </div>
+                  {!isTradingDay(today) && (
+                    <div className="mt-3 p-2 bg-red-900/20 border border-red-800/50 rounded text-xs text-red-400">
+                      ⛔ 今日{getTodayHolidayName(today) ?? "休市"}，系统拒绝新开仓
+                    </div>
+                  )}
+                </>
+              )
+            })()}
           </CardContent>
         </Card>
       </div>

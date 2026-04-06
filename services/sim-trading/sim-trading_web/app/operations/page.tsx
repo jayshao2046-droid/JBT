@@ -21,6 +21,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import { simApi } from "@/lib/sim-api"
+import { toast } from "sonner"
 
 export default function SimNowTradingTerminal() {
   const [isLoading, setIsLoading] = useState(false)
@@ -121,27 +122,27 @@ export default function SimNowTradingTerminal() {
     setIsLoading(true)
     setTimeout(() => {
       setIsLoading(false)
-      alert(`已下单: ${orderParams.direction === "buy" ? "买" : "卖"} ${orderParams.contract} ${orderParams.quantity}手`)
+      toast.success(`已下单：${orderParams.direction === "buy" ? "买入" : "卖出"} ${orderParams.contract} ${orderParams.quantity}手`)
     }, 300)
   }
 
   const handleClosePosition = (positionId: number) => {
-    alert(`平仓 ID: ${positionId}`)
+    toast.info(`平仓指令已发送（ID: ${positionId}）·骨架阶段未连接`)
     // TODO: 连接到 trading_api:8003 WebSocket
   }
 
   const handleReversePosition = (positionId: number) => {
-    alert(`反手 ID: ${positionId}`)
+    toast.warning(`反手指令已发送（ID: ${positionId}）·骨架阶段未连接`)
     // TODO: 连接到 trading_api:8003 WebSocket
   }
 
   const handleModifyStopLoss = (positionId: number) => {
-    alert(`修改止损 ID: ${positionId}`)
+    toast.info(`止损修改指令已发送（ID: ${positionId}）·骨架阶段未连接`)
     // TODO: 连接到 trading_api:8003 WebSocket
   }
 
   const handleClearAllPositions = () => {
-    alert("已一键清仓所有持仓")
+    toast.error("一键清仓指令已发送 · 骨架阶段未连接，实际未执行")
     // TODO: 连接到 trading_api:8003 WebSocket
     setShowClearConfirm(false)
   }
