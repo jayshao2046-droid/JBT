@@ -96,10 +96,10 @@
 1. 用户新增的“即时飞书 / 邮件告警”继续归入 `TASK-0014`，不新开任务号。
 2. 补充批次 A1：通知 bootstrap 与风险钩子闭环，保护级别冻结为 **P1**；建议白名单：
 	- `services/sim-trading/src/main.py`
-	- `services/sim-trading/src/risk/guards.py`
 	- `services/sim-trading/src/notifier/dispatcher.py`
-	- `services/sim-trading/tests/test_risk_hooks.py`
+	- `services/sim-trading/src/risk/guards.py`
 	- `services/sim-trading/tests/test_notifier.py`
+	- `services/sim-trading/tests/test_risk_hooks.py`
 3. 补充批次 A2：系统事件来源接线，保护级别冻结为 **P1**；建议白名单：
 	- `services/sim-trading/src/api/router.py`
 	- `services/sim-trading/src/gateway/simnow.py`
@@ -142,5 +142,14 @@
 
 1. **`TASK-0014` 正式成立。**
 2. **C 风控通知必须作为独立任务推进，不得并入 `TASK-0010` 或 `TASK-0017`。**
-3. **即时通知继续归入 `TASK-0014` 的补充批次 A1 / A2，当前状态均为 `pending_token`。**
+3. **即时通知继续归入 `TASK-0014` 的补充批次 A1 / A2；其中 `TASK-0014-A1` 已于 2026-04-07 完成实施、终审与锁回，`TASK-0014-A2` 当前保持待执行。**
 4. **legacy `J_BotQuant/.env` 只可作为部署侧凭证来源，不得把外部路径耦合进服务代码。**
+
+## 十、2026-04-07 TASK-0014-A1 收口补录
+
+1. `TASK-0014-A1` 实际业务白名单严格限于 5 个文件：`services/sim-trading/src/main.py`、`services/sim-trading/src/notifier/dispatcher.py`、`services/sim-trading/src/risk/guards.py`、`services/sim-trading/tests/test_notifier.py`、`services/sim-trading/tests/test_risk_hooks.py`。
+2. 实现收口冻结为：`main.py` 完成 notifier bootstrap；`dispatcher.py` 完成单例 register / get / clear / bootstrap；`risk/guards.py` 完成 `emit_alert` 到最小 `RiskEvent` 的映射。
+3. 最小自校验结果为 `13 passed, 1 skipped`。
+4. 对应代码提交为 `d4b5817`；对应 P1 token_id 为 `tok-7ab3cadf-043b-4709-b8e7-d00519f1ae81`；lockback review-id 为 `REVIEW-TASK-0014-A1`，当前状态 `locked`。
+5. 本批未扩展到 scheduler、日报、CTP 事件接线或 legacy `.env` 路径读取。
+6. 当前通知 / 报表子线下一执行顺序保持为 `TASK-0014-A2` → `TASK-0019-B0`（如需要）→ `TASK-0019-B1` → `TASK-0019-B2`。

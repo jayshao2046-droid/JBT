@@ -4,13 +4,13 @@
 
 - 任务 ID：TASK-0014
 - 阶段：sim-trading 风控通知链路预审
-- 当前任务是否仍处于“预审未执行”状态：整体是；补充批次 A1 / A2 已冻结待签发
+- 当前任务是否仍处于“预审未执行”状态：整体否；`TASK-0014-A1` 已实施并锁回，`TASK-0014-A2` 待执行
 - 执行 Agent：
   - 项目架构师（当前 P-LOG 治理文件）
   - 模拟交易 Agent（后续服务实现主体）
 - Token 摘要：
   - P-LOG 协同账本区文件：不需要文件级 Token
-  - `TASK-0014-A1`：`services/sim-trading/src/main.py`、`src/risk/guards.py`、`src/notifier/dispatcher.py`、`tests/test_risk_hooks.py`、`tests/test_notifier.py`，后续 P1 Token
+  - `TASK-0014-A1`：P1 token_id `tok-7ab3cadf-043b-4709-b8e7-d00519f1ae81`，文件严格限于 `services/sim-trading/src/main.py`、`src/notifier/dispatcher.py`、`src/risk/guards.py`、`tests/test_notifier.py`、`tests/test_risk_hooks.py`，对应提交 `d4b5817`，lockback review-id `REVIEW-TASK-0014-A1`，当前状态 `locked`
   - `TASK-0014-A2`：`services/sim-trading/src/api/router.py`、`src/gateway/simnow.py` + 最多 2 个测试文件，后续 P1 Token
   - `services/sim-trading/.env.example`：后续单文件 P0 Token
   - `shared/contracts/**` 若补通知事件契约：后续 P0 Token
@@ -35,20 +35,26 @@
 
 ## 即时通知补充批次冻结信息
 
-### 补充批次 A1
+### 补充批次 A1（已完成并锁回）
 
 1. 批次名称：补充批次 A1 — 通知 bootstrap 与风险钩子闭环
 2. 执行 Agent：模拟交易
 3. 保护级别：P1
-4. 建议白名单：
+4. 实际业务白名单严格限于：
   - `services/sim-trading/src/main.py`
-  - `services/sim-trading/src/risk/guards.py`
   - `services/sim-trading/src/notifier/dispatcher.py`
-  - `services/sim-trading/tests/test_risk_hooks.py`
+  - `services/sim-trading/src/risk/guards.py`
   - `services/sim-trading/tests/test_notifier.py`
-5. 当前 Token 状态：pending_token
+  - `services/sim-trading/tests/test_risk_hooks.py`
+5. P1 token_id：`tok-7ab3cadf-043b-4709-b8e7-d00519f1ae81`
+6. 代码提交：`d4b5817`
+7. 最小自校验：`13 passed, 1 skipped`
+8. 实现收口：`main.py` notifier bootstrap；`dispatcher.py` 单例 register / get / clear / bootstrap；`risk/guards.py` `emit_alert` 映射到最小 `RiskEvent`
+9. 范围排除：未扩展到 scheduler、日报、CTP 事件接线或 legacy `.env` 路径读取
+10. lockback review-id：`REVIEW-TASK-0014-A1`
+11. 当前 Token 状态：locked
 
-### 补充批次 A2
+### 补充批次 A2（待执行）
 
 1. 批次名称：补充批次 A2 — 系统事件来源接线
 2. 执行 Agent：模拟交易
@@ -78,19 +84,19 @@
 
 1. `TASK-0009`、`TASK-0013` 必须先闭环。
 2. `TASK-0010` 必须先完成最小风险事件输出与风控钩子占位。
-3. 需要由 Jay.S 先按 `TASK-0014-A1` → `TASK-0014-A2` 顺序签发对应 P1 Token。
+3. `TASK-0014-A2` 仍需由 Jay.S 签发对应 P1 Token；若未来需 reopen `TASK-0014-A1` 或扩大白名单，必须重新签发。
 4. 若后续需要补 `services/sim-trading/.env.example` 通知占位，必须另拆单文件 P0 批次。
 5. A2 若涉及测试文件，必须先冻结精确到文件的最多 2 个测试文件名单，再签发 Token。
 
 ## 当前状态
 
-- 预审状态：已通过
-- Token 状态：未申请主任务代码 Token；补充批次 A1 / A2 均为 `pending_token`
-- 解锁时间：N/A
+- 预审状态：已通过；`TASK-0014-A1` 已终审并锁回，`TASK-0014-A2` 待执行
+- Token 状态：主任务代码 Token 不适用；`TASK-0014-A1` 已 lockback 且状态 `locked`，`TASK-0014-A2` 为 `pending_token`
+- 解锁时间：`TASK-0014-A1` 已执行（未补具体时刻）；`TASK-0014-A2` N/A
 - 失效时间：N/A
-- 锁回时间：N/A
-- lockback 结果：尚未进入代码执行阶段
+- 锁回时间：`TASK-0014-A1` 已完成 lockback（未补具体时刻）；`TASK-0014-A2` N/A
+- lockback 结果：`TASK-0014-A1` 已完成终审与锁回；`TASK-0014-A2` 尚未进入代码执行阶段
 
 ## 结论
 
-**TASK-0014 当前仍处于“预审未执行”状态；即时通知继续归入补充批次 A1 / A2，且两批均待签发；通知链路相关服务文件、契约文件与 `.env.example` 继续锁定。**
+**TASK-0014 当前已完成补充批次 A1 的实施、终审与锁回；`TASK-0014-A2` 继续待执行；通知链路相关契约文件与 `.env.example` 仍继续锁定。**
