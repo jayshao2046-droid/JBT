@@ -167,3 +167,45 @@
 1. 若执行中证明必须新增第 2 个业务文件，当前补充范围立即失效，必须回交补充预审。
 2. 若执行中发现需要改后端、helper、operations 页面或 contract，当前补充范围立即失效，不得借本任务顺手扩写。
 3. 本轮仅允许做“可逆的前端百分比展示 / 存储换算”；不得把该字段的真实存储口径从比例小数改为百分比。
+
+---
+
+## 九、2026-04-06 单文件补充预审（二：金额型日亏损字段语义保持修复）
+
+### 任务号结论
+
+- **继续归属 `TASK-0004`，不新开任务号，也不转入 `TASK-0007` / `TASK-0008`。**
+
+### 根因冻结
+
+1. 已确认根因位于 `services/backtest/backtest_web/app/agent-network/page.tsx`。
+2. 页面读取策略配置时，把 `risk.daily_loss_limit` 与 `risk.daily_loss_limit_yuan` 混入同一前端状态。
+3. 页面写回 YAML 时，只会序列化 `daily_loss_limit`，不会保留金额型字段 `daily_loss_limit_yuan` 的原始语义。
+4. 该问题会把金额风控策略中的金额值误写到比例字段，例如 `FC-_30_cf_v1.yaml` 中的 `2000` 元可能被写回为 `risk.daily_loss_limit`，随后正式引擎报错：`risk.daily_loss_limit must be a ratio between 0 and 1`。
+
+### 本轮唯一业务白名单冻结
+
+1. `services/backtest/backtest_web/app/agent-network/page.tsx`
+2. 执行主体固定为：**回测 Agent**。
+
+### 允许变更语义
+
+1. 必须保留 `daily_loss_limit_yuan` 与 `daily_loss_limit` 的原始语义，禁止混写。
+2. 只有比例模式才允许按百分比格式展示与输入。
+3. 金额模式必须保持金额输入、金额写回，不得被转换为比例字段。
+4. `maxDrawdown` 现有百分比交互逻辑不得回归。
+5. 不得修改后端、helper、tests、contracts、`app/operations/page.tsx`、`app/page.tsx`、`src/**`、`Dockerfile`。
+
+### 当前会话授权与执行闭环
+
+1. Jay.S 已在当前会话明确确认：本轮可立即执行，执行顺序固定为“先修本地，再推送 git，再同步到 air 远端 docker，并验证远端可用且不能回退到之前的 API 500”。
+2. 本轮治理留痕按“当前会话授权 + 单文件范围摘要”记录，不在 Git 中伪造 `token_id`。
+3. 回测 Agent 完成业务修复后，必须先做本地自校验，再提交独立 git 推送与 air 远端 docker 验证结果，之后回交项目架构师终审与锁回。
+
+### 补充验收标准
+
+1. 对使用 `risk.daily_loss_limit_yuan` 的策略，修改 `maxDrawdown` 后再保存 / 回测，不得把金额字段误写成 `daily_loss_limit`。
+2. 对比例型策略，`daily_loss_limit` 仍按百分比交互，输入 `0.7` 时保存值必须为 `0.007`。
+3. 金额模式保存后再读取时，金额字段必须原样保留并按金额展示，不得被转换成百分比显示。
+4. `maxDrawdown` 现有百分比交互不回归。
+5. 本轮不得扩展到第 2 个业务文件；一旦需要新增业务文件，当前补充范围立即失效，必须回交补充预审。

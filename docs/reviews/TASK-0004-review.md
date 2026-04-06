@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0004
 - 审核角色：项目架构师
-- 审核阶段：看板阶段预审 + 2026-04-04 Token 签发补充确认 + 2026-04-06 单文件补充预审 + 2026-04-06 单文件补充终审
-- 审核时间：2026-04-03；2026-04-04 补充；2026-04-06 补充；2026-04-06 终审
-- 审核结论：通过（范围冻结为 `services/backtest/backtest_web/` 内两页收敛；预审最小业务白名单为 3 文件；2026-04-04 已补充确认 Jay.S 实际签发范围收敛为 2 文件，并完成前后端联动语义冻结；2026-04-06 已补充冻结为 `app/agent-network/page.tsx` 单文件百分比交互收口，并已完成终审与锁回）
+- 审核阶段：看板阶段预审 + 2026-04-04 Token 签发补充确认 + 2026-04-06 单文件补充预审 + 2026-04-06 单文件补充终审 + 2026-04-06 金额型日亏损字段语义保持修复补充预审 + 2026-04-06 金额型日亏损字段语义保持修复终审与锁回
+- 审核时间：2026-04-03；2026-04-04 补充；2026-04-06 补充；2026-04-06 终审；2026-04-06 再补充；2026-04-06 再终审
+- 审核结论：通过（范围冻结为 `services/backtest/backtest_web/` 内两页收敛；预审最小业务白名单为 3 文件；2026-04-04 已补充确认 Jay.S 实际签发范围收敛为 2 文件，并完成前后端联动语义冻结；2026-04-06 前序单文件百分比交互收口已留痕；本次“金额型日亏损字段语义保持修复”单文件补充已完成终审与锁回）
 
 ---
 
@@ -193,3 +193,56 @@
 4. 回归约束核验通过：`maxDrawdown` 仍沿用既有百分比输入实现；`positionFraction` 现有百分比输入实现未被回退。
 5. 终审结论：通过，无阻断项；本轮单文件补充已满足“只动 1 个业务文件、白名单未越界、输入/保存/读取语义闭环成立”的验收标准。
 6. 锁回结论：可以锁回，并应立即恢复 `services/backtest/backtest_web/app/agent-network/page.tsx` 的锁定状态；后续如需再次修改该文件，必须重新补充预审与解锁。
+
+## 十四、2026-04-06 补充预审（二：金额型日亏损字段语义保持修复）
+
+1. 补充预审成立，根因已确认位于 `services/backtest/backtest_web/app/agent-network/page.tsx`：页面读取时把 `risk.daily_loss_limit` 与 `risk.daily_loss_limit_yuan` 混到同一状态，但写回 YAML 时只会序列化 `daily_loss_limit`，会把金额型风控策略误写成比例字段。
+2. 任务号继续冻结为：**`TASK-0004`**。本轮不得改挂到 `TASK-0007` 或 `TASK-0008`，因为问题本质仍属于 backtest 看板前端单文件语义保持修复，不涉及正式后端并回、正式引擎泛化或报告导出。
+3. 本轮唯一业务文件白名单冻结为：`services/backtest/backtest_web/app/agent-network/page.tsx`。
+4. 执行主体冻结为：**回测 Agent**。本轮不接受扩展到第 2 个业务文件，也不接受 Atlas 直修口径替代回测 Agent 实施。
+5. 本轮允许的唯一变更语义冻结为：
+   - 保留 `daily_loss_limit_yuan` 与 `daily_loss_limit` 的原始语义，不得混写；
+   - 只有比例模式才允许按百分比格式展示 / 输入；
+   - 金额模式必须保持金额输入 / 写回；
+   - `maxDrawdown` 现有百分比交互逻辑不得回归。
+6. 本轮明确禁止修改：
+   - `services/backtest/backtest_web/app/operations/page.tsx`
+   - `services/backtest/backtest_web/app/page.tsx`
+   - `services/backtest/backtest_web/src/**`
+   - `services/backtest/src/**`
+   - `shared/contracts/**`
+   - 其他 helper、tests、Dockerfile 与全部非白名单文件
+7. 当前会话授权留痕冻结为：Jay.S 已明确确认本轮可立即执行，执行闭环固定为“先本地修复，再独立 git push，再同步到 air 远端 docker，并验证远端可用且不能回退到之前的 API 500”；按要求不在 review 中伪造 `token_id`，仅记录“当前会话授权 + 单文件范围摘要”。
+8. 验收标准冻结为：
+   - 对 `risk.daily_loss_limit_yuan` 策略，修改 `maxDrawdown` 后再保存 / 回测，不得把金额字段误写成 `daily_loss_limit`；
+   - 对比例型策略，`daily_loss_limit` 仍按百分比交互，输入 `0.7` 时保存 `0.007`；
+   - `maxDrawdown` 百分比交互不回归；
+   - 不扩展第 2 个业务文件。
+9. 风险冻结为：若执行中发现需要修改后端、helper、tests、contracts、`app/operations/page.tsx`、`app/page.tsx`、`src/**` 或 Dockerfile，当前补充范围立即失效，必须回交补充预审。
+10. 当前状态：本节补充预审已闭环，详见第十五节终审与锁回结论。
+
+## 十五、2026-04-06 补充终审结论（三：金额型日亏损字段语义保持修复）
+
+1. 终审取证来源已交叉核验：
+   - 回测 Agent 已在 `docs/prompts/agents/回测提示词.md` 留痕本轮仅修改 `services/backtest/backtest_web/app/agent-network/page.tsx`，并记录本地实施与自校验完成。
+   - `docs/prompts/agents/回测提示词.md` 的更新属于 P-LOG 流程同步，不构成业务白名单越界。
+   - 本轮实际业务写入仍严格限于 `services/backtest/backtest_web/app/agent-network/page.tsx`，未扩展到第 2 个业务文件。
+2. 语义保持核验通过：
+   - `daily_loss_limit_yuan` 与 `daily_loss_limit` 的原始语义已保持分离，不再混写。
+   - 只有比例模式继续按百分比交互；输入 `0.7` 时，保存值仍为 `0.007`。
+   - 金额模式继续保持金额输入与金额写回；对使用 `risk.daily_loss_limit_yuan` 的策略，修改 `maxDrawdown` 后再保存 / 回测，不会再把金额字段误写成 `daily_loss_limit`。
+   - `maxDrawdown` 现有百分比交互未回归。
+3. 本地自校验结果通过：
+   - `services/backtest/backtest_web/app/agent-network/page.tsx` 诊断结果为 0 错误。
+   - `docs/prompts/agents/回测提示词.md` 诊断结果为 0 错误。
+   - 在 `services/backtest/backtest_web` 执行 `pnpm build` 已成功。
+4. air 远端验证结果通过：
+   - 已同步 7 个相关文件到 `~/botquant-backtest-prod/`。
+   - 已执行 `/usr/local/bin/docker compose -f docker-compose.dev.yml up -d --no-deps --build --force-recreate backtest-web`。
+   - `http://127.0.0.1:3001/agent-network` 返回 200。
+   - `http://127.0.0.1:3001/api/system/status` 返回 200。
+   - API body 正常返回 JSON，未回退到之前的 API 500。
+   - 本地与 air 上 7 个相关文件 `shasum` 完全一致。
+5. 白名单边界核验通过：本轮未越出 `services/backtest/backtest_web/app/agent-network/page.tsx` 单文件范围，未触碰 `app/operations/page.tsx`、`app/page.tsx`、`backtest_web/src/**`、`services/backtest/src/**`、`shared/contracts/**` 或其他非白名单业务文件。
+6. 终审结论：通过，无新的阻断项；本轮已满足“金额型字段语义保持、比例模式百分比交互保持、远端验证不回退、单文件范围未越界”的验收标准。
+7. 锁回结论：应立即恢复 `services/backtest/backtest_web/app/agent-network/page.tsx` 的锁定状态；后续如需再次修改该文件，必须重新补充预审与解锁。

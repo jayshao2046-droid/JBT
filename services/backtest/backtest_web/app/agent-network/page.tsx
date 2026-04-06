@@ -31,6 +31,7 @@ type ParamValues = Record<string, string>
 
 type YamlScalarValue = string | number | boolean | Array<string | number | boolean>
 type YamlFieldGroup = "basic" | "strategy" | "signal" | "risk"
+type DailyLossLimitMode = "ratio" | "yuan"
 
 type ParsedYamlField = {
   path: string
@@ -76,6 +77,7 @@ type SystemRuntimeConfig = {
   slippagePerUnit: string
   commissionPerLotRoundTurn: string
   dailyLossLimit: string
+  dailyLossLimitMode: DailyLossLimitMode
   maxDrawdown: string
   perSymbolFuseYuan: string
   stopLossAtrMultiplier: string
@@ -123,6 +125,8 @@ const STRATEGY_SPECIAL_PREFIXES = [
 ]
 const SYSTEM_PRESET_STORAGE_KEY = "jbt_backtest_system_runtime_presets_v1"
 const SYSTEM_RUNTIME_ROOT_PATHS = new Set(["position_fraction", "backtest_start_date", "backtest_end_date"])
+const DAILY_LOSS_LIMIT_RATIO_PATH = "risk.daily_loss_limit"
+const DAILY_LOSS_LIMIT_YUAN_PATH = "risk.daily_loss_limit_yuan"
 
 function buildDefaultSystemConfig(commodityCode = ""): SystemRuntimeConfig {
   return {
@@ -132,6 +136,7 @@ function buildDefaultSystemConfig(commodityCode = ""): SystemRuntimeConfig {
     slippagePerUnit: "1",
     commissionPerLotRoundTurn: "6",
     dailyLossLimit: "0.05",
+    dailyLossLimitMode: "ratio",
     maxDrawdown: "0.15",
     perSymbolFuseYuan: "2000",
     stopLossAtrMultiplier: "1.5",
@@ -140,6 +145,35 @@ function buildDefaultSystemConfig(commodityCode = ""): SystemRuntimeConfig {
     forceCloseDay: "14:55",
     forceCloseNight: "22:55",
     noOvernight: true,
+  }
+}
+
+function normalizeDailyLossLimitMode(value: unknown): DailyLossLimitMode {
+  return value === "yuan" ? "yuan" : "ratio"
+}
+
+function normalizeSystemRuntimeConfig(rawConfig: Partial<SystemRuntimeConfig> | null | undefined, commodityCode = ""): SystemRuntimeConfig {
+  const nextCommodityCode = typeof rawConfig?.commodityCode === "string" && rawConfig.commodityCode
+    ? rawConfig.commodityCode
+    : commodityCode
+  const base = buildDefaultSystemConfig(nextCommodityCode)
+
+  return {
+    commodityCode: nextCommodityCode,
+    initialCapital: rawConfig?.initialCapital != null ? String(rawConfig.initialCapital) : base.initialCapital,
+    positionFraction: rawConfig?.positionFraction != null ? String(rawConfig.positionFraction) : base.positionFraction,
+    slippagePerUnit: rawConfig?.slippagePerUnit != null ? String(rawConfig.slippagePerUnit) : base.slippagePerUnit,
+    commissionPerLotRoundTurn: rawConfig?.commissionPerLotRoundTurn != null ? String(rawConfig.commissionPerLotRoundTurn) : base.commissionPerLotRoundTurn,
+    dailyLossLimit: rawConfig?.dailyLossLimit != null ? String(rawConfig.dailyLossLimit) : base.dailyLossLimit,
+    dailyLossLimitMode: normalizeDailyLossLimitMode(rawConfig?.dailyLossLimitMode),
+    maxDrawdown: rawConfig?.maxDrawdown != null ? String(rawConfig.maxDrawdown) : base.maxDrawdown,
+    perSymbolFuseYuan: rawConfig?.perSymbolFuseYuan != null ? String(rawConfig.perSymbolFuseYuan) : base.perSymbolFuseYuan,
+    stopLossAtrMultiplier: rawConfig?.stopLossAtrMultiplier != null ? String(rawConfig.stopLossAtrMultiplier) : base.stopLossAtrMultiplier,
+    takeProfitAtrMultiplier: rawConfig?.takeProfitAtrMultiplier != null ? String(rawConfig.takeProfitAtrMultiplier) : base.takeProfitAtrMultiplier,
+    maxConsecutiveLosses: rawConfig?.maxConsecutiveLosses != null ? String(rawConfig.maxConsecutiveLosses) : base.maxConsecutiveLosses,
+    forceCloseDay: rawConfig?.forceCloseDay != null ? String(rawConfig.forceCloseDay) : base.forceCloseDay,
+    forceCloseNight: rawConfig?.forceCloseNight != null ? String(rawConfig.forceCloseNight) : base.forceCloseNight,
+    noOvernight: typeof rawConfig?.noOvernight === "boolean" ? rawConfig.noOvernight : base.noOvernight,
   }
 }
 
@@ -154,7 +188,17 @@ function readSystemRuntimePresets(): SystemRuntimePreset[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter((item): item is SystemRuntimePreset => Boolean(item?.id && item?.name && item?.config))
+    return parsed.flatMap((item) => {
+      if (!item?.id || !item?.name || !item?.config) return []
+      const normalizedConfig = normalizeSystemRuntimeConfig(item.config, item.config?.commodityCode)
+      return [{
+        id: String(item.id),
+        name: String(item.name),
+        commodityCode: normalizedConfig.commodityCode,
+        config: normalizedConfig,
+        updatedAt: Number(item.updatedAt ?? Date.now()),
+      }]
+    })
   } catch {
     return []
   }
@@ -214,8 +258,9 @@ function removeTopLevelBlock(yaml: string, key: string): string {
 
 function buildSystemRiskBlock(config: SystemRuntimeConfig): string {
   const lines = ["risk:"]
+  const dailyLossLimitKey = config.dailyLossLimitMode === "yuan" ? "daily_loss_limit_yuan" : "daily_loss_limit"
 
-  if (config.dailyLossLimit.trim()) lines.push(`  daily_loss_limit: ${config.dailyLossLimit.trim()}`)
+  if (config.dailyLossLimit.trim()) lines.push(`  ${dailyLossLimitKey}: ${config.dailyLossLimit.trim()}`)
   if (config.maxDrawdown.trim()) lines.push(`  max_drawdown: ${config.maxDrawdown.trim()}`)
   if (config.perSymbolFuseYuan.trim()) lines.push(`  per_symbol_fuse_yuan: ${config.perSymbolFuseYuan.trim()}`)
   if (config.maxConsecutiveLosses.trim()) lines.push(`  max_consecutive_losses: ${config.maxConsecutiveLosses.trim()}`)
@@ -661,6 +706,13 @@ function formatCompactCurrency(value: string | number | null | undefined): strin
   return numeric.toLocaleString("zh-CN")
 }
 
+function formatCurrencyAmount(value: string | number | null | undefined): string {
+  if (value == null || value === "") return "--"
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return String(value)
+  return `${numeric.toLocaleString("zh-CN")} 元`
+}
+
 function formatDecimalAsPercent(value: string | number | null | undefined, digits = 1): string {
   if (value == null || value === "") return "--"
   const numeric = Number(value)
@@ -681,7 +733,7 @@ function parsePercentInput(value: string): string {
   if (!trimmed) return ""
   const numeric = Number(trimmed)
   if (!Number.isFinite(numeric)) return value
-  return String(numeric / 100)
+  return String(Number((numeric / 100).toFixed(10)))
 }
 
 function humanizeTemplateId(templateId: string): string {
@@ -804,9 +856,54 @@ export default function StrategyManagementPage() {
     if (presets.length > 0) {
       setSelectedSystemPresetId(presets[0].id)
       setSystemPresetName(presets[0].name)
-      setSystemConfig({ ...presets[0].config })
+      setSystemConfig(normalizeSystemRuntimeConfig(presets[0].config, presets[0].commodityCode))
     }
   }, [])
+
+  const resolveDailyLossLimitFromDocument = (document: ParsedYamlDocument | null, fallback: SystemRuntimeConfig) => {
+    if (!document) {
+      return {
+        dailyLossLimit: fallback.dailyLossLimit,
+        dailyLossLimitMode: fallback.dailyLossLimitMode,
+      }
+    }
+
+    const yuanField = document.fields.find((field) => field.path === DAILY_LOSS_LIMIT_YUAN_PATH)
+    if (yuanField) {
+      return {
+        dailyLossLimit: String(yuanField.value),
+        dailyLossLimitMode: "yuan" as const,
+      }
+    }
+
+    const ratioField = document.fields.find((field) => field.path === DAILY_LOSS_LIMIT_RATIO_PATH)
+    if (ratioField) {
+      return {
+        dailyLossLimit: String(ratioField.value),
+        dailyLossLimitMode: "ratio" as const,
+      }
+    }
+
+    return {
+      dailyLossLimit: fallback.dailyLossLimit,
+      dailyLossLimitMode: fallback.dailyLossLimitMode,
+    }
+  }
+
+  const preserveDailyLossLimitSemantics = (config: SystemRuntimeConfig, document: ParsedYamlDocument | null) => {
+    if (!document) return config
+    const hasExplicitDailyLossLimit = document.fields.some((field) => field.path === DAILY_LOSS_LIMIT_RATIO_PATH || field.path === DAILY_LOSS_LIMIT_YUAN_PATH)
+    if (!hasExplicitDailyLossLimit) return config
+
+    const resolved = resolveDailyLossLimitFromDocument(document, config)
+    if (resolved.dailyLossLimitMode === config.dailyLossLimitMode) return config
+
+    return {
+      ...config,
+      dailyLossLimit: resolved.dailyLossLimit,
+      dailyLossLimitMode: resolved.dailyLossLimitMode,
+    }
+  }
 
   const inferSystemConfigFromDocument = (document: ParsedYamlDocument | null, commodityCode: string): SystemRuntimeConfig => {
     const base = buildDefaultSystemConfig(commodityCode)
@@ -817,13 +914,16 @@ export default function StrategyManagementPage() {
       return found?.value
     }
 
+    const dailyLossLimit = resolveDailyLossLimitFromDocument(document, base)
+
     return {
       commodityCode: commodityCode || base.commodityCode,
       initialCapital: base.initialCapital,
       positionFraction: String(readValue(["position_fraction"]) ?? base.positionFraction),
       slippagePerUnit: String(readValue(["transaction_costs.slippage_per_unit"]) ?? base.slippagePerUnit),
       commissionPerLotRoundTurn: String(readValue(["transaction_costs.commission_per_lot_round_turn"]) ?? base.commissionPerLotRoundTurn),
-      dailyLossLimit: String(readValue(["risk.daily_loss_limit", "risk.daily_loss_limit_yuan"]) ?? base.dailyLossLimit),
+      dailyLossLimit: dailyLossLimit.dailyLossLimit,
+      dailyLossLimitMode: dailyLossLimit.dailyLossLimitMode,
       maxDrawdown: String(readValue(["risk.max_drawdown", "risk.max_drawdown_pct"]) ?? base.maxDrawdown),
       perSymbolFuseYuan: String(readValue(["risk.per_symbol_fuse_yuan"]) ?? base.perSymbolFuseYuan),
       stopLossAtrMultiplier: String(readValue(["risk.stop_loss.atr_multiplier", "risk.stop_loss_atr_multiplier"]) ?? base.stopLossAtrMultiplier),
@@ -837,11 +937,22 @@ export default function StrategyManagementPage() {
 
   const resolveSystemConfigForDocument = (document: ParsedYamlDocument, strategyName?: string): SystemRuntimeConfig => {
     const commodityCode = document.basic.symbols[0] ? getContractVarietyCode(document.basic.symbols[0]) : systemConfig.commodityCode
+    const inferredConfig = inferSystemConfigFromDocument(document, commodityCode)
+
     if (strategyName && strategyName === selectedStrategyForRun) {
-      return { ...systemConfig, commodityCode: systemConfig.commodityCode || commodityCode }
+      return preserveDailyLossLimitSemantics(
+        normalizeSystemRuntimeConfig({ ...systemConfig, commodityCode: systemConfig.commodityCode || commodityCode }, systemConfig.commodityCode || commodityCode),
+        document,
+      )
     }
+
     const matchedPreset = commodityCode ? systemPresets.find((preset) => preset.commodityCode === commodityCode) : undefined
-    return matchedPreset ? { ...matchedPreset.config, commodityCode } : inferSystemConfigFromDocument(document, commodityCode)
+    if (!matchedPreset) return inferredConfig
+
+    return preserveDailyLossLimitSemantics(
+      normalizeSystemRuntimeConfig({ ...matchedPreset.config, commodityCode }, commodityCode),
+      document,
+    )
   }
 
   const prepareStrategyYamlForAction = async (name: string) => {
@@ -941,7 +1052,12 @@ export default function StrategyManagementPage() {
     if (matchedPreset) {
       setSelectedSystemPresetId((prev) => (prev === matchedPreset.id ? prev : matchedPreset.id))
       setSystemPresetName(matchedPreset.name)
-      setSystemConfig({ ...matchedPreset.config, commodityCode })
+      setSystemConfig(
+        preserveDailyLossLimitSemantics(
+          normalizeSystemRuntimeConfig({ ...matchedPreset.config, commodityCode }, commodityCode),
+          strategyYamlDocument,
+        ),
+      )
       return
     }
 
@@ -1265,7 +1381,12 @@ export default function StrategyManagementPage() {
     const preset = systemPresets.find((item) => item.id === presetId)
     if (!preset) return
     setSystemPresetName(preset.name)
-    setSystemConfig({ ...preset.config })
+    setSystemConfig(
+      preserveDailyLossLimitSemantics(
+        normalizeSystemRuntimeConfig(preset.config, preset.commodityCode),
+        strategyYamlDocument,
+      ),
+    )
     setSystemPresetMsg(`✓ 已载入商品预设：${preset.name}`)
   }
 
@@ -1285,7 +1406,7 @@ export default function StrategyManagementPage() {
       id: selectedSystemPresetId || createSystemPresetId(),
       name: presetName,
       commodityCode,
-      config: { ...systemConfig, commodityCode },
+      config: normalizeSystemRuntimeConfig({ ...systemConfig, commodityCode }, commodityCode),
       updatedAt: Date.now(),
     }
 
@@ -1298,7 +1419,7 @@ export default function StrategyManagementPage() {
     setSystemPresets(nextPresets)
     setSelectedSystemPresetId(nextPreset.id)
     setSystemPresetName(nextPreset.name)
-    setSystemConfig({ ...nextPreset.config })
+    setSystemConfig(normalizeSystemRuntimeConfig(nextPreset.config, nextPreset.commodityCode))
     setSystemPresetMsg(`✓ 已保存商品预设：${nextPreset.name}`)
   }
 
@@ -1519,6 +1640,7 @@ export default function StrategyManagementPage() {
   const displayRiskFields: ParsedYamlField[] = []
   const selectedPreset = systemPresets.find((preset) => preset.id === selectedSystemPresetId) ?? null
   const currentCommodityCode = systemConfig.commodityCode || (currentStrategyBasic?.symbols?.[0] ? getContractVarietyCode(currentStrategyBasic.symbols[0]) : "")
+  const isDailyLossLimitRatioMode = systemConfig.dailyLossLimitMode === "ratio"
   const selectedStrategyActiveResults = selectedStrategyForRun
     ? results
         .filter((result) =>
@@ -1780,9 +1902,18 @@ export default function StrategyManagementPage() {
                 <Input value={systemConfig.commissionPerLotRoundTurn} onChange={(event) => updateSystemConfig("commissionPerLotRoundTurn", event.target.value)} className="bg-neutral-900 border-neutral-600 text-white" />
               </div>
               <div className="rounded-lg p-3 border border-cyan-700/30 bg-neutral-900/70">
-                <label className="text-xs text-cyan-300 block mb-1">日亏损限制</label>
-                <Input value={formatPercentInput(systemConfig.dailyLossLimit)} onChange={(event) => updateSystemConfig("dailyLossLimit", parsePercentInput(event.target.value))} className="bg-neutral-900 border-neutral-600 text-white" />
-                <p className="text-[10px] text-neutral-500 mt-1">按百分比输入，当前保存值 {formatDecimalAsPercent(systemConfig.dailyLossLimit)}</p>
+                <label className="text-xs text-cyan-300 block mb-1">{isDailyLossLimitRatioMode ? "日亏损限制" : "日亏损限制（元）"}</label>
+                {isDailyLossLimitRatioMode ? (
+                  <>
+                    <Input value={formatPercentInput(systemConfig.dailyLossLimit)} onChange={(event) => updateSystemConfig("dailyLossLimit", parsePercentInput(event.target.value))} className="bg-neutral-900 border-neutral-600 text-white" />
+                    <p className="text-[10px] text-neutral-500 mt-1">比例模式：按百分比输入并写回 daily_loss_limit，当前保存值 {formatDecimalAsPercent(systemConfig.dailyLossLimit)}</p>
+                  </>
+                ) : (
+                  <>
+                    <Input value={systemConfig.dailyLossLimit} onChange={(event) => updateSystemConfig("dailyLossLimit", event.target.value)} className="bg-neutral-900 border-neutral-600 text-white" />
+                    <p className="text-[10px] text-neutral-500 mt-1">金额模式：按金额输入并写回 daily_loss_limit_yuan，当前保存值 {formatCurrencyAmount(systemConfig.dailyLossLimit)}</p>
+                  </>
+                )}
               </div>
               <div className="rounded-lg p-3 border border-cyan-700/30 bg-neutral-900/70">
                 <label className="text-xs text-cyan-300 block mb-1">最大回撤</label>
@@ -1826,7 +1957,7 @@ export default function StrategyManagementPage() {
             </label>
 
             <p className="text-[11px] text-neutral-500 leading-relaxed">
-              这里保存的是商品级系统参数预设。回测前系统会把这些配置统一覆盖到 position_fraction、transaction_costs 和 risk，策略下半区只保留 YAML 逻辑层参数。
+              这里保存的是商品级系统参数预设。回测前系统会把这些配置统一覆盖到 position_fraction、transaction_costs 和 risk；其中日亏损限制会沿用 YAML 原字段语义：daily_loss_limit 为比例，daily_loss_limit_yuan 为金额。
             </p>
           </div>
 
