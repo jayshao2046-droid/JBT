@@ -51,7 +51,7 @@
 
 ### 批次 C（P1，backtest 双引擎执行编排层）
 
-- 状态：pending_lockback
+- 状态：locked
 - 保护路径：`services/backtest/**`
 - 白名单文件：
   1. `services/backtest/src/backtest/local_engine.py`（新建）
@@ -62,9 +62,8 @@
 - 签发时间：2026-04-07
 - 执行 Agent：回测
 - 终审结论：⚠️ 有保留通过（2026-04-07）
-- 终审 review-id：`REVIEW-TASK-0018-C`
-- 保留项：(1) 批次 A api.md 未提交须先独立 commit；(2) artifacts.equity_curve=None 待批次 D/F 补全；(3) job.strategy_id 缺失待批次 D/E 补全
-- 锁回条件：先独立提交批次 A commit → 再独立提交批次 C commit → 锁回状态改为 locked
+- lockback 结果：approved（review-id: REVIEW-TASK-0018-C）
+- 保留项（后续补全）：(1) artifacts.equity_curve=None 待批次 D/F；(2) job.strategy_id 待批次 D/E
 
 ### 批次 D（P1，系统级风控联动层）
 
