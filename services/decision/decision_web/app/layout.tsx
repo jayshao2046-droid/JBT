@@ -1,0 +1,20 @@
+import type React from "react"
+import type { Metadata } from "next"
+import "./globals.css"
+
+export const metadata: Metadata = {
+  title: "JBT 决策看板",
+  description: "JBT 量化交易决策端控制台",
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="zh-CN">
+      <body className="bg-black text-white antialiased">{children}</body>
+    </html>
+  )
+}
