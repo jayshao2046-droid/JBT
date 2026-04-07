@@ -14,97 +14,17 @@ import {
   ResponsiveContainer,
 } from "recharts"
 
-const kpiData = [
-  { label: "当前队列数", value: "6", unit: "个", trend: "+2" },
-  { label: "运行中任务", value: "2", unit: "个", trend: "→" },
-  { label: "今日完成数", value: "8", unit: "个", trend: "+3" },
-  { label: "最佳收益提升", value: "15.2%", unit: "", trend: "↑" },
-  { label: "平均研究时长", value: "4.5h", unit: "", trend: "-0.3h" },
-  { label: "非交易时段算力利用", value: "78%", unit: "", trend: "+5%" },
-]
+// 研究中心数据暂无专用 API，展示空状态
+const kpiData: { label: string; value: string; unit: string; trend: string }[] = []
+const scheduleData: { time: string; active: number; label: string }[] = []
+const completionTrendData: { time: string; completed: number }[] = []
+const bestResultsData: { strategy: string; improvement: number; sharpeRatio: number; maxDD: number; winRate: number }[] = []
+const activeTasksData: { id: number; strategy: string; taskType: string; progress: number; eta: string; status: string }[] = []
+const researchCompleteNotification: {
+  strategy: string; bestResult: number; sharpeRatio: number; maxDD: number; winRate: number; version: string; timestamp: string
+} | null = null
 
-const scheduleData = [
-  { time: "00:00", active: 0, label: "00:00" },
-  { time: "03:00", active: 1, label: "03:00" },
-  { time: "06:00", active: 2, label: "06:00" },
-  { time: "09:00", active: 0, label: "09:00交易开始" },
-  { time: "12:00", active: 0, label: "12:00" },
-  { time: "15:00", active: 0, label: "15:00交易中" },
-  { time: "18:00", active: 0, label: "18:00" },
-  { time: "21:00", active: 2, label: "21:00" },
-  { time: "23:59", active: 1, label: "23:59" },
-]
 
-const completionTrendData = [
-  { time: "06:00", completed: 0 },
-  { time: "09:00", completed: 1 },
-  { time: "12:00", completed: 2 },
-  { time: "15:00", completed: 2 },
-  { time: "18:00", completed: 5 },
-  { time: "21:00", completed: 8 },
-  { time: "24:00", completed: 8 },
-]
-
-const bestResultsData = [
-  {
-    strategy: "MA交叉策略",
-    improvement: 12.3,
-    sharpeRatio: 2.14,
-    maxDD: 8.5,
-    winRate: 62,
-  },
-  {
-    strategy: "动量因子",
-    improvement: 15.2,
-    sharpeRatio: 2.31,
-    maxDD: 7.2,
-    winRate: 65,
-  },
-  {
-    strategy: "均值回归",
-    improvement: 8.7,
-    sharpeRatio: 1.89,
-    maxDD: 9.1,
-    winRate: 58,
-  },
-]
-
-const activeTasksData = [
-  {
-    id: 1,
-    strategy: "MA交叉策略-期货",
-    taskType: "参数搜索",
-    progress: 65,
-    eta: "2小时",
-    status: "运行中",
-  },
-  {
-    id: 2,
-    strategy: "动量因子-多品种",
-    taskType: "因子优化",
-    progress: 40,
-    eta: "3小时",
-    status: "运行中",
-  },
-  {
-    id: 3,
-    strategy: "均值回归-能源",
-    taskType: "回测验证",
-    progress: 100,
-    eta: "完成",
-    status: "已完成",
-  },
-]
-
-const researchCompleteNotification = {
-  strategy: "MA交叉策略-期货",
-  bestResult: 12.3,
-  sharpeRatio: 2.14,
-  maxDD: 8.5,
-  winRate: 62,
-  version: "v2.2.0",
-  timestamp: "2024-04-05 18:32",
-}
 
 export default function ResearchCenter() {
   return (
@@ -284,6 +204,7 @@ export default function ResearchCenter() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {researchCompleteNotification ? (
           <div className="bg-neutral-800 border border-neutral-700 rounded p-4 space-y-3">
             <div>
               <p className="text-xs text-neutral-400 mb-1">策略</p>
@@ -318,6 +239,9 @@ export default function ResearchCenter() {
               <p className="text-xs text-neutral-500 mt-2">时间: {researchCompleteNotification.timestamp}</p>
             </div>
           </div>
+          ) : (
+            <p className="text-center text-neutral-500 py-8">暂无研究完成通知</p>
+          )}
           <div className="flex gap-2">
             <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm">
               查看飞书通知

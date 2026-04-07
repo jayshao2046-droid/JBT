@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,67 +14,45 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
+import { fetchSignals, type DecisionRecord } from "@/lib/api"
 
-const kpiData = [
-  { label: "候选信号数", value: "128", unit: "条", color: "blue" },
-  { label: "已拒绝数", value: "18", unit: "条", color: "red" },
-  { label: "L1 通过率", value: "86%", unit: "", color: "green" },
-  { label: "L2 通过率", value: "72%", unit: "", color: "green" },
-  { label: "L3 触发数", value: "12", unit: "条", color: "purple" },
-  { label: "已推送模拟交易", value: "92", unit: "条", color: "cyan" },
-]
+interface SignalRow {
+  id: string
+  time: string
+  strategy: string
+  symbol: string
+  direction: string
+  strength: number
+  factors: number
+  l1: string
+  l2: string
+  l3: string
+  status: string
+}
 
-const signalTableData = [
-  {
-    id: 1,
-    time: "14:32:15",
-    strategy: "MA交叉策略",
-    symbol: "IF2506",
-    direction: "多头",
-    strength: 0.85,
-    factors: 4,
-    l1: "通过",
-    l2: "通过",
-    l3: "通过",
-    status: "已推送",
-  },
-  {
-    id: 2,
-    time: "14:31:42",
-    strategy: "动量因子",
-    symbol: "IC2506",
-    direction: "空头",
-    strength: 0.72,
-    factors: 3,
-    l1: "通过",
-    l2: "拒绝",
-    l3: "-",
-    status: "已拒绝",
-  },
-  {
-    id: 3,
-    time: "14:30:08",
-    strategy: "均值回归",
-    symbol: "IH2506",
-    direction: "多头",
-    strength: 0.65,
-    factors: 2,
-    l1: "通过",
-    l2: "通过",
-    l3: "审核中",
-    status: "待发送",
-  },
-]
-
-const timelineData = [
-  { stage: "生成信号", count: 128, color: "#3b82f6" },
-  { stage: "L1 审查", count: 112, color: "#8b5cf6" },
-  { stage: "L2 审查", count: 81, color: "#ec4899" },
-  { stage: "L3 审查", count: 12, color: "#06b6d4" },
-  { stage: "推送待执行", count: 92, color: "#10b981" },
-]
-
-type SignalRow = typeof signalTableData[0]
+function mapSignalRow(rec: DecisionRecord): SignalRow {
+  const timeStr = rec.generated_at ? new Date(rec.generated_at).toLocaleTimeString("zh-CN", { hour12: false }) : "—"
+  const l1 = rec.eligibility_status !== "rejected" ? "通过" : "拒绝"
+  const l2 = rec.layer?.startsWith("L2") ? "通过" : rec.eligibility_status === "rejected" ? "拒绝" : "—"
+  const l3 = rec.layer?.startsWith("L3") ? "审核中" : "—"
+  const displayStatus =
+    rec.publish_workflow_status === "pushed" ? "已推送"
+    : rec.eligibility_status === "rejected" ? "已拒绝"
+    : "待发送"
+  return {
+    id: rec.decision_id,
+    time: timeStr,
+    strategy: rec.strategy_id,
+    symbol: rec.publish_target ?? "—",
+    direction: rec.action === "buy" ? "多头" : rec.action === "sell" ? "空头" : "—",
+    strength: rec.confidence ?? 0,
+    factors: 0,
+    l1,
+    l2,
+    l3,
+    status: displayStatus,
+  }
+}
 
 const getStatusBadgeColor = (status: string) => {
   switch (status) {
@@ -113,7 +91,42 @@ const getKPIColor = (color: string) => {
 }
 
 export default function SignalReview() {
+  const [rawSignals, setRawSignals] = useState<DecisionRecord[]>([])
+  const [loading, setLoading] = useState(true)
   const [selectedSignal, setSelectedSignal] = useState<SignalRow | null>(null)
+
+  useEffect(() => {
+    fetchSignals()
+      .then(setRawSignals)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const signalTableData = rawSignals.map(mapSignalRow)
+
+  const total = signalTableData.length
+  const rejected = signalTableData.filter(s => s.status === "已拒绝").length
+  const pushed = signalTableData.filter(s => s.status === "已推送").length
+  const l3Triggered = signalTableData.filter(s => s.l3 !== "—").length
+  const l1Rate = total > 0 ? Math.round(((total - rejected) / total) * 100) + "%" : "—"
+  const l2Rate = total > 0 ? Math.round((pushed / total) * 100) + "%" : "—"
+
+  const kpiData = [
+    { label: "候选信号数", value: String(total), unit: "条", color: "blue" },
+    { label: "已拒绝数", value: String(rejected), unit: "条", color: "red" },
+    { label: "L1 通过率", value: l1Rate, unit: "", color: "green" },
+    { label: "L2 通过率", value: l2Rate, unit: "", color: "green" },
+    { label: "L3 触发数", value: String(l3Triggered), unit: "条", color: "purple" },
+    { label: "已推送模拟交易", value: String(pushed), unit: "条", color: "cyan" },
+  ]
+
+  const timelineData = [
+    { stage: "生成信号", count: total },
+    { stage: "L1 审查", count: total - rejected },
+    { stage: "L2 审查", count: pushed + l3Triggered },
+    { stage: "L3 审查", count: l3Triggered },
+    { stage: "推送待执行", count: pushed },
+  ]
 
   return (
     <div className="p-6 space-y-6 bg-neutral-950 min-h-screen">

@@ -68,6 +68,11 @@ def review_signal(req: DecisionRequest) -> dict:
     return result
 
 
+@router.get("")
+def list_decisions() -> list[dict]:
+    return list(_decisions.values())
+
+
 @router.get("/{decision_id}")
 def get_decision(decision_id: str) -> dict:
     result = _decisions.get(decision_id)

@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -15,60 +16,7 @@ import {
   Bar,
   Line,
 } from "recharts"
-
-const kpiData = [
-  { label: "当前活跃策略数", value: "24", unit: "个", trend: "+2" },
-  { label: "可执行策略数", value: "18", unit: "个", trend: "+1" },
-  { label: "研究队列数", value: "6", unit: "个", trend: "-1" },
-  { label: "今日新增信号数", value: "128", unit: "条", trend: "+15" },
-  { label: "L1 拦截数", value: "8", unit: "条", trend: "+2" },
-  { label: "L2 升级数", value: "3", unit: "条", trend: "→" },
-  { label: "L3 在线复核数", value: "12", unit: "条", trend: "+5" },
-  { label: "通知异常数", value: "0", unit: "条", trend: "✓" },
-]
-
-// 流水线终态节点为"模拟发布目标"，体现执行门禁语义
-const pipelineData = [
-  { stage: "策略包入库", count: 24, color: "#f97316" },
-  { stage: "因子同步", count: 24, color: "#22c55e" },
-  { stage: "回测验证", count: 22, color: "#3b82f6" },
-  { stage: "研究完成", count: 20, color: "#8b5cf6" },
-  { stage: "人工确认", count: 18, color: "#ec4899" },
-  { stage: "执行发布", count: 18, color: "#06b6d4" },
-  { stage: "模拟发布目标", count: 18, color: "#10b981" },
-]
-
-const blockageItems = [
-  { type: "因子失配", count: 2, severity: "warning" },
-  { type: "回测过期", count: 3, severity: "alert" },
-  { type: "模型离线", count: 0, severity: "pass" },
-  { type: "通知失败", count: 1, severity: "warning" },
-]
-
-const signalTrendData = [
-  { time: "09:00", count: 5 },
-  { time: "10:00", count: 8 },
-  { time: "11:00", count: 12 },
-  { time: "12:00", count: 7 },
-  { time: "13:30", count: 15 },
-  { time: "14:00", count: 18 },
-  { time: "15:00", count: 12 },
-]
-
-const researchTrendData = [
-  { time: "06:00", completed: 0, running: 2 },
-  { time: "09:00", completed: 1, running: 3 },
-  { time: "12:00", completed: 3, running: 2 },
-  { time: "15:00", completed: 5, running: 1 },
-  { time: "18:00", completed: 8, running: 3 },
-  { time: "21:00", completed: 12, running: 2 },
-]
-
-const pendingStrategies = [
-  { id: 1, name: "MA交叉策略-期货", status: "待确认", progress: "研究完成", lastUpdate: "2小时前" },
-  { id: 2, name: "动量因子-多品种", status: "待确认", progress: "回测通过", lastUpdate: "3小时前" },
-  { id: 3, name: "均值回归-能源", status: "待执行", progress: "人工审核中", lastUpdate: "5小时前" },
-]
+import { fetchStrategies, fetchSignals, type StrategyPackage, type DecisionRecord } from "@/lib/api"
 
 const getSeverityColor = (severity: string) => {
   switch (severity) {
@@ -84,6 +32,62 @@ const getSeverityColor = (severity: string) => {
 }
 
 export default function DecisionOverview() {
+  const [strategies, setStrategies] = useState<StrategyPackage[]>([])
+  const [signals, setSignals] = useState<DecisionRecord[]>([])
+
+  useEffect(() => {
+    fetchStrategies().then(setStrategies).catch(() => {})
+    fetchSignals().then(setSignals).catch(() => {})
+  }, [])
+
+  const active = strategies.filter(s => s.lifecycle_status === "in_production").length
+  const executable = strategies.filter(s => ["pending_execution", "in_production"].includes(s.lifecycle_status)).length
+  const inResearch = strategies.filter(s => s.lifecycle_status === "in_research").length
+  const pushed = signals.filter(s => s.publish_workflow_status === "pushed").length
+  const rejected = signals.filter(s => s.eligibility_status === "rejected").length
+
+  const kpiData = [
+    { label: "当前活跃策略数", value: String(active), unit: "个", trend: "+0" },
+    { label: "可执行策略数", value: String(executable), unit: "个", trend: "+0" },
+    { label: "研究队列数", value: String(inResearch), unit: "个", trend: "→" },
+    { label: "今日新增信号数", value: String(signals.length), unit: "条", trend: "+0" },
+    { label: "L1 拦截数", value: String(rejected), unit: "条", trend: "+0" },
+    { label: "L2 升级数", value: "—", unit: "条", trend: "→" },
+    { label: "L3 在线复核数", value: "—", unit: "条", trend: "→" },
+    { label: "通知异常数", value: "0", unit: "条", trend: "✓" },
+  ]
+
+  const pipelineData = [
+    { stage: "策略包入库", count: strategies.length, color: "#f97316" },
+    { stage: "因子同步", count: strategies.filter(s => s.factor_sync_status === "aligned").length, color: "#22c55e" },
+    { stage: "回测验证", count: strategies.filter(s => s.backtest_certificate_id).length, color: "#3b82f6" },
+    { stage: "研究完成", count: strategies.filter(s => ["research_done", "backtest_confirmed", "pending_execution", "in_production"].includes(s.lifecycle_status)).length, color: "#8b5cf6" },
+    { stage: "人工确认", count: strategies.filter(s => ["backtest_confirmed", "pending_execution", "in_production"].includes(s.lifecycle_status)).length, color: "#ec4899" },
+    { stage: "执行发布", count: executable, color: "#06b6d4" },
+    { stage: "模拟发布目标", count: active, color: "#10b981" },
+  ]
+
+  const blockageItems = [
+    { type: "因子失配", count: strategies.filter(s => s.factor_sync_status === "mismatch").length, severity: "warning" },
+    { type: "回测过期", count: strategies.filter(s => !s.backtest_certificate_id && ["in_production", "pending_execution"].includes(s.lifecycle_status)).length, severity: "alert" },
+    { type: "模型离线", count: 0, severity: "pass" },
+    { type: "通知失败", count: 0, severity: "pass" },
+  ]
+
+  const signalTrendData: { time: string; count: number }[] = []
+  const researchTrendData: { time: string; completed: number; running: number }[] = []
+
+  const pendingStrategies = strategies
+    .filter(s => ["backtest_confirmed", "pending_execution"].includes(s.lifecycle_status))
+    .slice(0, 5)
+    .map(s => ({
+      id: s.strategy_id,
+      name: s.strategy_name,
+      status: s.lifecycle_status === "pending_execution" ? "待执行" : "待确认",
+      progress: s.lifecycle_status === "pending_execution" ? "回测确认" : "研究完成",
+      lastUpdate: (s.updated_at || s.created_at)?.slice(0, 10) ?? "—",
+    }))
+
   return (
     <div className="p-6 space-y-6 bg-neutral-950 min-h-screen">
       {/* KPI 第一行 */}

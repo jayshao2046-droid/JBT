@@ -14,47 +14,13 @@ import {
   ResponsiveContainer,
 } from "recharts"
 
-const kpiData = [
-  { label: "今日报警数", value: "12", unit: "条", color: "red" },
-  { label: "因子同步异常", value: "2", unit: "条", color: "yellow" },
-  { label: "研究完成通知", value: "8", unit: "条", color: "green" },
-  { label: "信号工作流汇报", value: "128", unit: "条", color: "blue" },
-  { label: "日报发送状态", value: "已发送", unit: "", color: "green" },
-  { label: "邮件通道状态", value: "正常", unit: "", color: "green" },
-]
-
-const systemAlerts = [
-  { id: 1, message: "Ollama 本地模型服务高CPU占用", time: "14:35", severity: "warning" },
-  { id: 2, message: "在线L3模型响应延迟 > 50ms", time: "14:28", severity: "alert" },
-  { id: 3, message: "研究任务队列已满", time: "14:15", severity: "warning" },
-]
-
-const riskControlAlerts = [
-  { id: 1, message: "因子同步失败: BOLL 回测数据缺失", time: "14:42", severity: "alert" },
-  { id: 2, message: "KDJ 因子有效性持续下降", time: "13:50", severity: "warning" },
-]
-
-const notificationChannels = [
-  { channel: "飞书", status: "正常", lastSent: "14:45", successRate: 100, icon: MessageSquare },
-  { channel: "邮件", status: "正常", lastSent: "14:40", successRate: 95, icon: Mail },
-]
-
-const dailyStats = {
-  strategyResearch: 6,
-  completedResearch: 3,
-  enterProduction: 2,
-  intercepted: 8,
-  sentToSim: 92,
-}
-
-const trendData = [
-  { time: "06:00", alerts: 2 },
-  { time: "09:00", alerts: 5 },
-  { time: "12:00", alerts: 8 },
-  { time: "15:00", alerts: 10 },
-  { time: "18:00", alerts: 12 },
-  { time: "21:00", alerts: 9 },
-]
+// 通知报表数据暂无专用 API，展示空状态
+const kpiData: { label: string; value: string; unit: string; color: string }[] = []
+const systemAlerts: { id: number; message: string; time: string; severity: string }[] = []
+const riskControlAlerts: { id: number; message: string; time: string; severity: string }[] = []
+const notificationChannels: { channel: string; status: string; lastSent: string; successRate: number }[] = []
+const dailyStats = { strategyResearch: 0, completedResearch: 0, enterProduction: 0, intercepted: 0, sentToSim: 0 }
+const trendData: { time: string; alerts: number }[] = []
 
 const getSeverityColor = (severity: string) => {
   switch (severity) {
@@ -191,7 +157,7 @@ export default function NotificationsReport() {
               <div key={idx} className="border border-neutral-700 rounded p-3">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <channel.icon className="w-4 h-4 text-neutral-400" />
+                    <MessageSquare className="w-4 h-4 text-neutral-400" />
                     <span className="text-sm font-medium text-white">{channel.channel}</span>
                   </div>
                   <Badge className="bg-green-900 text-green-400">{channel.status}</Badge>

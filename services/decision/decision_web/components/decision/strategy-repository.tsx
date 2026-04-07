@@ -1,86 +1,54 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ChevronRight, FileText, Download, Upload, Trash2 } from "lucide-react"
+import { fetchStrategies, type StrategyPackage } from "@/lib/api"
 
 // 8 状态机：导入→预约→研究中→研究完成→回测确认→待执行→生产中→已下架
-const kpiData = [
-  { label: "策略包总数", value: "42", status: "pass" },
-  { label: "已导入数", value: "5", status: "pass" },
-  { label: "已预约数", value: "8", status: "pass" },
-  { label: "研究中", value: "6", status: "pass" },
-  { label: "研究完成", value: "7", status: "pass" },
-  { label: "回测确认", value: "5", status: "pass" },
-  { label: "待执行", value: "7", status: "pass" },
-  { label: "生产中", value: "3", status: "pass" },
-  { label: "已下架", value: "1", status: "pass" },
-]
+const LIFECYCLE_CN: Record<string, string> = {
+  imported: "已导入",
+  reserved: "已预约",
+  in_research: "研究中",
+  research_done: "研究完成",
+  backtest_confirmed: "回测确认",
+  pending_execution: "待执行",
+  in_production: "生产中",
+  retired: "已下架",
+}
 
-const strategyFolders = [
-  { name: "全部策略", count: 42, icon: "📊" },
-  { name: "市场风格", children: [
-    { name: "趋势跟踪", count: 15 },
-    { name: "均值回归", count: 10 },
-    { name: "高频交易", count: 8 },
-  ]},
-  { name: "品种分类", children: [
-    { name: "商品期货", count: 20 },
-    { name: "金融期货", count: 15 },
-    { name: "跨期套利", count: 7 },
-  ]},
-  { name: "状态筛选", children: [
-    { name: "生产活跃", count: 3 },
-    { name: "研究中", count: 6 },
-    { name: "已下架", count: 1 },
-  ]},
-]
+interface Strategy {
+  id: string
+  name: string
+  category: string
+  status: string
+  version: string
+  lastBacktest: string
+  backtestStatus: string
+  factors: string[]
+  factorsAllSynced: boolean
+  backTestAge: number
+  description: string
+}
 
-const strategies = [
-  {
-    id: 1,
-    name: "MA交叉策略-期货",
-    category: "趋势跟踪",
-    status: "生产中",
-    version: "v2.1.3",
-    lastBacktest: "2024-04-05",
-    backtestStatus: "有效",
-    factors: ["MA5", "MA20", "RSI14"],
-    factorsAllSynced: true,
-    backTestAge: 2,
-    description: "简单MA交叉，支持多品种",
-  },
-  {
-    id: 2,
-    name: "动量因子-多品种",
-    category: "趋势跟踪",
-    status: "待执行",
-    version: "v1.8.2",
-    lastBacktest: "2024-04-04",
-    backtestStatus: "有效",
-    factors: ["MACD", "KDJ"],
-    factorsAllSynced: true,
-    backTestAge: 3,
-    description: "基于动量的多策略组合",
-  },
-  {
-    id: 3,
-    name: "均值回归-能源",
-    category: "均值回归",
-    status: "研究中",
-    version: "v1.5.1",
-    lastBacktest: "2024-04-02",
-    backtestStatus: "进行中",
-    factors: ["BOLL", "ATR20"],
-    factorsAllSynced: false,
-    backTestAge: 5,
-    description: "能源品种专用均值回归",
-  },
-]
-
-type Strategy = typeof strategies[0]
+function mapStrategy(pkg: StrategyPackage): Strategy {
+  const dayAge = Math.floor((Date.now() - new Date(pkg.updated_at || pkg.created_at).getTime()) / 86_400_000)
+  return {
+    id: pkg.strategy_id,
+    name: pkg.strategy_name,
+    category: pkg.template_id ?? "—",
+    status: LIFECYCLE_CN[pkg.lifecycle_status] ?? pkg.lifecycle_status,
+    version: pkg.strategy_version,
+    lastBacktest: (pkg.updated_at || pkg.created_at).slice(0, 10),
+    backtestStatus: pkg.backtest_certificate_id ? "有效" : "进行中",
+    factors: [],
+    factorsAllSynced: pkg.factor_sync_status === "aligned",
+    backTestAge: dayAge,
+    description: pkg.research_snapshot_id ?? "",
+  }
+}
 
 const getStatusBadgeColor = (status: string) => {
   switch (status) {
@@ -124,9 +92,44 @@ const canEnterPublish = (strategy: Strategy) => {
 }
 
 export default function StrategyRepository() {
+  const [rawStrategies, setRawStrategies] = useState<StrategyPackage[]>([])
+  const [loading, setLoading] = useState(true)
   const [selectedFolder, setSelectedFolder] = useState("全部策略")
-  const [selectedStrategy, setSelectedStrategy] = useState<Strategy>(strategies[0])
+  const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null)
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    fetchStrategies()
+      .then(data => {
+        setRawStrategies(data)
+        if (data.length > 0) setSelectedStrategy(mapStrategy(data[0]))
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const strategies = rawStrategies.map(mapStrategy)
+
+  const kpiData = [
+    { label: "策略包总数", value: String(strategies.length) },
+    { label: "已导入数", value: String(strategies.filter(s => s.status === "已导入").length) },
+    { label: "已预约数", value: String(strategies.filter(s => s.status === "已预约").length) },
+    { label: "研究中", value: String(strategies.filter(s => s.status === "研究中").length) },
+    { label: "研究完成", value: String(strategies.filter(s => s.status === "研究完成").length) },
+    { label: "回测确认", value: String(strategies.filter(s => s.status === "回测确认").length) },
+    { label: "待执行", value: String(strategies.filter(s => s.status === "待执行").length) },
+    { label: "生产中", value: String(strategies.filter(s => s.status === "生产中").length) },
+    { label: "已下架", value: String(strategies.filter(s => s.status === "已下架").length) },
+  ]
+
+  const strategyFolders = [
+    { name: "全部策略", count: strategies.length },
+    { name: "状态筛选", children: [
+      { name: "生产活跃", count: strategies.filter(s => s.status === "生产中").length },
+      { name: "研究中", count: strategies.filter(s => s.status === "研究中").length },
+      { name: "已下架", count: strategies.filter(s => s.status === "已下架").length },
+    ]},
+  ]
 
   const toggleFolder = (name: string) => {
     setExpandedFolders({

@@ -1,55 +1,16 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Clock, AlertTriangle } from "lucide-react"
+import { fetchModelStatus, type ModelStatus } from "@/lib/api"
 
-const kpiData = [
-  { label: "Ollama 状态", value: "运行中", status: "pass", color: "green" },
-  { label: "在线模型供应商", value: "正常", status: "pass", color: "blue" },
-  { label: "因子同步状态", value: "就绪", status: "pass", color: "green" },
-  { label: "回测链路状态", value: "正常", status: "pass", color: "green" },
-  { label: "发布门禁状态", value: "启用", status: "pass", color: "orange" },
-  { label: "通知服务状态", value: "正常", status: "pass", color: "green" },
-]
-
-const localModels = [
-  { name: "Qwen3 14B", status: "running", latency: "2.3ms", memory: "24GB", capacity: "主用" },
-  { name: "DeepSeek-R1 14B", status: "ready", latency: "2.8ms", memory: "24GB", capacity: "兼容" },
-  { name: "XGBoost", status: "running", latency: "1.2ms", memory: "4GB", capacity: "研究" },
-]
-
-const onlineModels = [
-  {
-    name: "Qwen3.6-Plus",
-    provider: "Alibaba",
-    status: "default",
-    latency: "45ms",
-    capacity: "默认 L3",
-  },
-  {
-    name: "Qwen3-Max",
-    provider: "Alibaba",
-    status: "upgrade",
-    latency: "60ms",
-    capacity: "升级复核",
-  },
-  {
-    name: "DeepSeek-V3.2",
-    provider: "DeepSeek",
-    status: "standby",
-    latency: "50ms",
-    capacity: "在线备援",
-  },
-]
-
-const configChangeLog = [
-  { time: "2024-04-05 18:32", event: "模型切换", detail: "Qwen3 14B 主用模型就绪", user: "系统自动" },
-  { time: "2024-04-05 14:15", event: "门禁变更", detail: "启用 L3 在线模型复核", user: "admin@jbt" },
-  { time: "2024-04-04 22:00", event: "研究窗口调整", detail: "非交易时段研究启用", user: "系统自动" },
-  { time: "2024-04-04 09:00", event: "模型激活", detail: "XGBoost 研究模型启用", user: "admin@jbt" },
-]
+// config / runtime 数据通过 /models/status 获取门禁配置
+const localModels: { name: string; status: string; latency: string; memory: string; capacity: string }[] = []
+const onlineModels: { name: string; provider: string; status: string; latency: string; capacity: string }[] = []
+const configChangeLog: { time: string; event: string; detail: string; user: string }[] = []
 
 const getStatusBadgeColor = (status: string) => {
   switch (status) {
@@ -82,6 +43,21 @@ const getModelStatusColor = (status: string) => {
 }
 
 export default function ConfigRuntime() {
+  const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null)
+
+  useEffect(() => {
+    fetchModelStatus().then(setModelStatus).catch(() => {})
+  }, [])
+
+  const kpiData = [
+    { label: "执行门禁状态", value: modelStatus ? (modelStatus.execution_gate_enabled ? "启用" : "关闭") : "—", status: modelStatus?.execution_gate_enabled ? "pass" : "warning", color: "orange" },
+    { label: "实盘门禁", value: modelStatus ? (modelStatus.live_trading_gate_locked ? "锁定" : "开放") : "—", status: modelStatus?.live_trading_gate_locked ? "pass" : "alert", color: "red" },
+    { label: "回测证书要求", value: modelStatus ? (modelStatus.model_router_require_backtest_cert ? "强制" : "宽松") : "—", status: "pass", color: "blue" },
+    { label: "研究快照要求", value: modelStatus ? (modelStatus.model_router_require_research_snapshot ? "强制" : "宽松") : "—", status: "pass", color: "blue" },
+    { label: "执行目标", value: modelStatus?.execution_gate_target ?? "—", status: "pass", color: "green" },
+    { label: "通知服务状态", value: "—", status: "pass", color: "green" },
+  ]
+
   return (
     <div className="p-6 space-y-6 bg-neutral-950 min-h-screen">
       {/* KPI 卡片 */}

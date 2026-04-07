@@ -1,117 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertTriangle } from "lucide-react"
-
-const kpiData = [
-  { label: "本地主模型状态", value: "就绪", status: "pass", color: "green" },
-  { label: "在线 L3 状态", value: "连接", status: "pass", color: "blue" },
-  { label: "平均决策延迟", value: "2.3ms", status: "pass", color: "orange" },
-  { label: "已注册因子数", value: "48", status: "pass", color: "purple" },
-  { label: "已对齐回测因子", value: "45", status: "warning", color: "yellow" },
-  { label: "过期因子数", value: "3", status: "alert", color: "red" },
-]
-
-const factorValidityData = [
-  { name: "MA5", validity: 0.92, stability: 0.87, recent: 0.89 },
-  { name: "RSI14", validity: 0.88, stability: 0.85, recent: 0.82 },
-  { name: "MACD", validity: 0.85, stability: 0.91, recent: 0.79 },
-  { name: "KDJ", validity: 0.79, stability: 0.76, recent: 0.72 },
-  { name: "ATR20", validity: 0.83, stability: 0.88, recent: 0.85 },
-  { name: "BOLL", validity: 0.81, stability: 0.79, recent: 0.75 },
-  { name: "CCI20", validity: 0.76, stability: 0.73, recent: 0.68 },
-  { name: "STOCH", validity: 0.74, stability: 0.71, recent: 0.65 },
-]
-
-const factorSyncData = [
-  { name: "MA5", synced: 1, expired: 0, missing: 0, waiting: 0 },
-  { name: "RSI14", synced: 1, expired: 0, missing: 0, waiting: 0 },
-  { name: "MACD", synced: 1, expired: 0, missing: 0, waiting: 0 },
-  { name: "KDJ", synced: 0, expired: 1, missing: 0, waiting: 0 },
-  { name: "ATR20", synced: 1, expired: 0, missing: 0, waiting: 0 },
-  { name: "BOLL", synced: 0, expired: 0, missing: 1, waiting: 0 },
-  { name: "CCI20", synced: 1, expired: 0, missing: 0, waiting: 0 },
-  { name: "STOCH", synced: 0, expired: 0, missing: 0, waiting: 1 },
-]
-
-// XGBoost=running, LightGBM=disabled, CatBoost=disabled（未引入）
-const models = [
-  {
-    name: "Qwen3 14B",
-    type: "本地主模型",
-    status: "running",
-    latency: "2.3ms",
-    accuracy: 0.94,
-    capacity: "14B参数",
-  },
-  {
-    name: "DeepSeek-R1 14B",
-    type: "兼容本地模型",
-    status: "ready",
-    latency: "2.8ms",
-    accuracy: 0.92,
-    capacity: "14B参数",
-  },
-  {
-    name: "Qwen2.5",
-    type: "L1 审查模型",
-    status: "ready",
-    latency: "1.8ms",
-    accuracy: 0.88,
-    capacity: "可切换系列",
-  },
-  {
-    name: "Qwen3.6-Plus",
-    type: "默认在线 L3",
-    status: "running",
-    latency: "45ms",
-    accuracy: 0.96,
-    capacity: "云端部署",
-  },
-  {
-    name: "Qwen3-Max",
-    type: "升级复核卡",
-    status: "ready",
-    latency: "60ms",
-    accuracy: 0.97,
-    capacity: "云端部署",
-  },
-  {
-    name: "DeepSeek-V3.2",
-    type: "在线备援卡",
-    status: "standby",
-    latency: "50ms",
-    accuracy: 0.95,
-    capacity: "云端部署",
-  },
-  {
-    name: "DeepSeek-R1",
-    type: "争议复核卡",
-    status: "ready",
-    latency: "55ms",
-    accuracy: 0.93,
-    capacity: "云端部署",
-  },
-  {
-    name: "XGBoost",
-    type: "研究主线模型",
-    status: "running",
-    latency: "1.2ms",
-    accuracy: 0.91,
-    capacity: "本地部署",
-  },
-  {
-    name: "LightGBM",
-    type: "预留后端",
-    status: "disabled",
-    latency: "-",
-    accuracy: 0.89,
-    capacity: "灰态保留",
-  },
-]
+import { fetchModelStatus, type ModelStatus } from "@/lib/api"
 
 const getHeatmapColor = (value: number) => {
   if (value >= 0.9) return "bg-green-800 text-green-300"
@@ -150,6 +44,26 @@ const getModelStatusColor = (status: string) => {
 
 export default function ModelsFactors() {
   const [activeTab, setActiveTab] = useState("validity")
+  const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null)
+
+  useEffect(() => {
+    fetchModelStatus()
+      .then(setModelStatus)
+      .catch(() => {})
+  }, [])
+
+  const kpiData = [
+    { label: "执行门禁状态", value: modelStatus ? (modelStatus.execution_gate_enabled ? "启用" : "关闭") : "—", status: modelStatus?.execution_gate_enabled ? "pass" : "warning", color: "green" },
+    { label: "实盘门禁", value: modelStatus ? (modelStatus.live_trading_gate_locked ? "锁定" : "开放") : "—", status: modelStatus?.live_trading_gate_locked ? "pass" : "alert", color: "blue" },
+    { label: "回测证书要求", value: modelStatus ? (modelStatus.model_router_require_backtest_cert ? "强制" : "宽松") : "—", status: "pass", color: "orange" },
+    { label: "研究快照要求", value: modelStatus ? (modelStatus.model_router_require_research_snapshot ? "强制" : "宽松") : "—", status: "pass", color: "purple" },
+    { label: "执行目标", value: modelStatus?.execution_gate_target ?? "—", status: "pass", color: "yellow" },
+    { label: "因子数据", value: "—", status: "pass", color: "red" },
+  ]
+
+  const factorValidityData: { name: string; validity: number; stability: number; recent: number }[] = []
+  const factorSyncData: { name: string; synced: number; expired: number; missing: number; waiting: number }[] = []
+  const models: { name: string; type: string; status: string; latency: string; accuracy: number; capacity: string }[] = []
 
   return (
     <div className="p-6 space-y-6 bg-neutral-950 min-h-screen">
