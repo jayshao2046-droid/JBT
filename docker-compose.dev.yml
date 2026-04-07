@@ -88,9 +88,33 @@ services:
     environment:
       JBT_SERVICE_NAME: decision
       JBT_SERVICE_PORT: "8104"
+      BACKTEST_SERVICE_URL: http://backtest:8103
+      DATA_SERVICE_URL: http://data:8105
+      SIM_TRADING_SERVICE_URL: http://sim-trading:8101
+    env_file:
+      - path: services/decision/.env
+        required: false
     volumes:
       - ./services/decision:/app
       - ./services/decision/runtime:/runtime
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8104/health')"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  decision-web:
+    build: ./services/decision/decision_web
+    container_name: JBT-DECISION-WEB-3003
+    ports:
+      - "3003:3003"
+    environment:
+      BACKEND_BASE_URL: http://decision:8104
+      NODE_ENV: production
+    depends_on:
+      decision:
+        condition: service_healthy
 
   data:
     build: ./services/data
