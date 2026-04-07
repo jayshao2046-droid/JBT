@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0021
 - 审核角色：项目架构师
-- 审核阶段：旧决策域清洗升级迁移预审
+- 审核阶段：旧决策域清洗升级迁移预审 + 批次 A 契约白名单与 Token 草案终审
 - 审核时间：2026-04-07
-- 审核结论：通过（当前轮次只冻结任务边界、业务口径、拆批方案、保护级别与前置条件；本轮白名单仅限治理账本，不进入 `services/**`、`shared/contracts/**` 或 `integrations/**` 代码执行）
+- 审核结论：通过（预审结论继续有效；批次 A 草案已通过架构终审，当前正式状态为“待 Jay.S 签发 P0 Token”，不是“已执行”）
 
 ---
 
@@ -61,3 +61,12 @@
 1. **TASK-0021 预审通过。**
 2. **当前轮次只完成立项与治理冻结，不进入代码执行。**
 3. **后续进入实施前，必须先补齐首批文件级白名单、对应 Token 与公共项目提示词同步。**
+
+## 八、批次 A 草案终审结论
+
+1. **A-Core / A-Extension 拆法通过。**
+2. 当前正式公共口径冻结为：**`TASK-0021` 批次 A 草案已通过架构终审，待 Jay.S 签发 P0 Token；当前仍未进入 `shared/contracts/**` 实施。**
+3. `A-Core` 建议文件范围冻结为：`shared/contracts/README.md`、`shared/contracts/decision/api.md`、`shared/contracts/decision/strategy_package.md`、`shared/contracts/decision/research_snapshot.md`、`shared/contracts/decision/backtest_certificate.md`、`shared/contracts/decision/decision_request.md`、`shared/contracts/decision/decision_result.md`、`shared/contracts/decision/model_boundary.md`。
+4. `A-Extension` 条件范围冻结为：`shared/contracts/decision/notification_event.md`、`shared/contracts/decision/dashboard_projection.md`；仅在 Jay.S 明确要求批次 A 先冻结通知事件或看板只读聚合字段时，才进入后续 P0 签发。
+5. 收紧说明：Atlas 草案中“A-Extension 可与 A-Core 合批签发”的表述，不进入当前正式口径。原因是首批 P0 需要继续维持最小面，通知事件与看板只读聚合字段目前不构成决策主链契约冻结前置。
+6. `services/**`、`integrations/legacy-botquant/**` 与 legacy 目录继续锁定；不得把 `TASK-0021` 与 `TASK-0016` 或 `TASK-0012` 混批。

@@ -3,15 +3,15 @@
 ## Lock 信息
 
 - 任务 ID：TASK-0021
-- 阶段：旧决策域清洗升级迁移预审
-- 当前任务是否仍处于“预审未执行”状态：是；当前仅完成立项与治理冻结
+- 阶段：旧决策域清洗升级迁移预审 + 批次 A 契约白名单与 Token 草案终审
+- 当前任务是否仍处于“预审未执行”状态：是；当前仅完成治理冻结与批次 A 草案终审，仍未进入代码执行
 - 执行 Agent：
   - 项目架构师（当前预审）
   - Atlas（当前账本与调度留痕）
   - 决策 Agent（后续只读拆解 / 未来实施主体）
 - Token 摘要：
   - P-LOG 协同账本区文件：不需要文件级 Token
-  - 后续批次 A `shared/contracts/**`：P0
+  - 后续批次 A `shared/contracts/**`：P0（批次 A 草案已通过架构终审，待 Jay.S 签发）
   - 后续批次 B `integrations/legacy-botquant/**`：P0
   - 后续批次 C / D `services/decision/**`：P1
   - 后续批次 E `services/dashboard/**`：P1
@@ -57,10 +57,18 @@
 4. 必须先由 Jay.S 对对应文件范围签发 P0 / P1 Token。
 5. 若实施涉及其他服务目录，必须先拆成对应服务子任务，不得在本主任务内跨服务直接写入。
 
+## 批次 A 草案终审冻结（2026-04-07）
+
+1. 架构终审结论：通过；当前正式状态为“批次 A 草案已通过架构终审，待 Jay.S 签发 P0 Token”，不是“已执行”。
+2. `A-Core` 建议文件范围：`shared/contracts/README.md`、`shared/contracts/decision/api.md`、`shared/contracts/decision/strategy_package.md`、`shared/contracts/decision/research_snapshot.md`、`shared/contracts/decision/backtest_certificate.md`、`shared/contracts/decision/decision_request.md`、`shared/contracts/decision/decision_result.md`、`shared/contracts/decision/model_boundary.md`。
+3. `A-Extension` 条件范围：`shared/contracts/decision/notification_event.md`、`shared/contracts/decision/dashboard_projection.md`；仅在 Jay.S 明确要求批次 A 先冻结通知事件或看板只读聚合字段时，才进入后续 P0 签发。
+4. 收紧说明：`A-Extension` 不与 `A-Core` 自动合批，继续保持首批 P0 最小面。
+5. 本次终审不构成解锁；`services/**`、`integrations/legacy-botquant/**`、legacy `J_BotQuant/**` 与其他非白名单文件继续锁定。
+
 ## 当前状态
 
 - 预审状态：已通过
-- Token 状态：当前轮次未申请代码 Token
+- Token 状态：当前轮次未申请代码 Token；批次 A 草案已通过架构终审，待 Jay.S 签发 P0 Token
 - 解锁时间：N/A
 - 失效时间：N/A
 - 锁回时间：N/A
@@ -68,4 +76,4 @@
 
 ## 结论
 
-**`TASK-0021` 当前仍处于“预审已建档、未进入执行”状态；继续锁定 `services/**`、`shared/contracts/**`、`integrations/**`、legacy 目录及其他全部非白名单文件。**
+**`TASK-0021` 当前仍处于“批次 A 草案已通过架构终审、待 Jay.S 签发 P0 Token、未进入执行”状态；继续锁定 `services/**`、`shared/contracts/**`、`integrations/**`、legacy 目录及其他全部非白名单文件。**
