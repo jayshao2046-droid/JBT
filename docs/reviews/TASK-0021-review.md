@@ -198,4 +198,62 @@ No errors found.
 
 **终审结论：✅ 通过。B 批 4 文件可进入 lockback。**
 
+---
+
+## 九、C0 批 `services/decision/.env.example` 终审结论
+
+### 1. 本次终审范围
+
+C0 批业务范围严格限于 1 文件：
+- `services/decision/.env.example`
+
+审核时间：2026-04-07
+审核角色：项目架构师
+Review ID：REVIEW-TASK-0021-C0
+
+### 2. 五项核验结果
+
+| 核验项 | 要求 | 实际值 | 结论 |
+|---|---|---|---|
+| 端口确认 | `DECISION_PORT=8104` | `DECISION_PORT=8104` | ✅ 通过 |
+| 本地模型 | `Qwen3-14B` / `DeepSeek-R1-14B` / `Qwen2.5` | `LOCAL_MODEL_MAIN=Qwen3-14B`、`LOCAL_MODEL_COMPAT=DeepSeek-R1-14B`、`LOCAL_MODEL_L1=Qwen2.5` | ✅ 通过 |
+| 在线模型 | `Qwen3.6-Plus`(default) / `Qwen3-Max` / `DeepSeek-V3.2` / `DeepSeek-R1` | `ONLINE_MODEL_DEFAULT=Qwen3.6-Plus`、`ONLINE_MODEL_UPGRADE=Qwen3-Max`、`ONLINE_MODEL_BACKUP=DeepSeek-V3.2`、`ONLINE_MODEL_DISPUTE=DeepSeek-R1` | ✅ 通过 |
+| 工具开关 | XGBoost=true、LightGBM=false、CatBoost=false、ONNX=true、Optuna=true、SHAP=true | `XGBOOST_ENABLED=true`、`LIGHTGBM_ENABLED=false`、`CATBOOST_ENABLED=false`、`ONNX_RUNTIME_ENABLED=true`、`OPTUNA_ENABLED=true`、`SHAP_ENABLED=true` | ✅ 通过 |
+| 门禁占位 | `EXECUTION_GATE_TARGET=sim-trading`、`LIVE_TRADING_GATE_LOCKED=true` | `EXECUTION_GATE_TARGET=sim-trading`、`LIVE_TRADING_GATE_LOCKED=true`（另有 `LIVE_TRADING_GATE_VISIBLE=true`） | ✅ 通过 |
+
+### 3. 禁止项检查
+
+- **真实密钥检查**：`ONLINE_MODEL_API_KEY=your-api-key-here`、`EMAIL_SMTP_PASSWORD=your-smtp-password`、`FEISHU_WEBHOOK_URL=.../your-token` — 全为明确占位符，无真实凭证。✅ 通过。
+- **运行时路径检查**：文件含 `XGBOOST_MODEL_DIR=./runtime/models/xgboost`、`OPTUNA_STORAGE=sqlite:///./runtime/optuna/study.db`、`SHAP_AUDIT_DIR=./runtime/shap` 等 `./runtime/...` 相对默认路径。
+
+  **⚠️ 非阻断观察**：上述路径均为相对路径默认值（非绝对系统路径如 `/Users/jayshao/...`），属于配置覆盖占位。实际部署时须在 `.env` 中显式覆盖为挂载卷路径，避免运行时数据落入工作目录。建议 C 批实施时在 `README.md` 或注释中补充"部署时须覆盖 `./runtime` 为挂载卷路径"说明。
+
+### 4. 结构完整性检查
+
+文件包含以下配置分区，与 C0 批预期范围对齐：
+- 基础服务、研究窗口
+- 本地模型 + 在线模型（API key 占位）
+- XGBoost / LightGBM / CatBoost 开关
+- ONNX Runtime + Optuna + SHAP
+- 执行门禁（gate_target / gate_locked）
+- 模型路由门禁（backtest cert / research snapshot 要求）
+- 回测服务 + 数据服务集成地址
+- 通知（飞书 / 邮件，默认关闭，webhook 占位）
+
+✅ 所有分区均已覆盖，无遗漏，无多余真实数据。
+
+### 5. 终审结论
+
+| 检查项 | 结论 |
+|---|---|
+| 端口确认 | ✅ 通过 |
+| 模型配置（本地 3 + 在线 4） | ✅ 通过 |
+| 工具开关（6 项） | ✅ 通过 |
+| 门禁占位 | ✅ 通过 |
+| 禁止项（无真实密钥） | ✅ 通过（含 1 条非阻断观察：`./runtime` 相对路径占位，部署时须显式覆盖） |
+| 结构完整性 | ✅ 通过 |
+| 是否可进入 lockback | **是** |
+
+**终审结论：✅ 通过。C0 批 `services/decision/.env.example` 可进入 lockback。**
+
 后续批次 C0、C、D、E0、E、F0、F、G 状态不变，继续为 `pending_manifest`，不得提前执行。
