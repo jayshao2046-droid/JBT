@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "jbt-decision"
+version = "0.1.0"
+description = "JBT Decision Service"
+python = "^3.11"
+
+[tool.poetry.dependencies]
+fastapi = "^0.115.0"
+uvicorn = { extras = ["standard"], version = "^0.34.0" }
+pydantic-settings = "^2.7.0"
+httpx = "^0.28.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-asyncio = "^0.24.0"
+httpx = "^0.28.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
