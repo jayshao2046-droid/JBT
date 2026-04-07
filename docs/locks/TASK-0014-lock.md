@@ -54,17 +54,27 @@
 10. lockback review-id：`REVIEW-TASK-0014-A1`
 11. 当前 Token 状态：locked
 
-### 补充批次 A2（待执行）
+### 补充批次 A2（已完成并锁回）
 
 1. 批次名称：补充批次 A2 — 系统事件来源接线
 2. 执行 Agent：模拟交易
 3. 保护级别：P1
-4. 建议白名单：
-  - `services/sim-trading/src/api/router.py`
+4. 实际业务白名单：
+  - `services/sim-trading/src/notifier/feishu.py`
   - `services/sim-trading/src/gateway/simnow.py`
-  - 最多 2 个 `services/sim-trading/tests/**` 测试文件
-5. 执行顺序：A2 仅能在 A1 完成自校验并锁回后启动。
-6. 当前 Token 状态：pending_token
+  - `services/sim-trading/tests/test_notifier.py`
+5. 执行顺序：已在 A1 完成并锁回后启动。
+6. P1 token_id：`tok-3ab9a9ea-edfe-40fe-9750-1e7dd9ab200b`
+7. 代码提交：`78cad42`
+8. 最小自校验：`9 passed`
+9. 实现收口：
+   - `feishu.py`：解析 API 响应 JSON，`code != 0` 时 return False（修复不检查错误码的 bug）
+   - `simnow.py`：`TdSpi.OnRspAuthenticate` 失败加 `emit_alert("P1", ..., {"event_code":"CTP_TD_AUTH_FAILED"})`
+   - `simnow.py`：`TdSpi.OnRspUserLogin` 失败加 `emit_alert("P1", ..., {"event_code":"CTP_TD_LOGIN_FAILED"})`
+   - `test_notifier.py`：新增 feishu API error code / success code 两条 case
+10. 范围确认：router.py 的 A2 接线（ctp_connect/disconnect/pause/resume emit_alert）已在上一批次中完成，本批次不重复
+11. lockback review-id：`REVIEW-TASK-0014-A2`
+12. 当前 Token 状态：locked
 
 ### 凭证来源治理
 
@@ -91,12 +101,12 @@
 ## 当前状态
 
 - 预审状态：已通过；`TASK-0014-A1` 已终审并锁回，`TASK-0014-A2` 待执行
-- Token 状态：主任务代码 Token 不适用；`TASK-0014-A1` 已 lockback 且状态 `locked`，`TASK-0014-A2` 为 `pending_token`
-- 解锁时间：`TASK-0014-A1` 已执行（未补具体时刻）；`TASK-0014-A2` N/A
+- Token 状态：主任务代码 Token 不适用；`TASK-0014-A1` 已 lockback 且状态 `locked`；`TASK-0014-A2` 已 lockback 且状态 `locked`
+- 解锁时间：A1 已执行；A2 2026-04-07
 - 失效时间：N/A
-- 锁回时间：`TASK-0014-A1` 已完成 lockback（未补具体时刻）；`TASK-0014-A2` N/A
-- lockback 结果：`TASK-0014-A1` 已完成终审与锁回；`TASK-0014-A2` 尚未进入代码执行阶段
+- 锁回时间：A1 已完成；A2 2026-04-07
+- lockback 结果：`TASK-0014-A1` `TASK-0014-A2` 均已完成终审与锁回
 
 ## 结论
 
-**TASK-0014 当前已完成补充批次 A1 的实施、终审与锁回；`TASK-0014-A2` 继续待执行；通知链路相关契约文件与 `.env.example` 仍继续锁定。**
+**TASK-0014 补充批次 A1 与 A2 均已实施、终审与锁回完成；待 Jay.S 确认后可进入 .env.example 补占位（需单独 P0 Token）。**

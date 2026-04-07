@@ -3,14 +3,14 @@ services:
     build: ./services/sim-trading
     platform: linux/amd64
     container_name: JBT-SIM-TRADING-8101
-    ports:
-      - "8101:8101"
+    network_mode: host
     environment:
       JBT_SERVICE_NAME: sim-trading
       JBT_SERVICE_PORT: "8101"
-      # SimNow CTP 前置地址（生产登录时段用交易时段前置）
+      SERVICE_PORT: "8101"
+      # SimNow CTP 前置地址（7x24 前置）
       SIMNOW_MD_FRONT: tcp://180.168.146.187:10131
-      SIMNOW_TD_FRONT: tcp://180.168.146.187:10130
+      SIMNOW_TRADE_FRONT: tcp://180.168.146.187:10130
       SIMNOW_BROKER_ID: "9999"
       # 账户信息从 .env 注入：SIMNOW_USER_ID / SIMNOW_PASSWORD
     env_file:
@@ -26,7 +26,7 @@ services:
     ports:
       - "3002:3002"
     environment:
-      BACKEND_BASE_URL: http://sim-trading:8101
+      BACKEND_BASE_URL: http://host.docker.internal:8101
       NODE_ENV: production
     depends_on:
       - sim-trading

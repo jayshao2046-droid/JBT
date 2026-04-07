@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0018
 - 审核角色：项目架构师
-- 审核阶段：D201（自建回测系统）建档预审
+- 审核阶段：D201（自建回测系统）建档预审 + 2026-04-07 锁控同步收口
 - 审核时间：2026-04-07
-- 审核结论：条件通过（建档通过；进入代码执行前需分批 Token 解锁）
+- 审核结论：条件通过（建档通过；批次 A/C/D/E 已锁回；批次 B 已签发并 validate 通过、当前 active；批次 C 补充范围已签发并 validate 通过、当前 active）
 
 ---
 
@@ -49,12 +49,13 @@
 5. `docs/prompts/公共项目提示词.md`
 6. `docs/prompts/agents/项目架构师提示词.md`
 
-## 六、下一步准入条件
+## 六、当前下一步准入条件
 
-1. 先执行批次 A 的文件级 P0 Token 签发。
-2. A 完成并锁回后，优先进入 C；B 可并行但必须在 C 接口冻结前完成契约对齐。
-3. 后续按 C/D/E/F 顺序逐批推进，每批独立审核、独立锁回。
-4. 新增统一验收门槛：同一输入下，两引擎结果必须可解释（允许数值差异，但必须提供证据链）。
+1. 批次 E 已完成 Atlas lockback，当前状态 `locked`；lockback review-id=`REVIEW-TASK-0018-E`，锁回摘要为“批次E终审通过；两文件白名单边界合规，允许锁回。”。
+2. 批次 B 当前有效业务白名单为 `services/data/src/main.py` 与 `services/data/tests/test_main.py`；对应 token=`tok-9ef072bb-776e-4e02-a814-7072fa63c836`，review-id=`REVIEW-TASK-0018-B`，validate 已通过，当前状态 `active`，数据 Agent 可进入最小只读 API 实施。
+3. 批次 C 主批次已锁回；当前补充范围有效业务白名单为 `services/backtest/src/backtest/local_engine.py`、`services/backtest/src/api/routes/backtest.py`、`services/backtest/tests/test_local_engine_generic.py`；对应 token=`tok-bfd51a47-63e2-40a5-aa62-25e705a75584`，review-id=`REVIEW-TASK-0018-C-SUP`，validate 已通过，当前状态 `active`，回测 Agent 可进入补充范围实施。
+4. 新增统一执行口径：3 年分钟 K 回测场景中，`requested_symbol` 可继续来自用户 YAML 的 `DCE.p2605`，但 `executed_data_symbol` 必须使用 Mini 上具备完整区间的 p 品种连续主力 `KQ_m_DCE_p` / `DCE.p` 连续主力完成 `2023-04-03` 至 `2026-04-03` 的 3 年回测；结果与报告必须显式区分两者，避免误导为“全程直接使用交割月 `DCE.p2605` 分钟数据回放”。
+5. 同一输入下，两引擎结果仍必须可解释，允许数值差异，但必须保留证据链与执行口径说明。
 
 ---
 
@@ -154,3 +155,80 @@
         三条保留项均属 MVP 工程范围内的可接受延迟，不阻塞批次 C 锁回。
         批次 D 启动前必须先补全批次 A commit，再正式锁回批次 C。
 ```
+
+---
+
+## 批次 E 补充预审收口与执行留痕（2026-04-07）
+
+### 当前收口结论
+
+1. 历史单文件 token `tok-06e8df29-1d9f-42e6-9df8-9f87bb10d98d` 仅对应早前单文件白名单与阻断结论，当前不再作为批次 E 的有效执行口径。
+2. 基于当前工作树真实状态，批次 E 代码面已实际落在以下两文件：
+     - `services/backtest/backtest_web/app/agent-network/page.tsx`
+     - `services/backtest/src/api/routes/backtest.py`
+3. 因此，批次 E 在补充预审阶段已先从 `pending_reissue` 收口为“待架构终审 / 待终审锁回”；当前已由 Atlas 完成正式 lockback，状态切换为 `locked`。
+4. 批次 E 当前执行留痕 token 为 `tok-12cffb12-0149-4aa8-90c0-7011297f77ec`，review-id 继续挂 `REVIEW-TASK-0018-E`；lockback 摘要为“批次E终审通过；两文件白名单边界合规，允许锁回。”；当前最小有效业务白名单即上述两文件。
+
+### 当前代码面收口
+
+1. `services/backtest/backtest_web/app/agent-network/page.tsx` 已提供显式 `tqsdk/local` 引擎选择器，并在单策略回测、批量回测、策略列表快速回测统一透传 `engine_type`。
+2. 同文件已把当前策略摘要、运行中任务卡片、策略列表“最新回测”位置的引擎来源做可视化回显，默认引擎可见可审计。
+3. `services/backtest/src/api/routes/backtest.py` 已声明 `BacktestRunPayload.engine_type`，并通过 `EngineRouter.validate_engine_type()` 统一校验。
+4. 同文件当前已形成双路径收口：`engine_type=tqsdk` 保持既有异步正式引擎行为不回归；`engine_type=local` 走 `EngineRouter.route_local(LocalBacktestParams(...))`，并把 `source=local_backtest_engine`、`payload.engine_type=local`、`execution_profile.engine_type=local`、`report.job.engine_type=local` 写回兼容层结果与报告。
+
+### 当前自校验与非阻断项
+
+1. 两个业务文件当前静态诊断均为 0 errors。
+2. 本地 local 冒烟已通过：兼容层 `POST /api/backtest/run` 传 `engine_type=local` 后，结果详情与报告均可读到 `local` 引擎来源字段。
+3. 现存 `pytest services/backtest/tests/test_formal_report_api.py -q` 失败点仍为既有断言要求 `tqsdk` 路径同步返回 `completed`，与本轮 `local` 引擎接入不构成同一阻断项；当前记为非阻断遗留，不影响本次补充预审收口。
+
+### 补充预审冻结：真正未闭环范围
+
+1. 批次 B 真正未闭环范围冻结为 `services/data/src/**` + `services/data/tests/**` 的最小只读 API，仅限 `health`、`version`、`symbols`、`bars` 四类接口，不得膨胀为策略逻辑、缓存治理或跨服务直读。
+2. 批次 C 真正未闭环范围冻结为补充范围，最小业务文件仅 `services/backtest/src/backtest/local_engine.py` 与 `services/backtest/src/api/routes/backtest.py`，用途限定为“ApiDataProvider + YAML 驱动本地成交回测”；该补充范围不复用已锁回的批次 C 主白名单。
+3. 3 年分钟 K 执行口径冻结如下：`requested_symbol` 可继续记录用户 YAML 中的 `DCE.p2605`；但 `executed_data_symbol` 必须切换为 Mini 上有完整时间区间的 p 品种连续主力 `KQ_m_DCE_p` / `DCE.p` 连续主力，以完成 `2023-04-03` 至 `2026-04-03` 的 3 年回测；结果页、报告导出与后续契约字段必须避免把连续主力执行误写成“直接使用 `DCE.p2605` 完整 3 年分钟数据”。
+
+### 当前状态
+
+1. 批次 E：locked（lockback 已完成，review-id=`REVIEW-TASK-0018-E`，摘要“批次E终审通过；两文件白名单边界合规，允许锁回。”）。
+2. 批次 B：active（token=`tok-9ef072bb-776e-4e02-a814-7072fa63c836`，review-id=`REVIEW-TASK-0018-B`，validate=passed；白名单=`services/data/src/main.py`、`services/data/tests/test_main.py`）。
+3. 批次 C 补充范围：active（token=`tok-bfd51a47-63e2-40a5-aa62-25e705a75584`，review-id=`REVIEW-TASK-0018-C-SUP`，validate=passed；白名单=`services/backtest/src/backtest/local_engine.py`、`services/backtest/src/api/routes/backtest.py`、`services/backtest/tests/test_local_engine_generic.py`）。
+
+---
+
+## 批次 E 终审（2026-04-07）
+
+### 终审基本信息
+
+1. 终审时间：2026-04-07
+2. review-id：`REVIEW-TASK-0018-E`
+3. 对应执行 token：`tok-12cffb12-0149-4aa8-90c0-7011297f77ec`
+4. 审核范围：仅 `services/backtest/backtest_web/app/agent-network/page.tsx` 与 `services/backtest/src/api/routes/backtest.py`
+5. 终审结论：✅ 通过（approved）
+
+### 边界合规
+
+1. 白名单边界通过：当前业务 diff 仅落在 `services/backtest/backtest_web/app/agent-network/page.tsx` 与 `services/backtest/src/api/routes/backtest.py` 两文件，未发现第 3 个业务文件进入本批次实现面。
+2. 服务边界通过：本批仅发生在 `services/backtest/**` 单服务内，未发现跨服务 import、跨目录读写或 shared/contracts 漂移。
+3. token 口径通过：历史单文件 token `tok-06e8df29-1d9f-42e6-9df8-9f87bb10d98d` 已按补审结论退役；当前执行留痕与终审继续绑定 `tok-12cffb12-0149-4aa8-90c0-7011297f77ec` + `REVIEW-TASK-0018-E`，账本口径一致。
+4. 终审范围通过：本次仅做两文件代码核验与 P-LOG 留痕，不重开测试白名单，不扩展到 `services/backtest/tests/**` 或其他后端文件。
+
+### 验收项
+
+1. 显式引擎选择通过：`page.tsx` 已提供可见的 `tqsdk/local` 选择器，默认值为 `tqsdk`，且当前策略摘要区同步回显引擎选择，满足“显式默认值、可审计”的验收要求。
+2. `engine_type` 透传通过：单策略保存后回测、批量回测、策略列表快速回测三类入口均通过前端 payload 显式透传 `engine_type`。
+3. compat route 分流通过：`backtest.py` 已把 `BacktestRunPayload.engine_type` 纳入兼容层请求模型，并通过 `EngineRouter.validate_engine_type()` 收口 `local/tqsdk` 分流；`tqsdk` 路径继续保持异步正式引擎行为，未发生回归性改写。
+4. 结果来源回写通过：`local` 路径结果已稳定写回 `source=local_backtest_engine`、`payload.engine_type=local`、`execution_profile.engine_type=local`，且报告中的 `job.engine_type=local` 可由 `/api/backtest/results/{task_id}/report` 直接导出。
+5. 详情与报告链路通过：详情接口直接返回带引擎来源的完整结果对象；报告接口在 `report_path` 不存在时会回退到内存中的 `formal_report`，满足 local 场景最小报告导出闭环。
+6. 自校验证据通过：两文件 VS Code 静态诊断为 0 errors；local smoke 已证明 `/api/backtest/run` 传 `engine_type=local` 后，详情与报告均保留 local 引擎来源字段。
+
+### 非阻断遗留
+
+1. `pytest services/backtest/tests/test_formal_report_api.py -q` 仍有 1 个既有失败，根因是旧断言要求 `tqsdk` 路径同步返回 `completed`，而当前兼容层基线仍为异步 `running`；该失败不由本批次 E 引入，也不阻断本批次终审。
+2. 批次 B 与批次 C 补充范围已切换为 `active` 并进入后续实施阶段；它们属于 E 之后的继续闭环范围，不影响当前批次 E 的前后端选择器与 compat route 闭环成立。
+
+### 锁回授权
+
+1. Atlas 是否已执行 lockback：是。
+2. 当前批次状态：`locked`。
+3. 说明：正式 `locked` 口径已完成回写；锁回摘要为“批次E终审通过；两文件白名单边界合规，允许锁回。”。

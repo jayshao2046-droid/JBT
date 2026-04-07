@@ -5,9 +5,15 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 SERVICE_ROOT = Path(__file__).resolve().parents[2]
+
+# 自动加载 .env 文件（不覆盖已设置的环境变量）
+_env_file = SERVICE_ROOT / ".env"
+if _env_file.exists():
+    load_dotenv(_env_file, override=False)
 
 
 def _read_str_env(name: str, default: str) -> str:

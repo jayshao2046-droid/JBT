@@ -44,11 +44,7 @@ def _make_md_spi_class():
         def OnFrontDisconnected(self, nReason):
             logger.warning("[mdapi] disconnected reason=%d", nReason)
             self._on_status("md_disconnected")
-            try:
-                from src.risk.guards import emit_alert
-                emit_alert("P1", f"行情接口主动断开 reason={nReason}", {"event_code": "CTP_MD_DISCONNECTED", "stage_preset": "sim"})
-            except Exception:
-                pass
+            self._api._record_disconnect("md", nReason)
 
         def OnRspUserLogin(self, pRspUserLogin, pRspInfo, nRequestID, bIsLast):
             if pRspInfo and pRspInfo.ErrorID != 0:
@@ -121,11 +117,7 @@ def _make_td_spi_class():
         def OnFrontDisconnected(self, nReason):
             logger.warning("[traderapi] disconnected reason=%d", nReason)
             self._on_status("td_disconnected")
-            try:
-                from src.risk.guards import emit_alert
-                emit_alert("P1", f"交易接口主动断开 reason={nReason}", {"event_code": "CTP_TD_DISCONNECTED", "stage_preset": "sim"})
-            except Exception:
-                pass
+            self._api._record_disconnect("td", nReason)
 
         def OnRspAuthenticate(self, p, pRspInfo, nRequestID, bIsLast):
             if pRspInfo and pRspInfo.ErrorID != 0:
@@ -184,6 +176,10 @@ class SimNowGateway:
         self._td_api = None
         self._md_spi = None
         self._td_spi = None
+        self._last_md_disconnect_reason = None
+        self._last_md_disconnect_time = None
+        self._last_td_disconnect_reason = None
+        self._last_td_disconnect_time = None
 
     @property
     def status(self):
@@ -193,6 +189,10 @@ class SimNowGateway:
                 "td": self._td_status,
                 "md_connected": self._md_status == "md_logged_in",
                 "td_connected": self._td_status in ("td_ready", "td_logged_in"),
+                "last_md_disconnect_reason": self._last_md_disconnect_reason,
+                "last_md_disconnect_time": self._last_md_disconnect_time,
+                "last_td_disconnect_reason": self._last_td_disconnect_reason,
+                "last_td_disconnect_time": self._last_td_disconnect_time,
             }
 
     def latest_tick(self, symbol):
@@ -216,6 +216,16 @@ class SimNowGateway:
         with self._lock:
             self._td_status = s
         logger.info("[gateway] td → %s", s)
+
+    def _record_disconnect(self, channel, reason):
+        import time as _time
+        with self._lock:
+            if channel == "md":
+                self._last_md_disconnect_reason = reason
+                self._last_md_disconnect_time = _time.time()
+            else:
+                self._last_td_disconnect_reason = reason
+                self._last_td_disconnect_time = _time.time()
 
     def _subscribe_all(self):
         if not self._instruments or self._md_api is None:

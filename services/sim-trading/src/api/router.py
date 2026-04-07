@@ -19,11 +19,15 @@ _system_state: Dict[str, Any] = {
     "paused_reason": None,
     "ctp_md_connected": False,
     "ctp_td_connected": False,
+    "last_disconnect_reason": None,
+    "last_disconnect_time": None,
     "ctp_broker_id": os.getenv("SIMNOW_BROKER_ID", "9999"),
     "ctp_user_id": os.getenv("SIMNOW_USER_ID", ""),
     "ctp_password": os.getenv("SIMNOW_PASSWORD", ""),
     "ctp_md_front": os.getenv("SIMNOW_MD_FRONT", "tcp://180.168.146.187:10131"),
     "ctp_td_front": os.getenv("SIMNOW_TRADE_FRONT", "tcp://180.168.146.187:10130"),
+    "last_disconnect_reason": None,
+    "last_disconnect_time": None,
 }
 
 _risk_presets: Dict[str, Any] = {
@@ -151,12 +155,22 @@ def get_system_state():
 def pause_trading(req: PauseRequest):
     _system_state["trading_enabled"] = False
     _system_state["paused_reason"] = req.reason
+    try:
+        from src.risk.guards import emit_alert
+        emit_alert("P1", req.reason, {"event_code": "TRADING_PAUSED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
+    except Exception:
+        pass
     return {"result": "paused", "state": _system_state}
 
 @router.post("/system/resume")
 def resume_trading():
     _system_state["trading_enabled"] = True
     _system_state["paused_reason"] = None
+    try:
+        from src.risk.guards import emit_alert
+        emit_alert("P2", "手动恢复交易", {"event_code": "TRADING_RESUMED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
+    except Exception:
+        pass
     return {"result": "resumed", "state": _system_state}
 
 @router.post("/system/preset")
@@ -223,9 +237,9 @@ def ctp_connect():
     )
     _gateway.connect()
 
-    # 等待最多 5 秒确认连接
+    # 等待最多 10 秒确认连接
     import time
-    for _ in range(10):
+    for _ in range(20):
         st = _gateway.status
         if st["md_connected"] or st["td_connected"]:
             break
@@ -234,6 +248,17 @@ def ctp_connect():
     st = _gateway.status
     _system_state["ctp_md_connected"] = st["md_connected"]
     _system_state["ctp_td_connected"] = st["td_connected"]
+    _system_state["last_disconnect_reason"] = st.get("last_md_disconnect_reason") or st.get("last_td_disconnect_reason")
+    _system_state["last_disconnect_time"] = st.get("last_md_disconnect_time") or st.get("last_td_disconnect_time")
+
+    try:
+        from src.risk.guards import emit_alert
+        if st["md_connected"] or st["td_connected"]:
+            emit_alert("P2", "行情/交易接口连接成功", {"event_code": "CTP_CONNECTED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
+        else:
+            emit_alert("P1", "CTP 连接超时，行情与交易接口均未就绪", {"event_code": "CTP_CONNECT_FAILED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
+    except Exception:
+        pass
 
     return {
         "result": "connecting",
@@ -254,6 +279,11 @@ def ctp_disconnect():
         _gateway = None
     _system_state["ctp_md_connected"] = False
     _system_state["ctp_td_connected"] = False
+    try:
+        from src.risk.guards import emit_alert
+        emit_alert("P2", "CTP 接口主动断开连接", {"event_code": "CTP_DISCONNECTED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
+    except Exception:
+        pass
     return {"result": "disconnected", "state": _system_state}
 
 
@@ -262,11 +292,15 @@ def ctp_status():
     """实时 CTP 连接状态（md + td 独立状态）"""
     if _gateway is None:
         return {"md": "disconnected", "td": "disconnected",
-                "md_connected": False, "td_connected": False}
+                "md_connected": False, "td_connected": False,
+                "last_disconnect_reason": _system_state.get("last_disconnect_reason"),
+                "last_disconnect_time": _system_state.get("last_disconnect_time")}
     st = _gateway.status
     # 同步回 system_state
     _system_state["ctp_md_connected"] = st["md_connected"]
     _system_state["ctp_td_connected"] = st["td_connected"]
+    _system_state["last_disconnect_reason"] = st.get("last_md_disconnect_reason") or st.get("last_td_disconnect_reason")
+    _system_state["last_disconnect_time"] = st.get("last_md_disconnect_time") or st.get("last_td_disconnect_time")
     return st
 
 

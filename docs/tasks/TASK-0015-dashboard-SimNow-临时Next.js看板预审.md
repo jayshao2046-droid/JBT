@@ -1,4 +1,10 @@
-# TASK-0015 dashboard SimNow 临时 Next.js 看板预审
+cd /Users/jayshao/JBT && python governance/jbt_lockctl.py issue \
+  --task TASK-0017 \
+  --agent 模拟交易 \
+  --files docker-compose.dev.ymlcd /Users/jayshao/JBT && python governance/jbt_lockctl.py issue \
+  --task TASK-0017 \
+  --agent 模拟交易 \
+  --files docker-compose.dev.yml# TASK-0015 dashboard SimNow 临时 Next.js 看板预审
 
 ## 文档信息
 
