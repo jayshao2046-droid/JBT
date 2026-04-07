@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0021
 - 审核角色：项目架构师
-- 审核阶段：总包执行治理准备终审同步
+- 审核阶段：A批 contracts 终审同步
 - 审核时间：2026-04-07
-- 审核结论：通过（当前正式状态已从“仅批次 A 冻结待签”升级为“总包执行治理已就绪”；执行组织固定为“项目架构师 + 决策 agent”，不使用 Livis；A 批 contracts 10 文件 Token 已 active，可直接开工；其余批次待 Jay.S 按 Manifest 一次性签发）
+- 审核结论：通过（A 批 contracts 正式 10 文件已完成实施并通过终审，边界合规，当前可进入 lockback；B、C0、C、D、E0、E、F0、F、G 继续待 Jay.S 按 Manifest 一次性签发）
 
 ---
 
@@ -74,3 +74,128 @@
 3. **当前 A 批 contracts 10 文件 Token 已 active，可直接开工。**
 4. **总包批次清单已冻结为 A、B、C0、C、D、E0、E、F0、F、G。**
 5. **当前下一动作已冻结为：先执行 A 批 contracts；随后由 Jay.S 按 Manifest 一次性签发后续批次。**
+
+## 七、A批 contracts 终审结论
+
+### 1. 本次终审范围
+
+1. A 批业务范围严格限于以下 10 个契约文件：
+	- `shared/contracts/README.md`
+	- `shared/contracts/decision/api.md`
+	- `shared/contracts/decision/strategy_package.md`
+	- `shared/contracts/decision/research_snapshot.md`
+	- `shared/contracts/decision/backtest_certificate.md`
+	- `shared/contracts/decision/decision_request.md`
+	- `shared/contracts/decision/decision_result.md`
+	- `shared/contracts/decision/model_boundary.md`
+	- `shared/contracts/decision/notification_event.md`
+	- `shared/contracts/decision/dashboard_projection.md`
+2. A 批伴随的 P-LOG 同步仅限 `docs/prompts/agents/决策提示词.md` 与 `docs/handoffs/TASK-0021-A批-contracts-决策交接.md`。
+3. 本次项目架构师治理回写仅限 `docs/reviews/TASK-0021-review.md`、`docs/locks/TASK-0021-lock.md`、`docs/prompts/公共项目提示词.md` 与 `docs/prompts/agents/项目架构师提示词.md`。
+
+### 2. 边界复核
+
+1. 依据决策 agent 交接单所列实际修改文件与当前工作树定向核对，A 批业务写入只落在上述 10 个契约文件。
+2. 未发现 A 批夹带 `services/**` 或 `integrations/**` 业务写入。
+3. 当前工作树虽存在其他任务改动，但不属于 A 批 contracts 终审范围，也不得混入本批次后续独立提交。
+
+### 3. 关键冻结语义
+
+1. decision 只负责因子、信号、审批与策略编排，不直接承接下单、成交、持仓或交易账本。
+2. 策略仓库动作固定为“导入、导出、预约、执行、下架”；其中“执行”只表示进入发布流程，不等于直接下单。
+3. 第一阶段发布目标只允许 `sim-trading`；`live-trading` 仅允许保留锁定可见语义，不得进入可执行状态。
+4. 模型路线冻结为本地 `Qwen3 14B` / `DeepSeek-R1 14B` / `Qwen2.5`，云端 `Qwen3.6-Plus` / `Qwen3-Max` / `DeepSeek-V3.2` / `DeepSeek-R1`；研究主线为 `XGBoost`，`LightGBM` 仅保留抽象位。
+
+### 4. 自校验与 lockback 判断
+
+1. 决策 agent 已回交最小诊断：A 批 10 个契约文件全部为 `No errors found`。
+2. 项目架构师终审结论：通过。
+3. A 批当前状态应由 `active` 收口为 `待 lockback`，当前结论为：**可进入 lockback**。
+4. B、C0、C、D、E0、E、F0、F、G 状态不变，继续为 `pending_manifest`，不得提前执行。
+
+---
+
+## 八、B 批 legacy-botquant decision 适配层终审结论
+
+### 1. 本次终审范围
+
+B 批业务范围严格限于以下 4 文件：
+- `integrations/legacy-botquant/decision/__init__.py`
+- `integrations/legacy-botquant/decision/adapter.py`
+- `integrations/legacy-botquant/decision/input_mapper.py`
+- `integrations/legacy-botquant/decision/signal_compat.py`
+
+审核时间：2026-04-07
+审核角色：项目架构师
+Review ID：REVIEW-TASK-0021-B
+
+### 2. 隔离性检查
+
+| 文件 | import 列表 | 跨服务 import | 结论 |
+|---|---|---|---|
+| `__init__.py` | 仅相对 import（`.adapter`、`.input_mapper`、`.signal_compat`） | 无 | ✅ 通过 |
+| `adapter.py` | `from __future__ import annotations`、`uuid`、`datetime`、`timezone`、`typing`、相对 import | 无 | ✅ 通过 |
+| `input_mapper.py` | `from __future__ import annotations`、`typing` | 无 | ✅ 通过 |
+| `signal_compat.py` | `from __future__ import annotations` | 无 | ✅ 通过 |
+
+结论：**隔离性 ✅ 通过**。4 文件均未引入 `services/**`、`J_BotQuant/**` 或任何 legacy 交易/回测代码。
+
+### 3. 只读性检查
+
+- `adapter.py::from_legacy_dict()`：纯字段转换，无任何交易 API 调用，无写操作。
+- `_normalize_factors()`、`_normalize_market_context()`：静态方法，仅 dict 规范化。
+- `input_mapper.py`：纯字段名重映射，无副作用。
+- `signal_compat.py`：纯信号类型转换与验证，无副作用。
+
+结论：**只读性 ✅ 通过**。
+
+### 4. 契约对齐检查（对照 `shared/contracts/decision/decision_request.md`）
+
+| 契约字段 | 适配层输出 | 对齐状态 |
+|---|---|---|
+| `request_id` | `f"legacy-{uuid4().hex[:12]}"` | ✅ 全局唯一 |
+| `trace_id` | `f"{prefix}-{uuid4().hex[:8]}"` | ✅ 链路可追踪 |
+| `strategy_id` | 经 `LegacyInputMapper` 重映射后取值 | ✅ |
+| `strategy_version` | 经 `LegacyInputMapper` 重映射后取值，默认 `"legacy"` | ✅ |
+| `symbol` | 经 `LegacyInputMapper` 重映射后取值 | ✅ |
+| `requested_target` | raw 取值，默认 `"sim-trading"` | ✅ 合法枚举 |
+| `signal` | `LegacySignalCompat` 输出整数 `-1`/`0`/`1` | ✅ 符合契约约束 |
+| `signal_strength` | `float(...)` 强制转换，默认 `0.0` | ✅ |
+| `factors` | `_normalize_factors()` 输出 `list[dict]`，子字段含 `name`/`value`/`version`/`updated_at` | ✅ 子结构对齐 |
+| `factor_version_hash` | raw 取值，默认 `"legacy-unknown"` | ✅ 占位合法 |
+| `market_context` | `_normalize_market_context()` 输出含 4 个必填子字段 | ✅ 子结构对齐 |
+| `research_snapshot_id` | raw 取值，默认 `"legacy-placeholder"` | ✅ 占位合法 |
+| `backtest_certificate_id` | raw 取值，默认 `"legacy-placeholder"` | ✅ 占位合法 |
+| `submitted_at` | raw 取值，默认 `now_iso`（ISO 8601） | ✅ |
+
+**⚠️ 非阻断观察**：输出 dict 含 `_legacy_source` 与 `_legacy_signal_type` 两个扩展字段，均以 `_` 前缀标记为元数据，不在契约定义内。建议下游 decision 服务在接收时显式过滤 `_` 前缀字段，避免传入门禁校验逻辑。
+
+结论：**契约对齐 ✅ 通过**（含 1 条非阻断观察，不构成终审拒绝理由）。
+
+### 5. 类型安全检查
+
+- 所有公开方法（`from_legacy_dict`、`map_strategy_fields`、`map_signal_fields`、`normalize_signal_type`、`normalize_signal_direction`、`is_valid_legacy_signal`）均有完整类型注解。
+- 无 Pydantic 依赖，无运行时魔法。
+
+结论：**类型安全 ✅ 通过**。
+
+### 6. get_errors 结果
+
+```
+No errors found.
+```
+
+### 7. 终审结论
+
+| 检查项 | 结论 |
+|---|---|
+| 隔离性 | ✅ 通过 |
+| 只读性 | ✅ 通过 |
+| 契约对齐 | ✅ 通过（含 1 条非阻断观察） |
+| 类型安全 | ✅ 通过 |
+| get_errors | 0 errors |
+| 是否可进入 lockback | **是** |
+
+**终审结论：✅ 通过。B 批 4 文件可进入 lockback。**
+
+后续批次 C0、C、D、E0、E、F0、F、G 状态不变，继续为 `pending_manifest`，不得提前执行。
