@@ -1564,6 +1564,7 @@ def build_result_summary(result: Mapping[str, Any]) -> dict[str, Any]:
         "source": result.get("source"),
         "report_path": result.get("report_path"),
         "execution_profile": result.get("execution_profile", {}),
+        "transaction_cost_summary": result.get("transaction_cost_summary", {}),
     }
     return summary
 

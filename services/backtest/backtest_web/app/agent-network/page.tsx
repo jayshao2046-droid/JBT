@@ -1191,6 +1191,7 @@ export default function StrategyManagementPage() {
       )
       setProgressMap((prev) => ({ ...prev, ...updates }))
       if (anyCompleted) {
+        toast.success("✓ 已完成回测", { duration: 2000 })
         loadAll()
         // 完成/失败后检查是否存在异常
         await checkCompletedAnomalies()
@@ -1289,8 +1290,11 @@ export default function StrategyManagementPage() {
       if (resp.status === 'failed' && resp.error_message) {
         setApiError(`回测失败 [${strategyName}]：${String(resp.error_message).split('\n')[0]}`)
       } else {
-        toast.success(`✓ 回测完成：${strategyName}`, { duration: 1000 })
-        setImportSuccess([`回测已提交: ${resp.task_id ?? "任务已提交"}`])
+        if (resp.engine_downgrade_reason) {
+          toast.warning(`⚠️ ${resp.engine_downgrade_reason}`, { duration: 6000 })
+        }
+        toast.success(`✓ 已提交回测`, { duration: 1000 })
+        setImportSuccess([`已提交回测：${strategyName}`])
       }
       setTimeout(() => loadAll(), 800)
     } catch (err) {
@@ -1366,10 +1370,14 @@ export default function StrategyManagementPage() {
         setRunParamMsg(`❌ 回测失败 [${name}]：${errMsg}`)
         setApiError(`回测失败 [${name}]：${errMsg}`)
       } else {
+        const firstResp = responses[0] as any
+        if (firstResp?.engine_downgrade_reason) {
+          toast.warning(`⚠️ ${firstResp.engine_downgrade_reason}`, { duration: 6000 })
+        }
         const msg = responses.length > 1
-          ? `✓ 已提交 ${responses.length} 个品种回测任务（策略：${name}）`
-          : `✓ 已提交回测：${responses[0]?.task_id || "已提交"}（策略：${name}）`
-        toast.success(msg, { duration: 1000 })
+          ? `已提交 ${responses.length} 个品种回测任务（策略：${name}）`
+          : `已提交回测：${name}`
+        toast.success(`✓ ${msg}`, { duration: 1000 })
         setRunParamMsg(msg)
         setImportSuccess([msg])
       }

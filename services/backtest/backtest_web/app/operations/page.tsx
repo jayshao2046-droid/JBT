@@ -1343,6 +1343,12 @@ export default function BacktestDetailPage() {
                     {(totalProfit + totalLoss) >= 0 ? '+' : ''}¥{Number(totalProfit + totalLoss).toLocaleString()}
                   </p>
                   <p className="text-xs text-neutral-500 mt-0.5">手续费 ¥{Number(stat.commission ?? totalComm).toLocaleString()}</p>
+                  {(() => {
+                    const cs = (selectedBacktest as any)?.transaction_cost_summary
+                    const totalSlip = cs?.total_slippage_estimated
+                    if (totalSlip == null || Number(totalSlip) === 0) return null
+                    return <p className="text-xs text-neutral-500">滑点 ¥{Number(totalSlip).toLocaleString()}</p>
+                  })()}
                 </div>
                 <div className="bg-neutral-800 rounded p-2.5">
                   <p className="text-xs text-neutral-400 mb-0.5">交易天数</p>

@@ -546,6 +546,17 @@ def _build_local_result_record(
         "transaction_costs": dict(transaction_costs),
         "transaction_cost_summary": {
             "total_cost": transaction_costs.get("total_cost"),
+            "slippage_per_unit": transaction_costs.get("slippage_per_unit"),
+            "commission_per_lot_round_turn": transaction_costs.get("commission_per_lot_round_turn"),
+            "total_commission_estimated": round(
+                sum(float(t.get("total_cost") or 0.0) for t in local_trades), 2
+            ) if local_trades else 0.0,
+            "total_slippage_estimated": round(
+                float(transaction_costs.get("slippage_per_unit") or 0.0)
+                * 2.0
+                * sum(int(t.get("quantity") or 1) for t in local_trades),
+                2,
+            ) if local_trades else 0.0,
         },
         "template_id": payload_strategy.get("template_id"),
         "timeframe": job_payload.get("timeframe"),
@@ -1150,19 +1161,25 @@ def run_backtest(payload: BacktestRunPayload, request: Request) -> dict[str, Any
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     # 若请求 tqsdk 但 auth 未配置，或策略不满足 formal_supported，自动降级到 local 引擎
+    engine_downgrade_reason: str | None = None
     if resolved_engine_type == "tqsdk":
         settings = get_settings()
         tqsdk_available = bool(settings.tqsdk_auth_username and settings.tqsdk_auth_password)
         execution_profile_check = build_strategy_execution_profile(strategy_record)
-        if not tqsdk_available or not execution_profile_check.get("formal_supported"):
+        if not tqsdk_available:
+            engine_downgrade_reason = "TqSdk 账号未配置（缺少 TQSDK_AUTH_USERNAME / TQSDK_AUTH_PASSWORD），已自动切换到本地回测"
+            resolved_engine_type = "local"
+        elif not execution_profile_check.get("formal_supported"):
+            engine_downgrade_reason = "策略模板不支持 TqSdk 在线回测（formal_supported=False），已自动切换到本地回测"
+            resolved_engine_type = "local"
+        if engine_downgrade_reason:
             _logger.info(
                 "tqsdk engine requested but not available (auth=%s, formal_supported=%s);"
                 " auto-downgrading to local for %s",
                 tqsdk_available,
-                execution_profile_check.get("formal_supported"),
+                execution_profile_check.get("formal_supported") if not engine_downgrade_reason or "账号" not in engine_downgrade_reason else False,
                 strategy_name,
             )
-            resolved_engine_type = "local"
 
     if resolved_engine_type == "local":
         symbols = _derive_symbols(payload, strategy_record)
@@ -1224,6 +1241,8 @@ def run_backtest(payload: BacktestRunPayload, request: Request) -> dict[str, Any
         return {
             "task_id": local_result["id"],
             "engine_type": "local",
+            "engine_downgrade_reason": engine_downgrade_reason,
+            "transaction_cost_summary": local_result.get("transaction_cost_summary", {}),
             **build_result_summary(local_result),
         }
 

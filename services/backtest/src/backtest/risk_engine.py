@@ -80,6 +80,11 @@ class RiskEngine:
         elif bar_date != self._current_day:
             self._day_start_equity = current_equity
             self._current_day = bar_date
+            # 日亏损限额每自然日重置：新的一天允许继续开仓（max_drawdown 是永久熔断，不重置）
+            if "daily_loss_limit" in self._triggered_rules:
+                self._triggered_rules.discard("daily_loss_limit")
+                if "max_drawdown" not in self._triggered_rules:
+                    self._open_allowed = True
 
         # 更新历史峰值净值
         if current_equity > self._peak_equity:
