@@ -554,8 +554,12 @@ export default function BacktestDetailPage() {
     if (!bt) { alert('请先点击一条回测记录'); return }
     const strategyName = bt.strategy ?? (bt as any).payload?.strategy?.id ?? bt.name ?? bt.id
     const executionProfile = getExecutionProfile(bt)
-    if (!bt.report_path || executionProfile?.executed_formal !== true) {
-      alert('当前结果没有可下载的正式 report.json，请先执行正式回测')
+    // 允许本地回测（local engine）和正式回测都可导出报告
+    const hasReport = !!(bt.report_path) ||
+      executionProfile?.executed_formal === true ||
+      executionProfile?.executed_mode === 'local'
+    if (!hasReport) {
+      alert('当前结果没有可下载的报告，请先执行回测后再导出')
       return
     }
 
@@ -956,6 +960,18 @@ export default function BacktestDetailPage() {
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${executionProfile.executed_formal ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-300'}`}>
                             {executionProfile.executed_label ?? executionProfile.label ?? '未知来源'}
                           </span>
+                          {(() => {
+                            const sk = (selectedBacktest as any)?.source_kind ?? (selectedBacktest as any)?.payload?.source_kind
+                            const src = (selectedBacktest as any)?.source
+                            if (!sk && !src) return null
+                            const isRealLocal = src === 'local_backtest_engine'
+                            const isContinuous = sk === 'continuous' || sk === 'api'
+                            return (
+                              <span className={`text-xs px-2 py-0.5 rounded-full border font-mono ${isRealLocal && isContinuous ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : isRealLocal ? 'border-blue-500/40 bg-blue-500/10 text-blue-300' : 'border-neutral-600 bg-neutral-800 text-neutral-400'}`}>
+                                {isRealLocal ? '✓ 真实本地回测' : '兼容模式'}{sk ? ` · ${sk}` : ''}
+                              </span>
+                            )
+                          })()}
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${executionProfile.formal_supported ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300' : 'border-neutral-600 bg-neutral-800 text-neutral-300'}`}>
                             {executionProfile.formal_supported ? '该策略具备正式引擎条件' : '该策略当前不具备正式引擎条件'}
                           </span>
@@ -968,6 +984,8 @@ export default function BacktestDetailPage() {
                     <p className="text-xs text-neutral-300 leading-relaxed">{executionProfile.executed_reason ?? executionProfile.reason ?? '--'}</p>
                     {selectedBacktest?.report_path ? (
                       <p className="text-[11px] text-neutral-500 font-mono break-all">report_path: {selectedBacktest.report_path}</p>
+                    ) : (selectedBacktest as any)?.source === 'local_backtest_engine' ? (
+                      <p className="text-[11px] text-emerald-600">✓ 本地回测报告存于内存，可直接导出。</p>
                     ) : (
                       <p className="text-[11px] text-neutral-500">当前结果未生成正式报告文件。</p>
                     )}
@@ -1634,7 +1652,9 @@ export default function BacktestDetailPage() {
                       <td className="py-1.5 px-3 text-white font-mono text-xs">{trade.volume ?? '--'}</td>
                       <td className="py-1.5 px-3 text-neutral-400 font-mono text-xs">{trade.commission ?? '--'}</td>
                       <td className="py-1.5 px-3 text-neutral-400 font-mono text-xs">
-                        {slippagePerLot > 0 ? trade._slip : <span className="text-neutral-600">—</span>}
+                        {trade.slippage != null
+                          ? trade.slippage
+                          : slippagePerLot > 0 ? trade._slip : <span className="text-neutral-600">—</span>}
                       </td>
                       <td className={`py-1.5 px-3 font-mono text-xs ${trade._computedProfit != null ? (trade._computedProfit >= 0 ? 'text-red-400' : 'text-green-400') : 'text-neutral-600'}`}>
                         {trade._isOpen

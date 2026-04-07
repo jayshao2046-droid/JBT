@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 import api, { deleteStrategy, exportStrategyContent, saveStrategyParams, approveStrategyLocal, getApprovedStrategies, isStrategyApproved, revokeApprovedStrategy, markStrategyDelivered } from "@/src/utils/api"
 import { FALLBACK_CONTRACT_CATEGORIES, type ContractCategoryPreset, formatTimeframeValue, humanizeDataSource, normalizeContractCategories, resolveFieldLabel } from "@/src/utils/strategyPresentation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,6 +33,7 @@ type ParamValues = Record<string, string>
 type YamlScalarValue = string | number | boolean | Array<string | number | boolean>
 type YamlFieldGroup = "basic" | "strategy" | "signal" | "risk"
 type DailyLossLimitMode = "ratio" | "yuan"
+type BacktestEngineType = "tqsdk" | "local"
 
 type ParsedYamlField = {
   path: string
@@ -127,6 +129,10 @@ const SYSTEM_PRESET_STORAGE_KEY = "jbt_backtest_system_runtime_presets_v1"
 const SYSTEM_RUNTIME_ROOT_PATHS = new Set(["position_fraction", "backtest_start_date", "backtest_end_date"])
 const DAILY_LOSS_LIMIT_RATIO_PATH = "risk.daily_loss_limit"
 const DAILY_LOSS_LIMIT_YUAN_PATH = "risk.daily_loss_limit_yuan"
+const ENGINE_OPTIONS: Array<{ value: BacktestEngineType; label: string; description: string }> = [
+  { value: "tqsdk", label: "TqSdk 在线回测", description: "默认引擎，走当前正式回测入口。" },
+  { value: "local", label: "Local 本地回测", description: "走批次 C/D 的 LocalBacktestEngine 路径。" },
+]
 
 function buildDefaultSystemConfig(commodityCode = ""): SystemRuntimeConfig {
   return {
@@ -632,6 +638,29 @@ function formatYamlEditableValue(value: YamlScalarValue): string {
   return String(value)
 }
 
+/** 检查策略 YAML 是否缺少必要风控字段，返回缺失字段的中文提示列表 */
+function checkYamlRequiredFields(document: ParsedYamlDocument): string[] {
+  const warnings: string[] = []
+  const fieldPaths = new Set(document.fields.map((f) => f.path))
+  const hasAny = (...paths: string[]) => paths.some((p) => fieldPaths.has(p))
+
+  if (!document.basic.symbols || document.basic.symbols.length === 0)
+    warnings.push("缺少 symbols（交易合约列表）")
+  if (!document.basic.timeframe)
+    warnings.push("缺少 timeframe_minutes（K线周期）")
+  if (!hasAny("initial_capital", "parameters.initial_capital"))
+    warnings.push("缺少 initial_capital（初始资金），将使用系统预设值")
+  if (!hasAny("risk.max_drawdown", "risk.max_drawdown_pct", "risk.max_drawdown_limit"))
+    warnings.push("缺少 risk.max_drawdown（最大回撤限制），将使用系统预设值")
+  if (!hasAny("risk.daily_loss_limit", "risk.daily_loss_limit_yuan", "risk.daily_loss_rate"))
+    warnings.push("缺少 risk.daily_loss_limit（日亏损上限），将使用系统预设值")
+  if (!hasAny("transaction_costs.slippage_per_unit", "parameters.transaction_costs.slippage_per_unit", "slippage"))
+    warnings.push("缺少 transaction_costs.slippage_per_unit（每手滑点），将使用系统预设值")
+  if (!hasAny("transaction_costs.commission_per_lot_round_turn", "parameters.transaction_costs.commission_per_lot_round_turn", "commission"))
+    warnings.push("缺少 transaction_costs.commission_per_lot_round_turn（手续费），将使用系统预设值")
+  return warnings
+}
+
 function buildUpdatedStrategyYaml(document: ParsedYamlDocument, edits: Record<string, string>): string {
   const nextLines = document.raw.split("\n")
   document.fields.forEach((field) => {
@@ -770,6 +799,33 @@ function getContractsByCategory(codes: readonly string[], availableContracts: st
   return availableContracts.filter((contract) => codes.includes(getContractVarietyCode(contract)))
 }
 
+function isBacktestEngineType(value: unknown): value is BacktestEngineType {
+  return value === "tqsdk" || value === "local"
+}
+
+function humanizeBacktestEngine(engineType: BacktestEngineType): string {
+  return engineType === "local" ? "Local 本地回测" : "TqSdk 在线回测"
+}
+
+function getBacktestEngineBadgeClass(engineType: BacktestEngineType): string {
+  return engineType === "local"
+    ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+    : "bg-sky-500/15 text-sky-300 border border-sky-500/30"
+}
+
+function resolveResultEngineType(result: any): BacktestEngineType | null {
+  const payloadEngineType = result?.payload?.engine_type
+  if (isBacktestEngineType(payloadEngineType)) return payloadEngineType
+
+  const profileEngineType = result?.execution_profile?.engine_type
+  if (isBacktestEngineType(profileEngineType)) return profileEngineType
+
+  const source = String(result?.source ?? "").toLowerCase()
+  if (source.includes("local")) return "local"
+  if (source.includes("tqsdk")) return "tqsdk"
+  return null
+}
+
 function mapStatus(status: string): string {
   const m: Record<string, string> = {
     local: "待测试",
@@ -797,6 +853,7 @@ export default function StrategyManagementPage() {
   const [selectedStrategy, setSelectedStrategy] = useState<any>(null)
   const [importErrors, setImportErrors] = useState<string[]>([])
   const [importSuccess, setImportSuccess] = useState<string[]>([])
+  const [yamlWarnings, setYamlWarnings] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [lastUpdate, setLastUpdate] = useState("--")
@@ -806,8 +863,12 @@ export default function StrategyManagementPage() {
   const [editedParams, setEditedParams] = useState<Record<string, string>>({})
   const [isSavingParams, setIsSavingParams] = useState(false)
   const [paramSaveMsg, setParamSaveMsg] = useState<string | null>(null)
-  const [backtestStart, setBacktestStart] = useState("2025-04-01")
-  const [backtestEnd, setBacktestEnd] = useState("2026-04-01")
+  const [backtestStart, setBacktestStart] = useState(() => {
+    const d = new Date()
+    d.setFullYear(d.getFullYear() - 1)
+    return d.toISOString().slice(0, 10)
+  })
+  const [backtestEnd, setBacktestEnd] = useState(() => new Date().toISOString().slice(0, 10))
   const [backtestResults, setBacktestResults] = useState<any[]>([])
   const [mainContracts, setMainContracts] = useState<string[]>([])
   const [contractCategoryPresets, setContractCategoryPresets] = useState<ContractCategoryPreset[]>(FALLBACK_CONTRACT_CATEGORIES)
@@ -831,6 +892,7 @@ export default function StrategyManagementPage() {
   const [systemPresetName, setSystemPresetName] = useState<string>("")
   const [systemPresetMsg, setSystemPresetMsg] = useState<string | null>(null)
   const [systemConfig, setSystemConfig] = useState<SystemRuntimeConfig>(buildDefaultSystemConfig())
+  const [selectedEngineType, setSelectedEngineType] = useState<BacktestEngineType>("local")
   // 批量并发上限（前端层）：限制每次同时提交给后端队列的任务数
   const [batchConcurrentLimit, setBatchConcurrentLimit] = useState<number>(8)
   // 已审批（保存到生产）策略列表
@@ -992,6 +1054,7 @@ export default function StrategyManagementPage() {
   ) => {
     const basePayload: Record<string, any> = {
       strategy_id: strategyName,
+      engine_type: selectedEngineType,
       start: backtestStart,
       end: backtestEnd,
     }
@@ -1157,12 +1220,19 @@ export default function StrategyManagementPage() {
       try {
         const content = e.target?.result as string
         await api.importStrategy(file.name, content)
+        // 解析 YAML 并触发合约预设自动跳转 + 风控字段检查
+        try {
+          const parsedDoc = parseStrategyYamlDocument(content)
+          setStrategyYamlDocument(parsedDoc)
+          setYamlWarnings(checkYamlRequiredFields(parsedDoc))
+        } catch (_) { /* 预设跳转失败不影响导入结果 */ }
         setImportSuccess([`成功提交导入申请: ${file.name}`])
         setImportErrors([])
         setTimeout(() => loadAll(), 500)
       } catch (err) {
         setImportErrors([`导入失败: ${api.friendlyError(err)}`])
         setImportSuccess([])
+        setYamlWarnings([])
       } finally {
         setIsLoading(false)
         if (fileInputRef.current) fileInputRef.current.value = ""
@@ -1212,13 +1282,14 @@ export default function StrategyManagementPage() {
       setIsLoading(true)
       const slippage = Number(systemConfig.slippagePerUnit)
       const commission = Number(systemConfig.commissionPerLotRoundTurn)
-      const runPayload: Record<string, any> = { strategy_id: strategyName, start: backtestStart, end: backtestEnd }
+      const runPayload: Record<string, any> = { strategy_id: strategyName, engine_type: selectedEngineType, start: backtestStart, end: backtestEnd }
       if (!Number.isNaN(slippage) && slippage >= 0) runPayload.slippage_per_unit = slippage
       if (!Number.isNaN(commission) && commission >= 0) runPayload.commission_per_lot_round_turn = commission
       const resp = await api.runBacktest(runPayload)
       if (resp.status === 'failed' && resp.error_message) {
         setApiError(`回测失败 [${strategyName}]：${String(resp.error_message).split('\n')[0]}`)
       } else {
+        toast.success(`✓ 回测完成：${strategyName}`, { duration: 1000 })
         setImportSuccess([`回测已提交: ${resp.task_id ?? "任务已提交"}`])
       }
       setTimeout(() => loadAll(), 800)
@@ -1298,6 +1369,7 @@ export default function StrategyManagementPage() {
         const msg = responses.length > 1
           ? `✓ 已提交 ${responses.length} 个品种回测任务（策略：${name}）`
           : `✓ 已提交回测：${responses[0]?.task_id || "已提交"}（策略：${name}）`
+        toast.success(msg, { duration: 1000 })
         setRunParamMsg(msg)
         setImportSuccess([msg])
       }
@@ -1357,7 +1429,9 @@ export default function StrategyManagementPage() {
         setRunParamMsg(failMsg)
         setApiError(failMsg)
       } else {
-        setRunParamMsg(`✓ 已批量提交 ${names.length} 个回测任务（并发上限 ${limit}）`)
+        const batchMsg = `✓ 已批量提交 ${names.length} 个回测任务（并发上限 ${limit}）`
+        setRunParamMsg(batchMsg)
+        toast.success(batchMsg, { duration: 1000 })
       }
       setImportSuccess([`✓ 已批量提交 ${names.length} 个回测`])
       setTimeout(() => loadAll(), 800)
@@ -1783,6 +1857,20 @@ export default function StrategyManagementPage() {
         </Card>
       )}
 
+      {yamlWarnings.length > 0 && (
+        <Card className="bg-amber-900/20 border-amber-600/50">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-amber-300 mb-1">YAML 字段提示（缺失字段将使用系统预设值）：</p>
+                {yamlWarnings.map((msg, i) => <p key={i} className="text-xs text-amber-200">· {msg}</p>)}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {importErrors.length > 0 && (
         <Card className="bg-red-900/20 border-red-600/50">
           <CardContent className="p-4">
@@ -1997,6 +2085,7 @@ export default function StrategyManagementPage() {
                 {currentCommodityCode && <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-700/50 text-neutral-200 border border-neutral-600">商品 {currentCommodityCode.toUpperCase()}</span>}
                 {currentStrategyBasic.templateId && <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-700/50 text-neutral-300 border border-neutral-600">模板 {selectedTemplateLabel}</span>}
                 {currentStrategyBasic.timeframe && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30">周期 {formatTimeframeValue(currentStrategyBasic.timeframe)}</span>}
+                <span className={`text-xs px-2 py-0.5 rounded-full ${getBacktestEngineBadgeClass(selectedEngineType)}`}>引擎 {humanizeBacktestEngine(selectedEngineType)}</span>
                 {systemConfig.initialCapital && <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">资金 {formatCompactCurrency(systemConfig.initialCapital)}</span>}
                 {systemConfig.positionFraction && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">仓位 {formatDecimalAsPercent(systemConfig.positionFraction)}</span>}
                 {(systemConfig.stopLossAtrMultiplier || systemConfig.takeProfitAtrMultiplier) && <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/30">止损/止盈 {systemConfig.stopLossAtrMultiplier || "--"} / {systemConfig.takeProfitAtrMultiplier || "--"} ATR</span>}
@@ -2206,6 +2295,37 @@ export default function StrategyManagementPage() {
             </div>
           </div>
 
+          <div className="border border-neutral-700 rounded-lg p-4 bg-neutral-800/40 space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-xs text-neutral-400 tracking-wider">执行引擎 / Engine</p>
+                <p className="text-[11px] text-neutral-500 mt-1">默认固定为 TqSdk，单策略回测、批量回测和策略列表快速回测都会显式透传 engine_type。</p>
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-full ${getBacktestEngineBadgeClass(selectedEngineType)}`}>
+                当前选择 {humanizeBacktestEngine(selectedEngineType)}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {ENGINE_OPTIONS.map((option) => {
+                const active = selectedEngineType === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setSelectedEngineType(option.value)}
+                    className={`rounded-lg border px-4 py-3 text-left transition-colors ${active ? "border-cyan-500 bg-cyan-500/10" : "border-neutral-700 bg-neutral-900/50 hover:border-neutral-500"}`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-white">{option.label}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${getBacktestEngineBadgeClass(option.value)}`}>{option.value}</span>
+                    </div>
+                    <p className="text-[11px] text-neutral-500 mt-1 leading-relaxed">{option.description}</p>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <div className="flex gap-3 pt-1 flex-wrap">
             <Button onClick={() => handleSaveCurrentStrategy()} className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1 min-w-[160px]" disabled={isSavingParams || !selectedStrategyForRun}>
               <Save className="w-4 h-4 mr-2" />{isSavingParams ? "保存中..." : "保存当前策略"}
@@ -2235,13 +2355,17 @@ export default function StrategyManagementPage() {
                 {selectedStrategyActiveResults.map((activeResult) => {
                   const progress = progressMap[activeResult.id] ?? { progress: 0, current_date: null }
                   const contractLabel = activeResult.contracts?.[0] ?? activeResult.payload?.contract ?? activeResult.payload?.symbols?.[0] ?? "--"
+                  const activeEngineType = resolveResultEngineType(activeResult) ?? selectedEngineType
                   return (
                     <div key={activeResult.id} className="rounded-lg border border-orange-500/20 bg-neutral-900/50 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div>
                           <p className="text-xs text-neutral-400">合约</p>
                           <p className="text-sm text-white font-mono">{contractLabel}</p>
-                          <p className="text-[11px] text-neutral-500 mt-1">任务 ID: {activeResult.id}</p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <p className="text-[11px] text-neutral-500">任务 ID: {activeResult.id}</p>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full ${getBacktestEngineBadgeClass(activeEngineType)}`}>{humanizeBacktestEngine(activeEngineType)}</span>
+                          </div>
                         </div>
                         <Button
                           onClick={async () => {
@@ -2462,7 +2586,13 @@ export default function StrategyManagementPage() {
                           const last = strategyLastResult(s.name)
                           if (!last) return <span className="text-neutral-600">—</span>
                           const d = last.submitted_at ? new Date(last.submitted_at * 1000) : null
-                          return d ? d.toLocaleDateString("zh-CN") + " " + d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—"
+                          const engineType = resolveResultEngineType(last)
+                          return (
+                            <div className="space-y-1">
+                              <div>{d ? d.toLocaleDateString("zh-CN") + " " + d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—"}</div>
+                              {engineType ? <span className={`inline-flex text-[10px] px-2 py-0.5 rounded-full ${getBacktestEngineBadgeClass(engineType)}`}>{humanizeBacktestEngine(engineType)}</span> : null}
+                            </div>
+                          )
                         })()}
                       </td>
                       <td className="py-3 px-4 text-xs font-mono">

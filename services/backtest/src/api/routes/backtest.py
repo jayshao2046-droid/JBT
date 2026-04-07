@@ -16,6 +16,12 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 if __package__:
+    from ...backtest.engine_router import EngineRouter
+    from ...backtest.engine_router import EngineTypeError
+    from ...backtest.local_engine import ApiDataProvider
+    from ...backtest.local_engine import LocalBacktestEngine
+    from ...backtest.local_engine import LocalBacktestParams
+    from ...backtest.local_engine import LocalBacktestReport
     from ...backtest.runner import BacktestJobInput
     from ...backtest.runner import OnlineBacktestRunner
     from ...backtest.result_builder import BacktestReport
@@ -32,6 +38,12 @@ if __package__:
     from .support import normalize_contract_symbol
     from .support import resolve_result_report_file
 else:
+    from backtest.engine_router import EngineRouter
+    from backtest.engine_router import EngineTypeError
+    from backtest.local_engine import ApiDataProvider
+    from backtest.local_engine import LocalBacktestEngine
+    from backtest.local_engine import LocalBacktestParams
+    from backtest.local_engine import LocalBacktestReport
     from backtest.result_builder import BacktestReport
     from backtest.runner import BacktestJobInput
     from backtest.runner import OnlineBacktestRunner
@@ -53,12 +65,14 @@ router = APIRouter(prefix="/api/backtest", tags=["backtest"])
 # Serialize background backtest executions — TqSdk does not support
 # multiple concurrent API sessions in one process.
 _backtest_execution_lock = threading.Lock()
+_engine_router = EngineRouter()
 
 
 class BacktestRunPayload(BaseModel):
     strategy_id: Optional[str] = None
     strategy_name: Optional[str] = None
     name: Optional[str] = None
+    engine_type: Optional[str] = None
     start: Optional[str] = None
     end: Optional[str] = None
     symbols: list[str] = Field(default_factory=list)
@@ -180,6 +194,153 @@ def _build_result_execution_profile(strategy_record: Optional[dict[str, Any]]) -
     }
 
 
+def _build_submitted_tqsdk_execution_profile(strategy_record: Optional[dict[str, Any]]) -> dict[str, Any]:
+    base_profile = build_strategy_execution_profile(strategy_record or {})
+    executed_reason = "当前任务已提交到 TqSdk 正式引擎，正在异步执行。"
+    return {
+        **base_profile,
+        "engine_type": "tqsdk",
+        "executed_mode": "tqsdk",
+        "executed_label": "TqSdk 在线回测",
+        "executed_formal": True,
+        "can_execute_formal": True,
+        "executed_reason": executed_reason,
+        "evidence": [
+            executed_reason,
+            *list(base_profile.get("evidence", [])),
+        ],
+    }
+
+
+def _coerce_timeframe_minutes(value: Any) -> Optional[int]:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        minutes = int(value)
+        return minutes if minutes > 0 else None
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if not normalized:
+            return None
+        multiplier = 1
+        if normalized.endswith("m"):
+            normalized = normalized[:-1].strip()
+        elif normalized.endswith("h"):
+            normalized = normalized[:-1].strip()
+            multiplier = 60
+        elif normalized.endswith("d"):
+            normalized = normalized[:-1].strip()
+            multiplier = 1440
+        if normalized.isdigit():
+            minutes = int(normalized) * multiplier
+            return minutes if minutes > 0 else None
+    return None
+
+
+def _resolve_local_timeframe_minutes(
+    payload: BacktestRunPayload,
+    strategy_record: dict[str, Any],
+) -> int:
+    strategy_params = strategy_record.get("params", {})
+    if not isinstance(strategy_params, dict):
+        strategy_params = {}
+    strategy_payload = strategy_record.get("strategy", {})
+    if not isinstance(strategy_payload, dict):
+        strategy_payload = {}
+
+    candidates = [
+        payload.params.get("timeframe_minutes"),
+        payload.params.get("timeframe"),
+        strategy_params.get("timeframe_minutes"),
+        strategy_params.get("timeframe"),
+        strategy_payload.get("timeframe_minutes"),
+        strategy_payload.get("timeframe"),
+    ]
+    for candidate in candidates:
+        timeframe_minutes = _coerce_timeframe_minutes(candidate)
+        if timeframe_minutes is not None:
+            return timeframe_minutes
+    return 60
+
+
+def _resolve_runtime_cost(
+    explicit_value: Optional[float],
+    strategy_record: dict[str, Any],
+    *keys: str,
+) -> float:
+    if explicit_value is not None:
+        return float(explicit_value)
+
+    for section_name in ("transaction_costs", "capital_params"):
+        section = strategy_record.get(section_name)
+        if not isinstance(section, dict):
+            continue
+        for key in keys:
+            candidate = section.get(key)
+            if candidate is None:
+                continue
+            try:
+                return float(candidate)
+            except (TypeError, ValueError):
+                continue
+    return 0.0
+
+
+def _normalize_risk_ratio(value: Any, *, initial_capital: float) -> Optional[float]:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if numeric < 0:
+        return None
+    if numeric > 1.0 and initial_capital > 0:
+        return round(numeric / initial_capital, 6)
+    return numeric
+
+
+def _resolve_local_risk_limits(
+    strategy_record: dict[str, Any],
+    initial_capital: float,
+) -> dict[str, float]:
+    max_drawdown: Optional[float] = None
+    daily_loss_limit: Optional[float] = None
+
+    for section_name in ("risk", "risk_control"):
+        section = strategy_record.get(section_name)
+        if not isinstance(section, dict):
+            continue
+
+        if max_drawdown is None:
+            for key in ("max_drawdown", "max_drawdown_pct"):
+                if key in section:
+                    max_drawdown = _normalize_risk_ratio(section.get(key), initial_capital=initial_capital)
+                    break
+
+        if daily_loss_limit is None:
+            if "daily_loss_limit" in section:
+                daily_loss_limit = _normalize_risk_ratio(
+                    section.get("daily_loss_limit"),
+                    initial_capital=initial_capital,
+                )
+            elif "daily_loss_limit_pct" in section:
+                daily_loss_limit = _normalize_risk_ratio(
+                    section.get("daily_loss_limit_pct"),
+                    initial_capital=initial_capital,
+                )
+            elif "daily_loss_limit_yuan" in section:
+                daily_loss_limit = _normalize_risk_ratio(
+                    section.get("daily_loss_limit_yuan"),
+                    initial_capital=initial_capital,
+                )
+
+    return {
+        "max_drawdown": max_drawdown if max_drawdown is not None else 1.0,
+        "daily_loss_limit": daily_loss_limit if daily_loss_limit is not None else 1.0,
+    }
+
+
 def _should_require_formal_or_fail(execution_profile: dict[str, Any]) -> bool:
     template_id = str(execution_profile.get("template_id") or "").strip()
     registered_templates = set(execution_profile.get("formal_engine", {}).get("registered_templates") or [])
@@ -248,9 +409,10 @@ def _build_formal_result_execution_profile(
         **base_profile,
         "mode": "formal",
         "label": "正式回测",
+        "engine_type": "tqsdk",
         "formal_supported": True,
-        "executed_mode": "formal",
-        "executed_label": "正式回测",
+        "executed_mode": "tqsdk",
+        "executed_label": "TqSdk 在线回测",
         "executed_formal": True,
         "can_execute_formal": True,
         "executed_reason": executed_reason,
@@ -261,6 +423,166 @@ def _build_formal_result_execution_profile(
             *list(base_profile.get("evidence", [])),
         ],
     }
+
+
+def _build_local_result_execution_profile(
+    strategy_record: Optional[dict[str, Any]],
+    report: LocalBacktestReport,
+) -> dict[str, Any]:
+    base_profile = build_strategy_execution_profile(strategy_record or {})
+    executed_reason = "当前结果由 LocalBacktestEngine 经 EngineRouter 生成。"
+    if report.summary.get("status") != "completed":
+        executed_reason = f"LocalBacktestEngine 已执行，但结果状态为 {report.summary.get('status')}。"
+    return {
+        **base_profile,
+        "mode": "local",
+        "label": "本地回测",
+        "engine_type": "local",
+        "executed_mode": "local",
+        "executed_label": "Local 本地回测",
+        "executed_formal": False,
+        "can_execute_formal": bool(base_profile.get("formal_supported")),
+        "executed_reason": executed_reason,
+        "evidence": [
+            executed_reason,
+            f"local_status={report.summary.get('status')}",
+            *list(base_profile.get("evidence", [])),
+        ],
+    }
+
+
+def _annualized_return_pct(
+    initial_capital: float,
+    final_equity: float,
+    start_date: date,
+    end_date: date,
+) -> float:
+    if initial_capital <= 0:
+        return 0.0
+    total_days = max((end_date - start_date).days, 1)
+    return ((final_equity / initial_capital) ** (365.0 / total_days) - 1.0) * 100.0
+
+
+def _build_local_result_record(
+    payload: BacktestRunPayload,
+    *,
+    strategy_name: str,
+    strategy_record: dict[str, Any],
+    report: LocalBacktestReport,
+    symbols: list[str],
+    contract: str,
+) -> dict[str, Any]:
+    report_payload = report.to_dict()
+    execution_profile = _build_local_result_execution_profile(strategy_record, report)
+    payload_strategy = dict(strategy_record.get("strategy", {}))
+    payload_strategy["id"] = strategy_name
+    payload_strategy["execution_profile"] = execution_profile
+
+    job_payload = report_payload.get("job", {})
+    summary_payload = report_payload.get("summary", {})
+    transaction_costs = report_payload.get("transaction_costs", {})
+    artifacts = report_payload.get("artifacts", {})
+    local_trades = list(artifacts.get("trades") or []) if isinstance(artifacts, dict) else []
+    requested_symbol = str(job_payload.get("requested_symbol") or contract)
+    executed_data_symbol = str(job_payload.get("executed_data_symbol") or contract)
+    source_kind = str(job_payload.get("source_kind") or "mock")
+    initial_capital = float(job_payload.get("initial_capital") or _resolve_initial_capital(payload, strategy_record))
+    final_equity = float(summary_payload.get("final_equity") or initial_capital)
+    start_date = _parse_date(str(job_payload.get("start_date") or payload.start), date(2024, 1, 2))
+    end_date = _parse_date(str(job_payload.get("end_date") or payload.end), date(2024, 12, 31))
+    total_return = ((final_equity - initial_capital) / initial_capital * 100.0) if initial_capital else 0.0
+    annual_return = _annualized_return_pct(initial_capital, final_equity, start_date, end_date)
+
+    winners = [float(trade.get("pnl", 0.0)) for trade in local_trades if float(trade.get("pnl", 0.0)) > 0.0]
+    losers = [abs(float(trade.get("pnl", 0.0))) for trade in local_trades if float(trade.get("pnl", 0.0)) < 0.0]
+    profit_loss_ratio = 0.0
+    if winners and losers:
+        profit_loss_ratio = (sum(winners) / len(winners)) / (sum(losers) / len(losers))
+
+    result_record = {
+        "id": str(job_payload.get("job_id") or uuid4()),
+        "task_id": str(job_payload.get("job_id") or uuid4()),
+        "name": strategy_name,
+        "strategy": strategy_name,
+        "status": str(summary_payload.get("status") or "completed"),
+        "payload": {
+            "start": start_date.isoformat(),
+            "end": end_date.isoformat(),
+            "symbols": symbols,
+            "contract": requested_symbol,
+            "engine_type": "local",
+            "requested_symbol": requested_symbol,
+            "executed_data_symbol": executed_data_symbol,
+            "source_kind": source_kind,
+            "params": payload.params or strategy_record.get("params", {}),
+            "strategy": payload_strategy,
+            "signal": strategy_record.get("signal", {}),
+            "risk": strategy_record.get("risk") or strategy_record.get("risk_control", {}),
+            "timeframe": job_payload.get("timeframe"),
+            "template_id": payload_strategy.get("template_id"),
+        },
+        "contracts": symbols,
+        "submitted_at": _now_ts(),
+        "progress": 100,
+        "current_date": end_date.isoformat(),
+        "trades": local_trades,
+        "equity_curve": list(artifacts.get("equity_curve") or []) if isinstance(artifacts, dict) else [],
+        "error_message": None,
+        "source": "local_backtest_engine",
+        "requested_symbol": requested_symbol,
+        "executed_data_symbol": executed_data_symbol,
+        "source_kind": source_kind,
+        "report_path": None,
+        "execution_profile": execution_profile,
+        "duration_seconds": 0,
+        "completion_logged": True,
+        "report_summary": dict(summary_payload),
+        "formal_report": report_payload,
+        "formal_notes": list(report.notes),
+        "risk_summary": {
+            "event_count": len(report.risk_events),
+            "events": list(report.risk_events),
+        },
+        "transaction_costs": dict(transaction_costs),
+        "transaction_cost_summary": {
+            "total_cost": transaction_costs.get("total_cost"),
+        },
+        "template_id": payload_strategy.get("template_id"),
+        "timeframe": job_payload.get("timeframe"),
+        "totalReturn": round(total_return, 2),
+        "annualReturn": round(annual_return, 2),
+        "maxDrawdown": round(float(summary_payload.get("max_drawdown") or 0.0) * 100.0, 2),
+        "sharpeRatio": round(float(summary_payload.get("sharpe") or 0.0), 2),
+        "winRate": round(float(summary_payload.get("win_rate") or 0.0) * 100.0, 1),
+        "profitLossRatio": round(profit_loss_ratio, 2),
+        "totalTrades": int(summary_payload.get("total_trades") or 0),
+        "total_trades": int(summary_payload.get("total_trades") or 0),
+        "initialCapital": round(initial_capital, 2),
+        "finalCapital": round(final_equity, 2),
+    }
+    result_record["result"] = {
+        "totalReturn": result_record["totalReturn"],
+        "annualReturn": result_record["annualReturn"],
+        "maxDrawdown": result_record["maxDrawdown"],
+        "sharpeRatio": result_record["sharpeRatio"],
+        "winRate": result_record["winRate"],
+        "profitLossRatio": result_record["profitLossRatio"],
+        "totalTrades": result_record["totalTrades"],
+    }
+    result_record["tqsdk_stat"] = {
+        "symbol": executed_data_symbol,
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "timeframe": _parse_timeframe_number(job_payload.get("timeframe")),
+        "init_balance": round(initial_capital, 2),
+        "balance": round(final_equity, 2),
+        "trading_days": len(result_record["equity_curve"]),
+        "open_times": result_record["totalTrades"],
+        "close_times": result_record["totalTrades"],
+        "profit_volumes": len(winners),
+        "loss_volumes": len(losers),
+    }
+    return result_record
 
 
 def _coerce_profit_factor(value: float) -> Optional[float]:
@@ -301,6 +623,7 @@ def _build_formal_result_record(
             "end": report.end_date.isoformat(),
             "symbols": symbols,
             "contract": contract,
+            "engine_type": "tqsdk",
             "params": payload.params or {},
             "strategy": payload_strategy,
             "signal": strategy_record.get("signal", {}),
@@ -700,6 +1023,28 @@ def _store_formal_result(state: dict[str, Any], result: dict[str, Any]) -> dict[
     return result
 
 
+def _store_local_result(state: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    state["results"][result["id"]] = result
+    strategy_name = str(result["strategy"])
+    strategy_record = get_strategy_record(state, strategy_name)
+    if strategy_record is not None:
+        strategy_record["status"] = result["status"]
+        strategy_record["updated_at"] = _now_ts()
+
+    append_event_log(
+        state,
+        strategy=strategy_name,
+        action="执行本地回测",
+        contract=result["payload"].get("contract"),
+        result=f"{result['totalReturn']:+.2f}%",
+    )
+    append_system_log(
+        state,
+        f"local result stored for {strategy_name} ({result['id']}, status={result['status']})",
+    )
+    return result
+
+
 @router.get("/summary")
 def get_summary(request: Request) -> dict[str, Any]:
     state = get_compat_state(request)
@@ -799,6 +1144,89 @@ def run_backtest(payload: BacktestRunPayload, request: Request) -> dict[str, Any
     state = get_compat_state(request)
     strategy_name = _resolve_strategy_name(payload)
     strategy_record = _require_strategy_record(state, strategy_name)
+    try:
+        resolved_engine_type = _engine_router.validate_engine_type(payload.engine_type)
+    except EngineTypeError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    # 若请求 tqsdk 但 auth 未配置，或策略不满足 formal_supported，自动降级到 local 引擎
+    if resolved_engine_type == "tqsdk":
+        settings = get_settings()
+        tqsdk_available = bool(settings.tqsdk_auth_username and settings.tqsdk_auth_password)
+        execution_profile_check = build_strategy_execution_profile(strategy_record)
+        if not tqsdk_available or not execution_profile_check.get("formal_supported"):
+            _logger.info(
+                "tqsdk engine requested but not available (auth=%s, formal_supported=%s);"
+                " auto-downgrading to local for %s",
+                tqsdk_available,
+                execution_profile_check.get("formal_supported"),
+                strategy_name,
+            )
+            resolved_engine_type = "local"
+
+    if resolved_engine_type == "local":
+        symbols = _derive_symbols(payload, strategy_record)
+        contract = payload.contract or symbols[0]
+        initial_capital = _resolve_initial_capital(payload, strategy_record)
+        local_risk_limits = _resolve_local_risk_limits(strategy_record, initial_capital)
+        local_router = EngineRouter(
+            local_engine=LocalBacktestEngine(
+                data_provider=ApiDataProvider(get_settings().data_api_url)
+            )
+        )
+
+        try:
+            local_report = local_router.route_local(
+                LocalBacktestParams(
+                    job_id=str(uuid4()),
+                    strategy_id=strategy_name,
+                    symbols=symbols,
+                    requested_symbol=contract,
+                    strategy_yaml_filename=(
+                        str(strategy_record.get("strategy_yaml_filename")).strip()
+                        if strategy_record.get("strategy_yaml_filename")
+                        else None
+                    ),
+                    start_date=_parse_date(payload.start, date(2024, 1, 2)),
+                    end_date=_parse_date(payload.end, date(2024, 12, 31)),
+                    initial_capital=initial_capital,
+                    timeframe_minutes=_resolve_local_timeframe_minutes(payload, strategy_record),
+                    slippage_per_unit=_resolve_runtime_cost(
+                        payload.slippage_per_unit,
+                        strategy_record,
+                        "slippage_per_unit",
+                        "slippage",
+                    ),
+                    commission_per_lot_round_turn=_resolve_runtime_cost(
+                        payload.commission_per_lot_round_turn,
+                        strategy_record,
+                        "commission_per_lot_round_turn",
+                        "commission",
+                    ),
+                    max_drawdown=local_risk_limits["max_drawdown"],
+                    daily_loss_limit=local_risk_limits["daily_loss_limit"],
+                )
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+        local_result = _store_local_result(
+            state,
+            _build_local_result_record(
+                payload,
+                strategy_name=strategy_name,
+                strategy_record=strategy_record,
+                report=local_report,
+                symbols=symbols,
+                contract=contract,
+            ),
+        )
+        return {
+            "task_id": local_result["id"],
+            "engine_type": "local",
+            **build_result_summary(local_result),
+        }
+
     execution_profile = build_strategy_execution_profile(strategy_record)
 
     if execution_profile.get("formal_supported"):
@@ -830,7 +1258,8 @@ def run_backtest(payload: BacktestRunPayload, request: Request) -> dict[str, Any
         # Build placeholder result record for async progress tracking
         payload_strategy = dict(strategy_record.get("strategy", {}))
         payload_strategy["id"] = strategy_name
-        payload_strategy["execution_profile"] = execution_profile
+        placeholder_execution_profile = _build_submitted_tqsdk_execution_profile(strategy_record)
+        payload_strategy["execution_profile"] = placeholder_execution_profile
 
         placeholder = {
             "id": job_id,
@@ -843,6 +1272,7 @@ def run_backtest(payload: BacktestRunPayload, request: Request) -> dict[str, Any
                 "end": end_date.isoformat(),
                 "symbols": symbols,
                 "contract": contract,
+                "engine_type": "tqsdk",
                 "params": payload.params or {},
                 "strategy": payload_strategy,
                 "signal": strategy_record.get("signal", {}),
@@ -868,6 +1298,7 @@ def run_backtest(payload: BacktestRunPayload, request: Request) -> dict[str, Any
             "initialCapital": round(initial_capital, 2),
             "finalCapital": round(initial_capital, 2),
             "result": {},
+            "execution_profile": placeholder_execution_profile,
         }
         state["results"][job_id] = placeholder
 
@@ -897,6 +1328,7 @@ def run_backtest(payload: BacktestRunPayload, request: Request) -> dict[str, Any
 
         return {
             "task_id": job_id,
+            "engine_type": "tqsdk",
             "status": "running",
             "progress": 1,
             "strategy": strategy_name,
@@ -1021,11 +1453,75 @@ def get_result_equity(task_id: str, request: Request) -> list[dict[str, Any]]:
     return list(_result_or_404(state, task_id).get("equity_curve", []))
 
 
+def _expand_local_engine_trades(result: dict[str, Any], trades: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """将 local_engine 的一对一成交记录（entry+exit 配对）展开为 CTP 风格的开仓/平仓两行格式。"""
+    if not trades:
+        return trades
+    # 仅对 local_engine 产出的配对格式做展开（判断特征字段）
+    if "entry_price" not in trades[0]:
+        return trades
+    symbol = str(
+        result.get("executed_data_symbol")
+        or (result.get("contracts") or [""])[0]
+        or ""
+    )
+    tx_costs = result.get("transaction_costs") or {}
+    slippage_per_unit = float(tx_costs.get("slippage_per_unit") or 0.0)
+    expanded: list[dict[str, Any]] = []
+    for trade in trades:
+        side = str(trade.get("side") or "long")
+        qty = int(trade.get("quantity") or 1)
+        entry_price = trade.get("entry_price")
+        exit_price = trade.get("exit_price")
+        entry_time = str(trade.get("entry_time") or "")
+        exit_time = str(trade.get("exit_time") or trade.get("close_time") or "")
+        pnl = trade.get("pnl")
+        total_cost = float(trade.get("total_cost") or 0.0)
+        commission_each = round(total_cost / 2.0, 2)
+        slip = round(slippage_per_unit * qty, 2) if slippage_per_unit > 0 else None
+        is_buy_open = side == "long"
+        # 开仓行
+        expanded.append({
+            "date": entry_time[:10] if entry_time else "",
+            "symbol": symbol,
+            "direction": "BUY" if is_buy_open else "SELL",
+            "offset": "OPEN",
+            "price": entry_price,
+            "volume": qty,
+            "commission": commission_each,
+            "slippage": slip,
+            "profit": None,
+            "entry_time": entry_time,
+            "exit_time": exit_time,
+            "exit_reason": trade.get("exit_reason"),
+            "pnl": None,
+        })
+        # 平仓行
+        expanded.append({
+            "date": exit_time[:10] if exit_time else "",
+            "symbol": symbol,
+            "direction": "SELL" if is_buy_open else "BUY",
+            "offset": "CLOSE",
+            "price": exit_price,
+            "volume": qty,
+            "commission": commission_each,
+            "slippage": slip,
+            "profit": pnl,
+            "entry_time": entry_time,
+            "exit_time": exit_time,
+            "exit_reason": trade.get("exit_reason"),
+            "pnl": pnl,
+        })
+    return expanded
+
+
 @router.get("/results/{task_id}/trades")
 def get_result_trades(task_id: str, request: Request) -> list[dict[str, Any]]:
     state = get_compat_state(request)
     _refresh_all_results(state)
-    return list(_result_or_404(state, task_id).get("trades", []))
+    result = _result_or_404(state, task_id)
+    trades = list(result.get("trades", []))
+    return _expand_local_engine_trades(result, trades)
 
 
 @router.get("/results/{task_id}/report")

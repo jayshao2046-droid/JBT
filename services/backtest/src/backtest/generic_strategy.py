@@ -1409,6 +1409,12 @@ def _rewrite_legacy_expression_calls(expression: str) -> str:
     )
     normalized = re.sub(r"\bdonchian_high\s*\(\s*[^)]+\)", "donchian_high", normalized, flags=re.IGNORECASE)
     normalized = re.sub(r"\bdonchian_low\s*\(\s*[^)]+\)", "donchian_low", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(
+        r"\badx\s*\(\s*period\s*=\s*(\d+)\s*\)",
+        lambda match: f"adx_{match.group(1)}",
+        normalized,
+        flags=re.IGNORECASE,
+    )
     return normalized
 
 
@@ -2198,7 +2204,22 @@ def _infer_legacy_indicator_specs(
                 period_hint=atr_period,
             )
         )
-    if re.search(r"\badx\b", combined_expression):
+    for adx_period_text in re.findall(
+        r"\badx\s*\(\s*period\s*=\s*(\d+)\s*\)",
+        combined_expression,
+        flags=re.IGNORECASE,
+    ):
+        adx_period = _read_positive_int(adx_period_text, label=f"adx(period={adx_period_text})")
+        add(
+            GenericIndicatorSpec(
+                name=f"adx_{adx_period}",
+                indicator_type="ADX",
+                params={"high": "high", "low": "low", "close": "close", "period": adx_period},
+                primary_output="adx",
+                period_hint=adx_period,
+            )
+        )
+    if re.search(r"\badx\b(?!\s*\()", combined_expression):
         add(
             GenericIndicatorSpec(
                 name="adx",
