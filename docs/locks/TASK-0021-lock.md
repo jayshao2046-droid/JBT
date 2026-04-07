@@ -3,15 +3,15 @@
 ## Lock 信息
 
 - 任务 ID：TASK-0021
-- 阶段：旧决策域清洗升级迁移预审 + 批次 A 契约白名单与 Token 草案终审
-- 当前任务是否仍处于“预审未执行”状态：是；当前仅完成治理冻结与批次 A 草案终审，仍未进入代码执行
+- 阶段：旧决策域清洗升级迁移预审 + 批次 A 10 文件 P0 签发范围终审同步
+- 当前任务是否仍处于“预审未执行”状态：是；当前仅完成治理冻结与批次 A 10 文件正式签发范围同步，仍未进入代码执行
 - 执行 Agent：
   - 项目架构师（当前预审）
   - Atlas（当前账本与调度留痕）
   - 决策 Agent（后续只读拆解 / 未来实施主体）
 - Token 摘要：
   - P-LOG 协同账本区文件：不需要文件级 Token
-  - 后续批次 A `shared/contracts/**`：P0（批次 A 草案已通过架构终审，待 Jay.S 签发）
+  - 后续批次 A `shared/contracts/**`：P0（Jay.S 已明确要求按 10 文件正式范围签发；当前待立即签发）
   - 后续批次 B `integrations/legacy-botquant/**`：P0
   - 后续批次 C / D `services/decision/**`：P1
   - 后续批次 E `services/dashboard/**`：P1
@@ -51,24 +51,32 @@
 
 ## 进入执行前需要的 Token / 授权
 
-1. 必须先完成 `TASK-0021` 的治理账本闭环。
-2. 必须先由项目架构师同步公共项目提示词。
-3. 必须先冻结首批契约批次的文件级白名单。
-4. 必须先由 Jay.S 对对应文件范围签发 P0 / P1 Token。
+1. `TASK-0021` 的治理账本闭环已完成本轮最小同步。
+2. 公共项目提示词与项目架构师私有提示词已同步到批次 A 10 文件正式口径。
+3. 批次 A 10 文件正式白名单已冻结。
+4. 仍待 Jay.S 对对应 10 文件范围签发 P0 Token。
 5. 若实施涉及其他服务目录，必须先拆成对应服务子任务，不得在本主任务内跨服务直接写入。
 
-## 批次 A 草案终审冻结（2026-04-07）
+## 批次 A 10 文件正式签发范围冻结（2026-04-07）
 
-1. 架构终审结论：通过；当前正式状态为“批次 A 草案已通过架构终审，待 Jay.S 签发 P0 Token”，不是“已执行”。
-2. `A-Core` 建议文件范围：`shared/contracts/README.md`、`shared/contracts/decision/api.md`、`shared/contracts/decision/strategy_package.md`、`shared/contracts/decision/research_snapshot.md`、`shared/contracts/decision/backtest_certificate.md`、`shared/contracts/decision/decision_request.md`、`shared/contracts/decision/decision_result.md`、`shared/contracts/decision/model_boundary.md`。
-3. `A-Extension` 条件范围：`shared/contracts/decision/notification_event.md`、`shared/contracts/decision/dashboard_projection.md`；仅在 Jay.S 明确要求批次 A 先冻结通知事件或看板只读聚合字段时，才进入后续 P0 签发。
-4. 收紧说明：`A-Extension` 不与 `A-Core` 自动合批，继续保持首批 P0 最小面。
-5. 本次终审不构成解锁；`services/**`、`integrations/legacy-botquant/**`、legacy `J_BotQuant/**` 与其他非白名单文件继续锁定。
+1. 架构终审结论：通过；Jay.S 已明确要求批次 A 同时冻结通知事件与看板只读聚合字段，当前正式状态为“批次 A 10 文件正式范围待 Jay.S 立即签发 P0 Token”，不是“已执行”。
+2. `shared/contracts/README.md`
+3. `shared/contracts/decision/api.md`
+4. `shared/contracts/decision/strategy_package.md`
+5. `shared/contracts/decision/research_snapshot.md`
+6. `shared/contracts/decision/backtest_certificate.md`
+7. `shared/contracts/decision/decision_request.md`
+8. `shared/contracts/decision/decision_result.md`
+9. `shared/contracts/decision/model_boundary.md`
+10. `shared/contracts/decision/notification_event.md`
+11. `shared/contracts/decision/dashboard_projection.md`
+12. 原“A-Extension 仅条件范围 / 不自动合批”口径已失效，不再作为当前正式冻结结论。
+13. 本次终审不构成解锁；`services/**`、`integrations/legacy-botquant/**`、legacy `J_BotQuant/**` 与其他非白名单文件继续锁定。
 
 ## 当前状态
 
 - 预审状态：已通过
-- Token 状态：当前轮次未申请代码 Token；批次 A 草案已通过架构终审，待 Jay.S 签发 P0 Token
+- Token 状态：当前轮次未取得实际代码 Token；批次 A 10 文件正式范围已完成架构终审同步，待 Jay.S 立即签发 P0 Token
 - 解锁时间：N/A
 - 失效时间：N/A
 - 锁回时间：N/A
@@ -76,4 +84,4 @@
 
 ## 结论
 
-**`TASK-0021` 当前仍处于“批次 A 草案已通过架构终审、待 Jay.S 签发 P0 Token、未进入执行”状态；继续锁定 `services/**`、`shared/contracts/**`、`integrations/**`、legacy 目录及其他全部非白名单文件。**
+**`TASK-0021` 当前仍处于“批次 A 10 文件正式范围已冻结、待 Jay.S 签发 P0 Token、未进入执行”状态；继续锁定 `services/**`、`shared/contracts/**`、`integrations/**`、legacy 目录及其他全部非白名单文件。**
