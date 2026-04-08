@@ -26,6 +26,7 @@ import {
   ResponsiveContainer,
   ComposedChart,
   Bar,
+  ReferenceLine,
 } from "recharts"
 import { simApi } from "@/lib/sim-api"
 import { toast } from "sonner"
@@ -362,19 +363,15 @@ export default function RiskControlPage() {
                   />
                   <Bar dataKey="loss" fill="#ef4444" radius={[0, 0, 0, 0]} opacity={0.3} />
                   <Line type="monotone" dataKey="pnl" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                  <ReferenceLine y={-2} stroke="#eab308" strokeDasharray="4 2" strokeWidth={1.5} label={{ value: "L2预警 2%", position: "insideTopRight", fill: "#eab308", fontSize: 10 }} />
+                  <ReferenceLine y={-3} stroke="#ef4444" strokeDasharray="4 2" strokeWidth={1.5} label={{ value: "L2熔断 3%", position: "insideTopRight", fill: "#ef4444", fontSize: 10 }} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
             {/* 警戒线说明 */}
-            <div className="mt-4 grid grid-cols-2 gap-4 text-xs">
-              <div>
-                <div className="w-4 h-0.5 bg-yellow-500 mb-1"></div>
-                <p className="text-neutral-400">2% 黄线</p>
-              </div>
-              <div>
-                <div className="w-4 h-0.5 bg-red-500 mb-1"></div>
-                <p className="text-neutral-400">3% 红线</p>
-              </div>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 rounded border border-neutral-800 bg-neutral-900/60 px-4 py-3 text-xs text-neutral-300">
+              <span><span className="text-yellow-400 mr-1">- -</span>黄线 2%：触碰后暂停新开仓并进入人工复核</span>
+              <span><span className="text-red-400 mr-1">- -</span>红线 3%：触碰后强制平仓并锁定交易</span>
             </div>
           </CardContent>
         </Card>

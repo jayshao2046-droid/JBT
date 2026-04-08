@@ -23,6 +23,59 @@ import {
 } from "recharts"
 import { simApi } from "@/lib/sim-api"
 import { toast } from "sonner"
+import { ALL_CONTRACTS } from "@/lib/contracts"
+
+const LOCAL_VIRTUAL_PRINCIPAL = 500000
+
+function isOptionStyleSymbol(symbol: string) {
+  return /\d+[CP]\d+/i.test(symbol)
+}
+
+function isMainContinuousSymbol(symbol: string) {
+  return /^[A-Za-z]{1,3}M$/.test(symbol)
+}
+
+function isProductKeySymbol(symbol: string) {
+  return /^[A-Z]{1,3}$/.test(symbol)
+}
+
+function isTradableFuturesSymbol(symbol: string) {
+  return /^[A-Za-z]{1,3}\d{3,4}$/.test(symbol) && !isOptionStyleSymbol(symbol)
+}
+
+function isAutocompleteCandidate(symbol: string) {
+  const trimmed = symbol.trim()
+  return Boolean(trimmed) && (
+    isMainContinuousSymbol(trimmed) ||
+    isProductKeySymbol(trimmed.toUpperCase()) ||
+    isTradableFuturesSymbol(trimmed)
+  )
+}
+
+function toProductKey(symbol: string) {
+  const normalized = symbol.trim().toUpperCase()
+  if (normalized.endsWith("M")) return normalized.slice(0, -1)
+  const match = normalized.match(/^([A-Z]{1,3})\d{3,4}$/)
+  return match ? match[1] : normalized
+}
+
+function resolveTickBook(ticks: Record<string, any>, symbol?: string) {
+  if (!symbol) return null
+  const normalized = symbol.trim()
+  const productKey = toProductKey(normalized)
+  return (
+    ticks[normalized] ??
+    ticks[normalized.toLowerCase()] ??
+    ticks[normalized.toUpperCase()] ??
+    ticks[productKey] ??
+    null
+  )
+}
+
+const DEFAULT_AUTOCOMPLETE_CANDIDATES = ALL_CONTRACTS
+  .map((contract) => contract.symbol)
+  .filter(isAutocompleteCandidate)
+  .sort((left, right) => left.localeCompare(right))
 
 export default function SimNowTradingTerminal() {
   const [isLoading, setIsLoading] = useState(false)
@@ -35,23 +88,27 @@ export default function SimNowTradingTerminal() {
 
   // 下单参数
   const [orderParams, setOrderParams] = useState({
-    contract: "螺纹钢2510",
+    contract: "",
     direction: "buy",
     openClose: "open",
     quantity: 1,
     priceType: "market",
-    limitPrice: 3850,
+    limitPrice: 0,
   })
 
   const [orderError, setOrderError] = useState("")
 
-  // 合约白名单
-  const contractWhitelist = [
-    "螺纹钢2510",
-    "沪铜2509",
-    "豆粕2509",
-    "沪金2512",
-  ]
+  // 合约输入（自动补全）
+  const [contractInput, setContractInput] = useState("")
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  // 预填充：先用主连期货，CTP ticks 到后以真实可交易合约补齐
+  const [availableContracts, setAvailableContracts] = useState<string[]>(
+    () => DEFAULT_AUTOCOMPLETE_CANDIDATES
+  )
+  const contractInputRef = useRef<HTMLInputElement>(null)
+  const availableContractsRef = useRef<string[]>(DEFAULT_AUTOCOMPLETE_CANDIDATES)
+  const contractInputValueRef = useRef("")
+  const selectedContractRef = useRef("")
 
   // 持仓
   const [positions, setPositions] = useState<any[]>([])
@@ -68,6 +125,24 @@ export default function SimNowTradingTerminal() {
 
   // 当前合约 5 档盘口
   const [orderBook, setOrderBook] = useState<any>(null)
+
+  const localVirtual = accountState?.local_virtual ?? {
+    label: "本地虚拟盘总本金",
+    principal: LOCAL_VIRTUAL_PRINCIPAL,
+  }
+  const ctpSnapshot = accountState?.ctp_snapshot ?? null
+
+  useEffect(() => {
+    availableContractsRef.current = availableContracts
+  }, [availableContracts])
+
+  useEffect(() => {
+    contractInputValueRef.current = contractInput
+  }, [contractInput])
+
+  useEffect(() => {
+    selectedContractRef.current = orderParams.contract
+  }, [orderParams.contract])
 
   // 判断当前是否在交易时段（期货：09:00-11:30 / 13:30-15:00 / 21:00-23:30）
   const isTradingHours = useCallback(() => {
@@ -95,12 +170,35 @@ export default function SimNowTradingTerminal() {
       setOrderStream((ord as any).orders ?? [])
       if (acct !== null) setAccountState(acct)
       if (ticksRes?.ticks) {
-        // 取第一个有数据的 tick 做盘口展示
-        const entries = Object.entries<any>(ticksRes.ticks)
-        if (entries.length > 0) {
-          const [, t] = entries[0]
-          setOrderBook(t)
+        const tickMap = ticksRes.ticks as Record<string, any>
+        const entries = Object.entries<any>(tickMap)
+        const ctpSymbols = entries
+          .map(([symbol]) => symbol)
+          .filter(isAutocompleteCandidate)
+          .sort((left, right) => left.localeCompare(right))
+        const mergedContracts = Array.from(new Set([
+          ...availableContractsRef.current.filter(isAutocompleteCandidate),
+          ...ctpSymbols,
+        ]))
+        mergedContracts.sort((left, right) => left.localeCompare(right))
+        availableContractsRef.current = mergedContracts
+        setAvailableContracts(mergedContracts)
+
+        const currentInput = contractInputValueRef.current.trim()
+        const currentContract = selectedContractRef.current
+        const exactInputContract = mergedContracts.find(
+          (candidate) => candidate.toUpperCase() === currentInput.toUpperCase()
+        )
+        const defaultContract = currentContract || exactInputContract || ctpSymbols[0] || DEFAULT_AUTOCOMPLETE_CANDIDATES[0] || ""
+        if (defaultContract && !currentContract) {
+          selectedContractRef.current = defaultContract
+          setOrderParams(prev => prev.contract ? prev : { ...prev, contract: defaultContract })
         }
+        if (defaultContract && !currentInput) {
+          contractInputValueRef.current = defaultContract
+          setContractInput(prev => prev || defaultContract)
+        }
+        setOrderBook(resolveTickBook(tickMap, currentContract || currentInput || defaultContract))
       }
     } catch {
       setBackendOnline(false)
@@ -131,7 +229,12 @@ export default function SimNowTradingTerminal() {
       return
     }
 
-    if ((accountState?.margin_rate ?? 0) > 80) {
+    if (!orderParams.contract) {
+      setOrderError("请先选择期货合约")
+      return
+    }
+
+    if ((ctpSnapshot?.margin_rate ?? 0) > 80) {
       setOrderError("保证金率触达 80%，无法开仓")
       return
     }
@@ -200,19 +303,19 @@ export default function SimNowTradingTerminal() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="bg-neutral-900 border-neutral-700">
           <CardContent className="p-4">
-            <p className="text-xs text-neutral-400 mb-1">动态权益</p>
+            <p className="text-xs text-neutral-400 mb-1">{localVirtual.label}</p>
             <p className="text-2xl font-bold text-white font-mono transition-[color] duration-300">
-              {accountState?.equity != null ? `¥${accountState.equity.toLocaleString()}` : "--"}
+              ¥{Number(localVirtual.principal ?? LOCAL_VIRTUAL_PRINCIPAL).toLocaleString()}
             </p>
           </CardContent>
         </Card>
 
-        <Card className={`bg-neutral-900 border transition-colors duration-300 ${(accountState?.floating_pnl ?? 0) >= 0 ? "border-green-600" : "border-red-600"}`}>
+        <Card className={`bg-neutral-900 border transition-colors duration-300 ${(ctpSnapshot?.floating_pnl ?? 0) >= 0 ? "border-green-600" : "border-red-600"}`}>
           <CardContent className="p-4">
-            <p className="text-xs text-neutral-400 mb-1">浮动盈亏</p>
-            <p className={`text-2xl font-bold font-mono transition-[color] duration-300 ${(accountState?.floating_pnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
-              {accountState?.floating_pnl != null
-                ? `${accountState.floating_pnl >= 0 ? "+" : ""}¥${accountState.floating_pnl.toLocaleString()}`
+            <p className="text-xs text-neutral-400 mb-1">CTP 浮动盈亏快照</p>
+            <p className={`text-2xl font-bold font-mono transition-[color] duration-300 ${(ctpSnapshot?.floating_pnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
+              {ctpSnapshot?.floating_pnl != null
+                ? `${ctpSnapshot.floating_pnl >= 0 ? "+" : ""}¥${ctpSnapshot.floating_pnl.toLocaleString()}`
                 : "--"}
             </p>
           </CardContent>
@@ -220,61 +323,71 @@ export default function SimNowTradingTerminal() {
 
         <Card className="bg-neutral-900 border-neutral-700">
           <CardContent className="p-4">
-            <p className="text-xs text-neutral-400 mb-1">可用资金</p>
+            <p className="text-xs text-neutral-400 mb-1">CTP 可用资金快照</p>
             <p className="text-2xl font-bold text-white font-mono transition-[color] duration-300">
-              {accountState?.available != null ? `¥${accountState.available.toLocaleString()}` : "--"}
+              {ctpSnapshot?.available != null ? `¥${ctpSnapshot.available.toLocaleString()}` : "--"}
             </p>
           </CardContent>
         </Card>
 
         <Card className="bg-neutral-900 border-neutral-600">
           <CardContent className="p-4">
-            <p className="text-xs text-neutral-400 mb-1">风险度</p>
+            <p className="text-xs text-neutral-400 mb-1">CTP 动态权益快照</p>
             <p className="text-2xl font-bold font-mono text-white">
-              --
+              {ctpSnapshot?.balance != null ? `¥${ctpSnapshot.balance.toLocaleString()}` : "--"}
             </p>
           </CardContent>
         </Card>
 
-        <Card className={`bg-neutral-900 border transition-colors duration-300 ${(accountState?.margin_rate ?? 0) > 70 ? "border-red-600" : "border-yellow-600"}`}>
+        <Card className={`bg-neutral-900 border transition-colors duration-300 ${(ctpSnapshot?.margin_rate ?? 0) > 70 ? "border-red-600" : "border-yellow-600"}`}>
           <CardContent className="p-4">
-            <p className="text-xs text-neutral-400 mb-1">保证金率</p>
-            <p className={`text-2xl font-bold font-mono transition-[color] duration-300 ${(accountState?.margin_rate ?? 0) > 70 ? "text-red-400" : "text-yellow-400"}`}>
-              {accountState?.margin_rate != null ? `${accountState.margin_rate}%` : "--"}
+            <p className="text-xs text-neutral-400 mb-1">CTP 保证金率快照</p>
+            <p className={`text-2xl font-bold font-mono transition-[color] duration-300 ${(ctpSnapshot?.margin_rate ?? 0) > 70 ? "text-red-400" : "text-yellow-400"}`}>
+              {ctpSnapshot?.margin_rate != null ? `${ctpSnapshot.margin_rate}%` : "--"}
             </p>
           </CardContent>
         </Card>
       </div>
 
+      <div className="text-xs text-neutral-500">
+        主口径固定为本地虚拟盘总本金 50 万，CTP / SimNow 数值仅作为次级账户快照展示。
+      </div>
+
       {/* 系统净收益统计行 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-neutral-900 border border-neutral-700 rounded p-3">
-          <p className="text-xs text-neutral-500 mb-1">初始资金</p>
+          <p className="text-xs text-neutral-500 mb-1">CTP 期初权益快照</p>
           <p className="text-sm font-mono text-neutral-300">
-            {accountState?.initial_balance != null ? `¥${accountState.initial_balance.toLocaleString()}` : "--"}
+            {ctpSnapshot?.initial_balance != null ? `¥${ctpSnapshot.initial_balance.toLocaleString()}` : "--"}
           </p>
         </div>
         <div className="bg-neutral-900 border border-neutral-700 rounded p-3">
-          <p className="text-xs text-neutral-500 mb-1">累计手续费</p>
+          <p className="text-xs text-neutral-500 mb-1">CTP 手续费快照</p>
           <p className="text-sm font-mono text-red-400">
-            {accountState?.total_commission != null ? `-¥${accountState.total_commission.toLocaleString()}` : "--"}
+            {ctpSnapshot?.commission != null ? `-¥${ctpSnapshot.commission.toLocaleString()}` : "--"}
           </p>
         </div>
         <div className="bg-neutral-900 border border-neutral-700 rounded p-3">
-          <p className="text-xs text-neutral-500 mb-1">累计滑点损耗</p>
-          <p className="text-sm font-mono text-red-400">
-            {accountState?.total_slippage != null ? `-¥${accountState.total_slippage.toLocaleString()}` : "--"}
-          </p>
-        </div>
-        <div className="bg-neutral-900 border border-neutral-700 rounded p-3">
-          <p className="text-xs text-neutral-500 mb-1">系统净收益</p>
-          <p className={`text-sm font-mono transition-[color] duration-300 ${
-            accountState?.net_pnl != null
-              ? accountState.net_pnl >= 0 ? "text-green-400" : "text-red-400"
+          <p className="text-xs text-neutral-500 mb-1">CTP 平仓盈亏快照</p>
+          <p className={`text-sm font-mono ${
+            ctpSnapshot?.close_pnl != null
+              ? ctpSnapshot.close_pnl >= 0 ? "text-green-400" : "text-red-400"
               : "text-neutral-400"
           }`}>
-            {accountState?.net_pnl != null
-              ? `${accountState.net_pnl >= 0 ? "+" : ""}¥${accountState.net_pnl.toLocaleString()}`
+            {ctpSnapshot?.close_pnl != null
+              ? `${ctpSnapshot.close_pnl >= 0 ? "+" : ""}¥${ctpSnapshot.close_pnl.toLocaleString()}`
+              : "--"}
+          </p>
+        </div>
+        <div className="bg-neutral-900 border border-neutral-700 rounded p-3">
+          <p className="text-xs text-neutral-500 mb-1">CTP 总盈亏快照</p>
+          <p className={`text-sm font-mono transition-[color] duration-300 ${
+            ctpSnapshot?.net_pnl != null
+              ? ctpSnapshot.net_pnl >= 0 ? "text-green-400" : "text-red-400"
+              : "text-neutral-400"
+          }`}>
+            {ctpSnapshot?.net_pnl != null
+              ? `${ctpSnapshot.net_pnl >= 0 ? "+" : ""}¥${ctpSnapshot.net_pnl.toLocaleString()}`
               : "--"}
           </p>
         </div>
@@ -309,21 +422,56 @@ export default function SimNowTradingTerminal() {
                 </div>
               ))}
             </div>
-            {/* 品种选择 */}
+            {/* 品种输入（自动补全）*/}
             <div className="space-y-3">
-            <div>
+            <div className="relative">
               <label className="text-xs text-neutral-400 block mb-2">品种</label>
-              <select
-                value={orderParams.contract}
-                onChange={(e) => setOrderParams({ ...orderParams, contract: e.target.value })}
-                className="w-full bg-neutral-800 border border-neutral-700 text-white text-sm p-2 rounded"
-              >
-                {contractWhitelist.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <Input
+                ref={contractInputRef}
+                value={contractInput}
+                onChange={(e) => {
+                  const v = e.target.value.toUpperCase()
+                  contractInputValueRef.current = v
+                  setContractInput(v)
+                  const exact = availableContracts.find((candidate) => candidate.toUpperCase() === v)
+                  if (exact) {
+                    selectedContractRef.current = exact
+                    setOrderParams((prev) => ({ ...prev, contract: exact }))
+                  }
+                  setShowSuggestions(true)
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                placeholder="输入期货合约，如 rb2506 或 MA605"
+                className="bg-neutral-800 border-neutral-700 text-white text-sm font-mono"
+              />
+              {showSuggestions && (() => {
+                const q = contractInput.trim().toUpperCase()
+                if (!q) return null
+                const filtered = availableContracts
+                  .filter((candidate) => candidate.toUpperCase().includes(q) && isAutocompleteCandidate(candidate))
+                  .slice(0, 8)
+                if (filtered.length === 0) return null
+                return (
+                  <div className="absolute z-20 w-full top-full mt-0.5 bg-neutral-800 border border-neutral-600 rounded shadow-lg max-h-40 overflow-y-auto">
+                    {filtered.map(c => (
+                      <div
+                        key={c}
+                        className={`px-3 py-1.5 text-xs font-mono cursor-pointer hover:bg-neutral-700 ${c === orderParams.contract ? "text-orange-400" : "text-white"}`}
+                        onMouseDown={() => {
+                          contractInputValueRef.current = c
+                          selectedContractRef.current = c
+                          setContractInput(c)
+                          setOrderParams(prev => ({ ...prev, contract: c }))
+                          setShowSuggestions(false)
+                        }}
+                      >
+                        {c}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
             </div>
 
             {/* 方向/开平 */}
@@ -368,7 +516,7 @@ export default function SimNowTradingTerminal() {
                 className="bg-neutral-800 border-neutral-700 text-white text-sm"
               />
               <p className="text-xs text-neutral-500 mt-1">
-                智能推荐: {accountState?.available != null ? `${Math.floor(accountState.available / 10000)} 手` : "--"}
+                智能推荐: {ctpSnapshot?.available != null ? `${Math.floor(ctpSnapshot.available / 10000)} 手` : "--"}
               </p>
             </div>
 

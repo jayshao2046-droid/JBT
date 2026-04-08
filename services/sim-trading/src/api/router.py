@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -26,9 +26,9 @@ _system_state: Dict[str, Any] = {
     "ctp_password": os.getenv("SIMNOW_PASSWORD", ""),
     "ctp_md_front": os.getenv("SIMNOW_MD_FRONT", "tcp://180.168.146.187:10131"),
     "ctp_td_front": os.getenv("SIMNOW_TRADE_FRONT", "tcp://180.168.146.187:10130"),
-    "last_disconnect_reason": None,
-    "last_disconnect_time": None,
 }
+
+_LOCAL_VIRTUAL_PRINCIPAL = 500000.0
 
 _risk_presets: Dict[str, Any] = {
     # ── SHFE 上期所 ────────────────────────────────────────
@@ -123,6 +123,48 @@ class RiskPresetUpdateRequest(BaseModel):
     enabled: bool
     commission: float = 1.0
     slippage_ticks: int = 1
+
+
+def _build_local_virtual_account() -> Dict[str, Any]:
+    return {
+        "label": "本地虚拟盘总本金",
+        "principal": _LOCAL_VIRTUAL_PRINCIPAL,
+        "currency": "CNY",
+        "active_preset": _system_state.get("active_preset", "sim_50w"),
+    }
+
+
+def _build_ctp_snapshot(connected: bool, account: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    acct = account or {}
+    balance = acct.get("balance") if connected else None
+    available = acct.get("available") if connected else None
+    margin = acct.get("margin") if connected else None
+    floating_pnl = acct.get("floating_pnl") if connected else None
+    close_pnl = acct.get("close_pnl") if connected else None
+    commission = acct.get("commission") if connected else None
+    initial_balance = acct.get("pre_balance") if connected else None
+    margin_rate = round(margin / balance * 100, 2) if balance and margin else None
+    if not connected:
+        note = "CTP 未连接，账户快照不可用"
+    elif balance is None:
+        note = "CTP 已连接，账户快照刷新中"
+    else:
+        note = "CTP 账户快照"
+    return {
+        "connected": connected,
+        "balance": balance,
+        "available": available,
+        "margin": margin,
+        "margin_rate": margin_rate,
+        "floating_pnl": floating_pnl,
+        "close_pnl": close_pnl,
+        "commission": commission,
+        "initial_balance": initial_balance,
+        "net_pnl": round((close_pnl or 0) + (floating_pnl or 0), 2)
+        if close_pnl is not None or floating_pnl is not None
+        else None,
+        "note": note,
+    }
 
 # ---------- 基础状态 ----------
 @router.get("/status")
@@ -341,26 +383,25 @@ def update_risk_preset(req: RiskPresetUpdateRequest):
 @router.get("/account")
 def get_account():
     """
-    账户净值/可用资金/浮动盈亏。
-    CTP 未连接时返回 connected=false，不返回任何假数据。
+    账户主口径拆分为：
+    1. 本地虚拟盘总本金（固定 50 万）
+    2. CTP 账户快照（仅作次级展示）
     """
     if _gateway is None or not _gateway.status.get("td_connected"):
         return {
             "connected": False,
-            "equity": None,
-            "available": None,
-            "floating_pnl": None,
-            "margin": None,
-            "margin_rate": None,
-            "note": "CTP 未连接，账户数据不可用",
+            "local_virtual": _build_local_virtual_account(),
+            "ctp_snapshot": _build_ctp_snapshot(False),
         }
-    # CTP 已连接时，从 gateway 获取（TASK-0016 实现订单/账户查询后扩展）
+    acct = _gateway._account
+    # 如果账户数据尚未回来，异步触发一次查询
+    if acct.get("balance") is None:
+        try:
+            _gateway._query_account()
+        except Exception:
+            pass
     return {
         "connected": True,
-        "equity": None,
-        "available": None,
-        "floating_pnl": None,
-        "margin": None,
-        "margin_rate": None,
-        "note": "CTP 已连接，账户查询 TASK-0016 实现",
+        "local_virtual": _build_local_virtual_account(),
+        "ctp_snapshot": _build_ctp_snapshot(True, acct),
     }

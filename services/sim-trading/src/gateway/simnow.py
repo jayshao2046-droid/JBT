@@ -5,6 +5,7 @@ SimNow CTP 网关实现（openctp-ctp 6.7.7）
 线程安全：回调在 CTP 内部线程，状态写入加锁后供 FastAPI 读取
 """
 import logging
+import re
 import threading
 from typing import Any, Callable, Dict, List, Optional
 
@@ -20,6 +21,56 @@ except ImportError:
     _tdmod = None
     _CTP_AVAILABLE = False
     logger.warning("openctp-ctp not installed, SimNow gateway unavailable")
+
+
+_FUTURES_PRODUCT_CLASS = getattr(_tdmod, "THOST_FTDC_PC_Futures", "1") if _CTP_AVAILABLE else "1"
+
+
+def _expand_czce_delivery_year(year_digit: int) -> int:
+    from datetime import datetime
+
+    current_yy = datetime.now().year % 100
+    base_decade = (current_yy // 10) * 10
+    candidates = [
+        base_decade - 10 + year_digit,
+        base_decade + year_digit,
+        base_decade + 10 + year_digit,
+    ]
+    futureish = [candidate for candidate in candidates if candidate >= current_yy - 1]
+    pool = futureish or candidates
+    return min(pool, key=lambda candidate: abs(candidate - current_yy))
+
+
+def _resolve_futures_expiry(
+    instrument_id: str,
+    delivery_year: Optional[int] = None,
+    delivery_month: Optional[int] = None,
+) -> Optional[int]:
+    try:
+        year = int(delivery_year or 0)
+        month = int(delivery_month or 0)
+    except (TypeError, ValueError):
+        year = 0
+        month = 0
+
+    if year > 0 and 1 <= month <= 12:
+        return (year % 100) * 100 + month
+
+    match = re.fullmatch(r"[A-Za-z]{1,3}(\d{4})", instrument_id)
+    if match:
+        expiry = int(match.group(1))
+        return expiry if 1 <= expiry % 100 <= 12 else None
+
+    match = re.fullmatch(r"[A-Za-z]{1,3}(\d{3})", instrument_id)
+    if not match:
+        return None
+
+    digits = match.group(1)
+    year_digit = int(digits[0])
+    month = int(digits[1:])
+    if not 1 <= month <= 12:
+        return None
+    return _expand_czce_delivery_year(year_digit) * 100 + month
 
 
 def _make_md_spi_class():
@@ -59,30 +110,33 @@ def _make_md_spi_class():
         def OnRtnDepthMarketData(self, d):
             if not d:
                 return
+            # CTP 对无效字段返回 DBL_MAX，过滤掉避庍显示科学计数法
+            _DBLMAX = 1.7976931348623157e+308
+            def _safe(v): return None if v is None or v >= _DBLMAX * 0.9 else v
             self._on_tick({
                 "symbol":        d.InstrumentID,
-                "last":          d.LastPrice,
-                "open":          d.OpenPrice,
-                "high":          d.HighestPrice,
-                "low":           d.LowestPrice,
-                "bid":           d.BidPrice1,
-                "ask":           d.AskPrice1,
+                "last":          _safe(d.LastPrice),
+                "open":          _safe(d.OpenPrice),
+                "high":          _safe(d.HighestPrice),
+                "low":           _safe(d.LowestPrice),
+                "bid":           _safe(d.BidPrice1),
+                "ask":           _safe(d.AskPrice1),
                 "bid_vol":       d.BidVolume1,
                 "ask_vol":       d.AskVolume1,
-                "bid2":          d.BidPrice2,  "ask2":  d.AskPrice2,
+                "bid2":          _safe(d.BidPrice2),  "ask2":  _safe(d.AskPrice2),
                 "bid_vol2":      d.BidVolume2, "ask_vol2": d.AskVolume2,
-                "bid3":          d.BidPrice3,  "ask3":  d.AskPrice3,
+                "bid3":          _safe(d.BidPrice3),  "ask3":  _safe(d.AskPrice3),
                 "bid_vol3":      d.BidVolume3, "ask_vol3": d.AskVolume3,
-                "bid4":          d.BidPrice4,  "ask4":  d.AskPrice4,
+                "bid4":          _safe(d.BidPrice4),  "ask4":  _safe(d.AskPrice4),
                 "bid_vol4":      d.BidVolume4, "ask_vol4": d.AskVolume4,
-                "bid5":          d.BidPrice5,  "ask5":  d.AskPrice5,
+                "bid5":          _safe(d.BidPrice5),  "ask5":  _safe(d.AskPrice5),
                 "bid_vol5":      d.BidVolume5, "ask_vol5": d.AskVolume5,
                 "volume":        d.Volume,
                 "turnover":      d.Turnover,
                 "open_interest": d.OpenInterest,
-                "upper_limit":   d.UpperLimitPrice,
-                "lower_limit":   d.LowerLimitPrice,
-                "prev_close":    d.PreClosePrice,
+                "upper_limit":   _safe(d.UpperLimitPrice),
+                "lower_limit":   _safe(d.LowerLimitPrice),
+                "prev_close":    _safe(d.PreClosePrice),
                 "update_time":   d.UpdateTime,
                 "update_ms":     d.UpdateMillisec,
             })
@@ -155,6 +209,44 @@ def _make_td_spi_class():
         def OnRspSettlementInfoConfirm(self, p, pRspInfo, nRequestID, bIsLast):
             logger.info("[traderapi] settlement confirmed, ready")
             self._on_status("td_ready")
+            # 结算确认后：查账户 + 查可用合约
+            import threading
+            threading.Timer(1.0, self._api._query_account).start()
+            threading.Timer(2.0, self._api._query_instruments).start()
+
+        def OnRspQryInstrument(self, p, pRspInfo, nRequestID, bIsLast):
+            if p:
+                self._api._on_instrument(
+                    instrument_id=p.InstrumentID,
+                    product_id=p.ProductID.upper(),
+                    product_class=getattr(p, "ProductClass", None),
+                    delivery_year=getattr(p, "DeliveryYear", None),
+                    delivery_month=getattr(p, "DeliveryMonth", None),
+                )
+            if bIsLast:
+                self._api._subscribe_discovered_contracts()
+                count = len(self._api._product_to_contract)
+                logger.info("[traderapi] instrument query done, %d futures products mapped", count)
+
+        def OnRspQryTradingAccount(self, p, pRspInfo, nRequestID, bIsLast):
+            if not p:
+                return
+            if pRspInfo and pRspInfo.ErrorID != 0:
+                logger.error("[traderapi] account query error: %s", pRspInfo.ErrorMsg)
+                return
+            self._api._on_account({
+                "balance":        p.Balance,       # 动态权益
+                "available":      p.Available,     # 可用资金
+                "margin":         p.CurrMargin,    # 占用保证金
+                "floating_pnl":   p.PositionProfit,# 持仓盈亏
+                "close_pnl":      p.CloseProfit,   # 平仓盈亏
+                "commission":     p.Commission,    # 手续费
+                "pre_balance":    p.PreBalance,    # 上次结算准备金（静态权益）
+                "deposit":        p.Deposit,       # 入金
+                "withdraw":       p.Withdraw,      # 出金
+            })
+            logger.info("[traderapi] account balance=%.2f pre_balance=%.2f available=%.2f",
+                        p.Balance, p.PreBalance, p.Available)
 
     return TdSpi
 
@@ -180,6 +272,16 @@ class SimNowGateway:
         self._last_md_disconnect_time = None
         self._last_td_disconnect_reason = None
         self._last_td_disconnect_time = None
+        self._account: Dict = {}
+        # product_id.upper() → list of (InstrumentID, expiry_int)
+        # e.g. "RB" → [("rb2506", 2506), ("rb2507", 2507), ...]
+        self._product_to_contracts: Dict[str, list] = {}
+        # product_id.upper() → near-month InstrumentID
+        self._product_to_contract: Dict[str, str] = {}
+        # actual InstrumentID → product_id.upper() 用于 tick 聚合
+        self._contract_to_product: Dict[str, str] = {}
+        # 合约发现完成后待订阅列表（在 MD 就绪前缓冲）
+        self._pending_subscribe: list = []
 
     @property
     def status(self):
@@ -205,7 +307,12 @@ class SimNowGateway:
 
     def _on_tick(self, tick):
         with self._lock:
-            self._ticks[tick["symbol"]] = tick
+            instr_id = tick["symbol"]
+            self._ticks[instr_id] = tick
+            # 同时用产品代码索引，方便前端用 RB/HC 等查询
+            product_id = self._contract_to_product.get(instr_id)
+            if product_id:
+                self._ticks[product_id] = dict(tick, symbol=product_id)
 
     def _on_md_status(self, s):
         with self._lock:
@@ -216,6 +323,96 @@ class SimNowGateway:
         with self._lock:
             self._td_status = s
         logger.info("[gateway] td → %s", s)
+
+    def _on_account(self, data: dict):
+        with self._lock:
+            self._account = data
+
+    def _on_instrument(
+        self,
+        instrument_id: str,
+        product_id: str,
+        product_class: Optional[str] = None,
+        delivery_year: Optional[int] = None,
+        delivery_month: Optional[int] = None,
+    ):
+        """处理单条合约信息，只保留 futures，并支持郑商所 3 位月份编码。"""
+        if product_class != _FUTURES_PRODUCT_CLASS:
+            return
+        expiry = _resolve_futures_expiry(instrument_id, delivery_year, delivery_month)
+        if expiry is None:
+            return
+        with self._lock:
+            lst = self._product_to_contracts.setdefault(product_id, [])
+            if any(existing_id == instrument_id for existing_id, _ in lst):
+                return
+            lst.append((instrument_id, expiry))
+
+    def _subscribe_discovered_contracts(self):
+        """从 _product_to_contracts 中选出主力合约（近月）并订阅 MD。"""
+        import datetime
+        now = datetime.datetime.now()
+        # 当前年月：YYMM格式
+        cur_yymm = (now.year % 100) * 100 + now.month
+
+        with self._lock:
+            for product_id, contracts in self._product_to_contracts.items():
+                # 过滤掉已过期的合约，选最近到期的
+                future_contracts = [(iid, exp) for iid, exp in contracts if exp >= cur_yymm]
+                if not future_contracts:
+                    future_contracts = contracts  # 都过期就取最新
+                if not future_contracts:
+                    continue
+                # 选到期最近的合约
+                near = min(future_contracts, key=lambda x: x[1])
+                self._product_to_contract[product_id] = near[0]
+                self._contract_to_product[near[0]] = product_id
+
+        # 用实际 instruments 过滤出需要的品种
+        subscribed_products = set(p.upper() for p in self._instruments)
+        to_subscribe = [
+            iid for prod, iid in self._product_to_contract.items()
+            if prod in subscribed_products
+        ]
+        to_subscribe = list(dict.fromkeys(to_subscribe))
+        # 如果没有发现任何合约（可能非交易时间），fallback 直接用产品代码
+        if not to_subscribe:
+            logger.warning("[gateway] no contracts discovered, subscribing raw product codes")
+            to_subscribe = list(self._instruments)
+
+        if to_subscribe and self._md_api is not None and self._md_status == "md_logged_in":
+            instrs = [s.encode() for s in to_subscribe]
+            self._md_api.SubscribeMarketData(instrs, len(instrs))
+            logger.info("[gateway] subscribed %d near-month contracts: %s",
+                        len(to_subscribe), to_subscribe[:5])
+        else:
+            logger.info("[gateway] will subscribe %d contracts when MD ready", len(to_subscribe))
+            # 存起来，等 MD 登录后触发
+            with self._lock:
+                self._pending_subscribe = to_subscribe
+
+    def _query_instruments(self):
+        """查询 CTP 可用合约列表（td_ready 后调用）。"""
+        if self._td_api is None or self._td_status not in ("td_ready", "td_logged_in"):
+            return
+        try:
+            req = _tdmod.CThostFtdcQryInstrumentField()
+            self._td_api.ReqQryInstrument(req, 0)
+            logger.info("[gateway] querying instruments...")
+        except Exception as exc:
+            logger.warning("[gateway] _query_instruments failed: %s", exc)
+
+    def _query_account(self):
+        """主动查询 CTP 账户余额（td_ready 后 1s 调用，guardian 可重复调用）。"""
+        if self._td_api is None or self._td_status not in ("td_ready", "td_logged_in"):
+            return
+        try:
+            req = _tdmod.CThostFtdcQryTradingAccountField()
+            req.BrokerID = self._broker_id
+            req.InvestorID = self._user_id
+            self._td_api.ReqQryTradingAccount(req, 0)
+        except Exception as exc:
+            logger.warning("[gateway] _query_account failed: %s", exc)
 
     def _record_disconnect(self, channel, reason):
         import time as _time
@@ -228,11 +425,25 @@ class SimNowGateway:
                 self._last_td_disconnect_time = _time.time()
 
     def _subscribe_all(self):
-        if not self._instruments or self._md_api is None:
+        """MD 登录成功后调用：优先用 _pending_subscribe（已发现近月合约），
+        否则 fallback 用 _product_to_contract，再否则用原始品种代码列表。"""
+        with self._lock:
+            pending = list(getattr(self, '_pending_subscribe', []))
+            self._pending_subscribe = []
+            discovered = list(self._product_to_contract.values())
+
+        if pending:
+            to_sub = pending
+        elif discovered:
+            to_sub = discovered
+        else:
+            to_sub = list(self._instruments)  # fallback：原始产品代码
+
+        if not to_sub or self._md_api is None:
             return
-        instrs = [s.encode() for s in self._instruments]
+        instrs = [s.encode() for s in to_sub]
         self._md_api.SubscribeMarketData(instrs, len(instrs))
-        logger.info("[gateway] subscribed %d instruments", len(instrs))
+        logger.info("[gateway] subscribed %d instruments (near-month=%s)", len(instrs), bool(pending or discovered))
 
     def connect(self):
         if not _CTP_AVAILABLE:
