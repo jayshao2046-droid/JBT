@@ -1,0 +1,43 @@
+# 默认采集调度模板 — 可用于生成 crontab 或调度器配置
+# 建议按需调整频率 / 时间（时区以服务器本地为准）
+# 名称为示例逻辑名，实际 collector 名称需和项目中采集器对应
+tushare:
+  # 日线类，收盘后一次抓取
+  daily_after_close:
+    endpoints:
+      - index_daily
+      - stock_daily
+      - fund_nav
+      - fut_daily
+    schedule: "0 18 * * 1-5"  # 每个交易日 18:00
+
+  # 每小时抓取（盘中近实时需要）
+  intraday_hourly:
+    endpoints:
+      - moneyflow
+      - top_list
+    schedule: "0 * * * *"
+
+  # 高频更新类（若受限可改为 15min）
+  intraday_5min:
+    endpoints:
+      - hsgt_top10
+    schedule: "*/5 9-16 * * 1-5"
+
+  # 宏观类，早晨抓取一次
+  macro_daily:
+    endpoints:
+      - macro_china
+      - macro_global
+    schedule: "0 6 * * *"
+
+  # 开盘/收盘概要（可在开盘前/收盘后触发）
+  market_summary:
+    endpoints:
+      - trade_cal
+      - market_status
+    schedule: "30 9,16 * * 1-5"
+
+  # fallback/default
+  default:
+    schedule: "0 3 * * *"

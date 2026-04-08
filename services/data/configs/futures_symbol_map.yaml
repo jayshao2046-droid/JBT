@@ -1,0 +1,900 @@
+# 期货品种代码映射表
+# D108 — 统一管理各数据源的代码映射
+# 格式: 内部代码 → {yfinance, akshare_sina, akshare_em, alpha_vantage, twelvedata, 说明}
+#
+# 验证时间: 2026-03-22 (Tushare fut_basic 查询，全部合约均为当前主力)
+# 验证环境: Mini (AkShare 1.18.38, yfinance 1.2.0, twelvedata 1.2.28)
+
+# ═══════════════════════════════════════════
+# 内盘期货 (14 品种)
+# ═══════════════════════════════════════════
+domestic:
+  # SHFE 上期所
+  SHFE.rb:
+    sina_code: "rb2605"     # 当前主力 (2026-03-22 verified)
+    tqsdk: "SHFE.rb2605"
+    macro_drivers: ["cn_ind.mysteel_rebar_inventory", "cn_ind.rebar_social_inventory",
+                    "cn_ind.steel_production", "CN.real_estate_sales",
+                    "CN.fixed_asset_investment", "cn_ind.iron_ore_port_inventory"]
+    note: "螺纹钢"
+
+  SHFE.cu:
+    sina_code: "cu2605"
+    tqsdk: "SHFE.cu2605"
+    macro_drivers: ["metal.lme_copper_inventory", "metal.shfe_copper_warrant",
+                    "metal.dxy", "US.manufacturing_pmi", "CN.official_manufacturing_pmi",
+                    "cot.copper", "CN.electricity_consumption"]
+    note: "铜"
+
+  SHFE.au:
+    sina_code: "au2605"
+    tqsdk: "SHFE.au2605"
+    macro_drivers: ["metal.gold_spot", "metal.dxy", "metal.vix", "metal.us10y_yield",
+                    "fin.us_fed_rate", "fin.spdr_gold_holdings",
+                    "fin.global_gold_etf_holdings", "cot.gold", "metal.tips_10y"]
+    note: "黄金"
+
+  SHFE.ag:
+    sina_code: "ag2605"
+    tqsdk: "SHFE.ag2605"
+    macro_drivers: ["metal.silver_spot", "metal.dxy", "metal.vix",
+                    "fin.us_fed_rate", "cot.silver", "metal.us10y_yield"]
+    note: "白银"
+
+  SHFE.hc:
+    sina_code: "hc2605"
+    tqsdk: "SHFE.hc2605"
+    macro_drivers: ["cn_ind.mysteel_hrc_inventory", "cn_ind.steel_production",
+                    "CN.industrial_output_yoy", "CN.fixed_asset_investment"]
+    note: "热卷"
+
+  # DCE 大商所
+  DCE.i:
+    sina_code: "i2605"
+    tqsdk: "DCE.i2605"
+    macro_drivers: ["cn_ind.iron_ore_port_inventory", "cn_ind.steel_production",
+                    "CN.real_estate_sales", "CN.fixed_asset_investment",
+                    "ship.bdi", "ship.bci"]
+    note: "铁矿石"
+
+  DCE.m:
+    sina_code: "m2605"
+    tqsdk: "DCE.m2605"
+    macro_drivers: ["agri.usda_soybean_export", "cn_ind.soybean_warehouse",
+                    "agri.brazil_soybean", "cot.soybean_meal",
+                    "metal.usd_cny", "US.weather_soybean_belt"]
+    note: "豆粕"
+
+  DCE.p:
+    sina_code: "p2605"
+    tqsdk: "DCE.p2605"
+    macro_drivers: ["agri.mpob_palm_oil_production", "agri.mpob_palm_oil_export",
+                    "agri.mpob_palm_oil_stock", "cn_ind.palm_oil_import",
+                    "metal.usd_cny"]
+    note: "棕榈油"
+
+  DCE.c:
+    sina_code: "c2605"
+    tqsdk: "DCE.c2605"
+    macro_drivers: ["agri.usda_corn_export", "cn_ind.corn_warehouse",
+                    "cot.corn", "metal.usd_cny"]
+    note: "玉米"
+
+  DCE.y:
+    sina_code: "y2605"
+    tqsdk: "DCE.y2605"
+    macro_drivers: ["agri.usda_soybean_export", "agri.mpob_palm_oil_stock",
+                    "cot.soybean_oil", "metal.usd_cny"]
+    note: "豆油"
+
+  # CZCE 郑商所
+  # 注意: CZCE 代码格式特殊, Sina 分钟接口可能返回空
+  # 建议使用 TqSdk 或 Tushare 采集 CZCE 分钟数据
+  CZCE.MA:
+    sina_code: "MA605"
+    sina_alt: "MA2605"    # 4位年月格式
+    tqsdk: "CZCE.MA605"
+    macro_drivers: ["energy.eia_crude_inventory", "cn_ind.methanol_inventory",
+                    "CN.industrial_output_yoy"]
+    note: "甲醇, Sina 分钟接口返回空 DataFrame"
+
+  CZCE.SA:
+    sina_code: "SA605"
+    sina_alt: "SA2605"
+    tqsdk: "CZCE.SA605"
+    macro_drivers: ["CN.industrial_output_yoy", "CN.real_estate_sales"]
+    note: "纯碱, Sina 分钟接口返回空 DataFrame"
+
+  CZCE.CF:
+    macro_drivers: ["agri.china_cotton_supply", "cot.cotton",
+                    "CN.retail_sales_yoy", "metal.usd_cny"]
+    sina_code: "CF605"
+    sina_alt: "CF2605"
+    tqsdk: "CZCE.CF605"
+    note: "棉花, Sina 分钟接口返回空 DataFrame"
+
+  CZCE.TA:
+    sina_code: "TA605"
+    sina_alt: "TA2605"
+    tqsdk: "CZCE.TA605"
+    macro_drivers: ["energy.eia_crude_inventory", "cn_ind.pta_inventory",
+                    "CN.industrial_output_yoy"]
+    note: "PTA, Sina 分钟接口返回空 DataFrame"
+
+  # ── SHFE 补充品种 (15个) ─────────────────────────────
+  SHFE.al:
+    sina_code: "al2605"
+    tqsdk: "SHFE.al2605"
+    overseas: ["LME.AHD"]
+    overseas_src: "akshare_hist"
+    macro_drivers: ["metal.lme_aluminum_inventory", "metal.dxy",
+                    "CN.electricity_consumption", "CN.industrial_output_yoy"]
+    note: "铝"
+
+  SHFE.zn:
+    sina_code: "zn2605"
+    tqsdk: "SHFE.zn2605"
+    overseas: ["LME.ZSD"]
+    overseas_src: "akshare_hist"
+    macro_drivers: ["metal.lme_zinc_inventory", "metal.dxy",
+                    "CN.industrial_output_yoy"]
+    note: "锌"
+
+  SHFE.pb:
+    sina_code: "pb2605"
+    tqsdk: "SHFE.pb2605"
+    overseas: ["LME.PBD"]
+    overseas_src: "akshare_hist"
+    macro_drivers: ["metal.lme_lead_inventory", "metal.dxy", "CN.industrial_output_yoy"]
+    note: "铅"
+
+  SHFE.ni:
+    sina_code: "ni2605"
+    tqsdk: "SHFE.ni2605"
+    overseas: ["LME.NID"]
+    overseas_src: "akshare_hist"
+    macro_drivers: ["metal.lme_nickel_inventory", "metal.dxy",
+                    "CN.industrial_output_yoy", "cot.copper"]
+    note: "镍"
+
+  SHFE.sn:
+    sina_code: "sn2605"
+    tqsdk: "SHFE.sn2605"
+    overseas: ["LME.SND"]
+    overseas_src: "akshare_hist"
+    macro_drivers: ["metal.lme_tin_inventory", "metal.dxy", "CN.industrial_output_yoy"]
+    note: "锡"
+
+  SHFE.fu:
+    sina_code: "fu2605"
+    tqsdk: "SHFE.fu2605"
+    overseas: ["NYMEX.HO"]
+    overseas_src: "yfinance"
+    overseas_minute: "HO=F"
+    macro_drivers: ["energy.eia_crude_inventory", "energy.eia_distillates_inventory",
+                    "energy.baker_hughes_rig_count_oil", "cot.heating_oil",
+                    "metal.dxy", "US.non_farm"]
+    note: "燃料油"
+
+  SHFE.bu:
+    sina_code: "bu2605"
+    tqsdk: "SHFE.bu2605"
+    overseas: ["NYMEX.CL"]
+    overseas_src: "yfinance"
+    overseas_minute: "CL=F"
+    macro_drivers: ["energy.eia_crude_inventory", "energy.baker_hughes_rig_count_oil",
+                    "CN.fixed_asset_investment", "cot.crude_wti"]
+    note: "沥青, 与原油高相关"
+
+  SHFE.ru:
+    sina_code: "ru2605"
+    tqsdk: "SHFE.ru2605"
+    overseas: ["TOCOM.RSS3"]
+    overseas_src: "akshare_hist_todo"
+    macro_drivers: ["cn_ind.rubber_inventory_shfe", "cn_ind.tsr20_inventory_sgx",
+                    "energy.eia_crude_inventory", "metal.usd_cny"]
+    note: "天然橡胶, 外盘 TOCOM RSS3; yfinance 暂不支持"
+
+  SHFE.ss:
+    sina_code: "ss2605"
+    tqsdk: "SHFE.ss2605"
+    overseas: ["LME.NID"]
+    overseas_src: "akshare_hist"
+    macro_drivers: ["metal.lme_nickel_inventory", "metal.dxy", "CN.industrial_output_yoy"]
+    note: "不锈钢, 与 LME 镍高相关"
+
+  SHFE.sp:
+    sina_code: "sp2605"
+    tqsdk: "SHFE.sp2605"
+    overseas: []
+    macro_drivers: ["ship.bdi", "metal.dxy", "metal.usd_cny"]
+    note: "纸浆, 无直接外盘对应"
+
+  SHFE.wr:
+    tushare_ts: "WR.SHF"
+    overseas: []
+    macro_drivers: ["cn_ind.mysteel_rebar_inventory", "CN.fixed_asset_investment"]
+    note: "线材, 无直接外盘对应"
+
+  SHFE.ad:
+    tushare_ts: "AD.SHF"
+    overseas: ["LME.AHD"]
+    overseas_src: "akshare_hist"
+    macro_drivers: ["metal.lme_aluminum_inventory", "CN.electricity_consumption"]
+    note: "氧化铝 (AD), 2024年上市"
+
+  SHFE.ao:
+    tushare_ts: "AO.SHF"
+    overseas: ["LME.AHD"]
+    overseas_src: "akshare_hist"
+    macro_drivers: ["metal.lme_aluminum_inventory", "CN.electricity_consumption"]
+    note: "氧化铝 (AO)"
+
+  SHFE.br:
+    tushare_ts: "BR.SHF"
+    overseas: ["NYMEX.CL"]
+    overseas_src: "yfinance"
+    overseas_minute: "CL=F"
+    macro_drivers: ["energy.eia_crude_inventory", "cn_ind.rubber_inventory_shfe"]
+    note: "顺丁橡胶, 与原油相关"
+
+  SHFE.op:
+    tushare_ts: "OP.SHF"
+    overseas: []
+    note: "铜期权 (非标准期货, 采集跳过)"
+
+  # ── DCE 补充品种 (18个) ─────────────────────────────
+  DCE.a:
+    sina_code: "a2605"
+    tqsdk: "DCE.a2605"
+    overseas: ["CBOT.ZS"]
+    overseas_src: "yfinance"
+    overseas_minute: "ZS=F"
+    macro_drivers: ["agri.usda_soybean_export", "cn_ind.soybean_warehouse",
+                    "agri.brazil_soybean", "cot.soybean", "metal.usd_cny"]
+    note: "黄大豆一号"
+
+  DCE.b:
+    sina_code: "b2605"
+    tqsdk: "DCE.b2605"
+    overseas: ["CBOT.ZS"]
+    overseas_src: "yfinance"
+    overseas_minute: "ZS=F"
+    macro_drivers: ["agri.usda_soybean_export", "cot.soybean", "metal.usd_cny"]
+    note: "黄大豆二号"
+
+  DCE.j:
+    sina_code: "j2605"
+    tqsdk: "DCE.j2605"
+    overseas: []
+    macro_drivers: ["cn_ind.coke_inventory", "cn_ind.steel_production",
+                    "CN.industrial_output_yoy", "ship.bdi"]
+    note: "焦炭, 无标准西方外盘合约"
+
+  DCE.jm:
+    sina_code: "jm2605"
+    tqsdk: "DCE.jm2605"
+    overseas: []
+    macro_drivers: ["cn_ind.coking_coal_inventory", "cn_ind.steel_production",
+                    "CN.industrial_output_yoy", "ship.bdi"]
+    note: "焦煤, 无标准西方外盘合约"
+
+  DCE.jd:
+    sina_code: "jd2604"
+    tqsdk: "DCE.jd2604"
+    overseas: []
+    macro_drivers: ["CN.retail_sales_yoy", "CN.official_manufacturing_pmi"]
+    note: "鸡蛋, 无直接外盘对应"
+
+  DCE.lh:
+    sina_code: "lh2605"
+    tqsdk: "DCE.lh2605"
+    overseas: ["CME.LE"]
+    overseas_src: "yfinance"
+    overseas_minute: "LE=F"
+    macro_drivers: ["CN.retail_sales_yoy", "cot.corn", "US.non_farm"]
+    note: "生猪"
+
+  DCE.l:
+    sina_code: "l2605"
+    tqsdk: "DCE.l2605"
+    overseas: ["NYMEX.CL"]
+    overseas_src: "yfinance"
+    overseas_minute: "CL=F"
+    macro_drivers: ["energy.eia_crude_inventory", "CN.industrial_output_yoy", "cot.crude_wti"]
+    note: "聚乙烯 (LLDPE)"
+
+  DCE.pp:
+    sina_code: "pp2605"
+    tqsdk: "DCE.pp2605"
+    overseas: ["NYMEX.CL"]
+    overseas_src: "yfinance"
+    overseas_minute: "CL=F"
+    macro_drivers: ["energy.eia_crude_inventory", "CN.industrial_output_yoy", "cot.crude_wti"]
+    note: "聚丙烯"
+
+  DCE.v:
+    sina_code: "v2605"
+    tqsdk: "DCE.v2605"
+    overseas: ["NYMEX.CL"]
+    overseas_src: "yfinance"
+    overseas_minute: "CL=F"
+    macro_drivers: ["energy.eia_crude_inventory", "CN.real_estate_sales", "CN.industrial_output_yoy"]
+    note: "PVC"
+
+  DCE.eg:
+    sina_code: "eg2604"
+    tqsdk: "DCE.eg2604"
+    overseas: ["NYMEX.CL", "NYMEX.NG"]
+    overseas_src: "yfinance"
+    overseas_minute: "CL=F"
+    macro_drivers: ["energy.eia_crude_inventory", "energy.eia_natural_gas_storage",
+                    "CN.industrial_output_yoy"]
+    note: "乙二醇"
+
+  DCE.bz:
+    tushare_ts: "BZ.DCE"
+    overseas: ["NYMEX.CL"]
+    overseas_src: "yfinance"
+    overseas_minute: "CL=F"
+    macro_drivers: ["energy.eia_crude_inventory", "CN.industrial_output_yoy"]
+    note: "苯乙烯"
+
+  DCE.eb:
+    tushare_ts: "EB.DCE"
+    overseas: ["NYMEX.CL"]
+    overseas_src: "yfinance"
+    overseas_minute: "CL=F"
+    macro_drivers: ["energy.eia_crude_inventory", "CN.industrial_output_yoy"]
+    note: "乙醇/苯乙烯衍生, 与原油相关"
+
+  DCE.cs:
+    sina_code: "cs2605"
+    tqsdk: "DCE.cs2605"
+    overseas: ["CBOT.ZC"]
+    overseas_src: "yfinance"
+    overseas_minute: "ZC=F"
+    macro_drivers: ["agri.usda_corn_export", "cn_ind.corn_warehouse", "cot.corn"]
+    note: "玉米淀粉"
+
+  DCE.pg:
+    sina_code: "pg2605"
+    tqsdk: "DCE.pg2605"
+    overseas: ["NYMEX.NG"]
+    overseas_src: "yfinance"
+    overseas_minute: "NG=F"
+    macro_drivers: ["energy.eia_natural_gas_storage", "cot.natural_gas",
+                    "CN.industrial_output_yoy"]
+    note: "液化石油气 (LPG)"
+
+  DCE.lg:
+    tushare_ts: "LG.DCE"
+    overseas: ["NYMEX.NG"]
+    overseas_src: "yfinance"
+    overseas_minute: "NG=F"
+    macro_drivers: ["energy.eia_natural_gas_storage", "cot.natural_gas"]
+    note: "液化石油气 (LG)"
+
+  DCE.rr:
+    tushare_ts: "RR.DCE"
+    overseas: []
+    macro_drivers: ["CN.retail_sales_yoy"]
+    note: "米, 无直接外盘对应"
+
+  DCE.bb:
+    tushare_ts: "BB.DCE"
+    overseas: []
+    macro_drivers: ["CN.real_estate_sales", "CN.fixed_asset_investment"]
+    note: "胶合板, 无直接外盘对应"
+
+  DCE.fb:
+    tushare_ts: "FB.DCE"
+    overseas: []
+    macro_drivers: ["CN.real_estate_sales", "CN.fixed_asset_investment"]
+    note: "纤维板, 无直接外盘对应"
+
+  # ── CZCE 补充品种 (22个) ─────────────────────────────
+  CZCE.OI:
+    sina_code: "OI605"
+    tqsdk: "CZCE.OI605"
+    overseas: ["ICE.RS"]
+    overseas_src: "akshare_hist"
+    macro_drivers: ["agri.mpob_palm_oil_stock", "cot.soybean_oil", "metal.usd_cny"]
+    note: "菜籽油, 外盘 ICE 油菜籽"
+
+  CZCE.RM:
+    sina_code: "RM605"
+    tqsdk: "CZCE.RM605"
+    overseas: ["CBOT.ZM"]
+    overseas_src: "yfinance"
+    overseas_minute: "ZM=F"
+    macro_drivers: ["agri.usda_soybean_export", "cot.soybean_meal", "metal.usd_cny"]
+    note: "菜粕"
+
+  CZCE.SR:
+    sina_code: "SR605"
+    tqsdk: "CZCE.SR605"
+    overseas: ["ICE.SB"]
+    overseas_src: "yfinance"
+    overseas_minute: "SB=F"
+    macro_drivers: ["agri.china_sugar_supply", "cot.sugar", "metal.usd_cny"]
+    note: "白糖"
+
+  CZCE.WH:
+    sina_code: "WH605"
+    tqsdk: "CZCE.WH605"
+    overseas: ["CBOT.ZW"]
+    overseas_src: "yfinance"
+    overseas_minute: "ZW=F"
+    macro_drivers: ["agri.usda_wheat_export", "cot.wheat_chicago", "metal.usd_cny"]
+    note: "强筋小麦"
+
+  CZCE.ZC:
+    sina_code: "ZC605"
+    tqsdk: "CZCE.ZC605"
+    overseas: []
+    macro_drivers: ["cn_ind.coal_qhd_inventory", "CN.electricity_consumption",
+                    "CN.industrial_output_yoy"]
+    note: "动力煤, 无直接西方外盘合约"
+
+  CZCE.RS:
+    tushare_ts: "RS.ZCE"
+    overseas: ["ICE.RS"]
+    overseas_src: "akshare_hist"
+    macro_drivers: ["agri.mpob_palm_oil_stock", "metal.usd_cny"]
+    note: "油菜籽, 外盘 ICE 油菜籽"
+
+  CZCE.PM:
+    tushare_ts: "PM.ZCE"
+    overseas: ["CBOT.ZW"]
+    overseas_src: "yfinance"
+    overseas_minute: "ZW=F"
+    macro_drivers: ["agri.usda_wheat_export", "cot.wheat_chicago"]
+    note: "普通小麦"
+
+  CZCE.UR:
+    tushare_ts: "UR.ZCE"
+    overseas: ["NYMEX.NG"]
+    overseas_src: "yfinance"
+    overseas_minute: "NG=F"
+    macro_drivers: ["energy.eia_natural_gas_storage", "CN.industrial_output_yoy"]
+    note: "尿素, 与天然气/煤化工相关"
+
+  CZCE.CY:
+    tushare_ts: "CY.ZCE"
+    overseas: ["ICE.CT"]
+    overseas_src: "yfinance"
+    overseas_minute: "CT=F"
+    macro_drivers: ["agri.china_cotton_supply", "cot.cotton"]
+    note: "棉纱, 与棉花高相关"
+
+  CZCE.PX:
+    tushare_ts: "PX.ZCE"
+    overseas: ["NYMEX.CL"]
+    overseas_src: "yfinance"
+    overseas_minute: "CL=F"
+    macro_drivers: ["energy.eia_crude_inventory", "CN.industrial_output_yoy"]
+    note: "对二甲苯 (PX), 与原油相关"
+
+  CZCE.PF:
+    tushare_ts: "PF.ZCE"
+    overseas: ["NYMEX.CL"]
+    overseas_src: "yfinance"
+    overseas_minute: "CL=F"
+    macro_drivers: ["energy.eia_crude_inventory", "CN.industrial_output_yoy"]
+    note: "短纤, 与原油相关"
+
+  CZCE.PK:
+    tushare_ts: "PK.ZCE"
+    overseas: ["CBOT.ZS"]
+    overseas_src: "yfinance"
+    overseas_minute: "ZS=F"
+    macro_drivers: ["agri.usda_soybean_export", "CN.retail_sales_yoy"]
+    note: "花生, 与大豆相关"
+
+  CZCE.AP:
+    tushare_ts: "AP.ZCE"
+    overseas: []
+    macro_drivers: ["CN.cpi_yoy", "CN.retail_sales_yoy"]
+    note: "苹果, 无直接外盘对应"
+
+  CZCE.CJ:
+    tushare_ts: "CJ.ZCE"
+    overseas: []
+    macro_drivers: ["CN.cpi_yoy", "CN.retail_sales_yoy"]
+    note: "红枣, 无直接外盘对应"
+
+  CZCE.FG:
+    tushare_ts: "FG.ZCE"
+    overseas: []
+    macro_drivers: ["CN.real_estate_sales", "CN.industrial_output_yoy"]
+    note: "玻璃, 无直接外盘对应"
+
+  CZCE.JR:
+    tushare_ts: "JR.ZCE"
+    overseas: []
+    macro_drivers: ["CN.cpi_yoy", "agri.usda_wheat_export"]
+    note: "粳稻, 无直接外盘对应"
+
+  CZCE.PL:
+    tushare_ts: "PL.ZCE"
+    overseas: []
+    macro_drivers: ["energy.eia_crude_inventory", "CN.industrial_output_yoy"]
+    note: "瓶片(PET片), 无直接外盘"
+
+  CZCE.PR:
+    tushare_ts: "PR.ZCE"
+    overseas: []
+    macro_drivers: ["CN.industrial_output_yoy"]
+    note: "2024年新品种, 待确认品类"
+
+  CZCE.RI:
+    tushare_ts: "RI.ZCE"
+    overseas: []
+    macro_drivers: ["CN.cpi_yoy"]
+    note: "早籼稻, 无直接外盘对应"
+
+  CZCE.SF:
+    tushare_ts: "SF.ZCE"
+    overseas: []
+    macro_drivers: ["CN.industrial_output_yoy", "CN.real_estate_sales"]
+    note: "硅铁, 无直接外盘对应"
+
+  CZCE.SH:
+    tushare_ts: "SH.ZCE"
+    overseas: []
+    macro_drivers: ["CN.industrial_output_yoy"]
+    note: "硅 (CZCE), 无直接外盘对应"
+
+  CZCE.SM:
+    tushare_ts: "SM.ZCE"
+    overseas: []
+    macro_drivers: ["CN.industrial_output_yoy", "cn_ind.steel_rebar_inventory"]
+    note: "锰硅, 无直接外盘对应"
+
+  # ── INE 国际能源品种 (5个) ─────────────────────────────
+  INE.sc:
+    sina_code: "sc2605"
+    tqsdk: "INE.sc2605"
+    overseas: ["ICE.B", "NYMEX.CL"]
+    overseas_src: "yfinance"
+    overseas_minute: "BZ=F"
+    macro_drivers: ["energy.eia_crude_inventory", "energy.eia_spr",
+                    "metal.dxy", "cot.crude_oil"]
+    note: "原油 (国际), 对标布伦特/WTI"
+
+  INE.bc:
+    sina_code: "bc2605"
+    tqsdk: "INE.bc2605"
+    overseas: ["COMEX.HG", "LME.CAD"]
+    overseas_src: "yfinance"
+    overseas_minute: "HG=F"
+    macro_drivers: ["metal.lme_copper_inventory", "metal.dxy",
+                    "CN.industrial_output_yoy"]
+    note: "国际铜"
+
+  INE.lu:
+    sina_code: "lu2605"
+    tqsdk: "INE.lu2605"
+    overseas: ["NYMEX.HO", "ICE.B"]
+    overseas_src: "yfinance"
+    overseas_minute: "HO=F"
+    macro_drivers: ["energy.eia_crude_inventory", "shipping.bdi", "metal.dxy"]
+    note: "低硫燃料油"
+
+  INE.nr:
+    sina_code: "nr2605"
+    tqsdk: "INE.nr2605"
+    overseas: ["SGX.TSR20"]
+    overseas_src: "akshare_hist_todo"
+    macro_drivers: ["CN.auto_sales", "metal.usd_cny"]
+    note: "20号胶, 外盘 SGX TSR20; AkShare 接口待验证"
+
+  INE.ec:
+    tushare_ts: "EC.INE"
+    overseas: []
+    macro_drivers: ["shipping.bdi", "shipping.scfi"]
+    note: "欧线集运指数期货, 无西方外盘直接对应"
+
+  # ── CFFEX 股指/国债期货 (8个) ─────────────────────────
+  CFFEX.IF:
+    tushare_ts: "IF.CFX"
+    overseas: ["CME.ES", "SGX.CN"]
+    overseas_src: "yfinance"
+    overseas_minute: "ES=F"
+    macro_drivers: ["market.sp500", "market.vix", "CN.pmi_manufacturing"]
+    note: "沪深300股指期货"
+
+  CFFEX.IC:
+    tushare_ts: "IC.CFX"
+    overseas: ["CME.ES", "SGX.CN"]
+    overseas_src: "yfinance"
+    overseas_minute: "ES=F"
+    macro_drivers: ["market.sp500", "market.vix", "CN.pmi_manufacturing"]
+    note: "中证500股指期货"
+
+  CFFEX.IH:
+    tushare_ts: "IH.CFX"
+    overseas: ["SGX.CN"]
+    overseas_src: "akshare_hist"
+    macro_drivers: ["market.sp500", "market.vix", "CN.pmi_manufacturing"]
+    note: "上证50股指期货, 富时中国A50(SGX)更直接相关"
+
+  CFFEX.IM:
+    tushare_ts: "IM.CFX"
+    overseas: ["CME.RTY"]
+    overseas_src: "akshare_hist"
+    macro_drivers: ["market.sp500", "market.vix", "CN.pmi_manufacturing"]
+    note: "中证1000股指期货, 与罗素2000结构类似"
+
+  CFFEX.T:
+    tushare_ts: "T.CFX"
+    overseas: ["CBOT.ZB"]
+    overseas_src: "yfinance"
+    overseas_minute: "ZB=F"
+    macro_drivers: ["fin.fed_rate", "fin.us_10y_yield", "CN.cpi_yoy"]
+    note: "10年期国债期货"
+
+  CFFEX.TF:
+    tushare_ts: "TF.CFX"
+    overseas: ["CBOT.ZB"]
+    overseas_src: "yfinance"
+    overseas_minute: "ZB=F"
+    macro_drivers: ["fin.fed_rate", "fin.us_10y_yield", "CN.cpi_yoy"]
+    note: "5年期国债期货"
+
+  CFFEX.TL:
+    tushare_ts: "TL.CFX"
+    overseas: ["CBOT.ZB"]
+    overseas_src: "yfinance"
+    overseas_minute: "ZB=F"
+    macro_drivers: ["fin.fed_rate", "fin.us_10y_yield", "CN.cpi_yoy"]
+    note: "30年期国债期货"
+
+  CFFEX.TS:
+    tushare_ts: "TS.CFX"
+    overseas: ["CBOT.ZB"]
+    overseas_src: "yfinance"
+    overseas_minute: "ZB=F"
+    macro_drivers: ["fin.fed_rate", "fin.us_10y_yield", "CN.cpi_yoy"]
+    note: "2年期国债期货"
+
+  # ── GFEX 广期所 (5个) ─────────────────────────────────
+  GFEX.lc:
+    tushare_ts: "LC.GFE"
+    overseas: []
+    macro_drivers: ["CN.new_energy_vehicle_sales", "CN.industrial_output_yoy"]
+    note: "碳酸锂, 暂无西方外盘对应"
+
+  GFEX.pd:
+    tushare_ts: "PD.GFE"
+    overseas: ["NYMEX.PA"]
+    overseas_src: "yfinance"
+    overseas_minute: "PA=F"
+    macro_drivers: ["metal.dxy", "CN.auto_sales"]
+    note: "钯"
+
+  GFEX.ps:
+    tushare_ts: "PS.GFE"
+    overseas: []
+    macro_drivers: ["CN.solar_installed_capacity", "CN.industrial_output_yoy"]
+    note: "多晶硅, 无直接西方外盘"
+
+  GFEX.pt:
+    tushare_ts: "PT.GFE"
+    overseas: ["NYMEX.PL"]
+    overseas_src: "yfinance"
+    overseas_minute: "PL=F"
+    macro_drivers: ["metal.dxy", "CN.auto_sales"]
+    note: "铂"
+
+  GFEX.si:
+    tushare_ts: "SI.GFE"
+    overseas: []
+    macro_drivers: ["CN.solar_installed_capacity", "CN.industrial_output_yoy"]
+    note: "工业硅, 无直接西方外盘"
+
+# ═══════════════════════════════════════════
+# 外盘期货 (30 品种)
+overseas:
+  # -- yfinance 分钟级 (21 品种) --
+  NYMEX.CL:
+    yfinance: "CL=F"
+    alpha_vantage: "CL"
+    twelvedata: "CL"
+    note: "WTI原油"
+
+  NYMEX.NG:
+    yfinance: "NG=F"
+    alpha_vantage: "NG"
+    twelvedata: "NG"
+    note: "天然气"
+
+  NYMEX.HO:
+    yfinance: "HO=F"
+    twelvedata: "HO"
+    note: "取暖油"
+
+  NYMEX.RB:
+    yfinance: "RB=F"
+    twelvedata: "RB"
+    note: "汽油"
+
+  COMEX.GC:
+    yfinance: "GC=F"
+    alpha_vantage: "GC"
+    twelvedata_paid: "GC"    # 需 Grow/Venture plan
+    note: "黄金"
+
+  COMEX.SI:
+    yfinance: "SI=F"
+    alpha_vantage: "SI"
+    twelvedata: "SI"
+    note: "白银"
+
+  COMEX.HG:
+    yfinance: "HG=F"
+    alpha_vantage: "HG"
+    twelvedata: "HG"
+    note: "铜"
+
+  NYMEX.PA:
+    yfinance: "PA=F"
+    twelvedata: "PA"
+    note: "钯"
+
+  NYMEX.PL:
+    yfinance: "PL=F"
+    twelvedata: "PL"
+    note: "铂"
+
+  CME.ES:
+    yfinance: "ES=F"
+    twelvedata: "ES"
+    note: "标普500期货"
+
+  CME.NQ:
+    yfinance: "NQ=F"
+    twelvedata: "NQ"
+    note: "纳斯达克期货"
+
+  CBOT.YM:
+    yfinance: "YM=F"
+    twelvedata: "YM"
+    note: "道琼斯期货"
+
+  CBOT.ZB:
+    yfinance: "ZB=F"
+    note: "美国国债"
+
+  CBOT.ZC:
+    yfinance: "ZC=F"
+    alpha_vantage: "ZC"
+    twelvedata_paid: "ZC"    # 需 Grow/Venture plan
+    note: "玉米"
+
+  CBOT.ZS:
+    yfinance: "ZS=F"
+    alpha_vantage: "ZS"
+    twelvedata: "ZS"
+    note: "大豆"
+
+  CBOT.ZW:
+    yfinance: "ZW=F"
+    alpha_vantage: "ZW"
+    twelvedata: "ZW"
+    note: "小麦"
+
+  CBOT.ZM:
+    yfinance: "ZM=F"
+    twelvedata: "ZM"
+    note: "豆粕"
+
+  CBOT.ZL:
+    yfinance: "ZL=F"
+    twelvedata: "ZL"
+    note: "豆油"
+
+  ICE.B:
+    yfinance: "BZ=F"
+    twelvedata: "BZ"
+    note: "布伦特原油"
+
+  ICE.CT:
+    yfinance: "CT=F"
+    twelvedata: "CT"
+    note: "棉花"
+
+  ICE.SB:
+    yfinance: "SB=F"
+    twelvedata: "SB"
+    note: "白糖"
+
+  # -- 仅日线品种 (10 品种 → AkShare) --
+  LME.AHD:
+    akshare_hist: "AHD"
+    yfinance_alt: ["ALI=F"]   # 待验证
+    note: "LME铝, yfinance 被限流未验证"
+
+  LME.CAD:
+    akshare_hist: "CAD"
+    yfinance_alt: ["HG=F"]    # COMEX铜, 非LME
+    note: "LME铜"
+
+  LME.NID:
+    akshare_hist: "NID"
+    yfinance_alt: ["NICKEL.L"]
+    note: "LME镍, yfinance 被限流未验证"
+
+  LME.PBD:
+    akshare_hist: "PBD"
+    yfinance_alt: ["LEAD.L"]
+    note: "LME铅, yfinance 被限流未验证"
+
+  LME.SND:
+    akshare_hist: "SND"
+    yfinance_alt: ["TIN.L"]
+    note: "LME锡, yfinance 被限流未验证"
+
+  LME.ZSD:
+    akshare_hist: "ZSD"
+    yfinance_alt: ["ZINC.L"]
+    note: "LME锌, yfinance 被限流未验证"
+
+  SGX.CN:
+    akshare_hist: "CN"         # futures_foreign_hist(symbol="CN")
+    yfinance_alt: ["FXI"]      # iShares China Large-Cap ETF (非期货)
+    note: "富时中国A50, CN00Y JSON解析失败, 改用 CN"
+
+  ICE.KC:
+    akshare_hist: "KC"
+    note: "咖啡"
+
+  ICE.CC:
+    akshare_hist: "CC"
+    note: "可可"
+
+  CME.RTY:
+    akshare_hist: "RTY"
+    note: "罗素尔2000"
+
+  # -- 新增外盘品种 (补充 domestic 关联需要) --
+  ICE.RS:
+    akshare_hist: "RS"
+    note: "ICE 油菜籽 (Canola/Rapeseed), 对应 CZCE.OI / CZCE.RS"
+
+  CME.LE:
+    yfinance: "LE=F"
+    twelvedata: "LE"
+    note: "活牛期货 (Live Cattle), 对应 DCE.lh"
+
+  SGX.TSR20:
+    akshare_hist_todo: "TSR20"
+    note: "新加坡 20号胶 (TSR20), 对应 INE.nr; AkShare 接口待验证"
+
+  TOCOM.RSS3:
+    akshare_hist_todo: "RSS3"
+    note: "TOCOM 天然橡胶 RSS3, 对应 SHFE.ru; AkShare 接口待验证"
+
+# ═══════════════════════════════════════════
+# 验证记录
+# ═══════════════════════════════════════════
+verification:
+  date: "2026-03-15"
+  environment: "Mini M2 8G, AkShare 1.18.38, yfinance 1.2.0, twelvedata 1.2.28"
+  results:
+    yfinance: "ALL rate limited (YFRateLimitError) — 需退避或降频"
+    alpha_vantage: "API连通, 但 Intraday 为 Premium 端点 (免费版不可用)"
+    twelvedata: "✅ CL/ES/NG/SI/HG/NQ 等免费, GC/ZC 需付费, 8 credits/min"
+    twelvedata_ssl: "Python urllib 403, 需通过 subprocess+curl 调用"
+    akshare_sina_shfe: "✅ 1023 rows/品种"
+    akshare_sina_dce: "✅ 1023 rows/品种"
+    akshare_sina_czce: "❌ 返回空 DataFrame (可能为过期合约)"
+    akshare_foreign_hist: "✅ LME/ICE/CME 均正常"
+    sgx_cn: "CN00Y ❌ JSON解析失败, CN ✅"
+  known_issues:
+    - "CZCE 新浪分钟接口对过期合约返回空 DataFrame"
+    - "yfinance Mini 上持续限流, 需添加退避策略"
+    - "Alpha Vantage Intraday 需 Premium ($49.99/月)"
+    - "Twelve Data 免费版 GC/ZC 不可用, 需 Grow plan ($29/月)"
+    - "Twelve Data Python urllib SSL不兼容, 使用 subprocess+curl 绕过"

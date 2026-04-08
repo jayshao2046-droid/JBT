@@ -1,0 +1,222 @@
+# BotQuant Mini (Mac Mini M2) 全量数据采集配置
+# 部署设备: Mac Mini M2 8G/256G+2TB SSD — 24/7 持续运行采集端
+# 部署时间: 2026-03-20
+# 版本: v1.0
+
+device:
+  name: Mini
+  role: data_collection
+  host: mini-remote         # .env DATA_ENDPOINT_HOST
+  data_dir: ~/J_BotQuant/BotQuan_Data
+  api_port: 8001
+
+# ═══════════════════════════════════════════════════════════════
+# 采集计划 (Crontab-like schedule)
+# ═══════════════════════════════════════════════════════════════
+
+schedule:
+
+  # ── 内盘期货分钟线 ─────────────────────────────────────────
+  domestic_minute:
+    collector: scripts/domestic_minute_backfill.py
+    trigger: interval
+    interval_minutes: 5            # 每5分钟增量更新（交易时段）
+    trading_hours_only: true
+    trading_sessions:
+      - "09:00-11:30"             # 早盘
+      - "13:30-15:00"             # 午盘
+      - "21:00-23:00"             # 夜盘（品种有差异）
+    symbols: 16                    # AkShare Sina: rb/hc/cu/au/ag - SHFE; i/m/p/c/y - DCE; MA/SA/CF/TA - CZCE
+    period: "1"                    # 1分钟
+    source: akshare_sina
+
+  # ── 外盘期货分钟线 ─────────────────────────────────────────
+  overseas_minute:
+    collector: scripts/overseas_minute_backfill.py
+    trigger: interval
+    interval_minutes: 5            # yfinance 最新7天分钟数据
+    symbols: 21                    # COMEX/NYMEX/CBOT/CME/ICE (yfinance)
+    daily_only_symbols: 10         # LME/SGX/ICE soft (AkShare)
+    source: yfinance
+
+  # ── A股分钟线 ────────────────────────────────────────────
+  stock_minute:
+    collector: scripts/stock_minute_backfill.py
+    trigger: cron
+    schedule: "30 09 * * 1-5"     # 每个交易日09:30启动
+    batch_size: 100
+    period: "5"                    # 5分钟
+    source: akshare_eastmoney
+    note: "全量5000+只A股，预计30-45天完成一轮"
+
+  # ── 宏观数据 (AkShare) ──────────────────────────────────
+  macro_cn:
+    collector: src.data.collectors.macro_collector
+    trigger: cron
+    schedule: "0 18 * * 1-5"      # 每交易日18:00
+    countries: [CN, US, EU, JP, AU, CA, UK]
+
+  # ── 宏观数据 (FRED) ─────────────────────────────────────
+  macro_fred:
+    collector: src.data.collectors.fred_collector
+    trigger: cron
+    schedule: "0 06 * * *"        # 每天06:00 (美东时段)
+    series_count: 22               # 联邦基金利率/国债/CPI/PCE/PPI/失业/GDP等
+    source: fred_api
+    requires_key: FRED_API_KEY
+    note: "需要有效的FRED API Key (https://fred.stlouisfed.org/docs/api/api_key.html)"
+
+  # ── 波动率指数 ──────────────────────────────────────────
+  volatility:
+    collector: src.data.collectors.volatility_collector
+    trigger: cron
+    schedule: "0 17 * * 1-5"      # 每交易日17:00
+    indicators: [50etf_qvix, 300etf_qvix, cboe_vix, cboe_vxn]
+
+  # ── 航运指数 ────────────────────────────────────────────
+  shipping:
+    collector: src.data.collectors.shipping_collector
+    trigger: cron
+    schedule: "30 10 * * 1-5"     # 每交易日10:30
+    indicators: [bdi, bci, bpi, bcti]
+
+  # ── 情绪数据 ────────────────────────────────────────────
+  sentiment:
+    collector: src.data.collectors.sentiment_collector
+    trigger: cron
+    schedule: "0 * * * 1-5"       # 每小时 (交易日)
+
+  # ── 新闻/RSS ────────────────────────────────────────────
+  news_rss:
+    collector: src.data.collectors.rss_collector
+    trigger: interval
+    interval_minutes: 3
+    feeds: 11                      # 11个验证可用源
+    sources:
+      - sina_finance               # ✅ P0
+      - tonghuashun                # ✅ P0
+      - wallstreetcn               # ✅ P0
+      - chinanews_finance          # ✅ P0
+      - yahoo_finance              # ✅ P1
+      - cnbc_business              # ✅ P1
+      - bloomberg_markets          # ✅ P1
+      - marketwatch                # ✅ P1
+      - fxstreet                   # ✅ P1
+      - bbc_chinese_biz            # ✅ P2
+      - tradingview                # ✅ P2
+
+  # ── Finnhub 新闻 ────────────────────────────────────────
+  news_finnhub:
+    collector: src.data.collectors.finnhub_collector
+    trigger: interval
+    interval_minutes: 5
+    categories: [general, forex]
+    source: finnhub_api
+    requires_key: FINNHUB_API_KEY
+    note: "需要有效的Finnhub API Key (https://finnhub.io/dashboard)"
+
+  # ── Alpha Vantage 外汇/ETF ──────────────────────────────
+  alpha_vantage:
+    collector: src.data.collectors.alpha_vantage_collector
+    trigger: cron
+    schedule: "0 07 * * 1-5"      # 每交易日07:00
+    forex_pairs: 6                 # USD/CNY, EUR/USD, USD/JPY等
+    etfs: 10                       # GLD, SLV, USO, UNG, CORN, WEAT等
+    source: alpha_vantage_api
+    tier: free                     # 使用免费端点; 去掉频率限制注意事项
+    requires_key: ALPHA_VANTAGE_KEY
+
+  # ── 数据完整性检查 ─────────────────────────────────────
+  completeness_check:
+    script: scripts/check_data_completeness.py
+    trigger: cron
+    schedule: "30 20 * * 1-5"     # 每交易日20:30
+
+  # ── 健康聚合通知 ────────────────────────────────────────
+  health_notify:
+    script: scripts/aggregate_health_and_notify.py
+    trigger: cron
+    schedule: "0 21 * * 1-5"      # 每交易日21:00
+
+# ═══════════════════════════════════════════════════════════════
+# Mini 部署检查清单
+# ═══════════════════════════════════════════════════════════════
+
+deployment_checklist:
+  environment:
+    - .venv Python 3.9+ 已安装
+    - requirements.txt 已安装 (pip install -r requirements.txt)
+    - 新增包: fredapi==0.5.2, finnhub-python==2.4.27, alpha_vantage==3.0.0
+    - .env 配置完整 (TUSHARE_TOKEN, FRED_API_KEY, FINNHUB_API_KEY, ALPHA_VANTAGE_KEY, FEISHU_*_WEBHOOK_URL)
+
+  api_keys:
+    tushare: 已配置 (TUSHARE_TOKEN)                # ✅ 已在 .env
+    akshare: 无需 key (免费)                        # ✅
+    yfinance: 无需 key (免费)                       # ✅
+    baostock: 无需 key (免费)                       # ✅
+    fred: FRED_API_KEY — 写入 .env                  # ⚠️ 需确认 key 格式 (无效字符's')
+    finnhub: FINNHUB_API_KEY — 写入 .env            # ⚠️ 需确认 key 是否正确
+    alpha_vantage: ALPHA_VANTAGE_KEY — 已写入 .env  # ✅ (61X5DOTMF4KD8O1O)
+    feishu: FEISHU_*_WEBHOOK_URL — 待配置           # ❌ 需填写 webhook URL
+
+  data_sync:
+    local_to_mini: "rsync -avz ~/J_BotQuant/src mini-remote:~/J_BotQuant/"
+    configs: "rsync -avz ~/J_BotQuant/configs mini-remote:~/J_BotQuant/"
+    env: "scp ~/.env mini-remote:~/J_BotQuant/.env  (手动，包含隐私)"
+
+  startup:
+    # crontab -e 添加:
+    # 30 09 * * 1-5 cd ~/J_BotQuant && .venv/bin/python3 scripts/domestic_minute_backfill.py
+    # */5 09-23 * * 1-5 cd ~/J_BotQuant && .venv/bin/python3 scripts/overseas_minute_backfill.py
+    # 0 17 * * 1-5 cd ~/J_BotQuant && .venv/bin/python3 -m src.data.collectors.volatility_collector
+    # 30 10 * * 1-5 cd ~/J_BotQuant && .venv/bin/python3 -m src.data.collectors.shipping_collector
+    # 30 20 * * 1-5 cd ~/J_BotQuant && .venv/bin/python3 scripts/check_data_completeness.py
+    # 0 21 * * 1-5 cd ~/J_BotQuant && .venv/bin/python3 scripts/aggregate_health_and_notify.py
+
+# ═══════════════════════════════════════════════════════════════
+# 数据状态 (2026-03-20 更新)
+# ═══════════════════════════════════════════════════════════════
+
+data_status:
+  domestic_futures_minute:
+    status: "✅ 已回补"
+    symbols: 16
+    rows: 16368
+    date_range: "约10-13交易日 (AkShare Sina 限制)"
+
+  overseas_futures_minute:
+    status: "✅ 已回补"
+    symbols_minute: 21   # yfinance 1min
+    symbols_daily: 10    # AkShare LME/ICE
+    rows: 135005
+    date_range: "7天 (yfinance 免费版限制)"
+    failed: ["SGX.CN"]   # 数据源错误
+
+  stock_minute:
+    status: "❌ 服务端拒绝"
+    note: "AkShare东方财富接口 Connection aborted — 暂时性限制，需稍后重试"
+
+  macro_collectors:
+    macro_cn: "✅ 运行正常 (60 records)"
+    fred: "❌ API Key 需重新确认"
+
+  volatility:
+    status: "✅ 运行正常 (100 items)"
+    indicators: [50etf_qvix, 300etf_qvix, cboe_vix, cboe_vxn]
+
+  shipping:
+    status: "✅ 运行正常 (120 items)"
+    note: "部分上海航交所指数403 — 正常，免费数据延迟"
+
+  rss_news:
+    status: "✅ 运行正常 (252 feeds)"
+
+  sentiment:
+    status: "✅ 运行正常 (106 items)"
+
+  alpha_vantage:
+    status: "✅ API Key 有效，免费端点正常"
+    note: "日内数据采集建议使用 get_currency_exchange_rate (free)"
+
+  finnhub:
+    status: "❌ API Key 401 — 需重新确认"

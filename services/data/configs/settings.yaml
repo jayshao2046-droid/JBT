@@ -1,0 +1,87 @@
+data_sources:
+  tushare:
+    enabled: true
+    token: ""
+  tqsdk:
+    enabled: true
+    edition: "community"
+    username: ""
+    password: ""
+  akshare:
+    enabled: true
+    key: ""
+
+collection:
+  retry_times: 3
+  retry_interval_seconds: 2
+  timeout_seconds: 15
+
+storage:
+  base_path: "~/J_BotQuant/BotQuan_Data"
+  minute_path: "parquet/{symbol}/1min"
+  daily_path: "parquet/{symbol}/daily"
+  macro_path: "macro"
+  news_path: "news"
+  sentiment_path: "sentiment"
+  logs_path: "logs"
+
+tqsdk:
+  enabled: true
+  edition: "community"
+  account_mode: "sim"
+  target_products:
+    - "rb"
+    - "hc"
+    - "cu"
+    - "au"
+    - "ag"
+    - "i"
+    - "m"
+    - "p"
+    - "c"
+    - "CF"
+    - "TA"
+    - "MA"
+    - "sc"
+    - "IF"
+
+symbols:
+  stocks:
+    - "000001.SZ"
+    - "600000.SH"
+  futures:
+    - "IF2406.CFX"
+
+# ===== 通知监控配置 =====
+monitor:
+  feishu:
+    webhook_url: ""
+    webhooks:
+      alert: ""
+      trade: ""
+      news: ""
+    retry_times: 3
+    retry_interval_seconds: 1
+    timeout_seconds: 10
+    mock_mode: false
+
+  email:
+    smtp_host: ""
+    smtp_port: 465
+    username: ""
+    password: ""
+    from_addr: ""
+    default_to_addrs: []
+    use_ssl: true
+    use_tls: false
+    retry_times: 3
+    retry_interval_seconds: 1
+    timeout_seconds: 10
+    mock_mode: false
+
+# ===== 运行时端点 =====
+endpoints:
+  data_api_url: "${BOTQUANT_DATA_API_URL}"
+  decision_api_url: "${BOTQUANT_DECISION_API_URL}"
+  trading_host: "${BOTQUANT_TRADING_HOST}"
+  dashboard_port: "${BOTQUANT_DASHBOARD_PORT}"

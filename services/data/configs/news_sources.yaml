@@ -1,0 +1,148 @@
+# BotQuant 数据 API 源配置（免费/半免费层）
+# D134.4 产出 — 2026-03-20
+# 覆盖范围：baostock / efinance / wbgapi + 待注册 Key 源
+# 参见 rss_feeds.yaml 获取 RSS/新闻源配置
+
+# ── 免费数据 API（无需注册，实测通过）─────────────────────
+free_data_apis:
+
+  - id: baostock
+    name: BaoStock A股/期货数据
+    package: "baostock"
+    install: "pip install baostock"
+    auth: none
+    tested: "2026-03-20"
+    status: active
+    coverage:
+      - A股历史日线/分钟K线
+      - 股票基本面（财务报表）
+      - 指数行情
+    usage: |
+      import baostock as bs
+      bs.login()
+      # bs.query_history_k_data_plus(code, fields, ...)
+      bs.logout()
+    notes: "免费无注册；历史数据完整；实时数据有延迟"
+
+  - id: efinance
+    name: efinance 东方财富数据
+    package: "efinance"
+    install: "pip install efinance"
+    auth: none
+    tested: "2026-03-20"
+    status: active
+    coverage:
+      - A股实时行情/历史K线
+      - 期货日线/历史数据
+      - 基金净值
+      - 债券行情
+    usage: |
+      import efinance as ef
+      df = ef.stock.get_realtime_quotes()  # 全量 A 股实时行情
+    notes: >
+      依赖东方财富推送服务器 push2.eastmoney.com；
+      偶发网络超时（间歇性）；实测稳定通过
+
+  - id: wbgapi
+    name: 世界银行数据 API
+    package: "wbgapi"
+    install: "pip install wbgapi"
+    auth: none
+    tested: "2026-03-20"
+    status: active
+    coverage:
+      - 全球宏观经济指标（GDP/CPI/贸易等）
+      - 187+ 国家历史数据
+      - 世界发展指标（WDI）
+    usage: |
+      import wbgapi as wb
+      # 查询中国 GDP
+      data = list(wb.data.fetch("NY.GDP.MKTP.CD", economy="CHN", time=range(2020, 2025)))
+      # 轻量验证（connectivity check）
+      economies = list(wb.economy.list(id="CHN"))
+    notes: "免费无注册；data.fetch() 大查询偶有 JSON decode 错误；用 economy.list() 做连通性验证"
+
+# ── 金融数据库（半免费，需注册 API Key）─────────────────
+pending_key_apis:
+
+  - id: fred_api
+    name: FRED 美联储宏观数据
+    package: "fredapi"
+    install: "pip install fredapi"
+    env_var: FRED_API_KEY
+    reg_url: "https://fred.stlouisfed.org/docs/api/api_key.html"
+    coverage:
+      - 美联储利率、国债收益率
+      - 美国宏观指标（CPI/PCE/失业率/工业产出）
+      - 大宗商品相关指标（WTI/金价历史）
+    usage: |
+      from fredapi import Fred
+      import os
+      fred = Fred(api_key=os.environ["FRED_API_KEY"])
+      df = fred.get_series("DGS10")  # 10年期美债收益率
+    priority: P0
+    notes: "免费500次/天；宏观因子必用数据源"
+
+  - id: finnhub
+    name: Finnhub 全球财经新闻+情绪
+    package: "finnhub-python"
+    install: "pip install finnhub-python"
+    env_var: FINNHUB_API_KEY
+    reg_url: "https://finnhub.io/"
+    coverage:
+      - 全球实时新闻
+      - 公司新闻/情绪分析
+      - 市场消息摘要
+    usage: |
+      import finnhub
+      import os
+      client = finnhub.Client(api_key=os.environ["FINNHUB_API_KEY"])
+      news = client.general_news("general", min_id=0)
+    priority: P1
+    notes: "免费层 60次/分钟；情绪和新闻联合数据"
+
+  - id: newsapi_org
+    name: NewsAPI.org 全球新闻聚合
+    package: "newsapi-python"
+    install: "pip install newsapi-python"
+    env_var: NEWSAPI_KEY
+    reg_url: "https://newsapi.org/register"
+    coverage:
+      - 全球200+媒体新闻源
+      - 关键词搜索
+      - 历史新闻（付费版）
+    usage: |
+      from newsapi import NewsApiClient
+      import os
+      api = NewsApiClient(api_key=os.environ["NEWSAPI_KEY"])
+      articles = api.get_everything(q="commodities", language="en", page_size=20)
+    priority: P2
+    notes: "免费层仅100次/天；仅适合开发测试；生产环境需付费"
+
+  - id: alpha_vantage
+    name: Alpha Vantage 股票/外汇/加密货币
+    package: "alpha_vantage"
+    install: "pip install alpha_vantage"
+    env_var: ALPHA_VANTAGE_KEY
+    reg_url: "https://www.alphavantage.co/support/#api-key"
+    coverage:
+      - 全球股票时序数据（60+ 交易所）
+      - 外汇汇率（FX_DAILY/INTRADAY）
+      - 加密货币
+      - 技术指标 API
+    usage: |
+      from alpha_vantage.timeseries import TimeSeries
+      import os
+      ts = TimeSeries(key=os.environ["ALPHA_VANTAGE_KEY"], output_format="pandas")
+      data, meta = ts.get_daily("AAPL")
+    priority: P1
+    notes: "免费500次/天；外汇历史数据品质较好"
+
+# ── 中国金融数据库（已集成于主 data_sources.yaml）────────
+# 以下仅做汇总参考，详细配置见 data_sources.yaml
+china_data_summary:
+  - tushare:    "主力期货/股票日线+分钟；需 Token（已配置）"
+  - tqsdk:      "实时期货 tick/分钟 K 线；需 SimNow/实盘账号"
+  - akshare:    "免费 A 股/期货/宏观/大宗商品；覆盖广"
+  - baostock:   "免费 A 股历史数据；稳定无注册（本文件管理）"
+  - efinance:   "免费东方财富数据；A 股/期货实时+历史（本文件管理）"

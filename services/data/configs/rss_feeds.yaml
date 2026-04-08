@@ -1,0 +1,290 @@
+# BotQuant RSS/新闻源配置
+# D134.4 产出 — 2026-03-20
+# 来源: D134.3 全量测试通过 (25/32, 4 skip-need-key, 3 WAF-blocked)
+# 更新标准: 只收录实测通过的源，并注明采集类型
+
+# ── 采集策略 ───────────────────────────────────────────────
+policy:
+  interval_high:   "3min"     # P0 高频新闻（期货市场开盘期间）
+  interval_normal: "30min"    # P1 标准新闻
+  interval_reference: "2h"    # P2 参考信息（交易所公告/统计局数据）
+  timeout_s: 12
+  retry_max: 3
+  user_agent: "Mozilla/5.0 (compatible; BotQuantBot/1.0)"
+
+# ── P0 实时资讯 — 高优先，需快速推送 ─────────────────────
+rss_p0:
+
+  # --- 国内财经快讯 JSON API ---
+  - id: sina_finance_api
+    name: 新浪财经资讯
+    type: json_api
+    url: "https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=2516&k=&num=50&page=1&r=0.1&type=rss"
+    interval: 3min
+    priority: P0
+    tested: "2026-03-20"
+    status: active
+
+  - id: tonghuashun
+    name: 同花顺快讯
+    type: json_api
+    url: "https://news.10jqka.com.cn/tapp/news/push/stock/?page=1&tag=&track=website"
+    interval: 3min
+    priority: P0
+    tested: "2026-03-20"
+    status: active
+
+  - id: wallstreetcn_api
+    name: 华尔街见闻
+    type: json_api
+    url: "https://api-one.wallstcn.com/apiv1/content/lives?channel=global-channel&limit=20"
+    interval: 3min
+    priority: P0
+    tested: "2026-03-20"
+    status: active
+
+  # --- 国际 RSS ---
+  - id: yahoo_finance_news
+    name: Yahoo Finance 新闻
+    type: rss
+    url: "https://finance.yahoo.com/news/rssindex"
+    interval: 3min
+    priority: P0
+    tested: "2026-03-20"
+    status: active
+
+  - id: cnbc_business
+    name: CNBC Business News
+    type: rss
+    url: "https://www.cnbc.com/id/100003114/device/rss/rss.html"
+    interval: 3min
+    priority: P0
+    notes: "替代 Reuters feeds（国内 DNS 超时）"
+    tested: "2026-03-20"
+    status: active
+
+  - id: fxstreet
+    name: FXStreet 外汇
+    type: rss
+    url: "https://www.fxstreet.com/rss"
+    interval: 3min
+    priority: P0
+    tested: "2026-03-20"
+    status: active
+
+  - id: bloomberg_markets
+    name: Bloomberg Markets RSS
+    type: rss
+    url: "https://feeds.bloomberg.com/markets/news.rss"
+    interval: 3min
+    priority: P0
+    tested: "2026-03-20"
+    status: active
+
+  - id: marketwatch_global
+    name: MarketWatch 全球市场
+    type: rss
+    url: "https://feeds.marketwatch.com/marketwatch/topstories/"
+    interval: 3min
+    priority: P0
+    notes: "替代 Investing.com（全线403反爬）"
+    tested: "2026-03-20"
+    status: active
+
+  # --- 国内财经 RSS ---
+  - id: chinanews_finance
+    name: 中国新闻网财经
+    type: rss
+    url: "https://www.chinanews.com.cn/rss/finance.xml"
+    interval: 3min
+    priority: P0
+    tested: "2026-03-20"
+    status: active
+
+# ── P1 标准资讯 ─────────────────────────────────────────
+rss_p1:
+
+  - id: bbc_chinese_biz
+    name: BBC 中文财经
+    type: rss
+    url: "http://www.bbc.co.uk/zhongwen/simp/business/index.xml"
+    interval: 30min
+    priority: P1
+    tested: "2026-03-20"
+    status: active
+
+  - id: tradingview_feed
+    name: TradingView 全球财经 Feed
+    type: rss
+    url: "https://www.tradingview.com/feed/"
+    interval: 30min
+    priority: P1
+    tested: "2026-03-20"
+    status: active
+
+  # --- 国内财经媒体（HTML可访问性通过，无公开RSS，需 scraper 接入）---
+  - id: stcn_kuaixun
+    name: 证券时报快讯
+    type: html_scrape
+    url: "https://kuaixun.stcn.com/"
+    interval: 10min
+    priority: P1
+    notes: "无公开RSS；需 HTTP scraper 解析快讯列表"
+    tested: "2026-03-20"
+    status: active
+
+  - id: qhrb
+    name: 期货日报
+    type: html_scrape
+    url: "http://www.qhrb.com.cn/"
+    interval: 30min
+    priority: P1
+    notes: "无公开RSS；需 HTTP scraper 解析新闻列表"
+    tested: "2026-03-20"
+    status: active
+
+  - id: jin10
+    name: 金十数据
+    type: html_scrape
+    url: "https://www.jin10.com/"
+    interval: 5min
+    priority: P1
+    notes: "无公开RSS；实时快讯需 WebSocket 或 scraper 接入"
+    tested: "2026-03-20"
+    status: active
+
+  - id: ifeng_finance
+    name: 凤凰财经
+    type: html_scrape
+    url: "https://finance.ifeng.com/"
+    interval: 30min
+    priority: P1
+    notes: "无公开RSS；需 HTTP scraper"
+    tested: "2026-03-20"
+    status: active
+
+  - id: nbd
+    name: 每日经济新闻
+    type: html_scrape
+    url: "https://www.nbd.com.cn/"
+    interval: 30min
+    priority: P1
+    tested: "2026-03-20"
+    status: active
+
+  - id: jingji_21
+    name: 21世纪经济报道
+    type: html_scrape
+    url: "https://www.21jingji.com/"
+    interval: 30min
+    priority: P1
+    notes: "官网无公开RSS（feed.rss 404）；需 scraper"
+    tested: "2026-03-20"
+    status: active
+
+# ── P2 参考/专业数据（交易所公告、统计局、大宗商品）──────
+rss_p2:
+
+  - id: shfe_notice
+    name: 上期所公告
+    type: html_scrape
+    url: "https://www.shfe.com.cn/publicnotice/notice/"
+    interval: 2h
+    priority: P2
+    notes: "可访问；无RSS；AkShare futures_notice_shfe() 为首选接入方式"
+    tested: "2026-03-20"
+    status: active
+
+  - id: csrc_notice
+    name: 证监会公告
+    type: html_scrape
+    url: "https://www.csrc.gov.cn/csrc/c100028/common_xq_list.shtml"
+    interval: 2h
+    priority: P2
+    notes: "可访问；无RSS；可通过 HTTP 抓取公告列表 JSON"
+    tested: "2026-03-20"
+    status: active
+
+  - id: stats_gov_cn
+    name: 国家统计局数据发布
+    type: html_scrape
+    url: "https://www.stats.gov.cn/sj/zxfb/"
+    interval: 4h
+    priority: P2
+    notes: "CPI/PPI/PMI 等宏观数据；/wzgl/rss/ 仅返回 432B 空HTML，用数据发布页代替"
+    tested: "2026-03-20"
+    status: active
+
+  - id: mysteel
+    name: 我的钢铁网
+    type: html_scrape
+    url: "https://www.mysteel.com/"
+    interval: 2h
+    priority: P2
+    notes: "钢铁/大宗商品商业平台；无公开RSS；AkShare spot commodity 为替代"
+    tested: "2026-03-20"
+    status: reference_only
+
+  - id: scicc99
+    name: 卓创资讯
+    type: html_scrape
+    url: "https://www.sci99.com/list/3_1000001.html"
+    interval: 2h
+    priority: P2
+    notes: "大宗商品商业付费平台；AkShare spot_price_daily() 为免费替代"
+    tested: "2026-03-20"
+    status: reference_only
+
+  - id: sns_100ppi
+    name: 生意社商品价格
+    type: html_scrape
+    url: "https://www.100ppi.com/price/"
+    interval: 2h
+    priority: P2
+    notes: "商品价格数据商业付费；AkShare spot_price_daily() 为免费替代"
+    tested: "2026-03-20"
+    status: reference_only
+
+# ── 受阻源（WAF 412） — 需通过 AkShare 接入 ───────────────
+blocked_use_akshare:
+  - id: dce_notice
+    name: 大商所公告
+    blocked_by: "WAF 412（全域名）"
+    akshare_api: "futures_notice_dce()"
+    note: "所有自动化请求均返回 412；需 AkShare 接入"
+
+  - id: czce_notice
+    name: 郑商所公告
+    blocked_by: "WAF 412（全域名）"
+    akshare_api: "futures_notice_czce()"
+    note: "所有自动化请求均返回 412；需 AkShare 接入"
+
+# ── 需要 API Key 注册（待 Jay.S 申请后激活）──────────────
+pending_api_key:
+  - id: fred_api
+    name: FRED 美联储宏观数据
+    reg_url: "https://fred.stlouisfed.org/docs/api/api_key.html"
+    env_var: FRED_API_KEY
+    status: active  # ✅ 2026-03-24 Jay.S 已申请，Key 已入 .env，宏观采集使用
+    note: "免费注册，宏观利率/国债收益率等核心数据，走 macro_scheduler，非新闻采集"
+
+  - id: finnhub
+    name: Finnhub 全球财经新闻
+    reg_url: "https://finnhub.io/"
+    env_var: FINNHUB_API_KEY
+    status: active  # ✅ 2026-03-24 已激活，接入 NewsAPICollector._async_fetch_finnhub
+    note: "免费层 100条/次；国际新闻（Reuters/Bloomberg/AP）实时汇集；每 3min 采集"
+
+  - id: newsapi_org
+    name: NewsAPI.org 全球新闻聚合
+    reg_url: "https://newsapi.org/register"
+    env_var: NEWSAPI_KEY
+    status: pending  # 未申请
+    note: "免费层 100次/天；仅开发环境"
+
+  - id: alpha_vantage
+    name: Alpha Vantage 新闻情绪
+    reg_url: "https://www.alphavantage.co/support/#api-key"
+    env_var: ALPHA_VANTAGE_KEY
+    status: active  # ✅ 2026-03-24 已激活，接入 NewsAPICollector._async_fetch_alphavantage
+    note: "免费 25次/天；提供新闻情绪分数(sentiment_score/label)，用于情绪因子"

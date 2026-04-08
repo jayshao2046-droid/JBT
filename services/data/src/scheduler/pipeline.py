@@ -19,8 +19,9 @@ from services.data.src.collectors.tqsdk_collector import TqSdkCollector
 from services.data.src.collectors.tushare_futures_collector import TushareFuturesCollector
 from services.data.src.collectors.tushare_collector import TushareDailyCollector
 from services.data.src.collectors.volatility_collector import VolatilityCollector
-# from src.data.source_manager import SourceManager
-# from src.data.storage import HDF5Storage
+from services.data.src.data.source_manager import SourceManager
+from services.data.src.data.storage import HDF5Storage
+from services.data.src.data.sentiment_mapper import map_news_to_score, map_sentiment_to_score
 from services.data.src.utils.config import get_config
 
 _logger = logging.getLogger(__name__)
@@ -400,7 +401,6 @@ def run_news_api_pipeline(
 
     # P1-010: 生成 news_score 扁平化数据
     try:
-        # from src.data.sentiment_mapper import map_news_to_score
         score_df = map_news_to_score(records)
         if not score_df.is_empty():
             _save_records(storage=resolved_storage, data_type="news_score", symbol=symbol, records=score_df.to_dicts())
@@ -481,7 +481,6 @@ def run_sentiment_pipeline(
 
     # P1-010: 生成 social_score 扁平化数据
     try:
-        # from src.data.sentiment_mapper import map_sentiment_to_score
         score_df = map_sentiment_to_score(records)
         if not score_df.is_empty():
             _save_records(storage=resolved_storage, data_type="social_score", symbol=symbol, records=score_df.to_dicts())
