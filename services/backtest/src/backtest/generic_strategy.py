@@ -2187,6 +2187,32 @@ def _infer_legacy_indicator_specs(
                     period_hint=period,
                 )
             )
+        elif normalized_name == "spread":
+            period = _read_positive_int(params.get("period", 20), label="Spread.period")
+            col_a = str(params.get("col_a") or "close").strip().lower() or "close"
+            col_b = str(params.get("col_b") or "close_ref").strip().lower() or "close_ref"
+            add(
+                GenericIndicatorSpec(
+                    name=alias_name or "spread_zscore",
+                    indicator_type="Spread",
+                    params={"col_a": col_a, "col_b": col_b, "period": period},
+                    primary_output="spread_zscore",
+                    period_hint=period,
+                )
+            )
+        elif normalized_name == "spread_rsi":
+            period = _read_positive_int(params.get("period", 14), label="Spread_RSI.period")
+            col_a = str(params.get("col_a") or "close").strip().lower() or "close"
+            col_b = str(params.get("col_b") or "close_ref").strip().lower() or "close_ref"
+            add(
+                GenericIndicatorSpec(
+                    name=alias_name or "spread_rsi",
+                    indicator_type="Spread_RSI",
+                    params={"col_a": col_a, "col_b": col_b, "period": period},
+                    primary_output="spread_rsi",
+                    period_hint=period,
+                )
+            )
 
     expression_texts: List[str] = []
     for value in [long_condition, short_condition, *market_filter_conditions]:

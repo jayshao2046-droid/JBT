@@ -282,6 +282,27 @@ def _rolling_mean_optional(
     return result
 
 
+def _rolling_std_optional(
+    values: Sequence[Optional[float]],
+    period: int,
+) -> List[Optional[float]]:
+    result: List[Optional[float]] = []
+    window: List[Optional[float]] = []
+
+    for value in values:
+        window.append(None if value is None else float(value))
+        if len(window) > period:
+            window.pop(0)
+        if len(window) == period and all(item is not None for item in window):
+            numeric = [float(item) for item in window]  # type: ignore[arg-type]
+            mean = sum(numeric) / period
+            variance = sum((x - mean) ** 2 for x in numeric) / period
+            result.append(math.sqrt(max(variance, 0.0)))
+        else:
+            result.append(None)
+    return result
+
+
 def _rolling_weighted_mean(
     values: Sequence[Optional[float]],
     period: int,
@@ -1513,5 +1534,96 @@ def _calculate_dpo(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[D
         if sma_value is not None and reference_index >= 0:
             dpo = values[reference_index] - sma_value
         rows.append({"timestamp": bar["timestamp"], "dpo": dpo})
+    return rows
+
+
+@factor_registry.register("Spread")
+def _calculate_spread(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Compute price spread between two columns with rolling z-score normalization.
+
+    Returns per-bar: spread, spread_mean, spread_std, spread_zscore.
+    col_a defaults to "close"; col_b defaults to "close_ref".
+    """
+    period = _require_positive_int(params.get("period", 20), label="Spread.period")
+    col_a = _read_column_name(params.get("col_a"), label="Spread.col_a", default="close")
+    col_b = _read_column_name(params.get("col_b"), label="Spread.col_b", default="close_ref")
+
+    spread_values: List[Optional[float]] = []
+    for bar in bars:
+        a = bar.get(col_a)
+        b = bar.get(col_b)
+        if a is not None and b is not None:
+            try:
+                spread_values.append(float(a) - float(b))
+            except (TypeError, ValueError):
+                spread_values.append(None)
+        else:
+            spread_values.append(None)
+
+    mean_values = _rolling_mean_optional(spread_values, period)
+    std_values = _rolling_std_optional(spread_values, period)
+
+    rows: List[Dict[str, Any]] = []
+    for bar, spread, mean, std in zip(bars, spread_values, mean_values, std_values):
+        zscore: Optional[float] = None
+        if spread is not None and mean is not None and std is not None and std > 0.0:
+            zscore = (spread - mean) / std
+        rows.append(
+            {
+                "timestamp": bar["timestamp"],
+                "spread": spread,
+                "spread_mean": mean,
+                "spread_std": std,
+                "spread_zscore": zscore,
+            }
+        )
+    return rows
+
+
+@factor_registry.register("Spread_RSI")
+def _calculate_spread_rsi(bars: List[Dict[str, Any]], params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Compute RSI of the price spread between two columns.
+
+    Returns per-bar: spread_rsi.
+    col_a defaults to "close"; col_b defaults to "close_ref".
+    """
+    period = _require_positive_int(params.get("period", 14), label="Spread_RSI.period")
+    col_a = _read_column_name(params.get("col_a"), label="Spread_RSI.col_a", default="close")
+    col_b = _read_column_name(params.get("col_b"), label="Spread_RSI.col_b", default="close_ref")
+
+    spread_values: List[Optional[float]] = []
+    for bar in bars:
+        a = bar.get(col_a)
+        b = bar.get(col_b)
+        if a is not None and b is not None:
+            try:
+                spread_values.append(float(a) - float(b))
+            except (TypeError, ValueError):
+                spread_values.append(None)
+        else:
+            spread_values.append(None)
+
+    changes: List[Optional[float]] = [None]
+    for prev, curr in zip(spread_values, spread_values[1:]):
+        if prev is None or curr is None:
+            changes.append(None)
+        else:
+            changes.append(curr - prev)
+
+    gains: List[Optional[float]] = [max(c, 0.0) if c is not None else None for c in changes]
+    losses: List[Optional[float]] = [max(-c, 0.0) if c is not None else None for c in changes]
+
+    avg_gain = _ema(gains, period)
+    avg_loss = _ema(losses, period)
+
+    rows: List[Dict[str, Any]] = []
+    for bar, g, loss in zip(bars, avg_gain, avg_loss):
+        rsi: Optional[float] = None
+        if g is not None and loss is not None:
+            if loss == 0.0:
+                rsi = 50.0 if g == 0.0 else 100.0
+            else:
+                rsi = 100.0 - 100.0 / (1.0 + g / loss)
+        rows.append({"timestamp": bar["timestamp"], "spread_rsi": rsi})
     return rows
     return rows
