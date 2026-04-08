@@ -47,7 +47,7 @@
 
 ## 2026-04-08 收口补批裁决
 
-1. 基于对 `services/decision/**`、`services/data/**` 与 `services/sim-trading/**` 的只读复核，decision 收口继续挂在 `TASK-0021` 下新增补充批次 `H0`~`H4`，**不新建第二个 decision 任务**。
+1. 基于对 `services/decision/**`、`services/data/**` 与 `services/sim-trading/**` 的只读复核，decision 收口继续挂在 `TASK-0021` 下新增补充批次 `H0`~`H5`，**不新建第二个 decision 任务**。
 2. 但 `sim-trading` 发布接收接口必须拆为独立 `TASK-0023`；不得继续混入本 Manifest。
 3. 当前补充批次冻结如下：
 
@@ -58,17 +58,20 @@
 | `H2` | 决策 agent | P1 | `src/persistence/state_store.py`、`src/gating/backtest_gate.py`、`src/gating/research_gate.py`、`src/model/router.py`、`tests/test_gating.py` | 回测 / 研究资格持久化与模型门禁 | 依赖 `H1` |
 | `H3` | 决策 agent | P1 | `pyproject.toml`、`src/research/factor_loader.py`、`tests/test_research.py` | 真实 data API 接入与 research 运行依赖 | 可与 `H0` / `H1` 并行 |
 | `H4` | 决策 agent | P1 | `src/api/routes/strategy.py`、`src/api/routes/signal.py`、`src/publish/gate.py`、`src/publish/sim_adapter.py`、`tests/test_publish.py` | signal / strategy publish 真闭环 | 依赖 `H2` / `H3`；可与 `TASK-0023-A` 并行 |
+| `H5` | 决策 agent | P1 | `services/decision/decision_web/next.config.mjs` | decision_web `/api/decision/*` rewrites 收口 | 可独立推进；不得与新的 decision_web 页面/部署批次混写 |
 
 4. `H4` 只修正 decision 侧发布入口与适配器命名空间，当前冻结到 `sim-trading` 既有 `/api/v1/strategy/publish`；不写 `services/sim-trading/**`。
-5. 当前不把 `services/decision/.env.example` 或 `docker-compose.dev.yml` 纳入首轮；若实施中证明现有占位不足，再另起 **P0** 补审。
+5. `H5` 只处理 `decision_web` 单文件 rewrites，不得借此 reopen `Dockerfile`、`docker-compose.dev.yml`、`.env.example`、页面代码或后端代码。
+6. 当前不把 `services/decision/.env.example` 或 `docker-compose.dev.yml` 纳入首轮；若实施中证明现有占位不足，再另起 **P0** 补审。
 
 ## 建议签发顺序
 
 1. A 已 active，立即开工。
 2. B、C0、C、D、E0、E、F0、F、G 按本 Manifest 一次性签发到位。
 3. 实际执行时仍按批次顺序推进：A → B → C0 → C → D → E0 → E → F0 → F → G。
-4. 对“部署后立即开工”阻塞，最稳妥补签顺序冻结为：`H0` → `H1` → `H2` → `H3` → `H4`；其中 `H0` 可与 `H1` / `H3` 并行，`H2` 必须在 `H1` 之后，`H4` 必须在 `H2` 与 `H3` 之后。
+4. 对“部署后立即开工”阻塞，最稳妥补签顺序冻结为：`H0` → `H1` → `H2` → `H3` → `H4` → `H5`；其中 `H0` 可与 `H1` / `H3` 并行，`H2` 必须在 `H1` 之后，`H4` 必须在 `H2` 与 `H3` 之后。
 5. `TASK-0023-A` 在本轮命名空间冻结后可与 `H4` 并行推进，但最终端到端验收需两边同时完成。
+6. `H5` 不依赖 `H0`~`H4` 的业务状态，但必须保持单文件回滚边界，不得混入其他 decision_web 改动。
 
 ## 关联交接单
 

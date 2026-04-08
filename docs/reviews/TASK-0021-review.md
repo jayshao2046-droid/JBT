@@ -99,12 +99,14 @@
 | `TASK-0021-H2` | 决策 Agent | P1 | 依赖 `H1` | `services/decision/src/persistence/state_store.py`、`services/decision/src/gating/backtest_gate.py`、`services/decision/src/gating/research_gate.py`、`services/decision/src/model/router.py`、`services/decision/tests/test_gating.py` | 回测/研究资格持久化与模型门禁 |
 | `TASK-0021-H3` | 决策 Agent | P1 | 可与 `H0` / `H1` 并行 | `services/decision/pyproject.toml`、`services/decision/src/research/factor_loader.py`、`services/decision/tests/test_research.py` | 真实 data API 接入与运行依赖 |
 | `TASK-0021-H4` | 决策 Agent | P1 | 依赖 `H2` / `H3`；可与 `TASK-0023-A` 并行 | `services/decision/src/api/routes/strategy.py`、`services/decision/src/api/routes/signal.py`、`services/decision/src/publish/gate.py`、`services/decision/src/publish/sim_adapter.py`、`services/decision/tests/test_publish.py` | signal / strategy publish 真闭环 |
+| `TASK-0021-H5` | 决策 Agent | P1 | 可独立推进；不得与新的 decision_web 页面/部署批次混写 | `services/decision/decision_web/next.config.mjs` | decision_web `/api/decision/*` rewrites 收口 |
 
 ### 5. 建议签发顺序
 
-1. 最稳妥先签顺序冻结为：`H0` → `H1` → `H2` → `H3` → `H4`。
+1. 最稳妥先签顺序冻结为：`H0` → `H1` → `H2` → `H3` → `H4` → `H5`。
 2. 若 Jay.S 允许并行，可让 `H0` 与 `H1` / `H3` 并行；`H2` 必须在 `H1` 之后；`H4` 必须在 `H2` 与 `H3` 之后。
 3. `TASK-0023-A` 在本轮命名空间冻结为 `/api/v1/strategy/publish` 后，可与 `H4` 并行推进，但最终端到端验收需两边同时完成。
+4. `H5` 不依赖 `H0`~`H4` 的业务状态，但必须保持单文件回滚边界，不得与新的 decision_web 页面或部署批次混写。
 
 ## 六、终审结论
 
@@ -288,7 +290,18 @@ No errors found.
 3. 其他状态当前都会在 gate 层被显式拒绝，且 `tests/test_publish.py` 已补齐 `imported` 非法路径拒绝与 `pending_execution` retry 放行的回归断言。
 4. 因此即便 `PublishExecutor` 仍通过 `repo.update(...)` 写入 `pending_execution` / `in_production`，非合法前置状态已经无法再进入发布流；上一轮“非待执行状态也可能被推进到发布流”的唯一阻断已被消除。
 5. 结论：**通过，可 lockback**。本轮无阻断发现。
-6. 另一个锁控前置保持不变：`lockctl status` 当前可见 2 张 H4 active token，但 Atlas 仍缺可直接用于 validate / lockback 的完整 JWT 文本；本轮仅形成 `approved_pending_lockback` 结论，实际 lockback 前仍需先确认可用的实际 token 文本。
+
+### 7. `TASK-0021-H5` 终审结论
+
+1. `services/decision/decision_web/next.config.mjs` 已在本文件前序终审中被明确裁定为 `H0` 白名单外历史脏改动，正式收口为单文件补充批次 `TASK-0021-H5`，保护级别 **P1**。
+2. Jay.S 已签发 P1 Token：`tok-06be4004-b5c6-4cd6-8efd-8b5369c0877b`（480min TTL）。
+3. 决策 Agent 已按白名单单文件实施：`async rewrites()` 规则仅覆盖 `/api/decision/:path*` → `${BACKEND_BASE_URL ?? "http://localhost:8104"}/:path*`，未扩展到 Dockerfile / compose / .env.example / 页面代码。
+4. 验收结果：
+   - 内容边界合规，未触碰白名单外文件。
+   - `next.config.mjs` 语法有效，本地构建/诊断口径保持可用。
+   - 单文件独立 commit：`0ead4c2`。
+5. Token lockback 已执行：`tok-06be4004` → `locked`，REVIEW-TASK-0021-H5 approved。
+6. 结论：**通过，已完成 lockback。H5 终审闭环。**
 
 ---
 

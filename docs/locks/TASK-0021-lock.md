@@ -6,7 +6,7 @@
 - 阶段：H0~H4 终审收口同步
 - 当前执行组织：项目架构师 + 决策 agent
 - 当前是否使用 Livis：否
-- 当前总体状态：A~G 历史留痕继续保留；H0/H1/H2/H3/H4 已完成终审，其中 H0/H1/H2/H3/H4 当前均可按各自白名单进入 lockback；`services/decision/decision_web/next.config.mjs` 明确不属于 H0 结论范围；H4 最新补修已消除上一轮 lifecycle 阻断，但 lockback 前仍需 Atlas / Jay.S 提供完整 JWT 文本
+- 当前总体状态：A~G 历史留痕继续保留；H0/H1/H2/H3/H4 已完成终审并锁回；`services/decision/decision_web/next.config.mjs` 已从 H0 白名单外历史脏改收口为独立补充批次 `TASK-0021-H5`，当前待 Jay.S 签发单文件 P1 Token
 
 ## 本轮治理同步文件白名单
 
@@ -84,6 +84,7 @@
 | `TASK-0021-H2` | 决策 Agent | P1 | `locked` | 回测 / 研究资格持久化与 model router 真校验 |
 | `TASK-0021-H3` | 决策 Agent | P1 | `locked` | `FactorLoader` 真实 data API 接入与 research 依赖补齐 |
 | `TASK-0021-H4` | 决策 Agent | P1 | `locked` | signal / strategy publish 真闭环，decision 侧路径冻结为 `/api/v1/strategy/publish` |
+| `TASK-0021-H5` | 决策 Agent | P1 | `locked` | `services/decision/decision_web/next.config.mjs` 单文件，收口 decision_web `/api/decision/*` rewrites；commit `0ead4c2` |
 
 4. `TASK-0023-A` 为独立 sim-trading 单服务任务，当前已完成 `approved` lockback，不得借用 `TASK-0021` 的任何历史白名单。
 5. 当前继续锁定 `services/decision/.env.example` 与 `docker-compose.dev.yml`；若后续必须触碰两者，仍需另起 **P0** 补审。
@@ -97,15 +98,16 @@
 | `TASK-0021-H2` | `tok-e4a42eab-0942-4e9e-b753-bd9090dffc1a` | `locked` | `approved` | 已完成 | 5 文件白名单边界合规；`requested_symbol` / `executed_data_symbol` 持久化语义已补齐；独立复跑 `pytest tests/test_state_persistence.py tests/test_gating.py -q` = `16 passed` |
 | `TASK-0021-H3` | `tok-c9b73a9a-c9aa-40a8-8d51-2e23cefe88f3` | `locked` | `approved` | 已完成 | `FactorLoader` 已按 `executed_data_symbol -> requested_symbol -> 合法 strategy_id -> 显式失败` 完成 symbol 闭环；独立复跑 `pytest tests/test_research.py -q` = `14 passed` |
 | `TASK-0021-H4` | `tok-1211b456-68eb-4291-b604-d6b97a32d452` / `tok-bf30ecb6-9559-4407-9a1b-a4d788b84300` | `locked` | `approved` | 已完成 | 最新补修严格限于 `publish/gate.py` 与 `tests/test_publish.py`；`get_errors = 0`、`pytest tests/test_publish.py tests/test_strategy.py -q = 38 passed`、本地模拟联调确认 `imported` 路径返回 `409 gate_rejected`；两张 H4 token 已按 `REVIEW-TASK-0021-H4` 完成 `approved` lockback |
+| `TASK-0021-H5` | `tok-06be4004-b5c6-4cd6-8efd-8b5369c0877b` | `locked` | `approved` | 已完成 | 单文件 `next.config.mjs` rewrites 收口，commit `0ead4c2`，REVIEW-TASK-0021-H5 |
 
 ## 当前状态
 
-- 预审状态：已通过；A 批终审已通过；H0~H4 已完成本轮终审
-- Token 状态：A=pending_lockback；B/C0/C/D/E0/E/F0/F/G=pending_manifest；H0/H1/H2/H3/H4=locked
-- 解锁时间：A 批 active 窗口已用于本轮实施；其余批次待 Jay.S 按 Manifest 一次性签发；H0~H4 对应 token 已全部锁回
-- 锁回时间：A 批待执行 lockback；H0/H1/H2/H3 已执行 lockback；H4 已执行 lockback（双 token 全部锁回）
-- lockback 结果：A 批当前仅形成“可进入 lockback”结论，尚未实际执行 lockback；H0/H1/H2/H3/H4=approved_locked
+- 预审状态：已通过；A 批终审已通过；H0~H5 已完成终审
+- Token 状态：A=pending_lockback；B/C0/C/D/E0/E/F0/F/G=pending_manifest；H0/H1/H2/H3/H4/H5=locked
+- 解锁时间：A 批 active 窗口已用于本轮实施；其余批次待 Jay.S 按 Manifest 一次性签发；H0~H5 对应 token 已全部锁回
+- 锁回时间：A 批待执行 lockback；H0/H1/H2/H3/H4/H5 均已执行 lockback
+- lockback 结果：A 批当前仅形成"可进入 lockback"结论，尚未实际执行 lockback；H0/H1/H2/H3/H4/H5=approved_locked
 
 ## 结论
 
-**`TASK-0021` 当前正式口径：A~G 的历史状态继续保留为既有留痕；H0~H4 已完成终审并按各自白名单执行实际 lockback，当前统一为 `locked`；`services/decision/decision_web/next.config.mjs` 明确不属于 H0 结论范围，并继续独立锁定。**
+**`TASK-0021` 当前正式口径：A~G 的历史状态继续保留为既有留痕；H0~H5 已全部完成终审并按各自白名单执行实际 lockback，当前统一为 `locked`。决策端代码层落地已全部闭环。**

@@ -325,6 +325,29 @@
 3. `PublishGate` 会因为回测证书 / 研究快照无效而拒绝发布。
 4. 下游路由缺失或拒绝时，decision 返回失败，不再伪造 `success=True`。
 
+#### 补充批次 H5：decision_web rewrites 收口
+
+- 批次标识：`TASK-0021-H5`
+- 执行 Agent：决策 Agent
+- 保护级别：**P1**
+- 是否可并行：可独立推进；不得与新的 decision_web 页面改动或部署批次混写
+
+业务白名单：
+
+1. `services/decision/decision_web/next.config.mjs`
+
+本批次目的：
+
+1. 收口 decision_web → decision 的 `/api/decision/:path*` rewrite 规则。
+2. 把默认后端入口冻结为 `http://localhost:8104`，并保留 `BACKEND_BASE_URL` 可覆盖机制。
+3. 避免把当前 rewrite 历史脏改继续挂在 `H0` Dockerfile 单文件结论或其他后端批次名下。
+
+本批次验收标准：
+
+1. rewrite 仅覆盖 `/api/decision/:path* -> ${BACKEND_BASE_URL ?? http://localhost:8104}/:path*`。
+2. 不扩展到 Dockerfile、compose、`.env.example`、页面代码或后端代码。
+3. `decision_web` 读取 next 配置时不因该文件报错，且本地最小构建/诊断口径保持可用。
+
 #### 跨服务拆任务协同说明
 
 1. `TASK-0021-H4` 只修正 decision 侧发布入口与 adapter 命名空间，不写 `services/sim-trading/**`。
@@ -342,7 +365,7 @@
 6. 后续批次 F：`services/decision/**` 通知体系，**P1**。
 7. 任意 `.env.example` 改动，必须另拆 **P0** 批次。
 8. `TASK-0021-H0` 为 `services/decision/decision_web/Dockerfile` 单文件 **P0**。
-9. `TASK-0021-H1`、`H2`、`H3`、`H4` 均为 **P1**，其中 `H1` / `H2` 共享 `state_store.py`，不得并行混写。
+9. `TASK-0021-H1`、`H2`、`H3`、`H4`、`H5` 均为 **P1**，其中 `H1` / `H2` 共享 `state_store.py`，不得并行混写。
 10. `TASK-0023-A` 为独立 sim-trading 单服务 **P1** 任务，不得借用 `H4` 白名单。
 
 ---
