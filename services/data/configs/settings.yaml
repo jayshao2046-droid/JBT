@@ -17,7 +17,7 @@ collection:
   timeout_seconds: 15
 
 storage:
-  base_path: "~/J_BotQuant/BotQuan_Data"
+  base_path: "~/jbt-data"
   minute_path: "parquet/{symbol}/1min"
   daily_path: "parquet/{symbol}/daily"
   macro_path: "macro"

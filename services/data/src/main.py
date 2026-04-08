@@ -11,9 +11,9 @@ from typing import Any, NamedTuple
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Header, Query
 
-SERVICE_NAME = "data"
-SERVICE_VERSION = "0.2.1"
-DEFAULT_STORAGE_ROOT = Path("/runtime/data")
+SERVICE_NAME = "jbt-data"
+SERVICE_VERSION = "1.0.0"
+DEFAULT_STORAGE_ROOT = Path("/data")
 MINUTE_DATA_SUBDIR = Path("futures_minute") / "1m"
 BAR_COLUMNS = (
     "datetime",

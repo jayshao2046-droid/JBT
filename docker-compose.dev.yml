@@ -89,7 +89,7 @@ services:
       JBT_SERVICE_NAME: decision
       JBT_SERVICE_PORT: "8104"
       BACKTEST_SERVICE_URL: http://backtest:8103
-      DATA_SERVICE_URL: http://data:8105
+      DATA_SERVICE_URL: http://jbt-data:8105
       SIM_TRADING_SERVICE_URL: http://sim-trading:8101
     env_file:
       - path: services/decision/.env
@@ -116,17 +116,35 @@ services:
       decision:
         condition: service_healthy
 
-  data:
+  jbt-data:
     build: ./services/data
     container_name: JBT-DATA-8105
     ports:
       - "8105:8105"
     environment:
-      JBT_SERVICE_NAME: data
+      JBT_SERVICE_NAME: jbt-data
       JBT_SERVICE_PORT: "8105"
+      DATA_STORAGE_ROOT: /data
+      JBT_DATA_LOG_DIR: /data/logs
+    env_file:
+      - path: services/data/.env
+        required: false
     volumes:
       - ./services/data:/app
-      - ./services/data/runtime:/runtime
+      - jbt-data-storage:/data
+      - ./services/data/configs:/app/services/data/configs:ro
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8105/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
 
   dashboard:
     build: ./services/dashboard
@@ -139,3 +157,7 @@ services:
     volumes:
       - ./services/dashboard:/app
       - ./services/dashboard/runtime:/runtime
+
+volumes:
+  jbt-data-storage:
+    driver: local

@@ -9,6 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import os
+
 from services.data.src.utils.exceptions import StorageError
 
 try:
@@ -24,11 +26,16 @@ except Exception:  # pragma: no cover - optional dependency fallback
     pq = None
 
 
+def _default_storage_root() -> Path:
+    """Return the data storage root from env or fallback."""
+    return Path(os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data")))
+
+
 class ParquetStorage:
     """Provide read/write/query operations for records organized by symbol and data type."""
 
     def __init__(self, base_dir: str | Path | None = None) -> None:
-        default_dir = Path.home() / "J_BotQuant" / "BotQuan_Data" / "parquet"
+        default_dir = _default_storage_root() / "parquet"
         self.base_dir = Path(base_dir).expanduser() if base_dir else default_dir
 
     def _build_file_path(self, data_type: str, symbol: str) -> Path:

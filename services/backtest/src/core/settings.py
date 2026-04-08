@@ -40,7 +40,7 @@ class Settings(BaseModel):
     log_level: str = "INFO"
     env: str = "development"
     backtest_mode: str = "online"
-    data_api_url: str = "http://data:8105"
+    data_api_url: str = "http://jbt-data:8105"
     decision_api_url: str = "http://decision:8104"
     tqsdk_edition: str = "community"
     tqsdk_account_type: str = "sim"
@@ -70,7 +70,7 @@ def get_settings() -> Settings:
         log_level=_read_str_env("JBT_LOG_LEVEL", "INFO"),
         env=_read_str_env("JBT_ENV", "development"),
         backtest_mode=_read_str_env("JBT_BACKTEST_MODE", "online"),
-        data_api_url=_read_str_env("JBT_DATA_API_URL", "http://data:8105"),
+        data_api_url=_read_str_env("JBT_DATA_API_URL", "http://jbt-data:8105"),
         decision_api_url=_read_str_env("JBT_DECISION_API_URL", "http://decision:8104"),
         tqsdk_edition=_read_str_env("TQSDK_EDITION", "community"),
         tqsdk_account_type=_read_str_env("TQSDK_ACCOUNT_TYPE", "sim"),

@@ -168,7 +168,7 @@ signal.signal(signal.SIGINT, _signal_handler)
 # ─────────────────────────────────────────────
 def _setup_scheduler_log() -> None:
     """额外添加 scheduler 专用日志文件输出。"""
-    log_dir = Path(os.path.expanduser("~/J_BotQuant/BotQuan_Data/logs"))
+    log_dir = Path(os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data"))) / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "scheduler.log"
 
@@ -806,7 +806,7 @@ def job_heartbeat(config: dict[str, Any]) -> None:
 
         # ── Studio 采集（SSH，超时 15s）────────────────────────────────
         _studio_hw_cmd = (
-            "/Users/jaybot/J_BotQuant/.venv/bin/python3 -c \""
+            "python3 -c \""
             "import psutil,json;"
             "m=psutil.virtual_memory();"
             "d={p.mountpoint:round(psutil.disk_usage(p.mountpoint).percent,1)"

@@ -1,13 +1,13 @@
 FROM python:3.11-slim
 
 LABEL service="jbt-data"
-LABEL version="0.2.0"
+LABEL version="1.0.0"
 
 WORKDIR /app
 
-# System deps
+# System deps + supervisor
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl rsync && \
+    curl rsync supervisor && \
     rm -rf /var/lib/apt/lists/*
 
 # Python deps
@@ -19,19 +19,25 @@ COPY src/ ./services/data/src/
 COPY tests/ ./services/data/tests/
 COPY configs/ ./services/data/configs/
 
-# Shared contracts (if needed at runtime)
-# COPY ../../shared/contracts/ ./shared/contracts/
+# Shared python-common (for cross-service contracts)
+COPY ../shared/python-common/ ./shared/python-common/ 2>/dev/null || true
 
-# Runtime dirs
-RUN mkdir -p /runtime/data /runtime/cache /runtime/logs /runtime/backup
+# Supervisord config
+COPY supervisord.conf /etc/supervisor/conf.d/jbt-data.conf
+
+# Data directories (will be mounted as volume in production)
+RUN mkdir -p /data/parquet /data/logs /data/cache /data/backup \
+             /var/log/supervisor
 
 ENV PYTHONPATH=/app
-ENV JBT_SERVICE_NAME=data
+ENV JBT_SERVICE_NAME=jbt-data
 ENV JBT_SERVICE_PORT=8105
+ENV DATA_STORAGE_ROOT=/data
+ENV JBT_DATA_LOG_DIR=/data/logs
 
 EXPOSE 8105
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8105/health || exit 1
 
-CMD ["python", "-m", "uvicorn", "services.data.src.main:app", "--host", "0.0.0.0", "--port", "8105"]
+CMD ["supervisord", "-n", "-c", "/etc/supervisor/conf.d/jbt-data.conf"]

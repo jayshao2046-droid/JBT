@@ -28,13 +28,13 @@ Crontab 示例 (每交易日 20:30):
 import argparse
 import json
 import logging
+import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# ── 常量 ──────────────────────────────────────────
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "BotQuan_Data"
+# ── 常量 ──────────────────────────────────────────────────
+DATA_DIR = Path(os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data")))
 PARQUET_DIR = DATA_DIR / "parquet"
 LOG_DIR = DATA_DIR / "logs"
 

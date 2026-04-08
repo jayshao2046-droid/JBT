@@ -58,7 +58,7 @@ LABEL = "Mini" if IS_MINI else ("Studio" if IS_STUDIO else _hostname)
 CN_TZ = timezone(timedelta(hours=8))
 
 # --------------- 数据目录 ---------------
-DATA_ROOT = Path.home() / "J_BotQuant" / "BotQuan_Data"
+DATA_ROOT = Path(os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data")))
 ALARM_STATE_FILE = DATA_ROOT / "logs" / "collector_alarm_state.json"
 COLLECTOR_STATUS_FILE = DATA_ROOT / "logs" / "collector_status_latest.json"
 
@@ -346,7 +346,7 @@ def get_service_status() -> dict:
 
 def get_parquet_status() -> dict:
     """Parquet 数据目录状态。"""
-    parquet_dir = Path.home() / "J_BotQuant" / "BotQuan_Data" / "parquet"
+    parquet_dir = DATA_ROOT / "parquet"
     info: dict[str, Any] = {"exists": parquet_dir.exists()}
     if not parquet_dir.exists():
         return info
@@ -884,7 +884,7 @@ def save_report(report: dict) -> Path:
 def write_heartbeat() -> None:
     """写入心跳文件。"""
     suffix = ".mini_heartbeat" if IS_MINI else ".studio_heartbeat"
-    hb = Path.home() / "J_BotQuant" / suffix
+    hb = DATA_ROOT / suffix
     hb.write_text(datetime.now(CN_TZ).isoformat())
 
 
