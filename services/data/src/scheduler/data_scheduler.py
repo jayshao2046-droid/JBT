@@ -50,6 +50,7 @@ if _env_file.exists():
 
 from services.data.src.utils.config import get_config
 from services.data.src.utils.logger import get_logger
+from services.data.src.utils.trading_calendar import GlobalTradingCalendar, MarketSnapshot
 
 # ─────────────────────────────────────────────
 # 全局状态
@@ -74,6 +75,8 @@ def _get_notifier(config: dict[str, Any] | None = None) -> Any:
 _dispatcher = None
 # 24h 连续采集器不发启动/完成通知
 _SILENT_COLLECTORS = {"新闻API", "RSS聚合", "飞书新闻推送", "情绪指数"}
+_calendar = GlobalTradingCalendar()
+_last_snapshot: MarketSnapshot | None = None
 
 
 def _get_dispatcher() -> Any:
@@ -86,6 +89,61 @@ def _get_dispatcher() -> Any:
         except Exception as exc:
             logger.warning("NotifierDispatcher 初始化失败: %s", exc)
     return _dispatcher
+
+
+def _emit_market_transition_notifications() -> None:
+    """检测开盘/休盘状态变更并推送飞书通知。
+
+    规则：
+    - 开盘：发送“开盘采集开始”
+    - 休盘：发送“休盘完成采集”
+    - 渠道：仅飞书（不发邮件）
+    """
+    global _last_snapshot
+
+    d = _get_dispatcher()
+    if not d:
+        return
+
+    try:
+        from services.data.src.notify.dispatcher import DataEvent, NotifyType
+        _calendar.refresh()
+        cur = _calendar.snapshot(datetime.now())
+        transitions = _calendar.detect_transitions(_last_snapshot, cur)
+
+        for tr in transitions:
+            if tr.to_open:
+                title = f"{tr.market} 开盘采集开始"
+                body_rows = [
+                    ("市场", tr.market),
+                    ("状态", "开盘"),
+                    ("动作", "启动分钟采集"),
+                    ("原因", tr.reason),
+                    ("时间", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                ]
+            else:
+                title = f"{tr.market} 休盘完成采集"
+                body_rows = [
+                    ("市场", tr.market),
+                    ("状态", "休盘"),
+                    ("动作", "停止分钟采集，等待下一开盘"),
+                    ("原因", tr.reason),
+                    ("时间", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                ]
+
+            d.dispatch(DataEvent(
+                event_code="market_session_transition",
+                notify_type=NotifyType.NOTIFY,
+                title=title,
+                body_md=title,
+                body_rows=body_rows,
+                source_name="global_calendar",
+                channels={"feishu"},
+            ))
+
+        _last_snapshot = cur
+    except Exception as exc:
+        logger.warning("市场状态提醒失败: %s", exc)
 
 
 def _signal_handler(signum: int, frame: Any) -> None:
@@ -150,16 +208,15 @@ def _is_futures_night_session(now: datetime | None = None) -> bool:
 def _is_trading_session(now: datetime | None = None) -> bool:
     """国内期货任意交易时段 (日盘+夜盘)."""
     now = now or datetime.now()
-    return _is_futures_day_session(now) or _is_futures_night_session(now)
+    _calendar.refresh()
+    return _calendar.snapshot(now).futures_cn.is_open
 
 
 def _is_stock_trading_session(now: datetime | None = None) -> bool:
     """A股交易时段: 09:30-11:30, 13:00-15:00 (周一到周五)."""
     now = now or datetime.now()
-    if now.weekday() >= 5:
-        return False
-    t = now.hour * 60 + now.minute
-    return (570 <= t <= 690) or (780 <= t <= 900)
+    _calendar.refresh()
+    return _calendar.snapshot(now).stocks_cn.is_open
 
 
 def _is_overseas_trading_hours(now: datetime | None = None) -> bool:
@@ -170,12 +227,8 @@ def _is_overseas_trading_hours(now: datetime | None = None) -> bool:
     实际采用: 周一06:00 到 周六05:00 全时段采集。
     """
     now = now or datetime.now()
-    # 周六05:00后和周日全天不交易
-    if now.weekday() == 5 and now.hour >= 5:
-        return False
-    if now.weekday() == 6:
-        return False
-    return True
+    _calendar.refresh()
+    return _calendar.snapshot(now).overseas.is_open
 
 
 # ─────────────────────────────────────────────
@@ -191,10 +244,13 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
         try:
             from services.data.src.notify.dispatcher import DataEvent, NotifyType
             d.dispatch(DataEvent(
+                event_code="collector_start",
                 title=f"{name} 启动",
                 notify_type=NotifyType.NOTIFY,
+                body_md=f"{name} 启动",
                 body_rows=[("采集器", name), ("启动时间", datetime.now().strftime("%H:%M:%S"))],
-                dedup_key=f"start:{name}",
+                source_name=name,
+                channels={"feishu"},
             ))
         except Exception:
             pass
@@ -211,12 +267,30 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
         if d and not silent:
             try:
                 from services.data.src.notify.dispatcher import DataEvent, NotifyType
+                channels = {"feishu", "email"}
+                if name in {"持仓仓单日报"}:
+                    # 明细仅邮件；飞书只发摘要（下面追加一条 feishu-only）。
+                    channels = {"email"}
                 d.dispatch(DataEvent(
+                    event_code="collector_done",
                     title=f"{name} 完成",
                     notify_type=NotifyType.NOTIFY,
+                    body_md=f"{name} 完成",
                     body_rows=[("采集器", name), ("记录数", f"{total:,} 条"), ("耗时", f"{elapsed}s")],
-                    dedup_key=f"done:{name}",
+                    source_name=name,
+                    channels=channels,
                 ))
+
+                if name in {"持仓仓单日报"}:
+                    d.dispatch(DataEvent(
+                        event_code="collector_done_feishu_summary",
+                        title=f"{name} 完成（摘要）",
+                        notify_type=NotifyType.NOTIFY,
+                        body_md=f"{name} 完成（摘要）",
+                        body_rows=[("采集器", name), ("状态", "已完成"), ("明细", "仓单/持仓明细已发送邮件")],
+                        source_name=name,
+                        channels={"feishu"},
+                    ))
             except Exception:
                 pass
 
@@ -233,10 +307,13 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
             try:
                 from services.data.src.notify.dispatcher import DataEvent, NotifyType
                 d.dispatch(DataEvent(
+                    event_code="collector_failed",
                     title=f"{name} 采集失败",
                     notify_type=NotifyType.P2,
+                    body_md=f"{name} 采集失败",
                     body_rows=[("采集器", name), ("错误", err_msg)],
-                    dedup_key=f"fail:{name}",
+                    source_name=name,
+                    channels={"feishu", "email"},
                 ))
             except Exception:
                 pass
@@ -398,6 +475,11 @@ def job_minute_kline(config: dict[str, Any]) -> None:
 
 def job_daily_kline(config: dict[str, Any]) -> None:
     """日线K线 — 每日 17:00。"""
+    _calendar.refresh()
+    ok, reason = _calendar.is_cn_trading_day(datetime.now())
+    if not ok:
+        logger.info("跳过日线K线: %s", reason)
+        return
     from services.data.src.scheduler.pipeline import run_daily_pipeline
     symbols = _get_domestic_symbols()
     _safe_run("日线K线", run_daily_pipeline, symbols=symbols, config=config)
@@ -410,6 +492,11 @@ def job_overseas_kline(config: dict[str, Any]) -> None:
     06:00 北京 = 美国日盘 15:30-21:00 CT 结束后约1h。
     LME 金属单独由 job_overseas_kline_lme 在 02:00 采集。
     """
+    _calendar.refresh()
+    ok, reason = _calendar.is_us_trading_day(datetime.now())
+    if not ok:
+        logger.info("跳过外盘日线(美/欧): %s", reason)
+        return
     from services.data.src.scheduler.pipeline import run_overseas_daily_pipeline
     # 过滤掉 LME 品种（由 job_overseas_kline_lme 处理）
     all_syms = _get_overseas_symbols()
@@ -424,6 +511,11 @@ def job_overseas_kline_lme(config: dict[str, Any]) -> None:
     02:00 北京采集已是收盘后1h，数据已稳定。
     品种: AHD(铝/AL) / ZSD(锌/ZN) / NID(镍/SS不锈钢) / CAD(铜/CU) / PBD / SND
     """
+    _calendar.refresh()
+    ok, reason = _calendar.is_lme_trading_day(datetime.now())
+    if not ok:
+        logger.info("跳过LME金属日线: %s", reason)
+        return
     from services.data.src.scheduler.pipeline import run_overseas_daily_pipeline
     lme_syms = [s for s in _get_overseas_symbols() if s.startswith("LME.")]
     _safe_run("LME金属日线", run_overseas_daily_pipeline, symbols=lme_syms, config=config)
@@ -502,6 +594,11 @@ def job_tushare_futures(config: dict[str, Any]) -> None:
     数据内容: fut_daily / fut_holding / fut_wsr / fut_settle
     ts_code 由 _build_tushare_ts_codes() 按当前日期动态生成。
     """
+    _calendar.refresh()
+    ok, reason = _calendar.is_cn_trading_day(datetime.now())
+    if not ok:
+        logger.info("跳过Tushare期货五合一: %s", reason)
+        return
     from services.data.src.scheduler.pipeline import run_tushare_futures_pipeline
     today = datetime.now().strftime("%Y%m%d")
     ts_codes = _build_tushare_ts_codes()
@@ -523,6 +620,11 @@ def job_macro(config: dict[str, Any]) -> None:
 
 def job_position(config: dict[str, Any]) -> None:
     """持仓/仓单 — 每日 15:30。"""
+    _calendar.refresh()
+    ok, reason = _calendar.is_cn_trading_day(datetime.now())
+    if not ok:
+        logger.info("跳过持仓/仓单: %s", reason)
+        return
     from services.data.src.scheduler.pipeline import run_position_pipeline
     _safe_run("持仓仓单日报", run_position_pipeline, config=config)
 
@@ -555,6 +657,11 @@ def job_shipping(config: dict[str, Any]) -> None:
     """海运物流 — 每日 09:00。"""
     from services.data.src.scheduler.pipeline import run_shipping_pipeline
     _safe_run("海运物流", run_shipping_pipeline, config=config)
+
+
+def job_market_session_watch(config: dict[str, Any]) -> None:
+    """每分钟检测一次全球市场开休盘状态并飞书提醒。"""
+    _emit_market_transition_notifications()
 
 
 def job_feishu_news_hourly(config: dict[str, Any]) -> None:
@@ -1013,6 +1120,14 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
 
     # 预初始化通知器
     _get_notifier(config)
+
+    # 初始化市场快照，并每分钟检测一次开/休盘状态变化。
+    _emit_market_transition_notifications()
+    scheduler.add_job(
+        job_market_session_watch, IntervalTrigger(minutes=1),
+        args=[config], id="market_session_watch", name="市场开休盘状态监听",
+        next_run_time=datetime.now(),
+    )
 
     # [DEPRECATED LIFTED] 分钟内盘K线: 每2分钟，交易时段门控在函数内。
     # 已迁回 JBT APScheduler，停用 com.botquant.futures.minute plist。

@@ -72,6 +72,8 @@ class DataEvent:
     trace_md: str = ""
     trace_rows: list[tuple[str, str]] = field(default_factory=list)
     source_name: str = ""
+    # 通道路由: {"feishu", "email"}; 默认双通道。
+    channels: set[str] = field(default_factory=lambda: {"feishu", "email"})
     # 飞书操作按钮 (P0 用)
     action_buttons: list[dict[str, Any]] = field(default_factory=list)
 
@@ -144,20 +146,30 @@ class NotifierDispatcher:
                 return True
             self._dedup_cache[event.dedup_key] = now
 
-        # 发送飞书
-        webhook_url = _webhook_for_type(event.notify_type)
-        feishu_ok = self._feishu.send(
-            webhook_url=webhook_url,
-            event=event,
-        )
+        channels = event.channels or {"feishu", "email"}
 
-        # 发送邮件（P0/P1 立即发邮件，其他只在飞书失败时降级发邮件）
+        # 发送飞书（按 channels 路由）
+        feishu_ok = True
+        if "feishu" in channels:
+            webhook_url = _webhook_for_type(event.notify_type)
+            feishu_ok = self._feishu.send(
+                webhook_url=webhook_url,
+                event=event,
+            )
+
+        # 发送邮件（按 channels 路由）
         email_ok = True
-        if event.notify_type in (NotifyType.P0, NotifyType.P1):
-            email_ok = self._email.send(event=event)
-        elif not feishu_ok:
-            logger.warning("feishu failed for %s, degrading to email", event.event_code)
-            email_ok = self._email.send(event=event)
+        if "email" in channels:
+            # 默认策略：P0/P1 总是发；其他仅在飞书失败时降级发
+            if event.notify_type in (NotifyType.P0, NotifyType.P1):
+                email_ok = self._email.send(event=event)
+            elif "feishu" in channels:
+                if not feishu_ok:
+                    logger.warning("feishu failed for %s, degrading to email", event.event_code)
+                    email_ok = self._email.send(event=event)
+            else:
+                # 仅邮件模式时直接发送
+                email_ok = self._email.send(event=event)
 
         # 更新通道状态
         if feishu_ok and email_ok:
