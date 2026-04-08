@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -123,6 +124,17 @@ class RiskPresetUpdateRequest(BaseModel):
     enabled: bool
     commission: float = 1.0
     slippage_ticks: int = 1
+
+
+class StrategyPublishRequest(BaseModel):
+    strategy_id: str
+    strategy_version: str
+    package_hash: str
+    publish_target: str
+    allowed_targets: list[str]
+    lifecycle_status: str
+    published_at: datetime
+    live_visibility_mode: str
 
 
 def _build_local_virtual_account() -> Dict[str, Any]:
@@ -404,4 +416,26 @@ def get_account():
         "connected": True,
         "local_virtual": _build_local_virtual_account(),
         "ctp_snapshot": _build_ctp_snapshot(True, acct),
+    }
+
+
+@router.post("/strategy/publish", status_code=202)
+def receive_strategy_publish(req: StrategyPublishRequest):
+    if req.publish_target != "sim-trading":
+        raise HTTPException(status_code=400, detail="publish_target must be sim-trading")
+    if "sim-trading" not in req.allowed_targets:
+        raise HTTPException(status_code=400, detail="allowed_targets must include sim-trading")
+    if req.lifecycle_status != "publish_pending":
+        raise HTTPException(status_code=400, detail="lifecycle_status must be publish_pending")
+    if req.live_visibility_mode != "locked_visible":
+        raise HTTPException(status_code=400, detail="live_visibility_mode must be locked_visible")
+
+    return {
+        "accepted": True,
+        "target": "sim-trading",
+        "strategy_id": req.strategy_id,
+        "strategy_version": req.strategy_version,
+        "package_hash": req.package_hash,
+        "received_at": datetime.utcnow().isoformat() + "Z",
+        "message": "strategy package accepted",
     }
