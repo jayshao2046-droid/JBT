@@ -71,6 +71,23 @@ def _get_notifier(config: dict[str, Any] | None = None) -> Any:
     return _notifier
 
 
+_dispatcher = None
+# 24h 连续采集器不发启动/完成通知
+_SILENT_COLLECTORS = {"新闻API", "RSS聚合", "飞书新闻推送", "情绪指数"}
+
+
+def _get_dispatcher() -> Any:
+    """获取 NotifierDispatcher 单例。"""
+    global _dispatcher
+    if _dispatcher is None:
+        try:
+            from services.data.src.notify.dispatcher import get_dispatcher
+            _dispatcher = get_dispatcher()
+        except Exception as exc:
+            logger.warning("NotifierDispatcher 初始化失败: %s", exc)
+    return _dispatcher
+
+
 def _signal_handler(signum: int, frame: Any) -> None:
     """优雅退出信号处理。"""
     global _running
@@ -166,6 +183,22 @@ def _is_overseas_trading_hours(now: datetime | None = None) -> bool:
 # ─────────────────────────────────────────────
 def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
     """安全执行管道，捕获异常并记录日志 + 通知."""
+    d = _get_dispatcher()
+    silent = name in _SILENT_COLLECTORS
+
+    # 发送启动通知（排除 24h 连续采集器）
+    if d and not silent:
+        try:
+            from services.data.src.notify.dispatcher import DataEvent, NotifyType
+            d.dispatch(DataEvent(
+                title=f"{name} 启动",
+                notify_type=NotifyType.NOTIFY,
+                body_rows=[("采集器", name), ("启动时间", datetime.now().strftime("%H:%M:%S"))],
+                dedup_key=f"start:{name}",
+            ))
+        except Exception:
+            pass
+
     try:
         logger.info("▶ 开始执行: %s", name)
         t0 = time.time()
@@ -173,15 +206,44 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
         elapsed = round(time.time() - t0, 2)
         total = sum(result.values()) if isinstance(result, dict) else 0
         logger.info("✅ %s 完成: %d 条记录, 耗时 %ss", name, total, elapsed)
-        # 记录到通知器
+
+        # 发送完成通知
+        if d and not silent:
+            try:
+                from services.data.src.notify.dispatcher import DataEvent, NotifyType
+                d.dispatch(DataEvent(
+                    title=f"{name} 完成",
+                    notify_type=NotifyType.NOTIFY,
+                    body_rows=[("采集器", name), ("记录数", f"{total:,} 条"), ("耗时", f"{elapsed}s")],
+                    dedup_key=f"done:{name}",
+                ))
+            except Exception:
+                pass
+
+        # 记录到旧通知器
         n = _get_notifier(kwargs.get("config"))
         if n:
             n.record_result(name, records=total, elapsed=elapsed, success=True)
     except Exception:
         logger.error("❌ %s 失败:\n%s", name, traceback.format_exc())
+        err_msg = traceback.format_exc()[-200:]
+
+        # 发送失败告警（所有采集器都发）
+        if d:
+            try:
+                from services.data.src.notify.dispatcher import DataEvent, NotifyType
+                d.dispatch(DataEvent(
+                    title=f"{name} 采集失败",
+                    notify_type=NotifyType.P2,
+                    body_rows=[("采集器", name), ("错误", err_msg)],
+                    dedup_key=f"fail:{name}",
+                ))
+            except Exception:
+                pass
+
         n = _get_notifier(kwargs.get("config"))
         if n:
-            n.record_result(name, records=0, elapsed=0, success=False, error=traceback.format_exc()[-200:])
+            n.record_result(name, records=0, elapsed=0, success=False, error=err_msg)
 
 
 # ─────────────────────────────────────────────
@@ -515,28 +577,37 @@ def job_heartbeat(config: dict[str, Any]) -> None:
         # from src.monitor.notify_feishu import FeishuNotifier
 
         now_str = datetime.now().strftime("%H:%M")
-        card = heartbeat_card(
-            time_str=now_str,
-            mini_cpu=mini_cpu,
-            mini_mem=mini_mem,
-            mini_disk=mini_disk,
-            studio_available=studio_available,
-            studio_cpu=studio_cpu,
-            studio_mem=studio_mem,
-            studio_main_disk=studio_main_disk,
-            studio_ext_disk=studio_ext_disk,
-            sources=freshness,
-            mini_processes=mini_processes,
-            studio_processes=studio_processes,
-            has_issues=has_issues,
-        )
-        webhook = _os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or _os.environ.get("FEISHU_WEBHOOK_URL") or ""
-        if webhook:
-            notifier = FeishuNotifier(webhook_url=webhook, keyword="BotQuant 报警", mock_mode=False)
-            res = notifier.send_card(card)
-            logger.info("✅ 2h 进程监控已发送: ok=%s", res.ok)
+
+        # ── 使用新通知系统 ─────────────────────────────────────────
+        d = _get_dispatcher()
+        if d:
+            try:
+                from services.data.src.notify import card_templates as ct
+
+                card = ct.device_health_card(
+                    cpu_pct=mini_cpu,
+                    mem_pct=mini_mem,
+                    disk_pct=mini_disk,
+                    processes=[
+                        {"label": p["label"], "ok": p["ok"]} for p in mini_processes
+                    ] + ([
+                        {"label": p["label"], "ok": p["ok"]} for p in studio_processes
+                    ] if studio_available else []),
+                    sources=freshness,
+                    has_issues=has_issues,
+                )
+                from services.data.src.notify.feishu import FeishuSender
+                sender = FeishuSender()
+                webhook = _os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or _os.environ.get("FEISHU_WEBHOOK_URL") or ""
+                if webhook:
+                    sender.send_card(webhook, card)
+                    logger.info("✅ 2h 进程监控已发送 (新通知系统)")
+                else:
+                    logger.warning("⚠️ 无飞书 webhook，跳过进程监控推送")
+            except Exception as _e:
+                logger.error("新通知系统发送失败: %s, 回退旧方式", _e)
         else:
-            logger.warning("⚠️ 无飞书 webhook，跳过进程监控推送")
+            logger.warning("⚠️ dispatcher 不可用，跳过进程监控推送")
     except Exception:
         logger.error("❌ 2h 进程监控异常:\n%s", traceback.format_exc())
 
@@ -598,6 +669,89 @@ def job_sla_reset(config: dict[str, Any]) -> None:
 def job_daily_reset(config: dict[str, Any]) -> None:
     """每日统计重置 — 00:00 清零当日计数器。"""
     n = _get_notifier(config)
+
+
+def job_daily_email_report(config: dict[str, Any]) -> None:
+    """每日邮件日报 — 09:30 + 16:30，发送完整数据端健康报告。"""
+    try:
+        logger.info("▶ 开始执行: 邮件日报")
+        import importlib.util
+        from services.data.src.notify.email_notify import EmailSender, build_daily_report_html
+
+        # 加载 health_check 获取设备指标
+        _hc_path = str(PROJECT_ROOT / "scripts" / "health_check.py")
+        _spec = importlib.util.spec_from_file_location("health_check_mod", _hc_path)
+        _mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
+        _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+
+        cpu = _mod.get_cpu_info()
+        mem = _mod.get_memory_info()
+        disks = _mod.get_disk_info()
+        freshness = _mod.get_collector_freshness() if _mod.IS_MINI else []
+
+        sources_freshness = [
+            {"label": s.get("label", s.get("name", "")), "ok": s.get("ok", False),
+             "age_str": s.get("age_str", "")} for s in freshness
+        ]
+
+        # 进程状态
+        import subprocess as _sp
+        try:
+            plist_out = _sp.run(["launchctl", "list"], capture_output=True, text=True, timeout=10).stdout
+        except Exception:
+            plist_out = ""
+        procs = [
+            {"label": label, "ok": pname in plist_out, "uptime": ""}
+            for label, _, pname in [
+                ("数据调度", "data_scheduler.py", "com.botquant.data_scheduler"),
+                ("健康检查", "health_check.py", "com.botquant.health"),
+                ("新闻采集", "news_scheduler.py", "com.botquant.news"),
+            ]
+        ]
+
+        ok_count = sum(1 for s in freshness if s.get("ok"))
+        total = len(freshness)
+        html = build_daily_report_html(
+            total_rounds=total,
+            success_rate=ok_count / max(total, 1) * 100,
+            failed_collectors=[s.get("label", "") for s in freshness if not s.get("ok") and not s.get("skipped")],
+            total_records=0,
+            sources_freshness=sources_freshness,
+            cpu_pct=float(cpu.get("usage_percent", 0)),
+            mem_pct=float(mem.get("used_percent", 0)),
+            disk_pct=float(disks[0]["used_percent"]) if disks else 0,
+            process_status=procs,
+            errors=[],
+            news_collected=0,
+            news_pushed=0,
+            breaking_count=0,
+            health_score=min(100, int(ok_count / max(total, 1) * 100)),
+        )
+
+        sender = EmailSender()
+        period = "晨报" if datetime.now().hour < 12 else "午报"
+        ok = sender.send_daily_report(html=html, report_type=period)
+        if ok:
+            logger.info("✅ 邮件日报(%s)已发送", period)
+        else:
+            logger.warning("⚠️ 邮件日报(%s)发送失败", period)
+    except Exception:
+        logger.error("❌ 邮件日报异常:\n%s", traceback.format_exc())
+
+
+def job_news_push_batch(config: dict[str, Any]) -> None:
+    """新闻批量推送 — 每30分钟，汇总重大新闻推送飞书。"""
+    try:
+        logger.info("▶ 开始执行: 新闻批量推送")
+        from services.data.src.notify.news_pusher import NewsPusher
+        pusher = NewsPusher()
+        stats = pusher.flush()
+        if stats and stats.get("pushed", 0) > 0:
+            logger.info("✅ 新闻推送: %d 条", stats["pushed"])
+        else:
+            logger.info("✅ 新闻推送: 无新内容")
+    except Exception:
+        logger.error("❌ 新闻推送异常:\n%s", traceback.format_exc())
     if n:
         n.reset_daily()
         logger.info("✅ 每日采集计数器已重置")
@@ -847,6 +1001,21 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
     scheduler.add_job(
         job_nas_backup, CronTrigger(hour=3, minute=0),
         args=[config], id="nas_backup", name="NAS备份",
+    )
+    # ── 新通知系统 ──
+    # 邮件日报: 09:30 + 16:30
+    scheduler.add_job(
+        job_daily_email_report, CronTrigger(hour=9, minute=30, day_of_week="mon-fri"),
+        args=[config], id="email_morning", name="邮件晨报",
+    )
+    scheduler.add_job(
+        job_daily_email_report, CronTrigger(hour=16, minute=30, day_of_week="mon-fri"),
+        args=[config], id="email_afternoon", name="邮件午报",
+    )
+    # 新闻批量推送: 每30分钟
+    scheduler.add_job(
+        job_news_push_batch, IntervalTrigger(minutes=30),
+        args=[config], id="news_push_batch", name="新闻批量推送",
     )
     # 强制平仓 — 日盘 14:55 (周一到周五)
     scheduler.add_job(

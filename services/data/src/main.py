@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import hmac
 import os
 import re
+import subprocess
+import time
 from pathlib import Path
 from typing import Any, NamedTuple
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Header, Query
 
 SERVICE_NAME = "data"
-SERVICE_VERSION = "0.2.0"
+SERVICE_VERSION = "0.2.1"
 DEFAULT_STORAGE_ROOT = Path("/runtime/data")
 MINUTE_DATA_SUBDIR = Path("futures_minute") / "1m"
 BAR_COLUMNS = (
@@ -309,6 +312,98 @@ def _serialize_bars(frame: pd.DataFrame) -> list[dict[str, Any]]:
             }
         )
     return bars
+
+
+# ─────────────────────────────────────────────
+# 运维 API（P0 飞书按钮回调 + 手动触发）
+# ─────────────────────────────────────────────
+_OPS_SECRET = os.environ.get("DATA_OPS_SECRET", "")
+
+
+def _verify_ops_token(token: str | None) -> None:
+    """校验运维操作令牌。"""
+    if not _OPS_SECRET:
+        raise HTTPException(status_code=503, detail="ops not configured")
+    if not token or not hmac.compare_digest(token, _OPS_SECRET):
+        raise HTTPException(status_code=403, detail="invalid ops token")
+
+
+@app.post("/api/v1/ops/restart-collector")
+def ops_restart_collector(
+    collector: str = Query(..., min_length=1),
+    x_ops_token: str | None = Header(None, alias="X-Ops-Token"),
+) -> dict[str, Any]:
+    """重启指定采集器（通过 launchctl 重新加载 plist）。
+
+    由飞书 P0 按钮触发或命令行手动调用。
+    """
+    _verify_ops_token(x_ops_token)
+
+    # 安全白名单
+    _PLIST_MAP = {
+        "data_scheduler": "com.botquant.data_scheduler",
+        "news": "com.botquant.news",
+        "health": "com.botquant.health",
+        "futures_minute": "com.botquant.futures.minute",
+        "futures_eod": "com.botquant.futures.eod",
+        "overseas_minute": "com.botquant.overseas.minute",
+        "overseas_daily": "com.botquant.overseas.daily",
+        "macro": "com.botquant.macro",
+        "tushare": "com.botquant.tushare",
+        "sentiment": "com.botquant.sentiment",
+        "shipping": "com.botquant.shipping",
+        "stock_minute": "com.botquant.stock.minute",
+        "volatility_cboe": "com.botquant.volatility.cboe",
+    }
+
+    plist_id = _PLIST_MAP.get(collector)
+    if not plist_id:
+        raise HTTPException(status_code=422, detail=f"unknown collector: {collector}")
+
+    plist_path = Path.home() / "Library" / "LaunchAgents" / f"{plist_id}.plist"
+    if not plist_path.exists():
+        raise HTTPException(status_code=404, detail=f"plist not found: {plist_id}")
+
+    # kickstart = unload + load
+    try:
+        subprocess.run(
+            ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{plist_id}"],
+            capture_output=True, text=True, timeout=15,
+        )
+        return {"status": "ok", "collector": collector, "plist": plist_id, "action": "restart"}
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="restart timed out")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/v1/ops/auto-remediate")
+def ops_auto_remediate(
+    x_ops_token: str | None = Header(None, alias="X-Ops-Token"),
+) -> dict[str, Any]:
+    """触发自动修复脚本。"""
+    _verify_ops_token(x_ops_token)
+
+    remediate_script = Path(__file__).resolve().parents[1] / "scripts" / "health_remediate.py"
+    if not remediate_script.exists():
+        raise HTTPException(status_code=404, detail="remediate script not found")
+
+    try:
+        import sys
+        result = subprocess.run(
+            [sys.executable, str(remediate_script)],
+            capture_output=True, text=True, timeout=120,
+        )
+        return {
+            "status": "ok" if result.returncode == 0 else "error",
+            "returncode": result.returncode,
+            "stdout": result.stdout[-500:],
+            "stderr": result.stderr[-200:],
+        }
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="remediation timed out")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 if __name__ == "__main__":

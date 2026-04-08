@@ -576,82 +576,99 @@ def evaluate_alarms(cpu: dict, mem: dict, disks: list, gpus: list, *, force_p0: 
 
 # ===================== 飞书 P0 立即告警 =====================
 def send_p0_alert(report: dict) -> None:
-    """发送 P0 级别立即告警到飞书。"""
-    # from src.monitor.notify_feishu import FeishuNotifier
-
+    """发送 P0 级别立即告警到飞书（使用新通知系统）。"""
     webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or ""
     if not webhook:
         print("[警告] 无飞书 webhook，跳过 P0 告警")
         return
-
-    notifier = FeishuNotifier(webhook_url=webhook, keyword="BotQuant 报警", mock_mode=False)
 
     alarms = report.get("alarms", [])
     p0_list = [a for a in alarms if a["level"] == "P0"]
     if not p0_list:
         return
 
-    now_str = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M")
-    alarm_lines = "\n".join(f"  - {a['metric']}: {a['value']} ({a['rule']})" for a in p0_list)
-
-    card = {
-        "header": {
-            "title": {"tag": "plain_text", "content": f"🚨 P0 紧急告警 — {report['device_label']}"},
-            "template": "red",
-        },
-        "elements": [
-            {"tag": "div", "text": {"tag": "lark_md", "content": f"**设备:** {report['device_label']}\n**时间:** {now_str}\n**告警数:** {len(p0_list)}"}},
-            {"tag": "div", "text": {"tag": "lark_md", "content": f"**告警详情:**\n{alarm_lines}"}},
-            {"tag": "div", "text": {"tag": "lark_md", "content": f"**CPU:** {report['cpu']['usage_percent']}% | **内存:** {report['memory']['used_percent']}%"}},
-            {"tag": "hr"},
-            {"tag": "div", "text": {"tag": "lark_md", "content": "系统正在尝试自动修复，修复完成后将发送确认消息。"}},
-        ],
-    }
-
     try:
-        res = notifier.send_card(card)
-        print(f"[飞书] P0 告警已发送: ok={res.ok}")
+        from services.data.src.notify import card_templates as ct
+        from services.data.src.notify.feishu import FeishuSender
+
+        alarm_lines = "\n".join(f"  - {a['metric']}: {a['value']} ({a['rule']})" for a in p0_list)
+        ops_base = os.environ.get("DATA_OPS_URL", "http://localhost:8105")
+        ops_token = os.environ.get("DATA_OPS_SECRET", "")
+
+        body_md = (
+            f"**设备:** {report['device_label']}\n"
+            f"**告警数:** {len(p0_list)}\n"
+            f"**CPU:** {report['cpu']['usage_percent']}%\n"
+            f"**内存:** {report['memory']['used_percent']}%\n\n"
+            f"**告警详情:**\n{alarm_lines}"
+        )
+        card = ct.alert_p0_with_buttons(
+            title=f"P0 紧急告警 — {report['device_label']}",
+            body_md=body_md,
+            ops_base_url=ops_base,
+            ops_token=ops_token,
+        )
+        sender = FeishuSender()
+        sender.send_card(webhook, card)
+        print(f"[飞书] P0 告警已发送 (新通知系统)")
     except Exception as e:
         print(f"[飞书] P0 告警发送失败: {e}")
+        # 回退: 尝试旧方式
+        try:
+            notifier = FeishuNotifier(webhook_url=webhook, keyword="BotQuant 报警", mock_mode=False)
+            now_str = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M")
+            alarm_lines = "\n".join(f"  - {a['metric']}: {a['value']} ({a['rule']})" for a in p0_list)
+            card = {
+                "header": {
+                    "title": {"tag": "plain_text", "content": f"🚨 P0 紧急告警 — {report['device_label']}"},
+                    "template": "red",
+                },
+                "elements": [
+                    {"tag": "div", "text": {"tag": "lark_md", "content": f"**设备:** {report['device_label']}\n**时间:** {now_str}\n**告警数:** {len(p0_list)}"}},
+                    {"tag": "div", "text": {"tag": "lark_md", "content": f"**告警详情:**\n{alarm_lines}"}},
+                    {"tag": "hr"},
+                ],
+            }
+            notifier.send_card(card)
+        except Exception:
+            pass
 
 
 # ===================== 飞书修复确认消息 =====================
 def send_remediation_confirm(report: dict, remediation_results: list) -> None:
-    """修复完成后发送确认消息。"""
-    # from src.monitor.notify_feishu import FeishuNotifier
-
+    """修复完成后发送确认消息（使用新通知系统）。"""
     webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or ""
     if not webhook:
         return
 
-    notifier = FeishuNotifier(webhook_url=webhook, keyword="BotQuant 报警", mock_mode=False)
-
-    now_str = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M")
-    all_ok = all(r.get("result") == "成功" for r in remediation_results)
-    status_emoji = "✅" if all_ok else "⚠️"
-    status_text = "全部恢复正常" if all_ok else "部分问题仍需人工处理"
-
-    action_lines = "\n".join(
-        f"  - {r['action']}: **{r['result']}** {r.get('detail', '')}"
-        for r in remediation_results
-    )
-
-    card = {
-        "header": {
-            "title": {"tag": "plain_text", "content": f"{status_emoji} 修复确认 — {report['device_label']}"},
-            "template": "green" if all_ok else "orange",
-        },
-        "elements": [
-            {"tag": "div", "text": {"tag": "lark_md", "content": f"**设备:** {report['device_label']}\n**时间:** {now_str}\n**状态:** {status_text}"}},
-            {"tag": "div", "text": {"tag": "lark_md", "content": f"**修复动作:**\n{action_lines}"}},
-            {"tag": "hr"},
-            {"tag": "div", "text": {"tag": "lark_md", "content": "如仍有异常，请在飞书群中 @管理员 处理。" if not all_ok else "系统已恢复正常运行。"}},
-        ],
-    }
-
     try:
-        res = notifier.send_card(card)
-        print(f"[飞书] 修复确认已发送: ok={res.ok}")
+        from services.data.src.notify.feishu import FeishuSender
+        sender = FeishuSender()
+
+        all_ok = all(r.get("result") == "成功" for r in remediation_results)
+        status_emoji = "✅" if all_ok else "⚠️"
+        status_text = "全部恢复正常" if all_ok else "部分问题仍需人工处理"
+        now_str = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M")
+
+        action_lines = "\n".join(
+            f"  - {r['action']}: **{r['result']}** {r.get('detail', '')}"
+            for r in remediation_results
+        )
+
+        card = {
+            "header": {
+                "title": {"tag": "plain_text", "content": f"{status_emoji} 修复确认 — {report['device_label']}"},
+                "template": "green" if all_ok else "orange",
+            },
+            "elements": [
+                {"tag": "div", "text": {"tag": "lark_md", "content": f"**设备:** {report['device_label']}\n**时间:** {now_str}\n**状态:** {status_text}"}},
+                {"tag": "div", "text": {"tag": "lark_md", "content": f"**修复动作:**\n{action_lines}"}},
+                {"tag": "hr"},
+                {"tag": "div", "text": {"tag": "lark_md", "content": "如仍有异常，请在飞书群中 @管理员 处理。" if not all_ok else "系统已恢复正常运行。"}},
+            ],
+        }
+        sender.send_card(webhook, card)
+        print(f"[飞书] 修复确认已发送 (新通知系统)")
     except Exception as e:
         print(f"[飞书] 修复确认发送失败: {e}")
 
@@ -662,54 +679,61 @@ def send_collector_alert(
     cpu: dict,
     mem: dict,
 ) -> None:
-    """按告警级别发送采集源 P1/P0 卡片到飞书。"""
-    # from src.monitor.notify_feishu import FeishuNotifier
-    # from src.monitor.feishu_card_templates import collector_alert_card
-
+    """按告警级别发送采集源 P1/P0 卡片到飞书（使用新通知系统）。"""
     webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or ""
     if not webhook:
         print("[警告] 无飞书 webhook，跳过采集源告警")
         return
 
-    notifier = FeishuNotifier(webhook_url=webhook, keyword="BotQuant 报警", mock_mode=False)
+    try:
+        from services.data.src.notify import card_templates as ct
+        from services.data.src.notify.feishu import FeishuSender
+        sender = FeishuSender()
 
-    # 按级别分组，同级合并发送
-    for level in ("P0", "P1"):
-        group = [a for a in alarms if a["level"] == level]
-        if not group:
-            continue
-        is_intraday = any(a.get("is_intraday") for a in group)
-        card = collector_alert_card(
-            level=level,
-            failed_sources=group,
-            cpu_pct=cpu.get("usage_percent", 0.0),
-            mem_pct=mem.get("used_percent", 0.0),
-            is_intraday=is_intraday,
-        )
-        try:
-            res = notifier.send_card(card)
-            print(f"[飞书] 采集源 {level} 告警已发送: ok={res.ok}")
-        except Exception as e:
-            print(f"[飞书] 采集源 {level} 告警发送失败: {e}")
+        for level in ("P0", "P1"):
+            group = [a for a in alarms if a["level"] == level]
+            if not group:
+                continue
+            sources_text = "\n".join(f"  - {a.get('label', a.get('name', ''))} ({a.get('age_str', '')})" for a in group)
+            body_md = (
+                f"**异常数:** {len(group)} 个\n"
+                f"**CPU:** {cpu.get('usage_percent', 0)}%\n"
+                f"**内存:** {mem.get('used_percent', 0)}%\n\n"
+                f"**详情:**\n{sources_text}"
+            )
+            card = ct.alert_card(
+                level=level,
+                title=f"采集源{level}告警",
+                body_md=body_md,
+            )
+            sender.send_card(webhook, card)
+            print(f"[飞书] 采集源 {level} 告警已发送 (新通知系统)")
+    except Exception as e:
+        print(f"[飞书] 采集源告警发送失败: {e}")
 
 
 def send_recovery_notice(
     recovered: list[dict[str, Any]],
     still_failed: list[dict[str, Any]],
 ) -> None:
-    """发送采集源恢复通知。"""
-    # from src.monitor.notify_feishu import FeishuNotifier
-    # from src.monitor.feishu_card_templates import collector_recovery_card
-
+    """发送采集源恢复通知（使用新通知系统）。"""
     webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or ""
     if not webhook:
         return
 
-    notifier = FeishuNotifier(webhook_url=webhook, keyword="BotQuant 报警", mock_mode=False)
-    card = collector_recovery_card(recovered_sources=recovered, still_failed=still_failed)
     try:
-        res = notifier.send_card(card)
-        print(f"[飞书] 采集恢复通知已发送: ok={res.ok}")
+        from services.data.src.notify import card_templates as ct
+        from services.data.src.notify.feishu import FeishuSender
+        sender = FeishuSender()
+
+        recovered_names = [s.get("label", s.get("name", "")) for s in recovered]
+        still_names = [s.get("label", s.get("name", "")) for s in still_failed]
+        card = ct.collector_recovery_card(
+            recovered=recovered_names,
+            still_failed=still_names,
+        )
+        sender.send_card(webhook, card)
+        print(f"[飞书] 采集恢复通知已发送 (新通知系统)")
     except Exception as e:
         print(f"[飞书] 采集恢复通知发送失败: {e}")
 

@@ -2,10 +2,12 @@
 
 Migrated from Mini crontab: `* * * * * touch ~/.mini_heartbeat`
 Now runs as a background thread within the data service process.
+Includes 2-hour device health report push to Feishu.
 """
 
 from __future__ import annotations
 
+import os
 import time
 import threading
 from datetime import datetime
@@ -17,6 +19,7 @@ logger = get_logger("data.heartbeat")
 
 _DEFAULT_HEARTBEAT_FILE = Path.home() / ".jbt_data_heartbeat"
 _DEFAULT_INTERVAL_SEC = 60
+_HEALTH_REPORT_INTERVAL_SEC = 2 * 3600  # 2 hours
 
 
 class HeartbeatWriter:
@@ -67,3 +70,98 @@ class HeartbeatWriter:
             return age < stale_seconds
         except OSError:
             return False
+
+
+class DeviceHealthReporter:
+    """每 2 小时推送一次设备健康报告到飞书。"""
+
+    def __init__(self, *, interval_sec: int = _HEALTH_REPORT_INTERVAL_SEC) -> None:
+        self._interval = interval_sec
+        self._thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+
+    def start(self) -> None:
+        if self._thread and self._thread.is_alive():
+            logger.warning("health reporter already running")
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._loop, daemon=True, name="health-reporter")
+        self._thread.start()
+        logger.info("device health reporter started: interval=%ds", self._interval)
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        if self._thread:
+            self._thread.join(timeout=5)
+        logger.info("health reporter stopped")
+
+    def _loop(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                self._push_report()
+            except Exception as exc:
+                logger.error("health report push failed: %s", exc)
+            self._stop_event.wait(timeout=self._interval)
+
+    def _push_report(self) -> None:
+        """采集本机指标并推送飞书设备健康卡片。"""
+        try:
+            import psutil
+        except ImportError:
+            logger.warning("psutil not available, skipping health report")
+            return
+
+        cpu_pct = psutil.cpu_percent(interval=1)
+        mem_pct = psutil.virtual_memory().percent
+        disk_pct = psutil.disk_usage("/").percent
+
+        # 进程状态 — 检查 data 相关进程
+        import subprocess
+        procs: list[dict] = []
+        try:
+            plist_out = subprocess.run(
+                ["launchctl", "list"], capture_output=True, text=True, timeout=10,
+            ).stdout
+            for label, pname in [
+                ("数据调度", "com.botquant.data_scheduler"),
+                ("健康检查", "com.botquant.health"),
+                ("新闻采集", "com.botquant.news"),
+                ("数据API", "com.botquant.data_api"),
+            ]:
+                procs.append({"label": label, "ok": pname in plist_out, "uptime": ""})
+        except Exception:
+            pass
+
+        # 网络延迟
+        latency_ms = 0
+        try:
+            import socket
+            t0 = time.time()
+            s = socket.create_connection(("open.feishu.cn", 443), timeout=5)
+            s.close()
+            latency_ms = int((time.time() - t0) * 1000)
+        except Exception:
+            latency_ms = -1
+
+        webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or ""
+        if not webhook:
+            logger.warning("no webhook, skipping health report")
+            return
+
+        try:
+            from services.data.src.notify import card_templates as ct
+            from services.data.src.notify.feishu import FeishuSender
+
+            card = ct.device_health_card(
+                cpu_pct=cpu_pct,
+                mem_pct=mem_pct,
+                disk_pct=disk_pct,
+                processes=procs,
+                net_latency_ms=float(latency_ms),
+            )
+            sender = FeishuSender()
+            sender.send_card(webhook, card)
+            logger.info("device health report pushed: cpu=%.0f%% mem=%.0f%% disk=%.0f%%",
+                        cpu_pct, mem_pct, disk_pct)
+        except Exception as exc:
+            logger.error("failed to push health report: %s", exc)
