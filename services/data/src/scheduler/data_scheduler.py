@@ -43,7 +43,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # 加载 .env (TUSHARE_TOKEN 等)
-_env_file = PROJECT_ROOT / ".env"
+# PROJECT_ROOT = services/data/src/，.env 在 services/data/.env
+_env_file = PROJECT_ROOT.parent / ".env"
+if not _env_file.exists():
+    _env_file = PROJECT_ROOT / ".env"  # fallback
 if _env_file.exists():
     for _line in _env_file.read_text().splitlines():
         _line = _line.strip()
@@ -64,15 +67,8 @@ _notifier = None  # CollectionNotifier, 延迟初始化
 
 
 def _get_notifier(config: dict[str, Any] | None = None) -> Any:
-    """获取或初始化 CollectionNotifier."""
-    global _notifier
-    if _notifier is None and config:
-        try:
-            # from src.monitor.collection_notifier import CollectionNotifier
-            _notifier = CollectionNotifier(config=config)
-        except Exception as exc:
-            logger.warning("CollectionNotifier 初始化失败: %s", exc)
-    return _notifier
+    """获取或初始化 CollectionNotifier (legacy, 已由 NotifierDispatcher 替代)."""
+    return None
 
 
 _dispatcher = None
@@ -776,7 +772,7 @@ def job_heartbeat(config: dict[str, Any]) -> None:
         ]
 
         # ── 加载 health_check 模块 ────────────────────────────────────
-        _hc_path = str(PROJECT_ROOT / "scripts" / "health_check.py")
+        _hc_path = str(PROJECT_ROOT / "health" / "health_check.py")
         _spec = importlib.util.spec_from_file_location("health_check_mod", _hc_path)
         _mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
         _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
