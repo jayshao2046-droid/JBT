@@ -34,7 +34,15 @@ class PositionCollector(BaseCollector):
         td = trade_date or datetime.now().strftime("%Y%m%d")
         records: list[dict[str, Any]] = []
         # 获取主力合约持仓排名
-        symbols_to_check = ["RB", "HC", "I", "M", "C", "CF", "Y", "P", "OI", "TA", "MA", "PP", "V", "RU"]
+        # 全量35个内盘期货品种
+        symbols_to_check = [
+            # SHFE（上期所）10个
+            "RB", "HC", "CU", "AL", "ZN", "AU", "AG", "RU", "SS", "SP",
+            # DCE（大商所）15个
+            "I", "M", "PP", "V", "L", "C", "JD", "Y", "P", "A", "JM", "J", "EB", "PG", "LH",
+            # CZCE（郑商所）10个
+            "TA", "MA", "CF", "SR", "OI", "RM", "FG", "SA", "PF", "UR",
+        ]
         for sym in symbols_to_check:
             try:
                 df = pro.fut_holding(symbol=sym.lower(), trade_date=td)

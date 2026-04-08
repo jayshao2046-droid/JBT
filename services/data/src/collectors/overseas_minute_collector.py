@@ -47,10 +47,18 @@ YFINANCE_MINUTE_MAP: dict[str, tuple[str, str, str]] = {
     "CBOT.ZW": ("ZW=F", "小麦", "CBOT"),
     "CBOT.ZM": ("ZM=F", "豆粕", "CBOT"),
     "CBOT.ZL": ("ZL=F", "豆油", "CBOT"),
-    # ICE 软商品 (3)
+    # ICE 软商品 / 农产品 (5)
     "ICE.B": ("BZ=F", "布伦特原油", "ICE"),
-    "ICE.CT": ("CT=F", "棉花", "ICE"),
-    "ICE.SB": ("SB=F", "白糖", "ICE"),
+    "ICE.CT": ("CT=F", "棉花", "ICE"),       # CF对标
+    "ICE.SB": ("SB=F", "白糖", "ICE"),       # SR对标
+    "ICE.RS": ("RS=F", "油菜籽/菜籽油", "ICE"),  # OI/RM对标（新增）
+    "ICE.KC": ("KC=F", "咖啡", "ICE"),
+    "ICE.CC": ("CC=F", "可可", "ICE"),
+    # CME 畜牧/钢铁 (2，新增)
+    "CME.HE": ("HE=F", "瘦肉猪", "CME"),    # LH/JD对标
+    "CME.HRC": ("HRC=F", "HRC热轧卷板", "CME"),  # RB/HC对标
+    # CME 股指补（1）
+    "CME.RTY": ("RTY=F", "罗素2000", "CME"),
 }
 
 # Alpha Vantage 代码映射 (备源1, premium intraday)
@@ -77,16 +85,13 @@ TWELVEDATA_MAP: dict[str, str] = {
 
 # ── 仅日线品种 (10) → AkShare ────────────────────────────
 DAILY_ONLY_MAP: dict[str, tuple[str, str, str]] = {
-    "LME.AHD": ("AHD", "LME铝", "LME"),
-    "LME.CAD": ("CAD", "LME铜", "LME"),
-    "LME.NID": ("NID", "LME镍", "LME"),
+    "LME.AHD": ("AHD", "LME铝", "LME"),   # AL对标
+    "LME.CAD": ("CAD", "LME铜", "LME"),   # CU额外
+    "LME.NID": ("NID", "LME镍", "LME"),   # SS不锈钢对标
     "LME.PBD": ("PBD", "LME铅", "LME"),
     "LME.SND": ("SND", "LME锡", "LME"),
-    "LME.ZSD": ("ZSD", "LME锌", "LME"),
+    "LME.ZSD": ("ZSD", "LME锌", "LME"),   # ZN对标
     "SGX.CN": ("CN", "富时中国A50", "SGX"),
-    "ICE.KC": ("KC", "咖啡", "ICE"),
-    "ICE.CC": ("CC", "可可", "ICE"),
-    "CME.RTY": ("RTY", "罗素尔2000", "CME"),
 }
 
 # ── 限流退避状态 (模块级) ─────────────────────────────────

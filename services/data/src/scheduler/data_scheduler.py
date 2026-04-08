@@ -250,71 +250,145 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
 # 管道任务定义
 # ─────────────────────────────────────────────
 def _get_domestic_symbols() -> list[str]:
-    """获取内盘合约列表（可从 config 动态扩展）。
+    """获取内盘全量 35 品种合约列表（主力+次主力，动态维护）。
 
-    覆盖 14 个核心品种（含主力+次主力合约共 16 个）：
-    SHFE: rb(螺纹钢), cu(铜), au(黄金), ag(白银), hc(热卷)
-    DCE:  i(铁矿石), m(豆粕), p(棕榈油), c(玉米), y(豆油)
-    CZCE: MA(甲醇), SA(纯碱), CF(棉花), TA(PTA)
+    覆盖 35 个品种，每品种取 2 个活跃合约（近月+次主力），合计约 70 个合约。
 
-    合约代码说明：
+    合约代码格式：
       SHFE/DCE  4位年月格式：rb2605 = 螺纹钢 2026年5月
-      CZCE      3位格式：MA605 = 甲醇 2026年5月（年末尾单位数字 + 两位月份）
+      CZCE      3位格式：MA605 = 甲醇 2026年5月（年末尾数字 + 两位月份）
+
+    35 品种（按交易所分组）：
+      SHFE: rb(螺纹钢), hc(热卷), cu(铜), al(铝), zn(锌), au(黄金), ag(白银),
+            ru(橡胶), ss(不锈钢), sp(纸浆)
+      DCE:  i(铁矿石), m(豆粕), pp(聚丙烯), v(PVC), l(塑料), c(玉米), jd(鸡蛋),
+            y(豆油), p(棕榈油), a(豆一), jm(焦煤), j(焦炭), eb(苯乙烯),
+            pg(液化气), lh(生猪)
+      CZCE: TA(PTA), MA(甲醇), CF(棉花), SR(白糖), OI(菜油), RM(菜粕),
+            FG(玻璃), SA(纯碱), PF(短纤), UR(尿素)
     """
     return [
-        # SHFE（上期所）— 2026年当前活跃合约
-        "SHFE.rb2605", "SHFE.rb2610",
-        "SHFE.cu2606",
-        "SHFE.au2606",
-        "SHFE.ag2606",
-        "SHFE.hc2605", "SHFE.hc2610",
-        # DCE（大商所）— 2026年当前活跃合约
-        "DCE.i2605", "DCE.i2609",
-        "DCE.m2605", "DCE.m2609",
-        "DCE.p2605",
-        "DCE.c2605",
-        "DCE.y2605",
-        # CZCE（郑商所）— 2026年当前活跃合约
-        "CZCE.MA605", "CZCE.MA609",
-        "CZCE.SA605",
-        "CZCE.CF605",
-        "CZCE.TA605",
+        # ── SHFE 上期所（10品种）────────────────────────────────────
+        "SHFE.rb2605", "SHFE.rb2610",      # 螺纹钢
+        "SHFE.hc2605", "SHFE.hc2610",      # 热卷板
+        "SHFE.cu2605", "SHFE.cu2606",      # 铜
+        "SHFE.al2605", "SHFE.al2606",      # 铝（新增）
+        "SHFE.zn2605", "SHFE.zn2606",      # 锌（新增）
+        "SHFE.au2606", "SHFE.au2612",      # 黄金（双月合约）
+        "SHFE.ag2606", "SHFE.ag2612",      # 白银（双月合约）
+        "SHFE.ru2605", "SHFE.ru2609",      # 橡胶（新增）
+        "SHFE.ss2605", "SHFE.ss2606",      # 不锈钢（新增）
+        "SHFE.sp2605", "SHFE.sp2609",      # 纸浆（新增）
+        # ── DCE 大商所（15品种）─────────────────────────────────────
+        "DCE.i2605",  "DCE.i2609",         # 铁矿石
+        "DCE.m2605",  "DCE.m2609",         # 豆粕
+        "DCE.pp2605", "DCE.pp2609",        # 聚丙烯（新增）
+        "DCE.v2605",  "DCE.v2609",         # PVC（新增）
+        "DCE.l2605",  "DCE.l2609",         # 塑料（新增）
+        "DCE.c2605",  "DCE.c2609",         # 玉米
+        "DCE.jd2605", "DCE.jd2606",        # 鸡蛋（月月合约，新增）
+        "DCE.y2605",  "DCE.y2609",         # 豆油
+        "DCE.p2605",  "DCE.p2609",         # 棕榈油
+        "DCE.a2605",  "DCE.a2609",         # 豆一（新增）
+        "DCE.jm2605", "DCE.jm2609",        # 焦煤（新增）
+        "DCE.j2605",  "DCE.j2609",         # 焦炭（新增）
+        "DCE.eb2605", "DCE.eb2609",        # 苯乙烯（新增）
+        "DCE.pg2605", "DCE.pg2606",        # 液化气（新增）
+        "DCE.lh2606", "DCE.lh2608",        # 生猪（双月合约，新增）
+        # ── CZCE 郑商所（10品种）────────────────────────────────────
+        "CZCE.TA605", "CZCE.TA609",        # PTA
+        "CZCE.MA605", "CZCE.MA609",        # 甲醇
+        "CZCE.CF605", "CZCE.CF609",        # 棉花
+        "CZCE.SR605", "CZCE.SR609",        # 白糖（新增）
+        "CZCE.OI605", "CZCE.OI609",        # 菜油（新增）
+        "CZCE.RM605", "CZCE.RM609",        # 菜粕（新增）
+        "CZCE.FG605", "CZCE.FG609",        # 玻璃（新增）
+        "CZCE.SA605", "CZCE.SA609",        # 纯碱
+        "CZCE.PF605", "CZCE.PF609",        # 短纤（新增）
+        "CZCE.UR605", "CZCE.UR609",        # 尿素（新增）
+    ]
+
+
+def _get_domestic_symbols_tushare() -> list[str]:
+    """返回全 35 品种的 Tushare 品种代码（用于 fut_holding / fut_wsr API）。
+
+    格式为大写品种代码，不含交易所和合约月份。
+    """
+    return [
+        # SHFE（10品种）
+        "RB", "HC", "CU", "AL", "ZN", "AU", "AG", "RU", "SS", "SP",
+        # DCE（15品种）
+        "I", "M", "PP", "V", "L", "C", "JD", "Y", "P", "A", "JM", "J", "EB", "PG", "LH",
+        # CZCE（10品种）
+        "TA", "MA", "CF", "SR", "OI", "RM", "FG", "SA", "PF", "UR",
     ]
 
 
 def _get_overseas_symbols() -> list[str]:
-    """获取外盘合约列表（D106 扩展至 30 个品种）。"""
+    """获取外盘合约列表（D109 扩展，覆盖 35 内盘品种的外盘对标）。
+
+    分两类：
+    1. YFINANCE_MINUTE_MAP 中的品种 — 支持分钟+日线（yfinance）
+    2. DAILY_ONLY_MAP 中的品种   — 仅支持日线（LME via AkShare）
+
+    外盘对标逻辑：
+      贵金属：GC(AU) / SI(AG) / HG(CU+AL+ZN proxy for LME)
+      能源：CL(TA/PP/V/L/EB/PG proxy) / NG(MA/UR proxy)
+      农产品：ZS(A) / ZM(M/RM proxy) / ZL(Y/OI proxy) / ZC(C)
+      软商品：CT(CF) / SB(SR) / RS(OI/RM)
+      畜牧：HE(LH/JD)
+      钢铁：HRC(RB/HC)
+      LME 金属日线：AHD(AL) / ZSD(ZN) / NID(SS) / CAD(CU) / PBD / SND
+    """
     return [
-        # 能源 (5)
-        "NYMEX.CL", "ICE.B", "NYMEX.NG",
-        "NYMEX.HO", "NYMEX.RB",
-        # 金属 - COMEX (5)
-        "COMEX.GC", "COMEX.SI", "COMEX.HG",
-        "NYMEX.PL", "NYMEX.PA",
-        # 金属 - LME (6) — D106 新增
-        "LME.AHD", "LME.CAD", "LME.NID",
-        "LME.PBD", "LME.SND", "LME.ZSD",
-        # 农产品 (7)
-        "CBOT.ZS", "CBOT.ZC", "CBOT.ZW",
-        "CBOT.ZM", "CBOT.ZL",
-        "ICE.CT", "ICE.SB",
-        # 股指 (4)
-        "CME.ES", "CME.NQ", "CBOT.YM",
-        "SGX.CN",
-        # 其他 (3) — D107 修复
-        "ICE.KC", "ICE.CC", "CME.RTY",
+        # ── 能源（4）— proxy for TA/MA/PP/V/L/EB/PG/UR ────────────
+        "NYMEX.CL",    # WTI原油（TA/PP/V/L/EB/PG 化工品上游）
+        "ICE.B",       # 布伦特原油
+        "NYMEX.NG",    # 天然气（MA/UR 上游）
+        "NYMEX.HO",    # 取暖油
+        # ── COMEX 金属（5）— 对标 AU/AG/CU/AL/ZN ─────────────────
+        "COMEX.GC",    # 黄金（AU对标）
+        "COMEX.SI",    # 白银（AG对标）
+        "COMEX.HG",    # COMEX铜（CU对标）
+        "NYMEX.PL",    # 铂（AG/AU 相关）
+        "NYMEX.PA",    # 钯（贵金属群）
+        # ── LME 金属日线（6）— 仅日线，AkShare ────────────────────
+        "LME.AHD",     # LME铝（AL对标）
+        "LME.ZSD",     # LME锌（ZN对标）
+        "LME.NID",     # LME镍（SS不锈钢对标）
+        "LME.CAD",     # LME铜（CU额外数据）
+        "LME.PBD",     # LME铅
+        "LME.SND",     # LME锡
+        # ── CBOT 农产品（5）— 对标 A/M/RM/Y/C/OI ─────────────────
+        "CBOT.ZS",     # 大豆（A对标）
+        "CBOT.ZM",     # 豆粕（M/RM对标）
+        "CBOT.ZL",     # 豆油（Y/OI对标）
+        "CBOT.ZC",     # 玉米（C对标）
+        "CBOT.ZW",     # 小麦（粮食群）
+        # ── ICE 软商品（4）— 对标 CF/SR/OI/RM ────────────────────
+        "ICE.CT",      # 棉花（CF对标）
+        "ICE.SB",      # 白糖#11（SR对标）
+        "ICE.KC",      # 咖啡
+        "ICE.CC",      # 可可
+        # ── CME 畜牧/钢铁（3）— 对标 LH/JD/RB/HC ─────────────────
+        "CME.HE",      # 瘦肉猪（LH/JD对标，新增）
+        "CME.HRC",     # HRC热轧卷板（RB/HC对标，新增）
+        # ── 股指期货（4）— 市场情绪参考 ──────────────────────────
+        "CME.ES",      # 标普500
+        "CME.NQ",      # 纳斯达克100
+        "CBOT.YM",     # 道琼斯
+        "CME.RTY",     # 罗素2000
+        # ── SGX（1）─────────────────────────────────────────────
+        "SGX.CN",      # 富时中国A50
     ]
 
 
 def job_minute_kline(config: dict[str, Any]) -> None:
-    """[DEPRECATED] 分钟内盘K线 — 已由 futures_minute_scheduler.py plist 接管。
+    """分钟内盘K线 — 每 2 分钟，仅交易时段。
 
-    旧实现使用硬编码 2405 合约（已过期）+ 内部 APScheduler 每2分钟触发。
-    新方案: com.botquant.futures.minute.plist (每60s) + com.botquant.futures.eod.plist
-    => scripts/futures_minute_scheduler.py --live / --eod
-    本函数保留但不再注册到 scheduler，见下方注释。
+    从 plist 迁回 JBT APScheduler。动态读取 _get_domestic_symbols() 所有 35 品种。
+    备注：时段门控由 _is_trading_session() 完成，函数本身只在交易时段执行。
     """
-    # [DEPRECATED] 保留以备回滚，使用前需更新 _get_domestic_symbols() 为动态发现
     if not _is_trading_session():
         return
     from services.data.src.scheduler.pipeline import run_minute_pipeline
@@ -330,10 +404,29 @@ def job_daily_kline(config: dict[str, Any]) -> None:
 
 
 def job_overseas_kline(config: dict[str, Any]) -> None:
-    """外盘日线 — 每日 17:00 (全部 30 品种)。"""
+    """外盘日线（美/欧收盘后）— 每日 06:00 北京时间。
+
+    覆盖: NYMEX/COMEX/CBOT/CME/ICE US 品种，对标35个内盘期货。
+    06:00 北京 = 美国日盘 15:30-21:00 CT 结束后约1h。
+    LME 金属单独由 job_overseas_kline_lme 在 02:00 采集。
+    """
     from services.data.src.scheduler.pipeline import run_overseas_daily_pipeline
-    symbols = _get_overseas_symbols()
-    _safe_run("外盘日线", run_overseas_daily_pipeline, symbols=symbols, config=config)
+    # 过滤掉 LME 品种（由 job_overseas_kline_lme 处理）
+    all_syms = _get_overseas_symbols()
+    us_syms = [s for s in all_syms if not s.startswith("LME.")]
+    _safe_run("外盘日线(美/欧)", run_overseas_daily_pipeline, symbols=us_syms, config=config)
+
+
+def job_overseas_kline_lme(config: dict[str, Any]) -> None:
+    """LME金属日线（伦敦收盘后）— 每日 02:00 北京时间。
+
+    伦敦金属交易所 Select (电子盘) 收盘 01:00 北京时间（17:00 London）。
+    02:00 北京采集已是收盘后1h，数据已稳定。
+    品种: AHD(铝/AL) / ZSD(锌/ZN) / NID(镍/SS不锈钢) / CAD(铜/CU) / PBD / SND
+    """
+    from services.data.src.scheduler.pipeline import run_overseas_daily_pipeline
+    lme_syms = [s for s in _get_overseas_symbols() if s.startswith("LME.")]
+    _safe_run("LME金属日线", run_overseas_daily_pipeline, symbols=lme_syms, config=config)
 
 
 def job_overseas_minute_yf(config: dict[str, Any]) -> None:
@@ -352,11 +445,67 @@ def job_stock_minute(config: dict[str, Any]) -> None:
     _safe_run("A股分钟K线", run_stock_minute_pipeline, config=config)
 
 
+def _build_tushare_ts_codes() -> list[str]:
+    """动态生成35个品种当前近月合约的 Tushare ts_code。
+
+    格式规则:
+      SHFE/DCE: {VARIETY}{YYMM}.{SHF|DCE}  — e.g. RB2605.SHF
+      CZCE:    {VARIETY}{YMM}.ZCE           — e.g. MA605.ZCE (3位日期码)
+    近月逻辑: 当月15日前取当月，否则取下月。
+    黄金/白银/生猪: 取下一个偶数月。
+    """
+    now = datetime.now()
+    y2 = now.year % 100   # e.g. 26
+    mo = now.month
+
+    # 近月: 15日前用当月，否则下月
+    if now.day < 15:
+        nm, ny = mo, y2
+    else:
+        nm = mo + 1 if mo < 12 else 1
+        ny = y2 if mo < 12 else (y2 + 1)
+
+    def _next_even(y: int, m: int) -> tuple[int, int]:
+        """取下一个偶数月（含当月）。"""
+        if m % 2 == 0:
+            return y, m
+        m2 = m + 1
+        y2_ = y if m2 <= 12 else y + 1
+        m2 = m2 if m2 <= 12 else 1
+        return y2_, m2
+
+    shfe_dce_mm = f"{ny:02d}{nm:02d}"
+    ey, em = _next_even(ny, nm)
+    even_mm = f"{ey:02d}{em:02d}"
+    czce_ymm = f"{ny % 10}{nm:02d}"
+    czce_even_ymm = f"{ey % 10}{em:02d}"
+
+    result: list[str] = []
+    # ── SHFE（10）──────────────────────────────────────────────────
+    for sym in ["RB", "HC", "CU", "AL", "ZN", "RU", "SS", "SP"]:
+        result.append(f"{sym}{shfe_dce_mm}.SHF")
+    result.append(f"AU{even_mm}.SHF")   # 黄金 — 偶数月
+    result.append(f"AG{even_mm}.SHF")   # 白银 — 偶数月
+    # ── DCE（15）──────────────────────────────────────────────────
+    for sym in ["I", "M", "PP", "V", "L", "C", "JD", "Y", "P", "A", "JM", "J", "EB", "PG"]:
+        result.append(f"{sym}{shfe_dce_mm}.DCE")
+    result.append(f"LH{even_mm}.DCE")   # 生猪 — 偶数月
+    # ── CZCE（10）─────────────────────────────────────────────────
+    for sym in ["TA", "MA", "CF", "SR", "OI", "RM", "FG", "SA", "PF", "UR"]:
+        result.append(f"{sym}{czce_ymm}.ZCE")
+    return result
+
+
 def job_tushare_futures(config: dict[str, Any]) -> None:
-    """Tushare期货五合一 — 每日 17:00。"""
+    """Tushare期货五合一 — 每日 17:10，动态覆盖35个品种近月合约。
+
+    数据内容: fut_daily / fut_holding / fut_wsr / fut_settle
+    ts_code 由 _build_tushare_ts_codes() 按当前日期动态生成。
+    """
     from services.data.src.scheduler.pipeline import run_tushare_futures_pipeline
     today = datetime.now().strftime("%Y%m%d")
-    for ts_code in ["RB2405.SHF", "I2405.DCE", "M2405.DCE"]:
+    ts_codes = _build_tushare_ts_codes()
+    for ts_code in ts_codes:
         _safe_run(
             f"Tushare期货({ts_code})",
             run_tushare_futures_pipeline,
@@ -865,81 +1014,84 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
     # 预初始化通知器
     _get_notifier(config)
 
-    # [DEPRECATED] 分钟内盘K线已由 plist 接管，此处禁用。
-    # 新方案: com.botquant.futures.minute.plist (every 60s) → futures_minute_scheduler.py --live
-    #         com.botquant.futures.eod.plist (11:35/15:20/23:05) → futures_minute_scheduler.py --eod
-    # scheduler.add_job(
-    #     job_minute_kline, IntervalTrigger(minutes=2),
-    #     args=[config], id="minute_kline", name="分钟内盘K线",
-    # )
+    # [DEPRECATED LIFTED] 分钟内盘K线: 每2分钟，交易时段门控在函数内。
+    # 已迁回 JBT APScheduler，停用 com.botquant.futures.minute plist。
+    scheduler.add_job(
+        job_minute_kline, IntervalTrigger(minutes=2),
+        args=[config], id="minute_kline", name="分钟内盘K线",
+    )
     # 日线K线: 每日 17:00
     scheduler.add_job(
         job_daily_kline, CronTrigger(hour=17, minute=0, day_of_week="mon-fri"),
         args=[config], id="daily_kline", name="日线K线",
     )
-    # [DEPRECATED] 外盘日线已由 plist 接管，此处禁用。
-    # 新方案: com.botquant.overseas.daily.plist (每日17:30) → overseas_minute_scheduler.py --daily
-    # scheduler.add_job(
-    #     job_overseas_kline, CronTrigger(hour=17, minute=5, day_of_week="mon-fri"),
-    #     args=[config], id="overseas_daily", name="外盘日线",
-    # )
-    # [DEPRECATED] 外盘分钟K线已由 plist 接管，此处禁用。
-    # 新方案: com.botquant.overseas.minute.plist (每5min) → overseas_minute_scheduler.py --live
-    # scheduler.add_job(
-    #     job_overseas_minute_yf, IntervalTrigger(minutes=5),
-    #     args=[config], id="overseas_minute_yf", name="外盘分钟K线(yfinance)",
-    # )
-    # [DEPRECATED] A股分钟K线已由 plist 接管，pipeline 模块亦有 httpx 导入错误
-    # 新方案: com.botquant.stock.minute.plist (15:35) → stock_minute_scheduler.py
-    # scheduler.add_job(
-    #     job_stock_minute, IntervalTrigger(minutes=2),
-    #     args=[config], id="stock_minute", name="A股分钟K线",
-    # )
-    # [DEPRECATED] Tushare期货 pipeline 有 httpx 导入错误；由 com.botquant.tushare plist 接管
-    # scheduler.add_job(
-    #     job_tushare_futures, CronTrigger(hour=17, minute=10, day_of_week="mon-fri"),
-    #     args=[config], id="tushare_futures", name="Tushare期货五合一",
-    # )
-    # [DEPRECATED] 宏观数据已由 com.botquant.macro plist 接管 (macro_scheduler.py KeepAlive)
-    # scheduler.add_job(
-    #     job_macro, CronTrigger(hour=9, minute=0, day_of_week="mon-fri"),
-    #     args=[config], id="macro", name="宏观数据",
-    # )
-    # [DEPRECATED] 持仓/仓单已由 com.botquant.position.daily plist 接管
-    # scheduler.add_job(
-    #     job_position, CronTrigger(hour=15, minute=30, day_of_week="mon-fri"),
-    #     args=[config], id="position", name="持仓仓单日报",
-    # )
-    # [DEPRECATED] 新闻API已由 com.botquant.news plist 接管 (news_scheduler.py KeepAlive)
-    # scheduler.add_job(
-    #     job_news_api, IntervalTrigger(minutes=1),
-    #     args=[config], id="news_api", name="新闻API",
-    # )
-    # [DEPRECATED] RSS聚合已由 com.botquant.news plist 接管
-    # scheduler.add_job(
-    #     job_rss, IntervalTrigger(minutes=10),
-    #     args=[config], id="rss", name="RSS聚合",
-    # )
-    # [DEPRECATED] 波动率已由 com.botquant.volatility plist 接管 (17:40)
-    # scheduler.add_job(
-    #     job_volatility, CronTrigger(hour=17, minute=15, day_of_week="mon-fri"),
-    #     args=[config], id="volatility", name="波动率指数",
-    # )
-    # [DEPRECATED] 情绪指数已由 com.botquant.sentiment plist 接管 (16:35 + Sat)
-    # scheduler.add_job(
-    #     job_sentiment, IntervalTrigger(minutes=5),
-    #     args=[config], id="sentiment", name="情绪指数",
-    # )
-    # [DEPRECATED] 海运物流已由 com.botquant.shipping plist 接管 (17:45)
-    # scheduler.add_job(
-    #     job_shipping, CronTrigger(hour=9, minute=10, day_of_week="mon-fri"),
-    #     args=[config], id="shipping", name="海运物流",
-    # )
-    # [DEPRECATED] 飞书新闻推送已由 com.botquant.news plist 接管
-    # scheduler.add_job(
-    #     job_feishu_news_hourly, IntervalTrigger(hours=1),
-    #     args=[config], id="feishu_news_hourly", name="飞书新闻推送",
-    # )
+    # [DEPRECATED LIFTED] 外盘日线（美/欧）: 每日 06:00（美盘收盘后1h）
+    # 调整自旧 17:05 → 06:00，覆盖 NYMEX/COMEX/CBOT/CME/ICE US 全品种。
+    scheduler.add_job(
+        job_overseas_kline, CronTrigger(hour=6, minute=0, day_of_week="tue-sat"),
+        args=[config], id="overseas_daily_us", name="外盘日线(美/欧)",
+    )
+    # LME 金属日线: 每日 02:00（伦敦收盘 01:00 后1h）— 新增
+    scheduler.add_job(
+        job_overseas_kline_lme, CronTrigger(hour=2, minute=0, day_of_week="tue-sat"),
+        args=[config], id="overseas_daily_lme", name="LME金属日线",
+    )
+    # [DEPRECATED LIFTED] 外盘分钟K线: 每5分钟，境外交易时段门控在函数内。
+    scheduler.add_job(
+        job_overseas_minute_yf, IntervalTrigger(minutes=5),
+        args=[config], id="overseas_minute_yf", name="外盘分钟K线(yfinance)",
+    )
+    # [DEPRECATED LIFTED] A股分钟K线: 每2分钟，A股交易时段门控在函数内。
+    # 注意: 东方财富接口有频率限制，偶发 429，由 _safe_run 退避重试。
+    scheduler.add_job(
+        job_stock_minute, IntervalTrigger(minutes=2),
+        args=[config], id="stock_minute", name="A股分钟K线",
+    )
+    # [DEPRECATED LIFTED] Tushare期货五合一: 17:10，动态35品种近月合约。
+    scheduler.add_job(
+        job_tushare_futures, CronTrigger(hour=17, minute=10, day_of_week="mon-fri"),
+        args=[config], id="tushare_futures", name="Tushare期货五合一",
+    )
+    # [DEPRECATED LIFTED] 宏观数据: 09:00
+    scheduler.add_job(
+        job_macro, CronTrigger(hour=9, minute=0, day_of_week="mon-fri"),
+        args=[config], id="macro", name="宏观数据",
+    )
+    # [DEPRECATED LIFTED] 持仓/仓单: 15:30（35品种全覆盖）
+    scheduler.add_job(
+        job_position, CronTrigger(hour=15, minute=30, day_of_week="mon-fri"),
+        args=[config], id="position", name="持仓仓单日报",
+    )
+    # [DEPRECATED LIFTED] 新闻API: 每1分钟
+    scheduler.add_job(
+        job_news_api, IntervalTrigger(minutes=1),
+        args=[config], id="news_api", name="新闻API",
+    )
+    # [DEPRECATED LIFTED] RSS聚合: 每10分钟
+    scheduler.add_job(
+        job_rss, IntervalTrigger(minutes=10),
+        args=[config], id="rss", name="RSS聚合",
+    )
+    # [DEPRECATED LIFTED] 波动率: 17:15
+    scheduler.add_job(
+        job_volatility, CronTrigger(hour=17, minute=15, day_of_week="mon-fri"),
+        args=[config], id="volatility", name="波动率指数",
+    )
+    # [DEPRECATED LIFTED] 情绪指数: 每5分钟
+    scheduler.add_job(
+        job_sentiment, IntervalTrigger(minutes=5),
+        args=[config], id="sentiment", name="情绪指数",
+    )
+    # [DEPRECATED LIFTED] 海运物流: 09:10
+    scheduler.add_job(
+        job_shipping, CronTrigger(hour=9, minute=10, day_of_week="mon-fri"),
+        args=[config], id="shipping", name="海运物流",
+    )
+    # [DEPRECATED LIFTED] 飞书新闻推送: 每1小时
+    scheduler.add_job(
+        job_feishu_news_hourly, IntervalTrigger(hours=1),
+        args=[config], id="feishu_news_hourly", name="飞书新闻推送",
+    )
     # ── 采集监控通知 ──
     # [DEPRECATED] 每日采集汇总: 23:00 — 已被 2h 心跳卡片替代
     # scheduler.add_job(
