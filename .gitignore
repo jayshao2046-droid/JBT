@@ -10,6 +10,10 @@ venv/
 .jbt/
 .jbt-local/
 
+# Environment files (contain credentials)
+.env
+.env.*
+!.env.example
 services/*/runtime/
 services/*/logs/
 services/*/.env
