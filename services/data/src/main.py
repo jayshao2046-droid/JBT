@@ -9,7 +9,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 
 SERVICE_NAME = "data"
-SERVICE_VERSION = "0.1.0-minimal"
+SERVICE_VERSION = "0.2.0"
 DEFAULT_STORAGE_ROOT = Path("/runtime/data")
 MINUTE_DATA_SUBDIR = Path("futures_minute") / "1m"
 BAR_COLUMNS = (
