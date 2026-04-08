@@ -7,8 +7,8 @@ device:
   name: Mini
   role: data_collection
   host: mini-remote         # .env DATA_ENDPOINT_HOST
-  data_dir: ~/J_BotQuant/BotQuan_Data
-  api_port: 8001
+  data_dir: ~/jbt-data
+  api_port: 8105
 
 # ═══════════════════════════════════════════════════════════════
 # 采集计划 (Crontab-like schedule)

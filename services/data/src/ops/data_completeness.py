@@ -14,15 +14,14 @@ check_data_completeness.py — 每日数据完整性监控
 
 输出:
   - 终端打印汇总表
-  - BotQuan_Data/logs/completeness_{date}.json
+  - {DATA_STORAGE_ROOT}/logs/completeness_{date}.json
 
 用法:
-  python scripts/check_data_completeness.py              # 检查今天
-  python scripts/check_data_completeness.py --date 20260320
-  python scripts/check_data_completeness.py --days 3     # 检查最近 3 天
+  DATA_STORAGE_ROOT=~/jbt-data python check_data_completeness.py
+  DATA_STORAGE_ROOT=~/jbt-data python check_data_completeness.py --date 20260320
+  DATA_STORAGE_ROOT=~/jbt-data python check_data_completeness.py --days 3
 
-Crontab 示例 (每交易日 20:30):
-  30 20 * * 1-5 cd ~/J_BotQuant && .venv/bin/python3 scripts/check_data_completeness.py
+Scheduler 自动调度 (data_scheduler.py 20:30 触发):
 """
 
 import argparse
