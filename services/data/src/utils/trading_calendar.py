@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Iterable
 
 
@@ -104,20 +104,30 @@ def _cn_futures_session(now: datetime, cn_holidays: set[str]) -> SessionState:
     ds = now.strftime("%Y-%m-%d")
     wd = now.weekday()
 
-    # 周末不开盘（周一凌晨 00:00-02:30 由上一交易日夜盘延续，不是周末）
-    if wd >= 5:
-        # 周六凌晨 <= 02:30 仍视作周五夜盘延续
-        if wd == 5 and now.time() <= time(2, 30):
-            return SessionState(True, "周五夜盘延续")
-        return SessionState(False, "周末休市")
-
-    # 法定/交易所假期休市
-    if _is_holiday(ds, cn_holidays):
-        return SessionState(False, "国内假期休市")
-
     t = now.time()
     day_ranges = [(time(9, 0), time(11, 30)), (time(13, 30), time(15, 0))]
     night_ranges = [(time(21, 0), time(23, 59)), (time(0, 0), time(2, 30))]
+
+    # 周一凌晨 00:00-02:30 并非有效夜盘延续（周日夜盘不开盘）
+    if wd == 0 and time(0, 0) <= t <= time(2, 30):
+        return SessionState(False, "周一凌晨休市")
+
+    # 凌晨夜盘延续（00:00-02:30）按“前一自然日”判断是否交易日/假期
+    if time(0, 0) <= t <= time(2, 30):
+        ref = now - timedelta(days=1)
+        ref_ds = ref.strftime("%Y-%m-%d")
+        ref_wd = ref.weekday()
+        if ref_wd >= 5:
+            return SessionState(False, "前一交易日为周末")
+        if _is_holiday(ref_ds, cn_holidays):
+            return SessionState(False, "前一交易日假期休市")
+        return SessionState(True, "夜盘延续时段")
+
+    # 白天与晚盘（21:00-23:59）按“当天”判断交易日/假期
+    if wd >= 5:
+        return SessionState(False, "周末休市")
+    if _is_holiday(ds, cn_holidays):
+        return SessionState(False, "国内假期休市")
 
     if _in_any(t, day_ranges):
         return SessionState(True, "日盘交易时段")
@@ -162,11 +172,16 @@ def _overseas_session(now: datetime, us_holidays: set[str], lme_holidays: set[st
     if wd == 5 and t >= time(6, 0):
         return SessionState(False, "周末休市")
 
-    # 假期判断：美盘/伦敦任一休市均视为外盘主集群休市
-    ds = now.strftime("%Y-%m-%d")
-    if _is_holiday(ds, us_holidays):
+    # 假期判断：凌晨窗口归属前一交易日（避免假期跨日误开盘）
+    # 示例：周一假期时，周二 01:00 应仍视作休市。
+    ref_date = now
+    if t < time(7, 0):
+        ref_date = now - timedelta(days=1)
+    ref_ds = ref_date.strftime("%Y-%m-%d")
+
+    if _is_holiday(ref_ds, us_holidays):
         return SessionState(False, "美国假期休市")
-    if _is_holiday(ds, lme_holidays):
+    if _is_holiday(ref_ds, lme_holidays):
         return SessionState(False, "伦敦假期休市")
 
     return SessionState(True, "外盘交易时段")

@@ -31,7 +31,7 @@ import signal
 import sys
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -114,6 +114,7 @@ def _emit_market_transition_notifications() -> None:
         for tr in transitions:
             if tr.to_open:
                 title = f"{tr.market} 开盘采集开始"
+                event_code = "market_session_open"
                 body_rows = [
                     ("市场", tr.market),
                     ("状态", "开盘"),
@@ -123,6 +124,7 @@ def _emit_market_transition_notifications() -> None:
                 ]
             else:
                 title = f"{tr.market} 休盘完成采集"
+                event_code = "market_session_close"
                 body_rows = [
                     ("市场", tr.market),
                     ("状态", "休盘"),
@@ -132,13 +134,14 @@ def _emit_market_transition_notifications() -> None:
                 ]
 
             d.dispatch(DataEvent(
-                event_code="market_session_transition",
+                event_code=event_code,
                 notify_type=NotifyType.NOTIFY,
                 title=title,
                 body_md=title,
                 body_rows=body_rows,
-                source_name="global_calendar",
+                source_name=f"global_calendar:{tr.market}",
                 channels={"feishu"},
+                bypass_quiet_hours=True,
             ))
 
         _last_snapshot = cur
@@ -279,6 +282,7 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
                     body_rows=[("采集器", name), ("记录数", f"{total:,} 条"), ("耗时", f"{elapsed}s")],
                     source_name=name,
                     channels=channels,
+                    bypass_quiet_hours=True,
                 ))
 
                 if name in {"持仓仓单日报"}:
@@ -290,6 +294,7 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
                         body_rows=[("采集器", name), ("状态", "已完成"), ("明细", "仓单/持仓明细已发送邮件")],
                         source_name=name,
                         channels={"feishu"},
+                        bypass_quiet_hours=True,
                     ))
             except Exception:
                 pass
@@ -493,9 +498,11 @@ def job_overseas_kline(config: dict[str, Any]) -> None:
     LME 金属单独由 job_overseas_kline_lme 在 02:00 采集。
     """
     _calendar.refresh()
-    ok, reason = _calendar.is_us_trading_day(datetime.now())
+    # 06:00 北京执行时，采的是“上一交易日”收盘数据（Tue-Sat 对应 Mon-Fri）。
+    ref_now = datetime.now() - timedelta(days=1)
+    ok, reason = _calendar.is_us_trading_day(ref_now)
     if not ok:
-        logger.info("跳过外盘日线(美/欧): %s", reason)
+        logger.info("跳过外盘日线(美/欧): %s (ref=%s)", reason, ref_now.strftime("%Y-%m-%d"))
         return
     from services.data.src.scheduler.pipeline import run_overseas_daily_pipeline
     # 过滤掉 LME 品种（由 job_overseas_kline_lme 处理）
@@ -512,9 +519,11 @@ def job_overseas_kline_lme(config: dict[str, Any]) -> None:
     品种: AHD(铝/AL) / ZSD(锌/ZN) / NID(镍/SS不锈钢) / CAD(铜/CU) / PBD / SND
     """
     _calendar.refresh()
-    ok, reason = _calendar.is_lme_trading_day(datetime.now())
+    # 02:00 北京执行时，采的是“上一交易日”伦敦收盘数据（Tue-Sat 对应 Mon-Fri）。
+    ref_now = datetime.now() - timedelta(days=1)
+    ok, reason = _calendar.is_lme_trading_day(ref_now)
     if not ok:
-        logger.info("跳过LME金属日线: %s", reason)
+        logger.info("跳过LME金属日线: %s (ref=%s)", reason, ref_now.strftime("%Y-%m-%d"))
         return
     from services.data.src.scheduler.pipeline import run_overseas_daily_pipeline
     lme_syms = [s for s in _get_overseas_symbols() if s.startswith("LME.")]

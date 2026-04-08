@@ -74,6 +74,8 @@ class DataEvent:
     source_name: str = ""
     # 通道路由: {"feishu", "email"}; 默认双通道。
     channels: set[str] = field(default_factory=lambda: {"feishu", "email"})
+    # 是否绕过 22:00-08:00 静默窗口（用于必须送达类通知）。
+    bypass_quiet_hours: bool = False
     # 飞书操作按钮 (P0 用)
     action_buttons: list[dict[str, Any]] = field(default_factory=list)
 
@@ -133,8 +135,8 @@ class NotifierDispatcher:
         """
         now = time.time()
 
-        # 夜间静默：仅 P0 通过
-        if _is_quiet_hours() and event.notify_type not in (NotifyType.P0,):
+        # 夜间静默：仅 P0 或显式 bypass 通过
+        if _is_quiet_hours() and (not event.bypass_quiet_hours) and event.notify_type not in (NotifyType.P0,):
             logger.debug("quiet hours, skipping: %s", event.event_code)
             return True
 
