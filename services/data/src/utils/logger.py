@@ -13,7 +13,7 @@ import json as _json
 import logging
 import os
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
@@ -21,6 +21,7 @@ _SERVICE_ROOT = Path(__file__).resolve().parents[2]  # services/data/
 _LOG_DIR = Path(os.getenv("JBT_DATA_LOG_DIR", str(_SERVICE_ROOT / "logs")))
 _LOG_FORMAT = os.getenv("JBT_LOG_FORMAT", "text")  # "json" or "text"
 _TEXT_FORMATTER = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+_UTC = timezone.utc
 
 
 class _JSONFormatter(logging.Formatter):
@@ -28,7 +29,7 @@ class _JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         entry = {
-            "ts": datetime.utcfromtimestamp(record.created).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            "ts": datetime.fromtimestamp(record.created, tz=_UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             "level": record.levelname,
             "logger": record.name,
             "msg": record.getMessage(),

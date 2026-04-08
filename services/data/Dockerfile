@@ -19,9 +19,6 @@ COPY src/ ./services/data/src/
 COPY tests/ ./services/data/tests/
 COPY configs/ ./services/data/configs/
 
-# Shared python-common (for cross-service contracts)
-COPY ../shared/python-common/ ./shared/python-common/ 2>/dev/null || true
-
 # Supervisord config
 COPY supervisord.conf /etc/supervisor/conf.d/jbt-data.conf
 
