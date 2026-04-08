@@ -1324,11 +1324,13 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
 
 # 任务注册表: (名称, 函数, 间隔秒数, 每日固定时间HH:MM 或 None)
 _FALLBACK_JOBS: list[tuple[str, Callable[..., Any], int | None, str | None]] = [
-    # ("分钟内盘K线", job_minute_kline, 120, None),  # [DEPRECATED] 由 plist 接管
+    ("市场开休盘状态监听",      job_market_session_watch,    60,   None),
+    ("分钟内盘K线",             job_minute_kline,          120,   None),
     ("A股分钟K线",             job_stock_minute,        120,   None),
     ("外盘分钟K线(yfinance)",  job_overseas_minute_yf,  300,   None),
     ("日线K线",                job_daily_kline,         None,  "17:00"),
-    ("外盘日线",               job_overseas_kline,      None,  "17:05"),
+    ("外盘日线(美/欧)",         job_overseas_kline,      None,  "06:00"),
+    ("LME金属日线",            job_overseas_kline_lme,  None,  "02:00"),
     ("Tushare期货五合一",      job_tushare_futures,     None,  "17:10"),
     ("宏观数据",               job_macro,               None,  "09:00"),
     ("持仓仓单日报",           job_position,            None,  "15:30"),

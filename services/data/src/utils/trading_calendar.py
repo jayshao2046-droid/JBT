@@ -114,6 +114,10 @@ def _cn_futures_session(now: datetime, cn_holidays: set[str]) -> SessionState:
 
     # 凌晨夜盘延续（00:00-02:30）按“前一自然日”判断是否交易日/假期
     if time(0, 0) <= t <= time(2, 30):
+        # 仅周二至周五凌晨存在有效夜盘延续（对应前一日周一至周四夜盘）
+        if wd not in (1, 2, 3, 4):
+            return SessionState(False, "非夜盘延续时段")
+
         ref = now - timedelta(days=1)
         ref_ds = ref.strftime("%Y-%m-%d")
         ref_wd = ref.weekday()
