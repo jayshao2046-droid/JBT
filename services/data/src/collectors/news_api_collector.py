@@ -19,7 +19,7 @@ _TIMEOUT = 15
 class NewsAPICollector(BaseCollector):
     """Collect financial news from public API endpoints using httpx async."""
 
-    DEFAULT_SOURCES = ["eastmoney", "cls", "sina_finance", "shmet", "jin10", "stcn"]
+    DEFAULT_SOURCES = ["eastmoney", "cls", "sina_finance", "shmet", "stcn"]
 
     def __init__(self, *, use_mock: bool = False, **kwargs: Any) -> None:
         kwargs.pop('name', None)
@@ -63,7 +63,6 @@ class NewsAPICollector(BaseCollector):
             "cls": self._async_fetch_cls,
             "sina_finance": self._async_fetch_sina,
             "shmet": self._async_fetch_shmet_news,
-            "jin10": self._async_fetch_jin10,
             "stcn": self._async_fetch_stcn,
         }
         records: list[dict[str, Any]] = []
@@ -149,24 +148,6 @@ class NewsAPICollector(BaseCollector):
                     "content": str(row.get("content", row.get("内容", "")))[:300],
                     "url": str(row.get("url", row.get("链接", ""))),
                 })
-        return items
-
-    @staticmethod
-    async def _async_fetch_jin10(client: httpx.AsyncClient) -> list[dict[str, Any]]:
-        """东方财富财经频道快讯 (替代已封锁的金十 API)."""
-        import re
-        url = "https://finance.eastmoney.com/a/czqyw.html"
-        resp = await client.get(url)
-        resp.raise_for_status()
-        items = []
-        pattern = re.compile(
-            r'<a[^>]*href="(https?://finance\.eastmoney\.com/a/\d+\.html)"[^>]*>([^<]+)</a>'
-        )
-        matches = pattern.findall(resp.text)
-        for link, title in matches[:50]:
-            title = title.strip()
-            if title:
-                items.append({"title": title, "url": link, "content": title[:300]})
         return items
 
     @staticmethod

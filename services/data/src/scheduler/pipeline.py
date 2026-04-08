@@ -8,9 +8,11 @@ from typing import Any
 
 from services.data.src.collectors.akshare_backup import AkshareBackupCollector
 from services.data.src.collectors.base import BaseCollector
+from services.data.src.collectors.cftc_collector import CftcCollector
+from services.data.src.collectors.forex_collector import ForexCollector
 from services.data.src.collectors.macro_collector import MacroCollector
 from services.data.src.collectors.news_api_collector import NewsAPICollector
-from services.data.src.collectors.news_translator import enrich_record_with_translation
+from services.data.src.collectors.options_collector import OptionsCollector
 from services.data.src.collectors.position_collector import PositionCollector
 from services.data.src.collectors.rss_collector import RSSCollector
 from services.data.src.collectors.sentiment_collector import SentimentCollector
@@ -384,21 +386,6 @@ def run_news_api_pipeline(
             _logger.error("news RSS backup also failed: %s", backup_exc)
             records = []
 
-    # P1-002: 翻译字段补全 — enrich title_original / title_translated
-    ds_key = os.environ.get("DEEPSEEK_API_KEY", "")
-    ds_url = resolved_config.get("deepseek", {}).get(
-        "base_url", "https://api.deepseek.com/v1"
-    )
-    enriched = 0
-    for i, rec in enumerate(records):
-        records[i] = enrich_record_with_translation(
-            rec, api_key=ds_key or None, base_url=ds_url,
-        )
-        if records[i].get("payload", {}).get("title_original"):
-            enriched += 1
-    if records:
-        _logger.info("news_api translation enrichment: %d/%d records", enriched, len(records))
-
     # P1-010: 生成 news_score 扁平化数据
     try:
         score_df = map_news_to_score(records)
@@ -539,4 +526,76 @@ def run_tushare_futures_pipeline(
 
     records = resolved_collector.collect_all(ts_code=ts_code, trade_date=trade_date)
     written = _save_records(storage=resolved_storage, data_type="futures", symbol=symbol, records=records)
+    return {symbol: written}
+
+
+def run_forex_pipeline(
+    *,
+    pairs: list[str] | None = None,
+    as_of: str | None = None,
+    config: dict[str, Any] | None = None,
+    storage: HDF5Storage | None = None,
+    collector: ForexCollector | None = None,
+    symbol: str = "forex",
+) -> dict[str, int]:
+    """Run Tushare FX daily collection and save to hdf5/{symbol}/forex/."""
+    resolved_config = config or get_config()
+    resolved_storage = storage or _build_storage(resolved_config)
+    resolved_collector = collector or ForexCollector(
+        config=resolved_config, storage=resolved_storage, use_mock=False,
+    )
+    try:
+        records = resolved_collector.collect(pairs=pairs, as_of=as_of)
+    except Exception as exc:
+        _logger.error("forex pipeline failed: %s", exc)
+        records = []
+    written = _save_records(storage=resolved_storage, data_type="forex", symbol=symbol, records=records)
+    return {symbol: written}
+
+
+def run_cftc_pipeline(
+    *,
+    indicators: list[str] | None = None,
+    as_of: str | None = None,
+    config: dict[str, Any] | None = None,
+    storage: HDF5Storage | None = None,
+    collector: CftcCollector | None = None,
+    symbol: str = "cftc",
+) -> dict[str, int]:
+    """Run CFTC COT report collection and save to hdf5/{symbol}/cftc/."""
+    resolved_config = config or get_config()
+    resolved_storage = storage or _build_storage(resolved_config)
+    resolved_collector = collector or CftcCollector(
+        config=resolved_config, storage=resolved_storage, use_mock=False,
+    )
+    try:
+        records = resolved_collector.collect(indicators=indicators, as_of=as_of)
+    except Exception as exc:
+        _logger.error("cftc pipeline failed: %s", exc)
+        records = []
+    written = _save_records(storage=resolved_storage, data_type="cftc", symbol=symbol, records=records)
+    return {symbol: written}
+
+
+def run_options_pipeline(
+    *,
+    indicators: list[str] | None = None,
+    as_of: str | None = None,
+    config: dict[str, Any] | None = None,
+    storage: HDF5Storage | None = None,
+    collector: OptionsCollector | None = None,
+    symbol: str = "options",
+) -> dict[str, int]:
+    """Run options market data collection and save to hdf5/{symbol}/options/."""
+    resolved_config = config or get_config()
+    resolved_storage = storage or _build_storage(resolved_config)
+    resolved_collector = collector or OptionsCollector(
+        config=resolved_config, storage=resolved_storage, use_mock=False,
+    )
+    try:
+        records = resolved_collector.collect(indicators=indicators, as_of=as_of)
+    except Exception as exc:
+        _logger.error("options pipeline failed: %s", exc)
+        records = []
+    written = _save_records(storage=resolved_storage, data_type="options", symbol=symbol, records=records)
     return {symbol: written}

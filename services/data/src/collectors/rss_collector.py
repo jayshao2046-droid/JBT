@@ -71,12 +71,16 @@ class RSSCollector(BaseCollector):
         if self.use_mock:
             return self._mock_records(feed_map=feed_map, as_of=as_of)
         try:
-            records = self._fetch_live(feed_map=feed_map, max_items=max_items, as_of=as_of)
+            # 公开国际源需走代理（CNBC/Reuters/Bloomberg/FT/WSJ/Investing/MarketWatch）
+            from services.data.src.utils.proxy import overseas_proxy_env
+            with overseas_proxy_env():
+                records = self._fetch_live(feed_map=feed_map, max_items=max_items, as_of=as_of)
         except Exception as exc:
             self.logger.warning("rss public feed fetch failed: %s", exc)
             records = []
 
         # --- RSShub fallback: only try if public feeds insufficient ---
+        # RSShub 走国内直连，不需要代理
         if len(records) < max_items and try_rsshub and (feeds is None):
             self.logger.info("public feeds returned %d records (< %d), trying RSShub fallback", len(records), max_items)
             try:

@@ -104,6 +104,7 @@ class ShippingCollector(BaseCollector):
     def _fetch_restricted_index(self, *, name: str, timestamp: str) -> list[dict[str, Any]]:
         """Attempt to fetch SCFI/CCFI from Investing.com via httpx."""
         import httpx
+        from services.data.src.utils.proxy import get_httpx_proxy_kwargs
         # Investing.com 提供 Baltic 和集装箱运价指数的公开页面
         ticker_map = {
             "scfi": "https://www.investing.com/indices/shanghai-containerized-freight",
@@ -112,7 +113,7 @@ class ShippingCollector(BaseCollector):
         url = ticker_map.get(name)
         if not url:
             return []
-        resp = httpx.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True)
+        resp = httpx.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True, **get_httpx_proxy_kwargs())
         resp.raise_for_status()
 
         import re

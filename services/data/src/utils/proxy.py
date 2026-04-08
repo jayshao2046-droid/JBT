@@ -94,6 +94,46 @@ def get_overseas_httpx_client(**kwargs) -> httpx.AsyncClient:
     return httpx.AsyncClient(proxy=get_proxy_url(), **kwargs)
 
 
+def get_httpx_proxy_kwargs() -> dict:
+    """返回 httpx 客户端代理参数，不可用时返回空 dict（直连）。"""
+    if is_proxy_alive():
+        return {"proxy": get_proxy_url()}
+    log.warning("代理不可用，httpx 将直连")
+    return {}
+
+
+# 境外连通测试目标（覆盖所有需要代理的域名类别）
+OVERSEAS_TARGETS: dict[str, str] = {
+    "google_204":    "http://www.gstatic.com/generate_204",
+    "yahoo_finance": "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=1d&interval=1d",
+    "reuters":       "https://www.reuters.com/",
+    "investing":     "https://www.investing.com/",
+    "noaa":          "https://www.cpc.ncep.noaa.gov/",
+}
+
+
+def check_overseas_targets() -> dict[str, float | None]:
+    """测试全部境外目标的连通性，返回 {target_name: latency_ms | None}。"""
+    results: dict[str, float | None] = {}
+    cfg = _cfg()
+    threshold_ms = cfg.get("alert_threshold_ms", 5000)
+    timeout = cfg.get("health_timeout_sec", 8)
+    proxy_url = get_proxy_url()
+    for name, url in OVERSEAS_TARGETS.items():
+        try:
+            t0 = time.monotonic()
+            with httpx.Client(proxy=proxy_url, timeout=timeout) as client:
+                r = client.get(url)
+                latency_ms = (time.monotonic() - t0) * 1000
+                if r.status_code in (200, 204, 301, 302, 403) and latency_ms < threshold_ms:
+                    results[name] = round(latency_ms, 1)
+                else:
+                    results[name] = None
+        except Exception:
+            results[name] = None
+    return results
+
+
 def check_and_report() -> bool:
     """P0 health check. Logs result and returns True if OK."""
     latency = get_proxy_latency_ms()

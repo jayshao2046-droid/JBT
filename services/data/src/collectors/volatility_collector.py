@@ -89,13 +89,15 @@ class VolatilityCollector(BaseCollector):
 
     def _fetch_yfinance_vix(self, *, name: str, ticker: str, timestamp: str, full_history: bool = False) -> list[dict[str, Any]]:
         """Fetch CBOE VIX/VXN via yfinance."""
+        from services.data.src.utils.proxy import overseas_proxy_env
         try:
             import yfinance as yf
         except ImportError:
             self.logger.warning("yfinance not installed, skipping %s", name)
             return []
         _period = "max" if full_history else "1mo"
-        data = yf.download(ticker, period=_period, interval="1d", progress=False)
+        with overseas_proxy_env():
+            data = yf.download(ticker, period=_period, interval="1d", progress=False)
         if data is None or data.empty:
             return []
         # flatten MultiIndex columns from yfinance 1.x (e.g. ("Open", "^VIX") → "Open")

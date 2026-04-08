@@ -83,6 +83,9 @@ DATA_RULES: dict[str, dict] = {
     "tushare":         {"dir": DATA_ROOT / "tushare",               "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "Tushare日线"},
     "weather":         {"dir": DATA_ROOT / "weather",               "max_age_h": 14,  "trading_only": False, "weekend_skip": False, "label": "天气"},
     "sentiment":       {"dir": DATA_ROOT / "sentiment",             "max_age_h": 26,  "trading_only": False, "weekend_skip": False, "label": "情绪指数"},
+    "forex":           {"dir": DATA_ROOT / "forex",                 "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "外汇日线"},
+    "cftc":            {"dir": DATA_ROOT / "cftc",                  "max_age_h": 200, "trading_only": False, "weekend_skip": False, "label": "CFTC持仓"},
+    "options":         {"dir": DATA_ROOT / "options",               "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "期权行情"},
     "health_log":      {"dir": DATA_ROOT / "logs",                  "max_age_h": 1,   "trading_only": False, "weekend_skip": False, "label": "健康日志"},
 }
 
@@ -266,7 +269,7 @@ def get_high_mem_processes(top_n: int = 5) -> list[dict]:
 
 
 def get_service_status() -> dict:
-    """VPN/mihomo/采集器服务状态。"""
+    """VPN/mihomo/采集器服务状态 + 代理境外连通性测试。"""
     services: dict[str, Any] = {}
 
     # VPN / mihomo
@@ -300,6 +303,31 @@ def get_service_status() -> dict:
             services["mihomo"] = "不可达"
     else:
         services["mihomo"] = "未部署"
+
+    # 代理境外连通性测试（仅 Mini）
+    if IS_MINI:
+        try:
+            from services.data.src.utils.proxy import check_overseas_targets, is_proxy_alive
+            if is_proxy_alive():
+                proxy_results = check_overseas_targets()
+                ok_count = sum(1 for r in proxy_results if r["ok"])
+                total = len(proxy_results)
+                if ok_count == total:
+                    services["proxy_overseas"] = f"全通 ({ok_count}/{total})"
+                elif ok_count > 0:
+                    failed = [r["name"] for r in proxy_results if not r["ok"]]
+                    services["proxy_overseas"] = f"部分通 ({ok_count}/{total}), 失败: {', '.join(failed)}"
+                else:
+                    services["proxy_overseas"] = "全部不通"
+                services["_proxy_detail"] = proxy_results
+            else:
+                services["proxy_overseas"] = "代理离线"
+                services["_proxy_detail"] = []
+        except Exception as exc:
+            services["proxy_overseas"] = f"检测异常: {exc}"
+            services["_proxy_detail"] = []
+    else:
+        services["proxy_overseas"] = "未部署"
 
     # 采集器进程数
     collector_count = 0
@@ -738,6 +766,61 @@ def send_recovery_notice(
         print(f"[飞书] 采集恢复通知发送失败: {e}")
 
 
+def send_proxy_alert(services: dict) -> None:
+    """代理连通性异常时发送飞书 P1 告警。"""
+    proxy_status = services.get("proxy_overseas", "")
+    if proxy_status in ("全通", "未部署") or proxy_status.startswith("全通"):
+        return  # 正常或不适用
+
+    webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or ""
+    if not webhook:
+        print("[警告] 无飞书 webhook，跳过代理告警")
+        return
+
+    try:
+        from services.data.src.notify.feishu import FeishuSender
+        sender = FeishuSender()
+
+        now_str = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M")
+        detail = services.get("_proxy_detail", [])
+        if detail:
+            target_lines = "\n".join(
+                f"  - {r['name']}: {'✅' if r['ok'] else '❌'} {r.get('latency_ms', '-')}ms"
+                for r in detail
+            )
+        else:
+            target_lines = "  无详细数据"
+
+        is_offline = "离线" in proxy_status or "全部不通" in proxy_status
+        level = "P0" if is_offline else "P1"
+        template = "red" if is_offline else "orange"
+        icon = "🚨" if is_offline else "⚠️"
+
+        card = {
+            "header": {
+                "title": {"tag": "plain_text", "content": f"{icon} [{level}-PROXY] 境外代理异常 — {LABEL}"},
+                "template": template,
+            },
+            "elements": [
+                {"tag": "div", "text": {"tag": "lark_md", "content": (
+                    f"**设备:** {LABEL}\n"
+                    f"**代理状态:** {proxy_status}\n"
+                    f"**mihomo:** {services.get('mihomo', '未知')}\n\n"
+                    f"**境外目标测试:**\n{target_lines}"
+                )}},
+                {"tag": "hr"},
+                {"tag": "div", "text": {"tag": "lark_md", "content":
+                    "代理离线将导致外盘采集(yfinance/VIX/SCFI)、RSS国际源全部失败。\n请检查 mihomo 进程和订阅更新。"}},
+                {"tag": "hr"},
+                {"tag": "note", "elements": [{"tag": "plain_text", "content": f"JBT data-service | {now_str}"}]},
+            ],
+        }
+        sender.send_card(webhook, card)
+        print(f"[飞书] 代理 {level} 告警已发送")
+    except Exception as e:
+        print(f"[飞书] 代理告警发送失败: {e}")
+
+
 # ===================== 主流程 =====================
 def run_health_check(force_p0: bool = False) -> dict:
     """执行健康检查并返回结构化报告。"""
@@ -899,6 +982,12 @@ def main():
             still_failed = [s for s in report["collector_freshness"] if not s["ok"] and not s.get("skipped")]
             print(f"[健康检查] {len(report['collector_recovered'])} 个采集源已恢复，发送恢复通知...")
             send_recovery_notice(report["collector_recovered"], still_failed)
+
+        # 代理境外连通性告警
+        proxy_status = report["services"].get("proxy_overseas", "")
+        if proxy_status and not proxy_status.startswith("全通") and proxy_status != "未部署":
+            print(f"[健康检查] 代理异常: {proxy_status}，发送告警...")
+            send_proxy_alert(report["services"])
     else:
         report.pop("_alarm_state_updated", None)
 

@@ -20,6 +20,9 @@ BotQuant 24h 数据调度主入口
     波动率         每日 17:00
     情绪指数       每5分钟
     海运物流       每日 09:00
+    外汇日线       每日 17:20
+    CFTC持仓报告   每周六 10:00
+    期权行情       每日 15:30
 """
 
 from __future__ import annotations
@@ -668,6 +671,34 @@ def job_shipping(config: dict[str, Any]) -> None:
     _safe_run("海运物流", run_shipping_pipeline, config=config)
 
 
+def job_forex(config: dict[str, Any]) -> None:
+    """外汇日线 — 每日 17:20 (Tushare fx_daily)。"""
+    _calendar.refresh()
+    ok, reason = _calendar.is_cn_trading_day(datetime.now())
+    if not ok:
+        logger.info("跳过外汇日线: %s", reason)
+        return
+    from services.data.src.scheduler.pipeline import run_forex_pipeline
+    _safe_run("外汇日线", run_forex_pipeline, config=config)
+
+
+def job_cftc(config: dict[str, Any]) -> None:
+    """CFTC持仓报告 — 每周六 10:00 (CFTC 周五发布)。"""
+    from services.data.src.scheduler.pipeline import run_cftc_pipeline
+    _safe_run("CFTC持仓报告", run_cftc_pipeline, config=config)
+
+
+def job_options(config: dict[str, Any]) -> None:
+    """期权行情 — 每日 15:30 (收盘后)。"""
+    _calendar.refresh()
+    ok, reason = _calendar.is_cn_trading_day(datetime.now())
+    if not ok:
+        logger.info("跳过期权行情: %s", reason)
+        return
+    from services.data.src.scheduler.pipeline import run_options_pipeline
+    _safe_run("期权行情", run_options_pipeline, config=config)
+
+
 def job_market_session_watch(config: dict[str, Any]) -> None:
     """每分钟检测一次全球市场开休盘状态并飞书提醒。"""
     _emit_market_transition_notifications()
@@ -1059,63 +1090,6 @@ def job_nas_backup(config: dict[str, Any]) -> None:
         logger.error("❌ NAS 备份异常:\n%s", traceback.format_exc())
 
 
-def job_force_close(config: dict[str, Any]) -> None:
-    """强制平仓检查 — 日盘 14:55 / 夜盘 22:55.
-
-    检查当前是否到达强平时间，若是则执行全仓平仓。
-    包含重试机制（最多 3 次），失败后飞书告警。
-    """
-    try:
-        logger.info("▶ 开始执行: 强制平仓检查")
-        # from src.risk.force_close import ForceCloseManager
-
-        fc = ForceCloseManager()
-        should, reason = fc.should_force_close()
-        if not should:
-            logger.info("✅ 强制平仓检查: 未到强平时间")
-            return
-
-        # 强平执行 (含重试)
-        max_retries = 3
-        for attempt in range(1, max_retries + 1):
-            logger.critical("🚨 强制平仓第 %d 次尝试: %s", attempt, reason)
-            results = fc.execute_force_close(reason)
-
-            if not results:
-                logger.info("✅ 无持仓需要平仓")
-                break
-
-            failed = {s: ok for s, ok in results.items() if not ok}
-            if not failed:
-                logger.info("✅ 强制平仓全部成功: %d 品种", len(results))
-                break
-
-            logger.error("❌ 强制平仓部分失败 (attempt %d): %s", attempt, list(failed.keys()))
-            if attempt < max_retries:
-                time.sleep(2)
-
-        # 飞书通知
-        n = _get_notifier(config)
-        if n:
-            failed_list = list(failed.keys()) if failed else []
-            if failed_list:
-                n.record_result(
-                    "强制平仓", records=0, elapsed=0, success=False,
-                    error=f"部分品种平仓失败: {failed_list}",
-                )
-            else:
-                n.record_result("强制平仓", records=len(results), elapsed=0, success=True)
-
-    except Exception:
-        logger.error("❌ 强制平仓异常:\n%s", traceback.format_exc())
-        n = _get_notifier(config)
-        if n:
-            n.record_result(
-                "强制平仓", records=0, elapsed=0, success=False,
-                error=traceback.format_exc()[-200:],
-            )
-
-
 # ─────────────────────────────────────────────
 # APScheduler 调度模式
 # ─────────────────────────────────────────────
@@ -1211,6 +1185,21 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
         job_shipping, CronTrigger(hour=9, minute=10, day_of_week="mon-fri"),
         args=[config], id="shipping", name="海运物流",
     )
+    # 外汇日线: 17:20 (Tushare fx_daily, 交易日)
+    scheduler.add_job(
+        job_forex, CronTrigger(hour=17, minute=20, day_of_week="mon-fri"),
+        args=[config], id="forex_daily", name="外汇日线",
+    )
+    # CFTC持仓报告: 每周六 10:00 (CFTC 周五发布, 周六采集)
+    scheduler.add_job(
+        job_cftc, CronTrigger(hour=10, minute=0, day_of_week="sat"),
+        args=[config], id="cftc_weekly", name="CFTC持仓报告",
+    )
+    # 期权行情: 15:30 (收盘后, 交易日)
+    scheduler.add_job(
+        job_options, CronTrigger(hour=15, minute=30, day_of_week="mon-fri"),
+        args=[config], id="options_daily", name="期权行情",
+    )
     # [DEPRECATED LIFTED] 飞书新闻推送: 每1小时
     scheduler.add_job(
         job_feishu_news_hourly, IntervalTrigger(hours=1),
@@ -1293,16 +1282,6 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
         job_news_push_batch, IntervalTrigger(minutes=30),
         args=[config], id="news_push_batch", name="新闻批量推送",
     )
-    # 强制平仓 — 日盘 14:55 (周一到周五)
-    scheduler.add_job(
-        job_force_close, CronTrigger(hour=14, minute=55, day_of_week="mon-fri"),
-        args=[config], id="force_close_day", name="强制平仓(日盘)",
-    )
-    # 强制平仓 — 夜盘 22:55 (周一到周四)
-    scheduler.add_job(
-        job_force_close, CronTrigger(hour=22, minute=55, day_of_week="mon-thu"),
-        args=[config], id="force_close_night", name="强制平仓(夜盘)",
-    )
 
     logger.info("=" * 60)
     logger.info("BotQuant 数据调度器启动 (APScheduler 模式)")
@@ -1339,6 +1318,9 @@ _FALLBACK_JOBS: list[tuple[str, Callable[..., Any], int | None, str | None]] = [
     ("波动率指数",             job_volatility,          None,  "17:15"),
     ("情绪指数",               job_sentiment,           300,   None),
     ("海运物流",               job_shipping,            None,  "09:10"),
+    ("外汇日线",               job_forex,               None,  "17:20"),
+    ("CFTC持仓报告",           job_cftc,                None,  "10:00"),  # 周六
+    ("期权行情",               job_options,             None,  "15:30"),
     ("飞书新闻推送",           job_feishu_news_hourly,  3600,  None),
     ("每日采集汇总",           job_daily_summary,       None,  "23:00"),
     ("晚间审计日报",           job_evening_report,      None,  "23:05"),
@@ -1349,8 +1331,6 @@ _FALLBACK_JOBS: list[tuple[str, Callable[..., Any], int | None, str | None]] = [
     ("每日计数器重置",         job_daily_reset,         None,  "00:00"),
     ("SLA计数器重置",          job_sla_reset,           None,  "00:05"),
     ("NAS备份",               job_nas_backup,          None,  "03:00"),
-    ("强制平仓(日盘)",         job_force_close,         None,  "14:55"),
-    ("强制平仓(夜盘)",         job_force_close,         None,  "22:55"),
 ]
 
 

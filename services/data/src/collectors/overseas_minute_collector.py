@@ -155,6 +155,8 @@ class OverseasMinuteCollector(BaseCollector):
         interval: str | None = None,
         as_of: str | None = None,
     ) -> list[dict[str, Any]]:
+        from services.data.src.utils.proxy import overseas_proxy_env
+
         symbol_list = symbols or self.symbols
         cur_period = period or self.period
         cur_interval = interval or self.interval
@@ -162,45 +164,47 @@ class OverseasMinuteCollector(BaseCollector):
         records: list[dict[str, Any]] = []
         failed_symbols: list[str] = []
 
-        # Layer 1: yfinance (主源)
-        if not _is_rate_limited("yfinance"):
-            yf_records, yf_failed = self._fetch_yfinance(
-                symbol_list=symbol_list, period=cur_period,
-                interval=cur_interval, as_of=as_of,
-            )
-            records.extend(yf_records)
-            failed_symbols = yf_failed
-        else:
-            self.logger.info("yfinance 处于退避冷却中, 跳过")
-            failed_symbols = [s for s in symbol_list if s in YFINANCE_MINUTE_MAP]
-
-        # Layer 2: Alpha Vantage (备源1, 仅对yfinance失败的品种)
-        if failed_symbols and self._av_api_key and not _is_rate_limited("alphavantage"):
-            av_targets = [s for s in failed_symbols if s in ALPHAVANTAGE_MAP]
-            if av_targets:
-                av_records, av_failed = self._fetch_alpha_vantage(
-                    symbol_list=av_targets, interval=cur_interval,
+        # 外盘采集全程走代理（yfinance/Alpha Vantage/Twelve Data 均需境外访问）
+        with overseas_proxy_env():
+            # Layer 1: yfinance (主源)
+            if not _is_rate_limited("yfinance"):
+                yf_records, yf_failed = self._fetch_yfinance(
+                    symbol_list=symbol_list, period=cur_period,
+                    interval=cur_interval, as_of=as_of,
                 )
-                records.extend(av_records)
-                # 更新失败列表
-                succeeded_av = {s for s in av_targets if s not in av_failed}
-                failed_symbols = [s for s in failed_symbols if s not in succeeded_av]
+                records.extend(yf_records)
+                failed_symbols = yf_failed
+            else:
+                self.logger.info("yfinance 处于退避冷却中, 跳过")
+                failed_symbols = [s for s in symbol_list if s in YFINANCE_MINUTE_MAP]
 
-        # Layer 3: Twelve Data (备源2, 仅对仍失败的品种)
-        if failed_symbols and self._td_api_key and not _is_rate_limited("twelvedata"):
-            td_targets = [s for s in failed_symbols if s in TWELVEDATA_MAP]
-            if td_targets:
-                td_records, td_failed = self._fetch_twelve_data(
-                    symbol_list=td_targets, interval=cur_interval,
-                )
-                records.extend(td_records)
-                succeeded_td = {s for s in td_targets if s not in td_failed}
-                failed_symbols = [s for s in failed_symbols if s not in succeeded_td]
+            # Layer 2: Alpha Vantage (备源1, 仅对yfinance失败的品种)
+            if failed_symbols and self._av_api_key and not _is_rate_limited("alphavantage"):
+                av_targets = [s for s in failed_symbols if s in ALPHAVANTAGE_MAP]
+                if av_targets:
+                    av_records, av_failed = self._fetch_alpha_vantage(
+                        symbol_list=av_targets, interval=cur_interval,
+                    )
+                    records.extend(av_records)
+                    # 更新失败列表
+                    succeeded_av = {s for s in av_targets if s not in av_failed}
+                    failed_symbols = [s for s in failed_symbols if s not in succeeded_av]
 
-        # Layer 4: AkShare 日线 (最后降级, 仅对仍失败的品种取日线)
-        if failed_symbols:
-            ak_records = self._fetch_akshare_daily_fallback(symbol_list=failed_symbols)
-            records.extend(ak_records)
+            # Layer 3: Twelve Data (备源2, 仅对仍失败的品种)
+            if failed_symbols and self._td_api_key and not _is_rate_limited("twelvedata"):
+                td_targets = [s for s in failed_symbols if s in TWELVEDATA_MAP]
+                if td_targets:
+                    td_records, td_failed = self._fetch_twelve_data(
+                        symbol_list=td_targets, interval=cur_interval,
+                    )
+                    records.extend(td_records)
+                    succeeded_td = {s for s in td_targets if s not in td_failed}
+                    failed_symbols = [s for s in failed_symbols if s not in succeeded_td]
+
+            # Layer 4: AkShare 日线 (最后降级, 仅对仍失败的品种取日线)
+            if failed_symbols:
+                ak_records = self._fetch_akshare_daily_fallback(symbol_list=failed_symbols)
+                records.extend(ak_records)
 
         # P1-001/P1-006: 品种级采集成功率统计
         total = len(symbol_list)
