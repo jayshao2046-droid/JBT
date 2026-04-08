@@ -3,9 +3,13 @@ from __future__ import annotations
 import importlib
 import sys
 
+import httpx
 import numpy as np
 import pytest
 
+import src.research.factor_loader as factor_loader_mod
+from src.gating.backtest_gate import BacktestGate
+from src.persistence.state_store import FileStateStore
 from src.research.session import ResearchSession, ResearchStatus, ResearchArtifacts
 from src.research.factor_loader import FactorLoader
 
@@ -100,15 +104,105 @@ def test_factor_loader_compute_hash_distinct() -> None:
     assert FactorLoader.compute_hash(X1) != FactorLoader.compute_hash(X2)
 
 
-def test_factor_loader_mock_load() -> None:
-    """mock load 应返回 (X, y) numpy 数组，形状正确。"""
+def test_factor_loader_load_prefers_executed_data_symbol_from_backtest_cert(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """load() 应优先使用回测证书中的 executed_data_symbol 访问 data service。"""
+    monkeypatch.setenv("DATA_SERVICE_URL", "http://data-service:8105")
+    state_file = tmp_path / "decision-state.json"
+    monkeypatch.setenv("DECISION_STATE_FILE", str(state_file))
+
+    BacktestGate(state_store=FileStateStore(state_file)).register_cert(
+        cert_id="bc-research-001",
+        strategy_id="strategy-alpha-001",
+        sharpe=1.4,
+        drawdown=0.08,
+        requested_symbol="DCE.p2605",
+        executed_data_symbol="KQ_m_DCE_p",
+    )
+
+    def fake_get(url: str, *, params: dict[str, object], timeout: float) -> httpx.Response:
+        assert url == "http://data-service:8105/api/v1/bars"
+        assert params == {
+            "symbol": "KQ_m_DCE_p",
+            "timeframe_minutes": 1,
+            "start": "2024-04-03",
+            "end": "2024-04-08",
+        }
+        assert timeout == 30
+        payload = {
+            "requested_symbol": "KQ_m_DCE_p",
+            "resolved_symbol": "KQ_m_DCE_p",
+            "source_kind": "continuous",
+            "timeframe_minutes": 1,
+            "count": 5,
+            "bars": [
+                {"datetime": "2024-04-03T09:00:00", "open": 10.0, "high": 11.0, "low": 9.0, "close": 10.0, "volume": 100.0, "open_interest": 1000.0},
+                {"datetime": "2024-04-03T09:01:00", "open": 10.0, "high": 12.0, "low": 9.0, "close": 11.0, "volume": 110.0, "open_interest": 1005.0},
+                {"datetime": "2024-04-03T09:02:00", "open": 11.0, "high": 12.0, "low": 10.0, "close": 12.0, "volume": 121.0, "open_interest": 1010.0},
+                {"datetime": "2024-04-03T09:03:00", "open": 12.0, "high": 13.0, "low": 11.0, "close": 11.0, "volume": 133.1, "open_interest": 1008.0},
+                {"datetime": "2024-04-03T09:04:00", "open": 11.0, "high": 14.0, "low": 10.0, "close": 13.0, "volume": 146.41, "open_interest": 1015.0},
+            ],
+        }
+        return httpx.Response(
+            200,
+            request=httpx.Request("GET", url, params=params),
+            json=payload,
+        )
+
+    monkeypatch.setattr(factor_loader_mod.httpx, "get", fake_get)
+
     loader = FactorLoader()
-    X, y = loader.load("alpha-001", "2025-01-01", "2025-12-31")
+    X, y = loader.load("strategy-alpha-001", "2024-04-03", "2024-04-08", n_features=5)
+
     assert isinstance(X, np.ndarray)
     assert isinstance(y, np.ndarray)
-    assert X.ndim == 2
-    assert y.ndim == 1
-    assert X.shape[0] == y.shape[0]
+    assert X.dtype == np.float32
+    assert y.dtype == np.int64
+    assert X.shape == (3, 5)
+    assert y.shape == (3,)
+    np.testing.assert_allclose(
+        X[0],
+        np.array([0.1, 3.0 / 11.0, 0.1, 0.1, 0.005], dtype=np.float32),
+        rtol=1e-6,
+    )
+    np.testing.assert_array_equal(y, np.array([1, 0, 1], dtype=np.int64))
+
+
+def test_factor_loader_load_raises_when_no_valid_symbol_source(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """无证书 symbol 且 strategy_id 不是合法标的格式时，应显式失败。"""
+    monkeypatch.setenv("DATA_SERVICE_URL", "http://data-service:8105")
+    monkeypatch.setenv("DECISION_STATE_FILE", str(tmp_path / "decision-state.json"))
+
+    def fake_get(url: str, *, params: dict[str, object], timeout: float) -> httpx.Response:
+        raise AssertionError("httpx.get should not be called without a valid data symbol")
+
+    monkeypatch.setattr(factor_loader_mod.httpx, "get", fake_get)
+
+    loader = FactorLoader()
+    with pytest.raises(RuntimeError, match="No valid data symbol available for strategy strategy-alpha-001"):
+        loader.load("strategy-alpha-001", "2024-04-03", "2024-04-08")
+
+
+def test_factor_loader_load_raises_when_data_service_unavailable(monkeypatch) -> None:
+    """上游 bars API 不可用时，应显式失败而不是静默回退到 mock 数据。"""
+    monkeypatch.setenv("DATA_SERVICE_URL", "http://data-service:8105")
+
+    def fake_get(url: str, *, params: dict[str, object], timeout: float) -> httpx.Response:
+        raise httpx.ConnectError(
+            "connection refused",
+            request=httpx.Request("GET", url, params=params),
+        )
+
+    monkeypatch.setattr(factor_loader_mod.httpx, "get", fake_get)
+
+    loader = FactorLoader()
+    with pytest.raises(RuntimeError, match="Failed to load bars from data service"):
+        loader.load("DCE.p2605", "2024-04-03", "2024-04-08")
 
 
 # ---------------------------------------------------------------------------

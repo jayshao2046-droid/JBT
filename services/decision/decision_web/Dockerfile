@@ -15,7 +15,7 @@ ARG BACKEND_BASE_URL=http://decision:8104
 ENV BACKEND_BASE_URL=${BACKEND_BASE_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN npm run build
+RUN mkdir -p public && npm run build
 
 FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/node:20-alpine AS runner
 WORKDIR /app
@@ -26,7 +26,7 @@ ENV HOSTNAME=0.0.0.0
 ENV PORT=3003
 ENV BACKEND_BASE_URL=http://decision:8104
 
-COPY --from=builder /app/public ./public 2>/dev/null || true
+COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/next.config.mjs ./next.config.mjs

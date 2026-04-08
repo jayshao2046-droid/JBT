@@ -1,7 +1,10 @@
 from typing import Optional
+
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from ...publish.executor import PublishExecutor, PublishStatus
 from ...strategy.repository import get_repository, StrategyPackage
 from ...strategy.lifecycle import LifecycleStatus, to_contract_state
 
@@ -26,6 +29,21 @@ class StrategyCreateRequest(BaseModel):
     reserved_at: Optional[str] = None
     published_at: Optional[str] = None
     retired_at: Optional[str] = None
+
+
+class StrategyPublishRequest(BaseModel):
+    target: str = "sim-trading"
+
+
+def _publish_response(strategy_id: str, status_name: str, message: str, target: str, adapter_response: dict) -> dict:
+    latest_snapshot = get_repository().get(strategy_id)
+    return {
+        "status": status_name,
+        "message": message,
+        "target": target,
+        "strategy": latest_snapshot.to_contract_dict() if latest_snapshot is not None else None,
+        "adapter_response": adapter_response,
+    }
 
 
 @router.get("")
@@ -80,3 +98,23 @@ def get_strategy_lifecycle(strategy_id: str) -> dict:
         "lifecycle_status": to_contract_state(pkg.lifecycle_status),
         "updated_at": pkg.updated_at,
     }
+
+
+@router.post("/{strategy_id}/publish")
+def publish_strategy(strategy_id: str, req: StrategyPublishRequest) -> JSONResponse:
+    result = PublishExecutor().execute(strategy_id, req.target)
+    body = _publish_response(
+        strategy_id=strategy_id,
+        status_name=result.status.value,
+        message=result.message,
+        target=result.target,
+        adapter_response=result.adapter_response,
+    )
+
+    if result.status == PublishStatus.SUCCESS:
+        return JSONResponse(status_code=status.HTTP_200_OK, content=body)
+    if result.status == PublishStatus.STRATEGY_NOT_FOUND:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=body)
+    if result.status == PublishStatus.GATE_REJECTED:
+        return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=body)
+    return JSONResponse(status_code=status.HTTP_502_BAD_GATEWAY, content=body)

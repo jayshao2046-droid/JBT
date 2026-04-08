@@ -1,12 +1,13 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/approvals", tags=["approval"])
+from ...persistence.state_store import get_state_store
 
-_approvals: dict[str, dict] = {}
+router = APIRouter(prefix="/approvals", tags=["approval"])
 
 
 class ApprovalSubmitRequest(BaseModel):
@@ -35,13 +36,13 @@ def submit_approval(req: ApprovalSubmitRequest) -> dict:
         "submitted_at": datetime.now(timezone.utc).isoformat(),
         "completed_at": None,
     }
-    _approvals[approval_id] = approval
+    get_state_store().upsert_record("approvals", approval_id, approval)
     return approval
 
 
 @router.get("/{approval_id}")
 def get_approval(approval_id: str) -> dict:
-    approval = _approvals.get(approval_id)
+    approval = get_state_store().get_record("approvals", approval_id)
     if approval is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Approval {approval_id} not found")
     return approval
@@ -49,7 +50,7 @@ def get_approval(approval_id: str) -> dict:
 
 @router.post("/{approval_id}/complete")
 def complete_approval(approval_id: str, req: ApprovalCompleteRequest) -> dict:
-    approval = _approvals.get(approval_id)
+    approval = get_state_store().get_record("approvals", approval_id)
     if approval is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Approval {approval_id} not found")
     if req.result not in ("approve", "reject"):
@@ -62,4 +63,5 @@ def complete_approval(approval_id: str, req: ApprovalCompleteRequest) -> dict:
     approval["completed_at"] = datetime.now(timezone.utc).isoformat()
     if req.notes:
         approval["notes"] = req.notes
+    get_state_store().upsert_record("approvals", approval_id, approval)
     return approval

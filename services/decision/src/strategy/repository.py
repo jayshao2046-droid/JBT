@@ -1,6 +1,9 @@
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
+
 from ..strategy.lifecycle import LifecycleStatus, transition, to_contract_state
+from ..persistence.state_store import MemoryStateStore, get_state_store
 
 
 class StrategyPackage:
@@ -46,6 +49,36 @@ class StrategyPackage:
         self.created_at = now
         self.updated_at = now
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "StrategyPackage":
+        pkg = cls(
+            strategy_id=data["strategy_id"],
+            strategy_name=data["strategy_name"],
+            strategy_version=data["strategy_version"],
+            template_id=data["template_id"],
+            package_hash=data["package_hash"],
+            factor_version_hash=data["factor_version_hash"],
+            factor_sync_status=data["factor_sync_status"],
+            research_snapshot_id=data["research_snapshot_id"],
+            backtest_certificate_id=data["backtest_certificate_id"],
+            risk_profile_hash=data["risk_profile_hash"],
+            config_snapshot_ref=data["config_snapshot_ref"],
+            allowed_targets=list(data.get("allowed_targets") or []),
+            live_visibility_mode=data.get("live_visibility_mode", "locked_visible"),
+            publish_target=data.get("publish_target"),
+            reserved_at=data.get("reserved_at"),
+            published_at=data.get("published_at"),
+            retired_at=data.get("retired_at"),
+        )
+        lifecycle_status = data.get("lifecycle_status", LifecycleStatus.imported.value)
+        if isinstance(lifecycle_status, LifecycleStatus):
+            pkg.lifecycle_status = lifecycle_status
+        else:
+            pkg.lifecycle_status = LifecycleStatus(str(lifecycle_status))
+        pkg.created_at = data.get("created_at", pkg.created_at)
+        pkg.updated_at = data.get("updated_at", pkg.updated_at)
+        return pkg
+
     def to_dict(self) -> dict:
         return {
             "strategy_id": self.strategy_id,
@@ -82,51 +115,60 @@ class StrategyPackage:
 
 
 class StrategyRepository:
-    def __init__(self) -> None:
-        self._store: dict[str, StrategyPackage] = {}
+    def __init__(self, state_store=None) -> None:
+        self._state_store = state_store or MemoryStateStore()
 
     def create(self, pkg: StrategyPackage) -> StrategyPackage:
-        self._store[pkg.strategy_id] = pkg
+        self._state_store.upsert_record("strategies", pkg.strategy_id, pkg.to_dict())
         return pkg
 
     def get(self, strategy_id: str) -> Optional[StrategyPackage]:
-        return self._store.get(strategy_id)
+        raw = self._state_store.get_record("strategies", strategy_id)
+        return StrategyPackage.from_dict(raw) if raw is not None else None
 
     def list_all(self) -> list[StrategyPackage]:
-        return list(self._store.values())
+        return [StrategyPackage.from_dict(item) for item in self._state_store.list_records("strategies")]
 
     def update(self, strategy_id: str, updates: dict) -> Optional[StrategyPackage]:
-        pkg = self._store.get(strategy_id)
+        pkg = self.get(strategy_id)
         if pkg is None:
             return None
         for key, value in updates.items():
             if hasattr(pkg, key):
+                if key == "lifecycle_status" and isinstance(value, str):
+                    value = LifecycleStatus(value)
                 setattr(pkg, key, value)
         pkg.updated_at = datetime.now(timezone.utc).isoformat()
+        self._state_store.upsert_record("strategies", strategy_id, pkg.to_dict())
         return pkg
 
     def delete(self, strategy_id: str) -> bool:
-        if strategy_id in self._store:
-            del self._store[strategy_id]
-            return True
-        return False
+        return self._state_store.delete_record("strategies", strategy_id)
 
     def transition_lifecycle(
         self, strategy_id: str, target: LifecycleStatus
     ) -> Optional[StrategyPackage]:
-        pkg = self._store.get(strategy_id)
+        pkg = self.get(strategy_id)
         if pkg is None:
             return None
         pkg.lifecycle_status = transition(pkg.lifecycle_status, target)
         pkg.updated_at = datetime.now(timezone.utc).isoformat()
+        self._state_store.upsert_record("strategies", strategy_id, pkg.to_dict())
         return pkg
 
     def list_by_status(self, status: LifecycleStatus) -> list[StrategyPackage]:
-        return [p for p in self._store.values() if p.lifecycle_status == status]
+        return [pkg for pkg in self.list_all() if pkg.lifecycle_status == status]
 
 
-_repository = StrategyRepository()
+_repository: Optional[StrategyRepository] = None
+_repository_state_file: Optional[Path] = None
 
 
 def get_repository() -> StrategyRepository:
+    global _repository, _repository_state_file
+
+    state_store = get_state_store()
+    if _repository is None or _repository_state_file != state_store.file_path:
+        _repository = StrategyRepository(state_store=state_store)
+        _repository_state_file = state_store.file_path
     return _repository

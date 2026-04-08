@@ -3,10 +3,10 @@
 ## Lock 信息
 
 - 任务 ID：TASK-0021
-- 阶段：A批 contracts 终审收口同步
+- 阶段：H0~H4 终审收口同步
 - 当前执行组织：项目架构师 + 决策 agent
 - 当前是否使用 Livis：否
-- 当前总体状态：A 批 contracts 已完成实施并通过终审，当前**可进入 lockback**；B、C0、C、D、E0、E、F0、F、G 继续待按 Manifest 一次性签发
+- 当前总体状态：A~G 历史留痕继续保留；H0/H1/H2/H3/H4 已完成终审，其中 H0/H1/H2/H3/H4 当前均可按各自白名单进入 lockback；`services/decision/decision_web/next.config.mjs` 明确不属于 H0 结论范围；H4 最新补修已消除上一轮 lifecycle 阻断，但 lockback 前仍需 Atlas / Jay.S 提供完整 JWT 文本
 
 ## 本轮治理同步文件白名单
 
@@ -71,14 +71,41 @@
 4. 任何 `.env.example`、compose、Dockerfile、deploy 相关修改，都不得并入 C、E、F、G 等 P1 实施批次。
 5. 不得以“A 已 active”为理由越权触碰 `integrations/**`、`services/**` 或其他未解锁契约文件。
 
+## 2026-04-08 收口补批锁控补充
+
+1. 基于实际代码审计，`decision_web/Dockerfile`、状态持久化、资格持久化 / model router、research 真实 data API / 运行依赖、signal / publish 真闭环，**均不自动继承** `C` / `D` / `F0` / `G` 的历史白名单。
+2. 原因：这些阻塞横跨部署文件、状态面、研究面与发布面；若直接顺手复用旧白名单，会破坏新的最小回滚单元。
+3. 本轮新增补充批次冻结如下：
+
+| 批次 | 执行 Agent | 保护级别 | 状态 | 说明 |
+|---|---|---|---|---|
+| `TASK-0021-H0` | 决策 Agent | P0 | `locked` | `services/decision/decision_web/Dockerfile` 单文件，修复镜像构建阻塞 |
+| `TASK-0021-H1` | 决策 Agent | P1 | `locked` | 策略仓库与审批状态持久化 |
+| `TASK-0021-H2` | 决策 Agent | P1 | `locked` | 回测 / 研究资格持久化与 model router 真校验 |
+| `TASK-0021-H3` | 决策 Agent | P1 | `locked` | `FactorLoader` 真实 data API 接入与 research 依赖补齐 |
+| `TASK-0021-H4` | 决策 Agent | P1 | `locked` | signal / strategy publish 真闭环，decision 侧路径冻结为 `/api/v1/strategy/publish` |
+
+4. `TASK-0023-A` 为独立 sim-trading 单服务任务，当前已完成 `approved` lockback，不得借用 `TASK-0021` 的任何历史白名单。
+5. 当前继续锁定 `services/decision/.env.example` 与 `docker-compose.dev.yml`；若后续必须触碰两者，仍需另起 **P0** 补审。
+
+## 2026-04-08 H0~H4 终审锁控结论
+
+| 批次 | token_id | 当前 token 状态 | 终审结论 | 是否可 lockback | 说明 |
+|---|---|---|---|---|---|
+| `TASK-0021-H0` | `tok-2ae91304-d52b-4e09-b434-fdef71fc086b` | `locked` | `approved` | 已完成 | `Dockerfile` 定向核验通过；`services/decision/decision_web/next.config.mjs` 作为独立历史脏改动明确不属于 H0 结论范围，且继续独立锁定 |
+| `TASK-0021-H1` | `tok-0b8452e5-bd7c-4cdc-ab94-1fd4c1971d6d` | `locked` | `approved` | 已完成 | 5 文件白名单边界合规；独立复跑 `pytest tests/test_state_persistence.py tests/test_strategy.py tests/test_publish.py -q` = `23 passed` |
+| `TASK-0021-H2` | `tok-e4a42eab-0942-4e9e-b753-bd9090dffc1a` | `locked` | `approved` | 已完成 | 5 文件白名单边界合规；`requested_symbol` / `executed_data_symbol` 持久化语义已补齐；独立复跑 `pytest tests/test_state_persistence.py tests/test_gating.py -q` = `16 passed` |
+| `TASK-0021-H3` | `tok-c9b73a9a-c9aa-40a8-8d51-2e23cefe88f3` | `locked` | `approved` | 已完成 | `FactorLoader` 已按 `executed_data_symbol -> requested_symbol -> 合法 strategy_id -> 显式失败` 完成 symbol 闭环；独立复跑 `pytest tests/test_research.py -q` = `14 passed` |
+| `TASK-0021-H4` | `tok-1211b456-68eb-4291-b604-d6b97a32d452` / `tok-bf30ecb6-9559-4407-9a1b-a4d788b84300` | `locked` | `approved` | 已完成 | 最新补修严格限于 `publish/gate.py` 与 `tests/test_publish.py`；`get_errors = 0`、`pytest tests/test_publish.py tests/test_strategy.py -q = 38 passed`、本地模拟联调确认 `imported` 路径返回 `409 gate_rejected`；两张 H4 token 已按 `REVIEW-TASK-0021-H4` 完成 `approved` lockback |
+
 ## 当前状态
 
-- 预审状态：已通过；A 批终审已通过
-- Token 状态：A=pending_lockback；B/C0/C/D/E0/E/F0/F/G=pending_manifest
-- 解锁时间：A 批 active 窗口已用于本轮实施；其余批次待 Jay.S 按 Manifest 一次性签发
-- 锁回时间：A 批待执行 lockback；其余批次当前未进入 lockback 阶段
-- lockback 结果：A 批当前仅形成“可进入 lockback”结论，尚未实际执行 lockback
+- 预审状态：已通过；A 批终审已通过；H0~H4 已完成本轮终审
+- Token 状态：A=pending_lockback；B/C0/C/D/E0/E/F0/F/G=pending_manifest；H0/H1/H2/H3/H4=locked
+- 解锁时间：A 批 active 窗口已用于本轮实施；其余批次待 Jay.S 按 Manifest 一次性签发；H0~H4 对应 token 已全部锁回
+- 锁回时间：A 批待执行 lockback；H0/H1/H2/H3 已执行 lockback；H4 已执行 lockback（双 token 全部锁回）
+- lockback 结果：A 批当前仅形成“可进入 lockback”结论，尚未实际执行 lockback；H0/H1/H2/H3/H4=approved_locked
 
 ## 结论
 
-**`TASK-0021` 当前状态：A 批 locked（commit 3bea6fe）；B~G 全部 Token 已由 Jay.S 签发，均为 active 状态（TTL 480min），可按 B→C0→C→D→E0→E→F0→F→G 顺序连续派发执行。**
+**`TASK-0021` 当前正式口径：A~G 的历史状态继续保留为既有留痕；H0~H4 已完成终审并按各自白名单执行实际 lockback，当前统一为 `locked`；`services/decision/decision_web/next.config.mjs` 明确不属于 H0 结论范围，并继续独立锁定。**

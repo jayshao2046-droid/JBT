@@ -2,13 +2,19 @@
 name = "jbt-decision"
 version = "0.1.0"
 description = "JBT Decision Service"
-python = "^3.11"
 
 [tool.poetry.dependencies]
+python = "^3.11"
 fastapi = "^0.115.0"
 uvicorn = { extras = ["standard"], version = "^0.34.0" }
 pydantic-settings = "^2.7.0"
 httpx = "^0.28.0"
+numpy = "^2.1.0"
+xgboost = "^2.1.0"
+optuna = "^4.1.0"
+shap = "^0.46.0"
+onnxruntime = "^1.20.0"
+onnxmltools = "^1.13.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"

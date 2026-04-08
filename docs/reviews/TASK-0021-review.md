@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0021
 - 审核角色：项目架构师
-- 审核阶段：A批 contracts 终审同步
-- 审核时间：2026-04-07
-- 审核结论：通过（A 批 contracts 正式 10 文件已完成实施并通过终审，边界合规，当前可进入 lockback；B、C0、C、D、E0、E、F0、F、G 继续待 Jay.S 按 Manifest 一次性签发）
+- 审核阶段：H0~H4 批终审
+- 审核时间：2026-04-08
+- 审核结论：通过（`TASK-0021-H0`、`TASK-0021-H1`、`TASK-0021-H2`、`TASK-0021-H3`、`TASK-0021-H4` 当前均可 lockback；`services/decision/decision_web/next.config.mjs` 明确不属于 H0 结论范围；H4 最新补修已消除上一轮 lifecycle 阻断，lockback 前仍需 Atlas / Jay.S 提供完整 JWT 文本）
 
 ---
 
@@ -66,6 +66,45 @@
 3. `F0` 涉及 `.env.example`、compose、Dockerfile、deploy/反代配置，必须单独受控，不得与业务实现混提交流水。
 4. `G` 仅允许构建“发布到模拟交易、实盘入口锁定可见”的链路；不得借此扩写 `services/sim-trading/**` 或 `services/live-trading/**`。
 5. 在 Jay.S 完成 Manifest 签发前，批次 B~G 全部视为未解锁。
+
+## 五A、2026-04-08 收口补批审核结论
+
+### 1. 只读代码事实
+
+1. `services/decision/src/strategy/repository.py` 当前仍为纯内存 `_store`，`services/decision/src/api/routes/approval.py` 当前仍为纯内存 `_approvals`。
+2. `services/decision/src/gating/backtest_gate.py` 与 `services/decision/src/gating/research_gate.py` 当前均为纯内存资格面，`services/decision/src/model/router.py` 仍只做 ID 非空检查。
+3. `services/decision/src/research/factor_loader.py` 当前仍返回随机 `numpy` mock，`services/decision/pyproject.toml` 尚未声明现有 research 模块运行依赖。
+4. `services/decision/src/api/routes/signal.py` 当前固定返回 `hold` / `manual_review` 占位值；`services/decision/src/api/routes/strategy.py` 尚未提供真实发布入口。
+5. `services/decision/src/publish/sim_adapter.py` 当前仍把 404 当成成功降级；而 `services/sim-trading/**` 侧并不存在对应发布接收端。
+6. `services/decision/decision_web/Dockerfile` 当前存在非法 `COPY ... 2>/dev/null || true`，已被实际 `docker build` 证实会阻断镜像构建。
+
+### 2. 任务归属裁决
+
+1. 基于上述代码事实，decision 收口继续挂在 `TASK-0021` 下新增补充批次 `H0`~`H4`，**不新开第二个 decision 任务**。
+2. 原因是所有阻塞都发生在 `services/decision/**` 与 `services/decision/decision_web/**` 当前迁移残面内；若另起 decision 新任务，会把同一服务迁移主线拆成两个回滚单元。
+3. 但 `sim-trading` 发布接收接口必须独立拆为 `TASK-0023`；该事项实际写入归属 `services/sim-trading/**`，不应继续塞在 `TASK-0021` 内。
+
+### 3. 首轮明确纳入与明确排除
+
+1. 首轮纳入：decision_web Dockerfile、策略/审批持久化、回测/研究资格持久化、真实 data API 接入与运行依赖、signal/model/publish 真闭环。
+2. 首轮排除：`research-center`、`notifications-report`、`config-runtime` 等纯 UI 空态。
+3. 首轮排除：`services/decision/.env.example` 与 `docker-compose.dev.yml`；当前占位足以承接本轮实现，若实施中证明仍缺配置位，再另起 **P0** 补审。
+
+### 4. 补充批次冻结
+
+| 批次 | 执行 Agent | 保护级别 | 是否可并行 | 业务白名单 | 目的 |
+|---|---|---|---|---|---|
+| `TASK-0021-H0` | 决策 Agent | P0 | 可与 `H1` / `H3` 并行 | `services/decision/decision_web/Dockerfile` | 修复 decision_web 生产镜像构建阻塞 |
+| `TASK-0021-H1` | 决策 Agent | P1 | 可与 `H0` / `H3` 并行；不可与 `H2` 并行 | `services/decision/src/core/settings.py`、`services/decision/src/persistence/state_store.py`、`services/decision/src/strategy/repository.py`、`services/decision/src/api/routes/approval.py`、`services/decision/tests/test_state_persistence.py` | 策略仓库与审批状态持久化 |
+| `TASK-0021-H2` | 决策 Agent | P1 | 依赖 `H1` | `services/decision/src/persistence/state_store.py`、`services/decision/src/gating/backtest_gate.py`、`services/decision/src/gating/research_gate.py`、`services/decision/src/model/router.py`、`services/decision/tests/test_gating.py` | 回测/研究资格持久化与模型门禁 |
+| `TASK-0021-H3` | 决策 Agent | P1 | 可与 `H0` / `H1` 并行 | `services/decision/pyproject.toml`、`services/decision/src/research/factor_loader.py`、`services/decision/tests/test_research.py` | 真实 data API 接入与运行依赖 |
+| `TASK-0021-H4` | 决策 Agent | P1 | 依赖 `H2` / `H3`；可与 `TASK-0023-A` 并行 | `services/decision/src/api/routes/strategy.py`、`services/decision/src/api/routes/signal.py`、`services/decision/src/publish/gate.py`、`services/decision/src/publish/sim_adapter.py`、`services/decision/tests/test_publish.py` | signal / strategy publish 真闭环 |
+
+### 5. 建议签发顺序
+
+1. 最稳妥先签顺序冻结为：`H0` → `H1` → `H2` → `H3` → `H4`。
+2. 若 Jay.S 允许并行，可让 `H0` 与 `H1` / `H3` 并行；`H2` 必须在 `H1` 之后；`H4` 必须在 `H2` 与 `H3` 之后。
+3. `TASK-0023-A` 在本轮命名空间冻结为 `/api/v1/strategy/publish` 后，可与 `H4` 并行推进，但最终端到端验收需两边同时完成。
 
 ## 六、终审结论
 
@@ -197,6 +236,59 @@ No errors found.
 | 是否可进入 lockback | **是** |
 
 **终审结论：✅ 通过。B 批 4 文件可进入 lockback。**
+
+---
+
+## 十一、TASK-0021 H0~H4 批终审结论
+
+### 1. 本次定向核验范围
+
+1. 本次仅核验 `TASK-0021-H0`、`H1`、`H2`、`H3` 及其当前工作树对应的 `services/decision/**` 改动。
+2. 当前 `git diff --name-only -- services/decision | sort` 显示，H0~H3 相关业务文件之外，额外存在 `services/decision/decision_web/next.config.mjs` 改动；经对照 H0 交接单与该文件当前 diff 语义，判定其为独立历史脏改动，不纳入 H0 定向结论，也不计入 H2/H3 终审范围。
+3. 当前 4 张 token 均已由 `lockctl status` 复核为 `active`：
+	- `TASK-0021-H0` = `tok-2ae91304-d52b-4e09-b434-fdef71fc086b`
+	- `TASK-0021-H1` = `tok-0b8452e5-bd7c-4cdc-ab94-1fd4c1971d6d`
+	- `TASK-0021-H2` = `tok-e4a42eab-0942-4e9e-b753-bd9090dffc1a`
+	- `TASK-0021-H3` = `tok-c9b73a9a-c9aa-40a8-8d51-2e23cefe88f3`
+
+### 2. `TASK-0021-H0` 终审结论
+
+1. H0 交接单声明白名单严格限于 `services/decision/decision_web/Dockerfile` 单文件，且明确“未扩展到 `next.config.mjs`”。
+2. 独立复核结果：`services/decision/decision_web/Dockerfile` 当前 `get_errors = 0`，且 `docker build -t jbt-decision-web-task-0021-h0-audit services/decision/decision_web` 已实际构建成功。
+3. 当前 decision 工作树确有 `services/decision/decision_web/next.config.mjs` 改动；但该文件属于独立 rewrite 历史脏改动，不构成 H0 的单文件回滚单元，且 H0 交接单已明确声明未扩展到该文件。
+4. 因此本次按批次定向核验裁决为：H0 结论只覆盖 `services/decision/decision_web/Dockerfile`；`services/decision/decision_web/next.config.mjs` 明确不属于 H0 通过 / lockback 结论范围，且继续保持独立锁定状态。
+5. 因此 H0 本轮结论为：**通过，可 lockback**。
+
+### 3. `TASK-0021-H1` 终审结论
+
+1. H1 业务改动严格落在 5 个白名单文件：`settings.py`、`state_store.py`、`strategy/repository.py`、`approval.py`、`tests/test_state_persistence.py`。
+2. 服务隔离复核通过：未发现跨服务 import，也未触碰 `shared/contracts/**`、`.env.example` 或部署文件。
+3. 自校验独立复跑通过：`DECISION_STATE_FILE=/tmp/jbt-decision-task-0021-h1-state.json PYTHONPATH=. ../../.venv/bin/pytest tests/test_state_persistence.py tests/test_strategy.py tests/test_publish.py -q` 结果 `23 passed in 0.34s`，5 文件 `get_errors = 0`。
+4. 结论：**通过，可 lockback**。当前建议按 H1 白名单定向锁回，不与 H0 的白名单外 `next.config.mjs` 混并处理。
+
+### 4. `TASK-0021-H2` 终审结论
+
+1. H2 业务改动严格落在 5 个白名单文件：`state_store.py`、`backtest_gate.py`、`research_gate.py`、`model/router.py`、`tests/test_gating.py`。
+2. 服务隔离复核通过：仅使用 decision 服务内部模块；没有跨服务 import，研究/回测资格仍通过本服务本地状态底座持久化。
+3. 补充回修复核通过：`BacktestCert` 当前已随 H2 状态底座持久化 `requested_symbol` 与 `executed_data_symbol`，并已通过 JSON 落盘 + 重启恢复路径验证；`PYTHONPATH=. ../../.venv/bin/pytest tests/test_state_persistence.py tests/test_gating.py -q` 结果 `16 passed in 0.26s`。
+4. 非阻断观察：当前 `BacktestCert` / `ResearchSnapshot` 仅保存最小门禁字段，不是对外契约的全量导出对象；若后续要直接对外输出这两类对象，仍需补映射层或补字段，不阻断本批“资格持久化 + model router 真校验”的最小目标。
+5. 结论：**通过，可 lockback**。
+
+### 5. `TASK-0021-H3` 终审结论
+
+1. H3 没有跨服务 import，形式上通过服务隔离；`PYTHONPATH=. ../../.venv/bin/pytest tests/test_research.py -q` 结果 `14 passed in 0.22s`。
+2. 当前 `FactorLoader` 已不再把 `strategy_id` 无条件当作 data service `symbol`；其解析顺序固定为：回测证书 `executed_data_symbol` -> 同证书 `requested_symbol` -> 仅当 `strategy_id` 本身已是合法标的格式时才回退使用 -> 否则在发 HTTP 前显式抛出 `FactorLoadError`。
+3. 该顺序已与 H2 补齐的回测证书持久化字段对齐，也与 data 服务当前接受的 symbol 形式对齐，因此“策略包/回测证书 -> data symbol -> `/api/v1/bars`”最小闭环已成立。
+4. 结论：**通过，可 lockback**。
+
+### 6. `TASK-0021-H4` 终审结论
+
+1. 本轮重新终审只聚焦 H4 最新补修；实际新增改动严格限于 `services/decision/src/publish/gate.py` 与 `services/decision/tests/test_publish.py`。已复核这 2 个补修文件 `get_errors = 0`，并独立复跑 `PYTHONPATH=. ../../.venv/bin/pytest tests/test_publish.py tests/test_strategy.py -q` 得到 `38 passed in 0.46s`；Atlas 追加提供的本地模拟联调结果也已确认：合法路径 `backtest_confirmed -> publish` 返回 `200 success`，非法路径 `imported -> publish` 返回 `409 gate_rejected`，且错误信息明确为 `lifecycle_status=imported cannot enter publish flow; expected backtest_confirmed or pending_execution`。
+2. 当前 `PublishGate` 已把发布流入口收口为两类合法状态：一是当前生命周期能按冻结状态机合法进入 `pending_execution` 的状态，按现态即 `backtest_confirmed`；二是已经处于 `pending_execution` 的 adapter 失败重试路径。
+3. 其他状态当前都会在 gate 层被显式拒绝，且 `tests/test_publish.py` 已补齐 `imported` 非法路径拒绝与 `pending_execution` retry 放行的回归断言。
+4. 因此即便 `PublishExecutor` 仍通过 `repo.update(...)` 写入 `pending_execution` / `in_production`，非合法前置状态已经无法再进入发布流；上一轮“非待执行状态也可能被推进到发布流”的唯一阻断已被消除。
+5. 结论：**通过，可 lockback**。本轮无阻断发现。
+6. 另一个锁控前置保持不变：`lockctl status` 当前可见 2 张 H4 active token，但 Atlas 仍缺可直接用于 validate / lockback 的完整 JWT 文本；本轮仅形成 `approved_pending_lockback` 结论，实际 lockback 前仍需先确认可用的实际 token 文本。
 
 ---
 

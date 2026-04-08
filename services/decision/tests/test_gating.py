@@ -1,11 +1,51 @@
 from __future__ import annotations
 
-from datetime import timedelta, timezone, datetime
+import json
+from types import SimpleNamespace
 
 import pytest
 
 from src.gating.backtest_gate import BacktestGate, CertStatus
 from src.gating.research_gate import ResearchGate
+from src.model import router as router_mod
+from src.persistence.state_store import FileStateStore
+from src.strategy.repository import StrategyPackage, StrategyRepository
+
+
+def _make_strategy_package(
+    strategy_id: str = "alpha-router-001",
+    factor_version_hash: str = "factor-hash-001",
+    research_snapshot_id: str = "rs-001",
+    backtest_certificate_id: str = "bc-001",
+) -> StrategyPackage:
+    return StrategyPackage(
+        strategy_id=strategy_id,
+        strategy_name="Router Strategy",
+        strategy_version="2026.04.08",
+        template_id="trend-v1",
+        package_hash="pkg-hash-001",
+        factor_version_hash=factor_version_hash,
+        factor_sync_status="aligned",
+        research_snapshot_id=research_snapshot_id,
+        backtest_certificate_id=backtest_certificate_id,
+        risk_profile_hash="risk-hash-001",
+        config_snapshot_ref="cfg-001",
+        allowed_targets=["sim-trading"],
+    )
+
+
+def _patch_router_dependencies(monkeypatch, repo, backtest_gate, research_gate) -> None:
+    monkeypatch.setattr(
+        router_mod,
+        "get_settings",
+        lambda: SimpleNamespace(
+            model_router_require_backtest_cert=True,
+            model_router_require_research_snapshot=True,
+        ),
+    )
+    monkeypatch.setattr(router_mod, "get_repository", lambda: repo)
+    monkeypatch.setattr(router_mod, "get_backtest_gate", lambda: backtest_gate)
+    monkeypatch.setattr(router_mod, "get_research_gate", lambda: research_gate)
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +113,37 @@ def test_cert_get_cert_returns_none_for_unknown() -> None:
     assert gate.get_cert("nonexistent") is None
 
 
+def test_backtest_gate_persists_record_across_restart(tmp_path) -> None:
+    state_file = tmp_path / "decision-state.json"
+
+    first_gate = BacktestGate(state_store=FileStateStore(state_file))
+    first_gate.register_cert(
+        cert_id="bc-persist-001",
+        strategy_id="alpha-persist-001",
+        sharpe=1.7,
+        drawdown=0.06,
+        factor_version_hash="factor-hash-001",
+        expires_days=90,
+        requested_symbol="DCE.p2605",
+        executed_data_symbol="KQ_m_DCE_p",
+    )
+
+    raw_state = json.loads(state_file.read_text(encoding="utf-8"))
+    stored = raw_state["backtest_certs"]["alpha-persist-001"]
+    assert stored["requested_symbol"] == "DCE.p2605"
+    assert stored["executed_data_symbol"] == "KQ_m_DCE_p"
+
+    restarted_gate = BacktestGate(state_store=FileStateStore(state_file))
+    restored = restarted_gate.get_cert("alpha-persist-001")
+
+    assert restored is not None
+    assert restored.certificate_id == "bc-persist-001"
+    assert restored.factor_version_hash == "factor-hash-001"
+    assert restored.requested_symbol == "DCE.p2605"
+    assert restored.executed_data_symbol == "KQ_m_DCE_p"
+    assert restarted_gate.is_valid("alpha-persist-001") is True
+
+
 # ---------------------------------------------------------------------------
 # ResearchGate
 # ---------------------------------------------------------------------------
@@ -130,3 +201,144 @@ def test_research_gate_get_snapshot() -> None:
     snap = gate.get_snapshot("alpha-004")
     assert snap is not None
     assert snap.research_snapshot_id == "sess-003"
+
+
+def test_research_gate_persists_record_across_restart(tmp_path) -> None:
+    state_file = tmp_path / "decision-state.json"
+
+    first_gate = ResearchGate(state_store=FileStateStore(state_file))
+    first_gate.register_snapshot(
+        session_id="rs-persist-001",
+        strategy_id="alpha-persist-002",
+        factor_hash="factor-hash-001",
+        best_params={"n_estimators": 200},
+        metrics={"sharpe": 1.3},
+    )
+
+    restarted_gate = ResearchGate(state_store=FileStateStore(state_file))
+    restored = restarted_gate.get_snapshot("alpha-persist-002")
+
+    assert restored is not None
+    assert restored.research_snapshot_id == "rs-persist-001"
+    assert restored.factor_version_hash == "factor-hash-001"
+    assert restarted_gate.is_complete("alpha-persist-002") is True
+
+
+def test_model_router_rejects_missing_persisted_research_snapshot(tmp_path, monkeypatch) -> None:
+    state_file = tmp_path / "decision-state.json"
+    initial_store = FileStateStore(state_file)
+
+    repo = StrategyRepository(state_store=initial_store)
+    repo.create(_make_strategy_package())
+
+    backtest_gate = BacktestGate(state_store=initial_store)
+    backtest_gate.register_cert(
+        cert_id="bc-001",
+        strategy_id="alpha-router-001",
+        sharpe=1.4,
+        drawdown=0.08,
+        factor_version_hash="factor-hash-001",
+    )
+
+    restarted_store = FileStateStore(state_file)
+    _patch_router_dependencies(
+        monkeypatch,
+        StrategyRepository(state_store=restarted_store),
+        BacktestGate(state_store=restarted_store),
+        ResearchGate(state_store=restarted_store),
+    )
+
+    result = router_mod.route(
+        strategy_id="alpha-router-001",
+        backtest_certificate_id="bc-001",
+        research_snapshot_id="rs-001",
+    )
+
+    assert result["allowed"] is False
+    assert "research snapshot" in result["reason"]
+
+
+def test_model_router_rejects_mismatched_eligibility_ids(tmp_path, monkeypatch) -> None:
+    state_file = tmp_path / "decision-state.json"
+    initial_store = FileStateStore(state_file)
+
+    repo = StrategyRepository(state_store=initial_store)
+    repo.create(_make_strategy_package())
+
+    backtest_gate = BacktestGate(state_store=initial_store)
+    backtest_gate.register_cert(
+        cert_id="bc-001",
+        strategy_id="alpha-router-001",
+        sharpe=1.4,
+        drawdown=0.08,
+        factor_version_hash="factor-hash-001",
+    )
+    research_gate = ResearchGate(state_store=initial_store)
+    research_gate.register_snapshot(
+        session_id="rs-001",
+        strategy_id="alpha-router-001",
+        factor_hash="factor-hash-001",
+        best_params={"max_depth": 4},
+        metrics={"sharpe": 1.2},
+    )
+
+    restarted_store = FileStateStore(state_file)
+    _patch_router_dependencies(
+        monkeypatch,
+        StrategyRepository(state_store=restarted_store),
+        BacktestGate(state_store=restarted_store),
+        ResearchGate(state_store=restarted_store),
+    )
+
+    result = router_mod.route(
+        strategy_id="alpha-router-001",
+        backtest_certificate_id="bc-wrong",
+        research_snapshot_id="rs-001",
+    )
+
+    assert result["allowed"] is False
+    assert "backtest certificate" in result["reason"]
+
+
+def test_model_router_allows_valid_persisted_eligibility(tmp_path, monkeypatch) -> None:
+    state_file = tmp_path / "decision-state.json"
+    initial_store = FileStateStore(state_file)
+
+    repo = StrategyRepository(state_store=initial_store)
+    repo.create(_make_strategy_package())
+
+    backtest_gate = BacktestGate(state_store=initial_store)
+    backtest_gate.register_cert(
+        cert_id="bc-001",
+        strategy_id="alpha-router-001",
+        sharpe=1.4,
+        drawdown=0.08,
+        factor_version_hash="factor-hash-001",
+    )
+    research_gate = ResearchGate(state_store=initial_store)
+    research_gate.register_snapshot(
+        session_id="rs-001",
+        strategy_id="alpha-router-001",
+        factor_hash="factor-hash-001",
+        best_params={"max_depth": 4},
+        metrics={"sharpe": 1.2},
+    )
+
+    restarted_store = FileStateStore(state_file)
+    _patch_router_dependencies(
+        monkeypatch,
+        StrategyRepository(state_store=restarted_store),
+        BacktestGate(state_store=restarted_store),
+        ResearchGate(state_store=restarted_store),
+    )
+
+    result = router_mod.route(
+        strategy_id="alpha-router-001",
+        backtest_certificate_id="bc-001",
+        research_snapshot_id="rs-001",
+    )
+
+    assert result == {
+        "allowed": True,
+        "reason": "all gate checks passed",
+    }

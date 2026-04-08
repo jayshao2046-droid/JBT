@@ -186,6 +186,150 @@
 4. 补充说明：若新增 env 占位字段，必须另拆 **P0**。
 5. 执行 Agent：决策 Agent
 
+### 2026-04-08 部署后立即开工收口补批裁决
+
+1. 基于对 `services/decision/**`、`services/data/**` 与 `services/sim-trading/**` 的只读复核，decision 收口继续挂在 `TASK-0021` 下新增补充批次，**不新建第二个 decision 任务**。
+2. 判定理由：
+	- 当前阻塞全部落在 `services/decision/**` 与 `services/decision/decision_web/**` 已建档主线上；
+	- 若另起一个 decision 新任务，会把同一服务迁移主线拆成两个回滚单元，导致边界与责任漂移；
+	- `TASK-0021` 已经承担旧决策域清洗升级迁移主线，收口补批比“新开第二个 decision 任务”更符合“一件事一审核一上锁”。
+3. 但 `sim-trading` 发布接收接口必须拆为独立 `TASK-0023`，不得继续塞回 `TASK-0021`；原因是其实际写入归属 `services/sim-trading/**`，若混入 `TASK-0021` 会破坏跨服务回滚边界。
+4. 当前首轮只纳入“部署后立即开工”的真实阻塞，不纳入纯 UI 空态；`research-center`、`notifications-report`、`config-runtime` 等页面空态继续排除。
+5. 当前不把 `services/decision/.env.example` 或 `docker-compose.dev.yml` 纳入首轮；现有 `DECISION_DB_URL`、`BACKTEST_SERVICE_URL`、`DATA_SERVICE_URL`、`SIM_TRADING_SERVICE_URL` 占位已足够承接本轮实现。若实施中证明仍缺配置位，再另起 **P0** 补充预审。
+6. 最稳妥先签顺序冻结为：`H0` → `H1` → `H2` → `H3` → `H4`；其中 `H0` 可与 `H1` / `H3` 并行，`H2` 依赖 `H1` 的持久化底座，`H4` 依赖 `H2` 与 `H3`，`TASK-0023-A` 在本轮命名空间冻结后可与 `H4` 并行。
+
+#### 补充批次 H0：decision_web Dockerfile 构建收口
+
+- 批次标识：`TASK-0021-H0`
+- 执行 Agent：决策 Agent
+- 保护级别：**P0**
+- 是否可并行：可与 `H1` / `H3` 并行；建议最先签发
+
+业务白名单：
+
+1. `services/decision/decision_web/Dockerfile`
+
+本批次目的：
+
+1. 移除当前 `COPY --from=builder /app/public ./public 2>/dev/null || true` 非法语法。
+2. 保证 `decision_web` 生产镜像可构建，不再把“页面本地 build 成功”误判为“容器可部署”。
+
+本批次验收标准：
+
+1. `docker build ./services/decision/decision_web` 不再停在 `COPY --from=builder /app/public ./public`。
+2. 不扩展到 `docker-compose.dev.yml`、`.dockerignore` 或页面业务代码。
+
+#### 补充批次 H1：策略仓库与审批状态持久化
+
+- 批次标识：`TASK-0021-H1`
+- 执行 Agent：决策 Agent
+- 保护级别：**P1**
+- 是否可并行：可与 `H0` / `H3` 并行；不可与 `H2` 并行
+
+业务白名单：
+
+1. `services/decision/src/core/settings.py`
+2. `services/decision/src/persistence/state_store.py`
+3. `services/decision/src/strategy/repository.py`
+4. `services/decision/src/api/routes/approval.py`
+5. `services/decision/tests/test_state_persistence.py`
+
+本批次目的：
+
+1. 去掉 `StrategyRepository._store` 与 `_approvals` 纯内存状态。
+2. 让策略包与审批记录在服务重启后可恢复，部署后可以连续操作而不是每次重启清空。
+
+本批次验收标准：
+
+1. 服务重启后，已导入策略包与审批记录仍可查询。
+2. 策略仓库与审批接口不再只依赖进程内 `dict`。
+3. 不新增 `.env.example` 变更。
+
+#### 补充批次 H2：研究/回测资格持久化与模型门禁
+
+- 批次标识：`TASK-0021-H2`
+- 执行 Agent：决策 Agent
+- 保护级别：**P1**
+- 是否可并行：依赖 `H1`；不可与 `H1` 并行
+
+业务白名单：
+
+1. `services/decision/src/persistence/state_store.py`
+2. `services/decision/src/gating/backtest_gate.py`
+3. `services/decision/src/gating/research_gate.py`
+4. `services/decision/src/model/router.py`
+5. `services/decision/tests/test_gating.py`
+
+本批次目的：
+
+1. 持久化 `backtest_certificate` 与 `research_snapshot`。
+2. 让 `model/router.route()` 调用真实 gate 对象，不再只做 ID 非空检查。
+
+本批次验收标准：
+
+1. 回测证书与研究快照在服务重启后仍存在。
+2. `model/router.route()` 在证书缺失、快照缺失或状态失效时明确拒绝。
+3. 不扩写到 publish 适配或前端页面。
+
+#### 补充批次 H3：research 真实 data API 接入与运行依赖
+
+- 批次标识：`TASK-0021-H3`
+- 执行 Agent：决策 Agent
+- 保护级别：**P1**
+- 是否可并行：可与 `H0` / `H1` 并行；`H4` 依赖其完成
+
+业务白名单：
+
+1. `services/decision/pyproject.toml`
+2. `services/decision/src/research/factor_loader.py`
+3. `services/decision/tests/test_research.py`
+
+本批次目的：
+
+1. 去掉 `FactorLoader` 随机 `numpy` mock。
+2. 对接 `data` 服务现有 `/api/v1/bars` 最小数据接口。
+3. 补齐当前 research 模块已实际 import 但尚未声明的运行依赖。
+
+本批次验收标准：
+
+1. `FactorLoader.load()` 使用 `DATA_SERVICE_URL` 的真实 HTTP 数据，不再生成随机矩阵。
+2. 上游不可用时返回显式失败，不再静默 mock 成功。
+3. `poetry install --only main` 不再遗漏 `numpy`、`xgboost`、`optuna`、`shap`、`onnxruntime`、`onnxmltools` 等现有 research 模块运行依赖。
+
+#### 补充批次 H4：signal/strategy publish 真闭环
+
+- 批次标识：`TASK-0021-H4`
+- 执行 Agent：决策 Agent
+- 保护级别：**P1**
+- 是否可并行：依赖 `H2` 与 `H3`；在本轮命名空间冻结后可与 `TASK-0023-A` 并行
+
+业务白名单：
+
+1. `services/decision/src/api/routes/strategy.py`
+2. `services/decision/src/api/routes/signal.py`
+3. `services/decision/src/publish/gate.py`
+4. `services/decision/src/publish/sim_adapter.py`
+5. `services/decision/tests/test_publish.py`
+
+本批次目的：
+
+1. 让 `/signals/review` 不再固定返回 `hold` / `manual_review` 占位值。
+2. 在 `strategy` 路由补最小发布入口，真正调用 `PublishExecutor`，而不是只停留在仓库创建/读取。
+3. 让 `PublishGate` 重验持久化后的 backtest / research 资格。
+4. 把 decision → sim-trading 的下游路径冻结到 `sim-trading` 既有命名空间 `/api/v1/strategy/publish`，并把 404 视为失败而非成功降级。
+
+本批次验收标准：
+
+1. `review_signal` 输出随真实 gate 结果变化，不再固定为占位值。
+2. decision 侧存在可调用的最小发布入口，失败时返回真实失败状态。
+3. `PublishGate` 会因为回测证书 / 研究快照无效而拒绝发布。
+4. 下游路由缺失或拒绝时，decision 返回失败，不再伪造 `success=True`。
+
+#### 跨服务拆任务协同说明
+
+1. `TASK-0021-H4` 只修正 decision 侧发布入口与 adapter 命名空间，不写 `services/sim-trading/**`。
+2. sim-trading 接收端独立拆为 `TASK-0023-A`；本轮只允许消费 `strategy_package.md` 已冻结字段，不得私增跨服务字段。
+
 ---
 
 ## 七、Token / 保护级别策略
@@ -197,6 +341,9 @@
 5. 后续批次 E：`services/dashboard/**`，**P1**。
 6. 后续批次 F：`services/decision/**` 通知体系，**P1**。
 7. 任意 `.env.example` 改动，必须另拆 **P0** 批次。
+8. `TASK-0021-H0` 为 `services/decision/decision_web/Dockerfile` 单文件 **P0**。
+9. `TASK-0021-H1`、`H2`、`H3`、`H4` 均为 **P1**，其中 `H1` / `H2` 共享 `state_store.py`，不得并行混写。
+10. `TASK-0023-A` 为独立 sim-trading 单服务 **P1** 任务，不得借用 `H4` 白名单。
 
 ---
 
@@ -227,3 +374,5 @@
 1. **`TASK-0021` 正式成立。**
 2. **本轮只做立项、治理和拆批冻结，不进入代码实施。**
 3. **下一检查点不是写代码，而是冻结首批契约批次的文件级白名单与 Token 申请草案。**
+4. **基于实际代码结构，decision 收口继续挂在 `TASK-0021` 下新增 `H0`~`H4` 补充批次，不新开第二个 decision 任务。**
+5. **`sim-trading` 发布接收接口必须拆成独立 `TASK-0023`，不得并入 `TASK-0021`。**

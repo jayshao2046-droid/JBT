@@ -9,7 +9,7 @@ import logging
 import os
 import urllib.request
 import urllib.error
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,7 @@ logger = logging.getLogger(__name__)
 class SimTradingAdapter:
     """
     向 sim-trading 服务 POST 策略包。
-    URL: {SIM_TRADING_SERVICE_URL}/api/sim/v1/strategy/publish
-    第一阶段：接口不存在时降级到 204→mock 成功，不硬挂。
+    URL: {SIM_TRADING_SERVICE_URL}/api/v1/strategy/publish
     """
 
     def __init__(self) -> None:
@@ -28,7 +27,17 @@ class SimTradingAdapter:
         self._timeout: int = int(os.environ.get("PUBLISH_HTTP_TIMEOUT", "10"))
 
     def _publish_url(self) -> str:
-        return f"{self._base_url}/api/sim/v1/strategy/publish"
+        return f"{self._base_url}/api/v1/strategy/publish"
+
+    @staticmethod
+    def _decode_payload(payload: bytes) -> dict[str, Any]:
+        raw = payload.decode("utf-8", errors="replace")
+        if not raw:
+            return {}
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            return {"raw": raw}
 
     def publish(self, strategy_payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -47,13 +56,9 @@ class SimTradingAdapter:
             )
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
                 status_code = resp.getcode()
-                resp_body = resp.read().decode("utf-8")
-                try:
-                    resp_json = json.loads(resp_body)
-                except (json.JSONDecodeError, ValueError):
-                    resp_json = {"raw": resp_body}
+                resp_json = self._decode_payload(resp.read())
 
-                success = status_code in (200, 201, 204)
+                success = status_code in (200, 201, 202, 204)
                 logger.info(
                     "SimTradingAdapter.publish strategy=%s status=%d success=%s",
                     strategy_payload.get("strategy_id"), status_code, success,
@@ -61,18 +66,12 @@ class SimTradingAdapter:
                 return {"success": success, "status_code": status_code, "response": resp_json}
 
         except urllib.error.HTTPError as exc:
-            # 404 = 端点尚未实现（第一阶段降级）
-            if exc.code == 404:
-                logger.warning(
-                    "SimTradingAdapter: publish endpoint not yet implemented (404), degrading to mock success. strategy=%s",
-                    strategy_payload.get("strategy_id"),
-                )
-                return {"success": True, "status_code": 404, "response": {"degraded": True}}
+            response = self._decode_payload(exc.read()) or {"raw": str(exc)}
             logger.error(
                 "SimTradingAdapter HTTPError %d for strategy=%s: %s",
                 exc.code, strategy_payload.get("strategy_id"), exc,
             )
-            return {"success": False, "status_code": exc.code, "response": str(exc)}
+            return {"success": False, "status_code": exc.code, "response": response}
 
         except urllib.error.URLError as exc:
             logger.error(

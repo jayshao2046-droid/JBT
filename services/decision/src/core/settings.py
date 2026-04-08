@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +36,15 @@ class Settings(BaseSettings):
     # 服务集成
     backtest_service_url: str = "http://localhost:8103"
     data_service_url: str = "http://localhost:8105"
+    data_service_timeout: int = 30
+    decision_state_file: str = "./runtime/decision-state.json"
+
+    @property
+    def resolved_decision_state_file(self) -> Path:
+        raw_path = Path(self.decision_state_file)
+        if raw_path.is_absolute():
+            return raw_path
+        return (Path(__file__).resolve().parents[2] / raw_path).resolve()
 
 
 def get_settings() -> Settings:
