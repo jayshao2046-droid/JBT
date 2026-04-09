@@ -1,5 +1,7 @@
+import collections
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 
 import uvicorn
@@ -14,12 +16,39 @@ if _env_file.exists():
 from src.api.router import router
 from src.notifier.dispatcher import bootstrap_dispatcher
 
+
+# --- 内存日志 Handler ---
+_MEMORY_LOG_MAX = 2000
+
+class MemoryLogHandler(logging.Handler):
+    """将日志记录保存到内存 deque，供只读 API 查询。"""
+
+    def __init__(self, maxlen: int = _MEMORY_LOG_MAX):
+        super().__init__()
+        self.records: collections.deque = collections.deque(maxlen=maxlen)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append({
+            "timestamp": datetime.fromtimestamp(record.created).isoformat(),
+            "level": record.levelname,
+            "source": record.name,
+            "message": self.format(record),
+        })
+
+
+memory_log_handler = MemoryLogHandler(maxlen=_MEMORY_LOG_MAX)
+memory_log_handler.setFormatter(logging.Formatter("%(message)s"))
+
+
 # --- 日志初始化 ---
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
+# 注册内存 handler 到 root logger
+logging.getLogger().addHandler(memory_log_handler)
+
 logger = logging.getLogger("sim-trading")
 
 # --- FastAPI 应用 ---
@@ -52,6 +81,55 @@ async def start_ctp_guardian():
     """启动 CTP 连接守护协程：自动连接 + 断开后定期重连。"""
     import asyncio
     asyncio.create_task(_ctp_connection_guardian())
+
+
+@app.on_event("startup")
+async def start_report_scheduler():
+    """启动收盘报表定时调度协程（每日 23:10 UTC+8）。"""
+    import asyncio
+    asyncio.create_task(_report_scheduler())
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    """服务关闭时发送系统关闭事件。"""
+    try:
+        from src.risk.guards import emit_alert
+        emit_alert("P2", "模拟交易服务正在关闭", {"event_code": "SYSTEM_SHUTDOWN", "source": "sim-trading"})
+    except Exception:
+        pass
+
+
+async def _report_scheduler():
+    """每日 23:10 UTC+8 触发收盘报表生成与邮件发送。"""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+
+    TZ_CN = timezone(timedelta(hours=8))
+    REPORT_HOUR = 23
+    REPORT_MINUTE = 10
+
+    logger.info("[scheduler] report scheduler started, target %02d:%02d UTC+8", REPORT_HOUR, REPORT_MINUTE)
+
+    while True:
+        now = datetime.now(TZ_CN)
+        target = now.replace(hour=REPORT_HOUR, minute=REPORT_MINUTE, second=0, microsecond=0)
+        if now >= target:
+            target += timedelta(days=1)
+        wait_seconds = (target - now).total_seconds()
+        logger.info("[scheduler] next report at %s (%.0f seconds)", target.isoformat(), wait_seconds)
+        await asyncio.sleep(wait_seconds)
+
+        try:
+            from src.ledger.service import LedgerService
+            from src.notifier.email import send_daily_report_email
+
+            ledger = LedgerService()
+            report = ledger.generate_daily_report()
+            result = send_daily_report_email(report)
+            logger.info("[scheduler] daily report sent: %s", result)
+        except Exception as exc:
+            logger.error("[scheduler] daily report failed: %s", exc)
 
 
 async def _ctp_connection_guardian():
@@ -202,6 +280,13 @@ async def _ctp_connection_guardian():
                     result = await asyncio.get_running_loop().run_in_executor(None, lambda: ctp_connect(silent=True))
                     if result.get("md_connected") or result.get("td_connected"):
                         _fail_count = 0
+                        try:
+                            from src.notifier.dispatcher import get_dispatcher
+                            dp = get_dispatcher()
+                            if dp:
+                                dp.emit_recovery("CTP_FRONT_DISCONNECTED")
+                        except Exception:
+                            pass
                     else:
                         _fail_count += 1
                         if _fail_count == MAX_FAST_RETRIES:

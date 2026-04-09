@@ -74,18 +74,24 @@
 11. lockback 摘要：`TASK-0022-A 第二次正式终审通过，执行锁回`
 12. 当前状态：`locked`
 
-### 批次 B（pending_token）
+### 批次 B（已执行并锁回）
 
 1. 任务：`TASK-0022-B`
 2. 执行 Agent：模拟交易 Agent
 3. 保护级别：**P1**
-4. 建议白名单：
+4. token_id：`tok-2bd2b52d-1451-4104-bfb4-5b213c0a0009`
+5. review-id：`REVIEW-TASK-0022-B`
+6. 建议白名单：
    - `services/sim-trading/src/main.py`
    - `services/sim-trading/src/api/router.py`
    - `services/sim-trading/sim-trading_web/app/intelligence/page.tsx`
    - `services/sim-trading/tests/test_log_view_api.py`（允许新增）
-5. 目标：最小只读日志查看。
-6. 前置关系：必须等待 `TASK-0014-A4` 与 `TASK-0017-A4` 锁回后再启动。
+7. 目标：最小只读日志查看。
+8. 最小自校验结果：50 passed / 1 skipped
+9. lockback 时间：2026-04-10
+10. lockback 结果：`approved`
+11. lockback 摘要：`TASK-0022-B 只读日志查看完成锁回`
+12. 当前状态：`locked`
 
 ## 当前继续禁止修改的路径说明
 
@@ -109,12 +115,12 @@
 ## 当前状态
 
 - 预审状态：已通过
-- Token 状态：批次 A 首轮 token = `historical_blocked`；批次 A 当前重签 token = `locked`；批次 B = `pending_token`
-- 解锁时间：批次 A 当前重签 token 已签发并 validate 通过；批次 B = N/A
+- Token 状态：批次 A 首轮 token = `historical_blocked`；批次 A 当前重签 token = `locked`；批次 B = `locked`
+- 解锁时间：批次 A 当前重签 token 已签发并 validate 通过；批次 B 2026-04-10
 - 失效时间：批次 A 首轮 token 已失效；当前重签 token 已在失效前完成 lockback
-- 锁回时间：批次 A = `2026-04-08 02:57:17 +0800`；批次 B = N/A
-- lockback 结果：批次 A 当前重签 token 已执行 `approved` 锁回；批次 B 尚未进入代码执行
+- 锁回时间：批次 A = `2026-04-08 02:57:17 +0800`；批次 B = 2026-04-10
+- lockback 结果：批次 A = `approved`；批次 B = `approved`（review-id `REVIEW-TASK-0022-B`）
 
 ## 结论
 
-**`TASK-0022` 当前状态更新为：批次 A 已完成第二次正式终审并已 lockback；当前有效锁回 token_id 为 `tok-6610ebec-c5ab-4271-8e62-b5cb12f85666`，review-id 为 `REVIEW-TASK-0022-A`，结果 `approved`，状态 `locked`。批次 B 继续 `pending_token`，且必须等待 `TASK-0014-A4` 与 `TASK-0017-A4` 收口后再启动。除 A 批五个白名单文件外，继续锁定 `services/**`、`shared/contracts/**`、`.env.example`、`docker-compose.dev.yml` 及其他非白名单文件。**
+**`TASK-0022` 全部批次均已闭环。批次 A 已完成第二次正式终审并已 lockback；批次 B（只读日志查看，50 passed / 1 skipped）已于 2026-04-10 完成终审与锁回。**

@@ -91,6 +91,71 @@ def test_emit_alert_dispatches_minimal_risk_event(monkeypatch):
     assert email_event == event
 
 
+# ---------------------------------------------------------------------------
+# A4: RiskEventCategory 推断 — 运行时事件
+# ---------------------------------------------------------------------------
+
+def test_infer_category_ctp_front_events():
+    """CTP_FRONT_CONNECTED/DISCONNECTED 前缀未命中 CTP_CONN，回退到 SYSTEM。"""
+    from src.risk.guards import infer_category, RiskEventCategory
+    assert infer_category("CTP_FRONT_CONNECTED") == RiskEventCategory.SYSTEM
+    assert infer_category("CTP_FRONT_DISCONNECTED") == RiskEventCategory.SYSTEM
+
+
+def test_infer_category_system_shutdown():
+    """SYSTEM_SHUTDOWN 命中 SYS 前缀，映射为 SYSTEM。"""
+    from src.risk.guards import infer_category, RiskEventCategory
+    assert infer_category("SYSTEM_SHUTDOWN") == RiskEventCategory.SYSTEM
+
+
+def test_infer_category_ctp_rsp_error():
+    """CTP_RSP_ERROR 前缀未命中已有映射，回退到 SYSTEM。"""
+    from src.risk.guards import infer_category, RiskEventCategory
+    assert infer_category("CTP_RSP_ERROR") == RiskEventCategory.SYSTEM
+
+
+# ---------------------------------------------------------------------------
+# A4: 升级机制 — 连续断线场景
+# ---------------------------------------------------------------------------
+
+def test_escalation_consecutive_disconnects():
+    """连续 CTP_FRONT_DISCONNECTED 在 escalation_window 内达到阈值时 P1 升级为 P0。"""
+    import time as _time
+
+    feishu = MagicMock(spec=FeishuNotifier)
+    feishu.send.return_value = True
+    email = MagicMock(spec=EmailNotifier)
+    email.send.return_value = True
+    dp = NotifierDispatcher(feishu, email, dedup_window_s=0.01, escalation_threshold=3, escalation_window_s=300.0)
+    register_dispatcher(dp)
+
+    for i in range(3):
+        emit_alert("P1", f"CTP 断开 #{i}", {"event_code": "CTP_FRONT_DISCONNECTED"})
+        _time.sleep(0.02)  # ensure dedup window expires
+
+    last_event = feishu.send.call_args.args[0]
+    assert last_event.risk_level == "P0"
+
+
+def test_escalation_does_not_affect_p2():
+    """P2 事件不受升级机制影响，即使频率超阈值。"""
+    import time as _time
+
+    feishu = MagicMock(spec=FeishuNotifier)
+    feishu.send.return_value = True
+    email = MagicMock(spec=EmailNotifier)
+    email.send.return_value = True
+    dp = NotifierDispatcher(feishu, email, dedup_window_s=0.01, escalation_threshold=3, escalation_window_s=300.0)
+    register_dispatcher(dp)
+
+    for i in range(5):
+        emit_alert("P2", f"CTP 前置已连接 #{i}", {"event_code": "CTP_FRONT_CONNECTED"})
+        _time.sleep(0.02)
+
+    last_event = feishu.send.call_args.args[0]
+    assert last_event.risk_level == "P2"
+
+
 # TODO: 断网/断数据源下本地缓存行为验证
 # 验收点（TASK-0013/TASK-0017 补充预审冻结）：
 #   1. 断网时读取最近一次本地快照进行安全降级判断

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 _LEVEL_COLOR = {
     "P0": "red",
     "P1": "orange",
-    "P2": "green",
+    "P2": "yellow",
 }
 
 _LEVEL_ICON = {
@@ -51,8 +51,8 @@ class FeishuNotifier:
             logger.error("FEISHU_WEBHOOK_URL is not set, cannot send notification")
             return False
 
-        color = _LEVEL_COLOR.get(event.risk_level, "blue")
-        icon = _LEVEL_ICON.get(event.risk_level, "📋")
+        color = _LEVEL_COLOR.get(event.risk_level, "turquoise")
+        icon = _LEVEL_ICON.get(event.risk_level, "📣")
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         payload = {
             "msg_type": "interactive",
@@ -60,7 +60,7 @@ class FeishuNotifier:
                 "header": {
                     "title": {
                         "tag": "plain_text",
-                        "content": f"{icon} [{event.stage_preset.upper()}-{event.risk_level}] {event.event_code}",
+                        "content": f"{icon} [SIM-{event.risk_level}] {event.event_code}: {event.message or event.reason}",
                     },
                     "template": color,
                 },

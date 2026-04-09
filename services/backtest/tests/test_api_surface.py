@@ -498,3 +498,164 @@ def test_market_main_contracts_fallback_when_tqsdk_unavailable(monkeypatch, tmp_
     assert quotes_response.status_code == 200
     quotes_payload = quotes_response.json()
     assert quotes_payload[0]["source"] == "service_local"
+
+
+# ── TASK-0007-B: New endpoint surface tests ────────────────────────
+
+
+def test_backtest_list_alias_returns_same_as_results(monkeypatch, tmp_path: Path) -> None:
+    client = _make_formal_client(monkeypatch, tmp_path)
+    _import_formal_strategy(client)
+    client.post(
+        "/api/backtest/run",
+        json={"strategy_id": "palmoil_formal.yaml", "start": "2024-01-03", "end": "2024-03-29", "symbols": ["DCE.p2509"]},
+    )
+
+    results_response = client.get("/api/backtest/results")
+    assert results_response.status_code == 200
+
+    list_response = client.get("/api/backtest/list")
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == len(results_response.json())
+    assert list_response.json()[0]["id"] == results_response.json()[0]["id"]
+
+
+def test_backtest_task_id_alias_returns_detail(monkeypatch, tmp_path: Path) -> None:
+    client = _make_formal_client(monkeypatch, tmp_path)
+    _import_formal_strategy(client)
+    run_resp = client.post(
+        "/api/backtest/run",
+        json={"strategy_id": "palmoil_formal.yaml", "start": "2024-01-03", "end": "2024-03-29", "symbols": ["DCE.p2509"]},
+    )
+    task_id = run_resp.json()["task_id"]
+
+    detail_via_results = client.get(f"/api/backtest/results/{task_id}")
+    assert detail_via_results.status_code == 200
+
+    detail_via_alias = client.get(f"/api/backtest/{task_id}")
+    assert detail_via_alias.status_code == 200
+    assert detail_via_alias.json()["id"] == task_id
+    assert detail_via_alias.json()["id"] == detail_via_results.json()["id"]
+
+
+def test_backtest_task_id_result_alias_returns_report(monkeypatch, tmp_path: Path) -> None:
+    client = _make_formal_client(monkeypatch, tmp_path)
+    _import_formal_strategy(client)
+    run_resp = client.post(
+        "/api/backtest/run",
+        json={"strategy_id": "palmoil_formal.yaml", "start": "2024-01-03", "end": "2024-03-29", "symbols": ["DCE.p2509"]},
+    )
+    task_id = run_resp.json()["task_id"]
+
+    report_via_results = client.get(f"/api/backtest/results/{task_id}/report")
+    assert report_via_results.status_code == 200
+
+    report_via_alias = client.get(f"/api/backtest/{task_id}/result")
+    assert report_via_alias.status_code == 200
+    assert report_via_alias.headers["content-type"].startswith("application/json")
+
+
+def test_backtest_task_id_alias_404_for_unknown(monkeypatch, tmp_path: Path) -> None:
+    client = _make_client(monkeypatch, tmp_path)
+    resp = client.get("/api/backtest/nonexistent-id-12345")
+    assert resp.status_code == 404
+
+
+def test_strategy_list_alias_returns_same_as_strategies(monkeypatch, tmp_path: Path) -> None:
+    client = _make_client(monkeypatch, tmp_path)
+    yaml_text = "\n".join([
+        'name: "test_strat.yaml"',
+        'template_id: "demo"',
+        'symbols:',
+        '  - "SHFE.rb2505"',
+    ])
+    client.post("/api/strategy/import", json={"name": "test_strat.yaml", "content": yaml_text})
+
+    strategies_response = client.get("/api/strategies")
+    assert strategies_response.status_code == 200
+
+    list_response = client.get("/api/strategy/list")
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == len(strategies_response.json())
+
+
+def test_strategy_detail_returns_strategy_info(monkeypatch, tmp_path: Path) -> None:
+    client = _make_client(monkeypatch, tmp_path)
+    yaml_text = "\n".join([
+        'name: "detail_strat.yaml"',
+        'template_id: "demo-detail"',
+        'symbols:',
+        '  - "SHFE.rb2505"',
+        'signal:',
+        '  confirm_bars: 2',
+    ])
+    client.post("/api/strategy/import", json={"name": "detail_strat.yaml", "content": yaml_text})
+
+    detail_response = client.get("/api/strategy/detail_strat.yaml")
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["name"] == "detail_strat.yaml"
+    assert "execution_profile" in detail
+    assert "params" in detail
+    assert "symbols" in detail
+
+
+def test_strategy_detail_404_for_unknown(monkeypatch, tmp_path: Path) -> None:
+    client = _make_client(monkeypatch, tmp_path)
+    resp = client.get("/api/strategy/no_such_strategy.yaml")
+    assert resp.status_code == 404
+
+
+def test_strategy_params_returns_params(monkeypatch, tmp_path: Path) -> None:
+    client = _make_client(monkeypatch, tmp_path)
+    yaml_text = "\n".join([
+        'name: "params_strat.yaml"',
+        'template_id: "demo-params"',
+        'symbols:',
+        '  - "SHFE.cu2505"',
+        'signal:',
+        '  confirm_bars: 3',
+        'risk:',
+        '  max_drawdown: 0.15',
+        '  daily_loss_limit: 0.03',
+    ])
+    client.post("/api/strategy/import", json={"name": "params_strat.yaml", "content": yaml_text})
+
+    params_response = client.get("/api/strategy/params_strat.yaml/params")
+    assert params_response.status_code == 200
+    params = params_response.json()
+    assert params["name"] == "params_strat.yaml"
+    assert "params" in params
+    assert "risk" in params
+    assert "signal" in params
+    assert "capital_params" in params
+
+
+def test_strategy_params_404_for_unknown(monkeypatch, tmp_path: Path) -> None:
+    client = _make_client(monkeypatch, tmp_path)
+    resp = client.get("/api/strategy/no_such.yaml/params")
+    assert resp.status_code == 404
+
+
+def test_system_status_returns_expected_shape(monkeypatch, tmp_path: Path) -> None:
+    client = _make_client(monkeypatch, tmp_path)
+    resp = client.get("/api/system/status")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert {"cpu", "memory", "disk", "latency", "services", "formal_engine"}.issubset(payload.keys())
+
+
+def test_market_list_returns_categories(monkeypatch, tmp_path: Path) -> None:
+    client = _make_client(monkeypatch, tmp_path)
+    resp = client.get("/api/market/list")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert "markets" in payload
+    assert "total" in payload
+    assert payload["total"] >= 10
+    markets = payload["markets"]
+    assert isinstance(markets, list)
+    first = markets[0]
+    assert {"key", "name_zh", "name_en", "codes"}.issubset(first.keys())
+    assert isinstance(first["codes"], list)
+    assert len(first["codes"]) > 0

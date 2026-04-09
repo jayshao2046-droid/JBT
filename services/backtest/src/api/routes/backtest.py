@@ -1651,3 +1651,21 @@ def delete_results_batch(payload: BatchDeletePayload, request: Request) -> dict[
         "deleted_ids": deleted_ids,
         "deleted_count": len(deleted_ids),
     }
+
+
+# ── Compat alias routes (TASK-0007-B) ──────────────────────────────
+
+
+@router.get("/list")
+def list_backtest_tasks(request: Request) -> list[dict[str, Any]]:
+    return get_results(request)
+
+
+@router.get("/{task_id}", response_model=None)
+def get_backtest_task_by_id(task_id: str, request: Request) -> dict[str, Any]:
+    return get_result_by_id(task_id, request)
+
+
+@router.get("/{task_id}/result", response_model=None)
+def get_backtest_task_result(task_id: str, request: Request) -> Response:
+    return get_result_report(task_id, request)

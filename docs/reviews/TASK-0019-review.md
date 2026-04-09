@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0019
 - 审核角色：项目架构师
-- 审核阶段：sim-trading 收盘统计邮件 / 定时报表预审
-- 审核时间：2026-04-07
-- 审核结论：通过（当前轮次已冻结定时编排、时间窗、批次拆分与 legacy env 映射建议；本轮白名单仅限治理账本与 prompt，不进入 `services/sim-trading/**` 代码执行）
+- 审核阶段：sim-trading 收盘统计邮件 / 定时报表预审；2026-04-10 B1/B2 终审
+- 审核时间：2026-04-07；2026-04-10（B1/B2 终审）
+- 审核结论：通过（B1/B2 均已完成终审与锁回；B0 仍待确认）
 
 ---
 
@@ -60,11 +60,35 @@
 
 1. **TASK-0019 预审通过。**
 2. **当前轮次只完成收盘统计邮件 / 定时报表治理冻结，不进入代码执行。**
-3. **后续进入实施前，必须由 Jay.S 先确认晚间时间窗最终值，并在 `TASK-0014-A4`、`TASK-0017-A4`、`TASK-0022-B` 收口后，按 B0（如需要）→ B1 → B2 顺序签发对应 P0 / P1 Token。**
+3. **B1/B2 已于 2026-04-10 完成终审与锁回。B0（`.env.example`）仍待 Jay.S 确认是否需要。**
 
-## 八、2026-04-09 扩展预审补录
+## 九、2026-04-09 扩展预审补录
 
 1. `TASK-0019-B0` 已升级为“剩余通知 / 报表模板占位合并批次”，文件严格限于 `services/sim-trading/.env.example`，默认由 Atlas / Jay.S 处理，不派发模拟交易 Agent。
 2. `TASK-0019-B1` 的测试白名单已收紧为 `services/sim-trading/tests/test_notifier.py` 与 `services/sim-trading/tests/test_report_scheduler.py`（允许新增）。
 3. `TASK-0019-B2` 的测试白名单已收紧为 `services/sim-trading/tests/test_ctp_notify.py` 与 `services/sim-trading/tests/test_report_scheduler.py`。
 4. 串行关系冻结为：`TASK-0019-B1` / `TASK-0019-B2` 均需等待 `TASK-0014-A4`、`TASK-0017-A4`、`TASK-0022-B` 收口；B0 若启用，必须在 B1 前独立完成。
+
+## 十、2026-04-10 TASK-0019-B1 终审补录
+
+1. 批次名称：补充批次 B1 — scheduler 与最小邮件报表骨架
+2. 执行 Agent：模拟交易 Agent
+3. token_id：`tok-465b174b-0732-444f-b5c8-a05e41c4a3b0`
+4. review-id：`REVIEW-TASK-0019-B1`
+5. 实际白名单严格限于：`services/sim-trading/src/main.py`、`src/notifier/email.py`、`src/ledger/service.py`、`tests/test_notifier.py`、`tests/test_report_scheduler.py`
+6. 最小自校验结果：60 passed / 1 skipped
+7. lockback 时间：2026-04-10
+8. lockback 结果：`approved`
+9. 当前 Token 状态：`locked`
+
+## 十一、2026-04-10 TASK-0019-B2 终审补录
+
+1. 批次名称：补充批次 B2 — 账户 / 持仓 / 成交报表充实
+2. 执行 Agent：模拟交易 Agent
+3. token_id：`tok-6041d41c-5ef8-4789-bdde-2de5fb70b2b0`
+4. review-id：`REVIEW-TASK-0019-B2`
+5. 实际白名单严格限于：`services/sim-trading/src/gateway/simnow.py`、`src/ledger/service.py`、`src/api/router.py`、`tests/test_ctp_notify.py`、`tests/test_report_scheduler.py`
+6. 最小自校验结果：68 passed / 1 skipped
+7. lockback 时间：2026-04-10
+8. lockback 结果：`approved`
+9. 当前 Token 状态：`locked`

@@ -3,15 +3,15 @@
 ## Lock 信息
 
 - 任务 ID：TASK-0007
-- 阶段：批次 A 契约补登已执行并锁回；补充批次 D 已完成终审并锁回
+- 阶段：批次 A 契约补登已执行并锁回；批次 B/C 已执行并锁回；补充批次 D 已完成终审并锁回
 - 执行 Agent：
   - 项目架构师（批次 A，P0 契约补登）
   - 回测 Agent（批次 B、批次 C、补充批次 D，P1 实施）
 - Token 摘要：
   - P-LOG 协同账本区文件：不需要文件级 Token
   - `shared/contracts/backtest/api.md`：批次 A 已在当前会话即时确认后执行；授权来源：Jay.S 当前会话明确确认：立即签发批次A；按要求不记录 token_id，当前状态已锁回
-  - `services/backtest/src/api/**` 与指定 tests：待 Jay.S 为回测 Agent 签发 5 文件 P1 Token
-  - `services/backtest/backtest_web/src/utils/api.ts`、`services/backtest/backtest_web/next.config.mjs`：待 Jay.S 为回测 Agent 签发 2 文件 P1 Token
+  - `services/backtest/src/api/**` 与指定 tests：批次 B P1 token_id `tok-47940111-1c84-48fc-a005-86847096c740`，lockback review-id `REVIEW-TASK-0007-B`，当前状态 `locked`
+  - `services/backtest/backtest_web/src/utils/api.ts`、`services/backtest/backtest_web/next.config.mjs`：批次 C P1 token_id `tok-c19ceb4a-82f6-44f1-a240-b9254b2ea5d1`，lockback review-id `REVIEW-TASK-0007-C`，当前状态 `locked`
   - `services/backtest/backtest_web/Dockerfile`：补充批次 D 已按 Jay.S 当前会话即时执行确认完成单文件实施、终审与锁回；授权来源原样记录为“远端 api 报错 500”；按要求不记录 token_id；执行主体固定为回测 Agent；终审确认业务白名单未越界，远端 air 重建验证后 API 500 已消失；后续如需再次修改该文件，必须重新补充预审
 
 ## 治理文件白名单（本轮已使用）
@@ -33,7 +33,7 @@
 
 1. `shared/contracts/backtest/api.md`
 
-## 批次 B 业务文件白名单（待 P1 Token）
+## 批次 B 业务文件白名单（已执行并锁回）
 
 1. `services/backtest/src/api/app.py`
 2. `services/backtest/src/api/routes/backtest.py`
@@ -41,7 +41,7 @@
 4. `services/backtest/src/api/routes/support.py`
 5. `services/backtest/tests/test_api_surface.py`
 
-## 批次 C 业务文件白名单（待 P1 Token）
+## 批次 C 业务文件白名单（已执行并锁回）
 
 1. `services/backtest/backtest_web/src/utils/api.ts`
 2. `services/backtest/backtest_web/next.config.mjs`
@@ -95,14 +95,14 @@
 
 - 预审状态：已通过
 - 批次 A 状态：当前会话已执行并锁回
-- 批次 B Token 状态：待签发
-- 批次 C Token 状态：待签发
+- 批次 B Token 状态：`locked`（token_id `tok-47940111-1c84-48fc-a005-86847096c740`）
+- 批次 C Token 状态：`locked`（token_id `tok-c19ceb4a-82f6-44f1-a240-b9254b2ea5d1`）
 - 补充批次 D 状态：已完成自校验、终审与锁回
-- 解锁时间：2026-04-04（批次 A 当前会话即时确认）；2026-04-06（补充批次 D 当前会话即时执行确认）
+- 解锁时间：2026-04-04（批次 A）；2026-04-10（批次 B/C）；2026-04-06（补充批次 D）
 - 失效时间：N/A
-- 锁回时间：2026-04-04（批次 A 当前会话即时锁回）；2026-04-06（补充批次 D 终审锁回）
-- lockback 结果：批次 A 已锁回；批次 B、批次 C 尚未执行；补充批次 D 已完成单文件实施、终审与锁回
+- 锁回时间：2026-04-04（批次 A）；2026-04-10（批次 B/C）；2026-04-06（补充批次 D）
+- lockback 结果：批次 A = `approved`（已锁回）；批次 B = `approved`（review-id `REVIEW-TASK-0007-B`）；批次 C = `approved`（review-id `REVIEW-TASK-0007-C`）；补充批次 D = `approved`（已锁回）
 
 ## 结论
 
-**TASK-0007 批次 A 已完成正式契约补登、自校验与锁回；2026-04-06 补充批次 D 已完成单文件实施、终审与锁回，业务白名单未越界，远端 air 重建验证已确认 API 500 消失；后续如需再次修改 `services/backtest/backtest_web/Dockerfile`，必须重新补充预审；`JBT-BACKTEST-8004` 运行态清理继续后置；批次 B 与批次 C 仍待 Jay.S 后续签发对应 P1 Token。**
+**TASK-0007 全部 4 个批次（A/B/C/D）均已执行完毕并锁回。批次 B（正式后端 API 并回，71 passed / 2 pre-existing）与批次 C（前端 8004 收口，0 errors）已于 2026-04-10 完成终审与锁回。后续如需再次修改已锁回文件，必须重新补充预审。**

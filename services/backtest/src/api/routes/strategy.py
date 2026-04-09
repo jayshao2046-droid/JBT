@@ -102,3 +102,35 @@ def export_strategy(name: str, request: Request) -> PlainTextResponse:
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strategy not found")
     return PlainTextResponse(record["content"])
+
+
+# ── Compat alias / detail routes (TASK-0007-B) ─────────────────────
+
+
+@router.get("/strategy/list")
+def list_strategies_shortcut(request: Request) -> list[dict[str, Any]]:
+    return list_strategies(request)
+
+
+@router.get("/strategy/{name}")
+def get_strategy_detail(name: str, request: Request) -> dict[str, Any]:
+    state = get_compat_state(request)
+    record = get_strategy_record(state, name)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strategy not found")
+    return serialize_strategy(state, record)
+
+
+@router.get("/strategy/{name}/params")
+def get_strategy_params(name: str, request: Request) -> dict[str, Any]:
+    state = get_compat_state(request)
+    record = get_strategy_record(state, name)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strategy not found")
+    return {
+        "name": name,
+        "params": record.get("params", {}),
+        "risk": record.get("risk") or record.get("risk_control", {}),
+        "signal": record.get("signal", {}),
+        "capital_params": record.get("capital_params", {}),
+    }

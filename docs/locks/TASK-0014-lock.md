@@ -4,7 +4,7 @@
 
 - 任务 ID：TASK-0014
 - 阶段：sim-trading 风控通知链路预审 + 扩展预审补录
-- 当前任务是否仍处于“预审未执行”状态：整体否；`TASK-0014-A1` 与 `TASK-0014-A2` 已实施并锁回，`TASK-0014-A3` / `TASK-0014-A4` 待执行
+- 当前任务是否仍处于“预审未执行”状态：否；A1/A2/A3/A4 均已实施并锁回
 - 执行 Agent：
   - 项目架构师（当前 P-LOG 治理文件）
   - 模拟交易 Agent（后续服务实现主体）
@@ -12,8 +12,8 @@
   - P-LOG 协同账本区文件：不需要文件级 Token
   - `TASK-0014-A1`：P1 token_id `tok-7ab3cadf-043b-4709-b8e7-d00519f1ae81`，文件严格限于 `services/sim-trading/src/main.py`、`src/notifier/dispatcher.py`、`src/risk/guards.py`、`tests/test_notifier.py`、`tests/test_risk_hooks.py`，对应提交 `d4b5817`，lockback review-id `REVIEW-TASK-0014-A1`，当前状态 `locked`
   - `TASK-0014-A2`：P1 token_id `tok-3ab9a9ea-edfe-40fe-9750-1e7dd9ab200b`，文件严格限于 `services/sim-trading/src/notifier/feishu.py`、`src/gateway/simnow.py`、`tests/test_notifier.py`，对应提交 `78cad42`，lockback review-id `REVIEW-TASK-0014-A2`，当前状态 `locked`
-  - `TASK-0014-A3`：`services/sim-trading/src/notifier/dispatcher.py`、`src/notifier/email.py`、`src/notifier/feishu.py`、`src/risk/guards.py`、`tests/test_notifier.py`，后续 P1 Token
-  - `TASK-0014-A4`：`services/sim-trading/src/main.py`、`src/api/router.py`、`src/gateway/simnow.py`、`tests/test_ctp_notify.py`、`tests/test_risk_hooks.py`，后续 P1 Token
+  - `TASK-0014-A3`：P1 token_id `tok-850ecb5e-f42f-450f-a73b-ec45a3620fcb`，文件严格限于 `services/sim-trading/src/notifier/dispatcher.py`、`src/notifier/email.py`、`src/notifier/feishu.py`、`src/risk/guards.py`、`tests/test_notifier.py`，lockback review-id `REVIEW-TASK-0014-A3`，当前状态 `locked`
+  - `TASK-0014-A4`：P1 token_id `tok-e4f5647e-ccb1-45c0-8cab-9a8fa01b97f4`，文件严格限于 `services/sim-trading/src/main.py`、`src/api/router.py`、`src/gateway/simnow.py`、`tests/test_ctp_notify.py`、`tests/test_risk_hooks.py`，lockback review-id `REVIEW-TASK-0014-A4`，当前状态 `locked`
   - `services/sim-trading/.env.example`：本轮不再由 `TASK-0014` 单独签发；若需要新增剩余通知 / 报表模板占位，统一并入 `TASK-0019-B0` 单文件 P0 Token
   - `shared/contracts/**` 若补通知事件契约：后续 P0 Token
 
@@ -90,7 +90,12 @@
   - `services/sim-trading/src/risk/guards.py`
   - `services/sim-trading/tests/test_notifier.py`
 5. 批次目标：完善 RiskEvent / 通知分类、去重 / 抑制 / 恢复 / 升级策略与双通道失败收口，不扩展到 ledger / report 逻辑。
-6. 当前 Token 状态：pending_token
+6. P1 token_id：`tok-850ecb5e-f42f-450f-a73b-ec45a3620fcb`
+7. 最小自校验：35 passed / 1 skipped
+8. lockback review-id：`REVIEW-TASK-0014-A3`
+9. lockback 时间：2026-04-10
+10. lockback 结果：`approved`
+11. 当前 Token 状态：`locked`
 
 ### 补充批次 A4（待签发）
 
@@ -104,8 +109,13 @@
   - `services/sim-trading/tests/test_ctp_notify.py`
   - `services/sim-trading/tests/test_risk_hooks.py`
 5. 批次目标：把 guardian / connect / disconnect / auth / login / recovery 等运行时事件正式接线到 A3 内核，不扩展到 `.env.example`、ledger 或报表调度。
-6. 执行顺序：仅能在 A3 完成自校验并锁回后启动。
-7. 当前 Token 状态：pending_token
+6. 执行顺序：已在 A3 完成自校验并锁回后启动。
+7. P1 token_id：`tok-e4f5647e-ccb1-45c0-8cab-9a8fa01b97f4`
+8. 最小自校验：43 passed / 1 skipped
+9. lockback review-id：`REVIEW-TASK-0014-A4`
+10. lockback 时间：2026-04-10
+11. lockback 结果：`approved`
+12. 当前 Token 状态：`locked`
 
 ### 凭证来源治理
 
@@ -133,13 +143,13 @@
 
 ## 当前状态
 
-- 预审状态：已通过；`TASK-0014-A1` / `TASK-0014-A2` 已终审并锁回，`TASK-0014-A3` / `TASK-0014-A4` 待执行
-- Token 状态：主任务代码 Token 不适用；`TASK-0014-A1` / `TASK-0014-A2` = `locked`；`TASK-0014-A3` / `TASK-0014-A4` = `pending_token`
-- 解锁时间：A1 已执行；A2 2026-04-07
+- 预审状态：已通过；A1/A2/A3/A4 均已终审并锁回
+- Token 状态：主任务代码 Token 不适用；`TASK-0014-A1` / `TASK-0014-A2` / `TASK-0014-A3` / `TASK-0014-A4` = `locked`
+- 解锁时间：A1 已执行；A2 2026-04-07；A3/A4 2026-04-10
 - 失效时间：N/A
-- 锁回时间：A1 已完成；A2 2026-04-07
-- lockback 结果：`TASK-0014-A1` `TASK-0014-A2` 均已完成终审与锁回
+- 锁回时间：A1 已完成；A2 2026-04-07；A3 2026-04-10；A4 2026-04-10
+- lockback 结果：A1/A2/A3/A4 均已完成终审与锁回（A3 review-id `REVIEW-TASK-0014-A3`，A4 review-id `REVIEW-TASK-0014-A4`）
 
 ## 结论
 
-**`TASK-0014` 当前状态更新为：补充批次 A1 / A2 已实施、终审与锁回完成；补充批次 A3 / A4 已完成扩展预审并进入 `pending_token`；剩余 `.env.example` 模板占位不再由 `TASK-0014` 单独签发，统一并入 `TASK-0019-B0`。**
+**`TASK-0014` 全部 4 个补充批次（A1/A2/A3/A4）均已实施、终审与锁回完成。A3（通知内核专业化，35 passed / 1 skipped）与 A4（运行时事件源接线，43 passed / 1 skipped）已于 2026-04-10 完成终审与锁回。剩余 `.env.example` 模板占位统一并入 `TASK-0019-B0`。**

@@ -86,6 +86,11 @@ def _make_md_spi_class():
         def OnFrontConnected(self):
             logger.info("[mdapi] connected, login")
             self._on_status("md_connected")
+            try:
+                from src.risk.guards import emit_alert
+                emit_alert("P2", "CTP 行情前置已连接", {"event_code": "CTP_FRONT_CONNECTED", "source": "simnow_md"})
+            except Exception:
+                pass
             req = _mdmod.CThostFtdcReqUserLoginField()
             req.BrokerID = self._api._broker_id
             req.UserID = self._api._user_id
@@ -96,6 +101,11 @@ def _make_md_spi_class():
             logger.warning("[mdapi] disconnected reason=%d", nReason)
             self._on_status("md_disconnected")
             self._api._record_disconnect("md", nReason)
+            try:
+                from src.risk.guards import emit_alert
+                emit_alert("P1", f"CTP 行情前置断开 reason={nReason}", {"event_code": "CTP_FRONT_DISCONNECTED", "source": "simnow_md"})
+            except Exception:
+                pass
 
         def OnRspUserLogin(self, pRspUserLogin, pRspInfo, nRequestID, bIsLast):
             if pRspInfo and pRspInfo.ErrorID != 0:
@@ -161,6 +171,11 @@ def _make_td_spi_class():
         def OnFrontConnected(self):
             logger.info("[traderapi] connected, auth")
             self._on_status("td_connected")
+            try:
+                from src.risk.guards import emit_alert
+                emit_alert("P2", "CTP 交易前置已连接", {"event_code": "CTP_FRONT_CONNECTED", "source": "simnow_td"})
+            except Exception:
+                pass
             req = _tdmod.CThostFtdcReqAuthenticateField()
             req.BrokerID = self._api._broker_id
             req.UserID = self._api._user_id
@@ -172,6 +187,11 @@ def _make_td_spi_class():
             logger.warning("[traderapi] disconnected reason=%d", nReason)
             self._on_status("td_disconnected")
             self._api._record_disconnect("td", nReason)
+            try:
+                from src.risk.guards import emit_alert
+                emit_alert("P1", f"CTP 交易前置断开 reason={nReason}", {"event_code": "CTP_FRONT_DISCONNECTED", "source": "simnow_td"})
+            except Exception:
+                pass
 
         def OnRspAuthenticate(self, p, pRspInfo, nRequestID, bIsLast):
             if pRspInfo and pRspInfo.ErrorID != 0:
@@ -209,10 +229,11 @@ def _make_td_spi_class():
         def OnRspSettlementInfoConfirm(self, p, pRspInfo, nRequestID, bIsLast):
             logger.info("[traderapi] settlement confirmed, ready")
             self._on_status("td_ready")
-            # 结算确认后：查账户 + 查可用合约
+            # 结算确认后：查账户 + 查可用合约 + 查持仓
             import threading
             threading.Timer(1.0, self._api._query_account).start()
             threading.Timer(2.0, self._api._query_instruments).start()
+            threading.Timer(3.0, self._api._query_positions).start()
 
         def OnRspQryInstrument(self, p, pRspInfo, nRequestID, bIsLast):
             if p:
@@ -248,6 +269,59 @@ def _make_td_spi_class():
             logger.info("[traderapi] account balance=%.2f pre_balance=%.2f available=%.2f",
                         p.Balance, p.PreBalance, p.Available)
 
+        def OnRtnTrade(self, pTrade):
+            if not pTrade:
+                return
+            trade_data = {
+                "instrument_id": pTrade.InstrumentID,
+                "order_ref": pTrade.OrderRef,
+                "direction": getattr(pTrade, "Direction", ""),
+                "offset": getattr(pTrade, "OffsetFlag", ""),
+                "price": pTrade.Price,
+                "volume": pTrade.Volume,
+                "trade_id": pTrade.TradeID.strip(),
+                "trade_time": pTrade.TradeTime,
+                "exchange_id": pTrade.ExchangeID,
+            }
+            try:
+                from src.ledger.service import get_ledger
+                get_ledger().add_trade(trade_data)
+            except Exception:
+                pass
+            logger.info("[traderapi] trade: %s %s@%.2f vol=%d",
+                        pTrade.InstrumentID, pTrade.TradeID.strip(), pTrade.Price, pTrade.Volume)
+
+        def OnRtnOrder(self, pOrder):
+            if not pOrder:
+                return
+            logger.info("[traderapi] order update: %s status=%s ref=%s",
+                        pOrder.InstrumentID, getattr(pOrder, "OrderStatus", "?"), pOrder.OrderRef)
+
+        def OnRspQryInvestorPosition(self, p, pRspInfo, nRequestID, bIsLast):
+            if p and p.InstrumentID:
+                self._api._on_position({
+                    "instrument_id": p.InstrumentID,
+                    "direction": getattr(p, "PosiDirection", ""),
+                    "position": p.Position,
+                    "today_position": getattr(p, "TodayPosition", 0),
+                    "open_cost": getattr(p, "OpenCost", 0),
+                    "position_cost": getattr(p, "PositionCost", 0),
+                    "floating_pnl": getattr(p, "PositionProfit", 0),
+                    "margin": getattr(p, "UseMargin", 0),
+                })
+            if bIsLast:
+                self._api._flush_positions()
+
+        def OnRspError(self, pRspInfo, nRequestID, bIsLast):
+            if pRspInfo and pRspInfo.ErrorID != 0:
+                logger.error("[traderapi] error: %d %s", pRspInfo.ErrorID, pRspInfo.ErrorMsg)
+                try:
+                    from src.risk.guards import emit_alert
+                    emit_alert("P1", f"CTP 通用错误 [{pRspInfo.ErrorID}] {pRspInfo.ErrorMsg}",
+                               {"event_code": "CTP_RSP_ERROR", "source": "simnow_td"})
+                except Exception:
+                    pass
+
     return TdSpi
 
 
@@ -282,6 +356,8 @@ class SimNowGateway:
         self._contract_to_product: Dict[str, str] = {}
         # 合约发现完成后待订阅列表（在 MD 就绪前缓冲）
         self._pending_subscribe: list = []
+        # 持仓查询中间缓冲（CTP 逐条回调，bIsLast 时 flush）
+        self._pending_positions: list = []
 
     @property
     def status(self):
@@ -327,6 +403,11 @@ class SimNowGateway:
     def _on_account(self, data: dict):
         with self._lock:
             self._account = data
+        try:
+            from src.ledger.service import get_ledger
+            get_ledger().update_account(data)
+        except Exception:
+            pass
 
     def _on_instrument(
         self,
@@ -413,6 +494,35 @@ class SimNowGateway:
             self._td_api.ReqQryTradingAccount(req, 0)
         except Exception as exc:
             logger.warning("[gateway] _query_account failed: %s", exc)
+
+    def _on_position(self, data: dict):
+        with self._lock:
+            self._pending_positions.append(data)
+
+    def _flush_positions(self):
+        with self._lock:
+            positions = list(self._pending_positions)
+            self._pending_positions.clear()
+        try:
+            from src.ledger.service import get_ledger
+            get_ledger().update_positions(positions)
+        except Exception:
+            pass
+        logger.info("[gateway] positions flushed: %d records", len(positions))
+
+    def _query_positions(self):
+        if self._td_api is None or self._td_status not in ("td_ready", "td_logged_in"):
+            return
+        try:
+            with self._lock:
+                self._pending_positions.clear()
+            req = _tdmod.CThostFtdcQryInvestorPositionField()
+            req.BrokerID = self._broker_id
+            req.InvestorID = self._user_id
+            self._td_api.ReqQryInvestorPosition(req, 0)
+            logger.info("[gateway] querying positions...")
+        except Exception as exc:
+            logger.warning("[gateway] _query_positions failed: %s", exc)
 
     def _record_disconnect(self, channel, reason):
         import time as _time

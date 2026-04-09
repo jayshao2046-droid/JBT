@@ -58,6 +58,8 @@ def normalize_bars(raw_bars: Any) -> List[Dict[str, Any]]:
 class FactorRegistry:
     def __init__(self) -> None:
         self._calculators: Dict[str, FactorCalculator] = {}
+        self._alias_index: Dict[str, str] = {}
+        self._display_names: Dict[str, str] = {}
 
     def register(
         self,
@@ -67,8 +69,27 @@ class FactorRegistry:
         if calculator is None:
             return lambda func: self.register(factor_name, func)
 
-        self._calculators[_normalize_factor_name(factor_name)] = calculator
+        normalized = _normalize_factor_name(factor_name)
+        self._calculators[normalized] = calculator
+        self._display_names[normalized] = factor_name.strip()
+        alias_key = _make_alias_key(normalized)
+        if alias_key != normalized:
+            self._alias_index[alias_key] = normalized
         return calculator
+
+    def resolve_factor_name(self, factor_name: str) -> str:
+        normalized = _normalize_factor_name(factor_name)
+        if normalized in self._calculators:
+            return normalized
+        alias_key = _make_alias_key(normalized)
+        resolved = self._alias_index.get(alias_key)
+        if resolved is not None:
+            return resolved
+        for canonical, calc in self._calculators.items():
+            if _make_alias_key(canonical) == alias_key:
+                self._alias_index[alias_key] = canonical
+                return canonical
+        raise StrategyConfigError(f"Unsupported factor {factor_name}")
 
     def calculate(
         self,
@@ -76,10 +97,8 @@ class FactorRegistry:
         bars: Any,
         params: Optional[Mapping[str, Any]] = None,
     ) -> FactorResult:
-        normalized_name = _normalize_factor_name(factor_name)
-        calculator = self._calculators.get(normalized_name)
-        if calculator is None:
-            raise StrategyConfigError(f"Unsupported factor {factor_name}")
+        resolved_name = self.resolve_factor_name(factor_name)
+        calculator = self._calculators[resolved_name]
 
         normalized_bars = normalize_bars(bars)
         rows = calculator(normalized_bars, dict(params or {}))
@@ -87,6 +106,25 @@ class FactorRegistry:
 
     def list_factors(self) -> List[str]:
         return sorted(self._calculators)
+
+    def list_factors_with_aliases(self) -> List[Dict[str, Any]]:
+        result: List[Dict[str, Any]] = []
+        for canonical in sorted(self._calculators):
+            display = self._display_names.get(canonical, canonical)
+            aliases = set()
+            aliases.add(canonical)
+            no_underscore = _make_alias_key(canonical)
+            if no_underscore != canonical:
+                aliases.add(no_underscore)
+            with_underscores = _camel_to_snake(display)
+            if with_underscores != canonical:
+                aliases.add(with_underscores)
+            result.append({
+                "name": canonical,
+                "display_name": display,
+                "aliases": sorted(aliases),
+            })
+        return result
 
 
 factor_registry = FactorRegistry()
@@ -96,6 +134,16 @@ def _normalize_factor_name(factor_name: str) -> str:
     if not isinstance(factor_name, str) or not factor_name.strip():
         raise StrategyConfigError("factor_name must be a non-empty string")
     return factor_name.strip().lower()
+
+
+def _make_alias_key(normalized_name: str) -> str:
+    return normalized_name.replace("_", "")
+
+
+def _camel_to_snake(name: str) -> str:
+    import re as _re
+    s1 = _re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
+    return _re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
 
 def _normalize_column_mapping(columns: Mapping[str, Any]) -> List[Dict[str, Any]]:
@@ -1625,5 +1673,4 @@ def _calculate_spread_rsi(bars: List[Dict[str, Any]], params: Dict[str, Any]) ->
             else:
                 rsi = 100.0 - 100.0 / (1.0 + g / loss)
         rows.append({"timestamp": bar["timestamp"], "spread_rsi": rsi})
-    return rows
     return rows

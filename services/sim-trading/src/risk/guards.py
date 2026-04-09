@@ -1,3 +1,4 @@
+import enum
 import logging
 import os
 from typing import Any, Mapping, Optional
@@ -6,6 +7,34 @@ from src.notifier.dispatcher import RiskEvent, SystemRiskState, get_dispatcher
 
 
 logger = logging.getLogger(__name__)
+
+
+class RiskEventCategory(str, enum.Enum):
+    """风险事件分类枚举。"""
+    CTP_CONNECTION = "CTP_CONNECTION"
+    CTP_AUTH = "CTP_AUTH"
+    CTP_TRADING = "CTP_TRADING"
+    RISK_LIMIT = "RISK_LIMIT"
+    SYSTEM = "SYSTEM"
+
+
+_PREFIX_CATEGORY_MAP = {
+    "CTP_CONN": RiskEventCategory.CTP_CONNECTION,
+    "CTP_AUTH": RiskEventCategory.CTP_AUTH,
+    "CTP_TRADE": RiskEventCategory.CTP_TRADING,
+    "CTP_ORDER": RiskEventCategory.CTP_TRADING,
+    "RISK": RiskEventCategory.RISK_LIMIT,
+    "SYS": RiskEventCategory.SYSTEM,
+}
+
+
+def infer_category(event_code: str) -> RiskEventCategory:
+    """根据 event_code 前缀推断 RiskEventCategory。"""
+    upper = event_code.upper()
+    for prefix, cat in _PREFIX_CATEGORY_MAP.items():
+        if upper.startswith(prefix):
+            return cat
+    return RiskEventCategory.SYSTEM
 
 
 def _normalize_level(level: str) -> str:
@@ -42,6 +71,9 @@ def emit_alert(level: str, message: str, context: dict = None) -> Optional[Syste
         logger.warning("Notifier dispatcher is not configured, skip risk alert: %s", message)
         return None
 
+    event_code = _string_value(payload, "event_code", "RISK_ALERT")
+    category = infer_category(event_code)
+
     event = RiskEvent(
         task_id=_string_value(payload, "task_id", "TASK-0014"),
         stage_preset=_resolve_stage_preset(payload),
@@ -51,8 +83,10 @@ def emit_alert(level: str, message: str, context: dict = None) -> Optional[Syste
         symbol=_string_value(payload, "symbol"),
         signal_id=_string_value(payload, "signal_id"),
         trace_id=_string_value(payload, "trace_id"),
-        event_code=_string_value(payload, "event_code", "RISK_ALERT"),
+        event_code=event_code,
         reason=str(message),
+        source=_string_value(payload, "source", "risk_guard"),
+        category=category.value,
     )
     return dispatcher.dispatch(event)
 

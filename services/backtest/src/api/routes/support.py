@@ -743,7 +743,15 @@ def _scan_strategy_metadata(
             pass
 
     factor_names = list(metadata.get("factor_names") or [])
-    missing_factors = [f for f in factor_names if f and f.strip().lower() not in registered_factor_names]
+    missing_factors = []
+    for f in factor_names:
+        if not f or not f.strip():
+            continue
+        try:
+            if _factor_registry is not None:
+                _factor_registry.resolve_factor_name(f)
+        except Exception:
+            missing_factors.append(f)
 
     has_transaction_costs = False
     if definition is not None:
@@ -1646,4 +1654,32 @@ def get_main_contracts(request: Request) -> dict[str, Any]:
         "categories": list(state.get("main_contract_categories", [])),
         "source": "service_local_compatibility",
         "note": "兼容层本地主力合约清单，仅供分类选择与界面联调，不代表实时主力行情。",
+    }
+
+
+@router.get("/v1/factors")
+def list_registered_factors() -> dict[str, Any]:
+    """Return all registered factors with alias information."""
+    if _factor_registry is None:
+        return {"factors": [], "count": 0}
+    try:
+        factors = _factor_registry.list_factors_with_aliases()
+    except Exception:
+        factors = [{"name": n, "display_name": n, "aliases": [n]} for n in _factor_registry.list_factors()]
+    return {"factors": factors, "count": len(factors)}
+
+
+@router.get("/market/list")
+def list_available_markets(request: Request) -> dict[str, Any]:
+    return {
+        "markets": [
+            {
+                "key": category["key"],
+                "name_zh": category["zh"],
+                "name_en": category["en"],
+                "codes": category["codes"],
+            }
+            for category in MAIN_CONTRACT_CATEGORIES
+        ],
+        "total": len(MAIN_CONTRACT_CATEGORIES),
     }

@@ -4,15 +4,15 @@
 
 - 任务 ID：TASK-0019
 - 阶段：sim-trading 收盘统计邮件 / 定时报表预审
-- 当前任务是否仍处于“预审未执行”状态：整体是；B0 / B1 / B2 已冻结待签发
+- 当前任务是否仍处于“预审未执行”状态：否；B1/B2 已实施并锁回；B0 待确认
 - 执行 Agent：
   - 项目架构师（当前 P-LOG 治理文件）
   - 模拟交易 Agent（后续服务实现主体）
 - Token 摘要：
   - P-LOG 协同账本区文件：不需要文件级 Token
   - `TASK-0019-B0`：`services/sim-trading/.env.example`，后续单文件 P0 Token（默认 Atlas / Jay.S 处理）
-  - `TASK-0019-B1`：`services/sim-trading/src/main.py`、`src/notifier/email.py`、`src/ledger/service.py`、`tests/test_notifier.py`、`tests/test_report_scheduler.py`（允许新增），后续 P1 Token
-  - `TASK-0019-B2`：`services/sim-trading/src/gateway/simnow.py`、`src/ledger/service.py`、`src/api/router.py`、`tests/test_ctp_notify.py`、`tests/test_report_scheduler.py`，后续 P1 Token
+  - `TASK-0019-B1`：P1 token_id `tok-465b174b-0732-444f-b5c8-a05e41c4a3b0`，文件严格限于 `services/sim-trading/src/main.py`、`src/notifier/email.py`、`src/ledger/service.py`、`tests/test_notifier.py`、`tests/test_report_scheduler.py`（允许新增），lockback review-id `REVIEW-TASK-0019-B1`，当前状态 `locked`
+  - `TASK-0019-B2`：P1 token_id `tok-6041d41c-5ef8-4789-bdde-2de5fb70b2b0`，文件严格限于 `services/sim-trading/src/gateway/simnow.py`、`src/ledger/service.py`、`src/api/router.py`、`tests/test_ctp_notify.py`、`tests/test_report_scheduler.py`，lockback review-id `REVIEW-TASK-0019-B2`，当前状态 `locked`
 
 ## 治理文件白名单（本轮已使用）
 
@@ -41,7 +41,7 @@
 4. 建议白名单：`services/sim-trading/.env.example`
 5. 当前 Token 状态：待 Jay.S 确认是否需要该批次；如需要则为 pending_token
 
-### B1
+### B1（已执行并锁回）
 
 1. 批次名称：补充批次 B1 — scheduler 与最小邮件报表骨架
 2. 执行 Agent：模拟交易
@@ -52,9 +52,14 @@
    - `services/sim-trading/src/ledger/service.py`
   - `services/sim-trading/tests/test_notifier.py`
   - `services/sim-trading/tests/test_report_scheduler.py`（允许新增）
-5. 当前 Token 状态：pending_token
+5. P1 token_id：`tok-465b174b-0732-444f-b5c8-a05e41c4a3b0`
+6. 最小自校验：60 passed / 1 skipped
+7. lockback review-id：`REVIEW-TASK-0019-B1`
+8. lockback 时间：2026-04-10
+9. lockback 结果：`approved`
+10. 当前 Token 状态：`locked`
 
-### B2
+### B2（已执行并锁回）
 
 1. 批次名称：补充批次 B2 — 账户 / 持仓 / 成交报表充实
 2. 执行 Agent：模拟交易
@@ -65,8 +70,13 @@
    - `services/sim-trading/src/api/router.py`
   - `services/sim-trading/tests/test_ctp_notify.py`
   - `services/sim-trading/tests/test_report_scheduler.py`
-5. 执行顺序：B2 仅能在 B1 完成自校验并锁回后启动。
-6. 当前 Token 状态：pending_token
+5. 执行顺序：B2 已在 B1 完成自校验并锁回后启动。
+6. P1 token_id：`tok-6041d41c-5ef8-4789-bdde-2de5fb70b2b0`
+7. 最小自校验：68 passed / 1 skipped
+8. lockback review-id：`REVIEW-TASK-0019-B2`
+9. lockback 时间：2026-04-10
+10. lockback 结果：`approved`
+11. 当前 Token 状态：`locked`
 
 ## 当前继续禁止修改的路径说明
 
@@ -86,12 +96,12 @@
 ## 当前状态
 
 - 预审状态：已通过
-- Token 状态：B0 待确认是否需要；B1 / B2 均为 `pending_token`
-- 解锁时间：N/A
+- Token 状态：B0 待确认是否需要；B1 = `locked`；B2 = `locked`
+- 解锁时间：B1/B2 2026-04-10
 - 失效时间：N/A
-- 锁回时间：N/A
-- lockback 结果：尚未进入代码执行阶段
+- 锁回时间：B1 2026-04-10；B2 2026-04-10
+- lockback 结果：B1 = `approved`（review-id `REVIEW-TASK-0019-B1`）；B2 = `approved`（review-id `REVIEW-TASK-0019-B2`）
 
 ## 结论
 
-**`TASK-0019` 当前仍处于“预审未执行”状态；收盘统计邮件 / 定时报表继续锁定，后续仅能在 `TASK-0014-A4`、`TASK-0017-A4`、`TASK-0022-B` 收口后，按 B0（如需要）→ B1 → B2 顺序进入执行。**
+**`TASK-0019` B1（scheduler 邮件骨架，60 passed / 1 skipped）与 B2（报表充实，68 passed / 1 skipped）已于 2026-04-10 完成终审与锁回。B0（`.env.example` 模板占位）仍待 Jay.S 确认是否需要。**

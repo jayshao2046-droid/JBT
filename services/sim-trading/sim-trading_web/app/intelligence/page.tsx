@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,7 @@ import {
   ChevronDown,
   Gauge,
   AlertOctagon,
+  ScrollText,
 } from "lucide-react"
 import {
   LineChart,
@@ -56,6 +57,23 @@ export default function RiskControlPage() {
     marginWarning: 60,
     marginAlert: 70,
   })
+
+  // --- 日志查看 ---
+  const [logEntries, setLogEntries] = useState<Array<{timestamp:string;level:string;source:string;message:string}>>([])
+  const [logLevelFilter, setLogLevelFilter] = useState<string>("ALL")
+  const [logAutoRefresh, setLogAutoRefresh] = useState(true)
+  const [logLoading, setLogLoading] = useState(false)
+
+  const fetchLogs = useCallback(() => {
+    setLogLoading(true)
+    const params = new URLSearchParams({ limit: "200" })
+    if (logLevelFilter !== "ALL") params.set("level", logLevelFilter)
+    fetch(`/api/sim/api/v1/logs/tail?${params.toString()}`, { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data: any) => setLogEntries(data.logs ?? []))
+      .catch(() => {})
+      .finally(() => setLogLoading(false))
+  }, [logLevelFilter])
 
   // L1 检查项目（10项）
   const l1Checks = [
@@ -182,6 +200,14 @@ export default function RiskControlPage() {
     const t = setInterval(handleRefresh, 10000)
     return () => clearInterval(t)
   }, [])
+
+  // 日志轮询（5s）
+  useEffect(() => {
+    fetchLogs()
+    if (!logAutoRefresh) return
+    const t = setInterval(fetchLogs, 5000)
+    return () => clearInterval(t)
+  }, [logAutoRefresh, fetchLogs])
 
   const handleSaveSimConfig = () => {
     // TODO: 连接到 trading_api:8003 WebSocket，下发配置
@@ -663,6 +689,67 @@ export default function RiskControlPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* 系统日志查看 */}
+      <Card className="bg-neutral-900 border-neutral-700">
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-sm font-medium text-neutral-300 flex items-center gap-2">
+              <ScrollText className="w-4 h-4" />
+              系统日志（只读）
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <select
+                value={logLevelFilter}
+                onChange={(e) => setLogLevelFilter(e.target.value)}
+                className="bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs rounded px-2 py-1"
+              >
+                <option value="ALL">全部级别</option>
+                <option value="INFO">INFO</option>
+                <option value="WARNING">WARNING</option>
+                <option value="ERROR">ERROR</option>
+              </select>
+              <Button
+                size="sm"
+                variant="ghost"
+                className={`text-xs ${logAutoRefresh ? "text-green-400" : "text-neutral-500"}`}
+                onClick={() => setLogAutoRefresh(!logAutoRefresh)}
+              >
+                {logAutoRefresh ? "⏸ 暂停" : "▶ 自动刷新"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-neutral-400 hover:text-orange-500"
+                onClick={fetchLogs}
+                disabled={logLoading}
+              >
+                <RefreshCw className={`w-3 h-3 ${logLoading ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="max-h-80 overflow-y-auto bg-neutral-950 rounded border border-neutral-800 p-2 font-mono text-xs space-y-0.5">
+            {logEntries.length === 0 ? (
+              <p className="text-neutral-600 text-center py-4">暂无日志</p>
+            ) : (
+              logEntries.map((entry, idx) => (
+                <div key={idx} className="flex gap-2 leading-5 hover:bg-neutral-900/50">
+                  <span className="text-neutral-600 shrink-0">{entry.timestamp?.slice(11, 19) ?? "--"}</span>
+                  <span className={`shrink-0 w-14 text-right ${
+                    entry.level === "ERROR" ? "text-red-400" :
+                    entry.level === "WARNING" ? "text-yellow-400" :
+                    "text-green-400"
+                  }`}>{entry.level}</span>
+                  <span className="text-neutral-500 shrink-0 max-w-[120px] truncate">{entry.source}</span>
+                  <span className="text-neutral-300 break-all">{entry.message}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

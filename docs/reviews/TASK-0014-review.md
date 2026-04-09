@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0014
 - 审核角色：项目架构师
-- 审核阶段：sim-trading 风控通知链路预审 + `TASK-0014-A1` / `TASK-0014-A2` 终审补录 + 2026-04-09 扩展预审补录
-- 审核时间：2026-04-09
-- 审核结论：通过（预审冻结结论继续有效；`TASK-0014-A1` / `TASK-0014-A2` 已锁回，2026-04-09 已新增 A3 / A4 扩展批次预审）
+- 审核阶段：sim-trading 风控通知链路预审 + `TASK-0014-A1` / `TASK-0014-A2` 终审补录 + 2026-04-09 扩展预审补录 + 2026-04-10 A3/A4 终审补录
+- 审核时间：2026-04-09；2026-04-10（A3/A4 终审）
+- 审核结论：通过（全部 4 个补充批次 A1/A2/A3/A4 均已完成终审与锁回）
 
 ---
 
@@ -63,8 +63,32 @@
 
 1. **TASK-0014 预审通过。**
 2. **当前轮次只完成通知链路治理冻结，不进入代码执行。**
-3. **即时通知继续归入 `TASK-0014` 的补充批次 A1 / A2 / A3 / A4；其中 `TASK-0014-A1` / `TASK-0014-A2` 已完成实施、终审与锁回，A3 / A4 当前待执行。**
-4. **后续进入 `TASK-0014-A3` / `TASK-0014-A4` 或 contracts 扩展前，仍必须由 Jay.S 先按顺序签发对应 P1 / P0 Token；`.env.example` 剩余模板占位统一并入 `TASK-0019-B0`。**
+3. **即时通知继续归入 `TASK-0014` 的补充批次 A1 / A2 / A3 / A4；全部 4 个批次均已完成实施、终审与锁回。**
+4. **剩余 `.env.example` 模板占位统一并入 `TASK-0019-B0`。**
+
+## 十、2026-04-10 TASK-0014-A3 终审补录
+
+1. 批次名称：补充批次 A3 — 通知内核专业化
+2. 执行 Agent：模拟交易 Agent
+3. token_id：`tok-850ecb5e-f42f-450f-a73b-ec45a3620fcb`
+4. review-id：`REVIEW-TASK-0014-A3`
+5. 实际白名单严格限于：`services/sim-trading/src/notifier/dispatcher.py`、`src/notifier/email.py`、`src/notifier/feishu.py`、`src/risk/guards.py`、`tests/test_notifier.py`
+6. 最小自校验结果：35 passed / 1 skipped
+7. lockback 时间：2026-04-10
+8. lockback 结果：`approved`
+9. 当前 Token 状态：`locked`
+
+## 十一、2026-04-10 TASK-0014-A4 终审补录
+
+1. 批次名称：补充批次 A4 — 运行时事件源与守护恢复接线
+2. 执行 Agent：模拟交易 Agent
+3. token_id：`tok-e4f5647e-ccb1-45c0-8cab-9a8fa01b97f4`
+4. review-id：`REVIEW-TASK-0014-A4`
+5. 实际白名单严格限于：`services/sim-trading/src/main.py`、`src/api/router.py`、`src/gateway/simnow.py`、`tests/test_ctp_notify.py`、`tests/test_risk_hooks.py`
+6. 最小自校验结果：43 passed / 1 skipped
+7. lockback 时间：2026-04-10
+8. lockback 结果：`approved`
+9. 当前 Token 状态：`locked`
 
 ## 八、2026-04-07 TASK-0014-A1 终审补录
 

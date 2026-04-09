@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0022
 - 审核角色：项目架构师
-- 审核阶段：TASK-0022-A 第二次正式终审
-- 审核时间：2026-04-08 02:57 +0800
-- 审核结论：通过（第二次正式终审仅核验 5 个白名单文件；上次 3 个阻断已消除，且已执行 lockback）
+- 审核阶段：TASK-0022-A 第二次正式终审；2026-04-10 TASK-0022-B 终审
+- 审核时间：2026-04-08 02:57 +0800；2026-04-10（批次 B 终审）
+- 审核结论：通过（批次 A/B 均已完成终审与锁回）
 
 ---
 
@@ -167,3 +167,16 @@
 1. `TASK-0022-B` 继续保持独立归属，不并入 `TASK-0017`；原因是其目标是“最小只读日志能力”，而不是部署前本地 clean pre-deploy。
 2. `services/sim-trading/tests/test_log_view_api.py` 在本轮被明确允许作为新增测试文件，不再视为治理漂移。
 3. `TASK-0022-B` 必须等待 `TASK-0014-A4` 与 `TASK-0017-A4` 锁回后再启动，因为共享 `src/main.py` / `src/api/router.py` / `app/intelligence/page.tsx`。
+
+## 十二、2026-04-10 TASK-0022-B 终审补录
+
+1. 批次名称：批次 B — 最小只读日志查看
+2. 执行 Agent：模拟交易 Agent
+3. token_id：`tok-2bd2b52d-1451-4104-bfb4-5b213c0a0009`
+4. review-id：`REVIEW-TASK-0022-B`
+5. 实际白名单严格限于：`services/sim-trading/src/main.py`、`src/api/router.py`、`sim-trading_web/app/intelligence/page.tsx`、`tests/test_log_view_api.py`
+6. 最小自校验结果：50 passed / 1 skipped
+7. lockback 时间：2026-04-10
+8. lockback 结果：`approved`
+9. 当前 Token 状态：`locked`
+10. 终审结论：TASK-0022-B 通过；TASK-0022 全部批次均已闭环。

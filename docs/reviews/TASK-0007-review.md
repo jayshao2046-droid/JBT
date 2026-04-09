@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0007
 - 审核角色：项目架构师
-- 审核阶段：8004 正式后端并回预审；2026-04-06 补充批次 D 终审
-- 审核时间：2026-04-04（预审）；2026-04-06（补充批次 D 终审）
-- 审核结论：通过（`TASK-0006` 已被历史任务占用，当前事项顺延为 `TASK-0007`；本轮必须先走 `shared/contracts/backtest/api.md` 的 P0 契约补登，再进入 backtest 正式后端并回与前端 `8004` 口径收口；2026-04-06 补充批次 D 已完成单文件实施、只读核验、终审与锁回；本轮业务白名单未越界，远端 air 重建验证后 `/api/system/status` 不再返回 500；`docker-compose.dev.yml`、`services/backtest/Dockerfile`、`src/backtest/**` 与 `TASK-0004` 两个 page 文件继续锁定）
+- 审核阶段：8004 正式后端并回预审；2026-04-06 补充批次 D 终审；2026-04-10 批次 B/C 终审
+- 审核时间：2026-04-04（预审）；2026-04-06（补充批次 D 终审）；2026-04-10（批次 B/C 终审）
+- 审核结论：通过（全部 4 个批次 A/B/C/D 均已完成终审与锁回）
 
 ---
 
@@ -121,12 +121,37 @@
 5. 终审结论：补充批次 D 通过；当前可判定白名单未越界，且本轮问题已在单文件范围内闭环。✅
 6. 锁回结论：`services/backtest/backtest_web/Dockerfile` 当前已按补充批次 D 终审结论重新锁回；后续如需再次修改该文件，仍须重新补充预审，不得沿用本轮授权。✅
 
-## 十、当前结论
+## 十、2026-04-10 批次 B 终审补录
+
+1. 批次名称：批次 B — 正式后端 API 并回
+2. 执行 Agent：回测 Agent
+3. token_id：`tok-47940111-1c84-48fc-a005-86847096c740`
+4. review-id：`REVIEW-TASK-0007-B`
+5. 实际白名单严格限于：`services/backtest/src/api/app.py`、`services/backtest/src/api/routes/backtest.py`、`services/backtest/src/api/routes/strategy.py`、`services/backtest/src/api/routes/support.py`、`services/backtest/tests/test_api_surface.py`
+6. 最小自校验结果：71 passed / 2 pre-existing
+7. lockback 时间：2026-04-10
+8. lockback 结果：`approved`
+9. 当前 Token 状态：`locked`
+
+## 十一、2026-04-10 批次 C 终审补录
+
+1. 批次名称：批次 C — 前端 8004 收口
+2. 执行 Agent：回测 Agent
+3. token_id：`tok-c19ceb4a-82f6-44f1-a240-b9254b2ea5d1`
+4. review-id：`REVIEW-TASK-0007-C`
+5. 实际白名单严格限于：`services/backtest/backtest_web/src/utils/api.ts`、`services/backtest/backtest_web/next.config.mjs`
+6. 最小自校验结果：已在先前批次完成收口，0 errors
+7. lockback 时间：2026-04-10
+8. lockback 结果：`approved`
+9. 当前 Token 状态：`locked`
+
+## 十二、当前结论
 
 1. **TASK-0007 预审通过。**
 2. **本轮必须按“批次 A 契约先行 → 批次 B 正式后端并回 → 批次 C 前端 8004 口径收口”的顺序推进。**
-3. **批次 B 与批次 C 当前仍处于 Jay.S 分批签发 Token 的准备态。**
-4. **2026-04-06 补充批次 D 已完成终审与锁回；业务白名单未越界，实际业务写入仍严格限于 `services/backtest/backtest_web/Dockerfile`。**
-5. **远端 air 重建验证已确认代理 500 消失；`/agent-network` 与 `/api/system/status` 当前均返回 200，且 API body 正常返回 JSON。**
-6. **后续如需再次修改 `services/backtest/backtest_web/Dockerfile`，必须重新补充预审，不得沿用本轮即时执行确认。**
-7. **运行态 `JBT-BACKTEST-8004` 清理不属于代码 Token 范围，需在代码批次终审锁回后单独确认。**
+3. **批次 A 已完成契约补登并锁回。**
+4. **批次 B 已完成正式后端 API 并回并锁回（71 passed / 2 pre-existing）。**
+5. **批次 C 已完成前端 8004 收口并锁回（0 errors）。**
+6. **2026-04-06 补充批次 D 已完成终审与锁回；业务白名单未越界。**
+7. **TASK-0007 全部 4 个批次均已闭环。**
+8. **运行态 `JBT-BACKTEST-8004` 清理不属于代码 Token 范围，需在代码批次终审锁回后单独确认。**

@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/v1", tags=["sim-trading"])
@@ -440,3 +440,66 @@ def receive_strategy_publish(req: StrategyPublishRequest):
         "received_at": datetime.utcnow().isoformat() + "Z",
         "message": "strategy package accepted",
     }
+
+
+# ---------- 报表 API ----------
+@router.get("/report/daily")
+def get_daily_report():
+    """返回当日收盘报表数据。"""
+    from src.ledger.service import get_ledger
+    return get_ledger().generate_daily_report()
+
+
+@router.get("/report/trades")
+def get_report_trades():
+    """返回当日成交列表。"""
+    from src.ledger.service import get_ledger
+    return {"trades": get_ledger().get_trades()}
+
+
+@router.get("/report/positions")
+def get_report_positions():
+    """返回当前持仓列表。"""
+    from src.ledger.service import get_ledger
+    return {"positions": get_ledger().get_positions()}
+
+
+# ---------- 只读日志查看 ----------
+def _get_memory_log_records() -> List[Dict[str, Any]]:
+    """从 main.py 的 MemoryLogHandler 获取日志记录列表。"""
+    from src.main import memory_log_handler
+    return list(memory_log_handler.records)
+
+
+@router.get("/logs")
+def get_logs(
+    limit: int = Query(default=100, ge=1, le=1000),
+    level: Optional[str] = Query(default=None),
+    source: Optional[str] = Query(default=None),
+):
+    """返回最近 N 条日志，支持按级别和来源过滤。纯只读。"""
+    records = _get_memory_log_records()
+    if level:
+        level_upper = level.upper()
+        records = [r for r in records if r["level"] == level_upper]
+    if source:
+        records = [r for r in records if source in r["source"]]
+    tail = records[-limit:]
+    return {"logs": tail, "total": len(tail)}
+
+
+@router.get("/logs/tail")
+def get_logs_tail(
+    limit: int = Query(default=100, ge=1, le=1000),
+    level: Optional[str] = Query(default=None),
+    source: Optional[str] = Query(default=None),
+):
+    """返回最新 N 条日志（供轮询刷新），结构同 /logs。"""
+    records = _get_memory_log_records()
+    if level:
+        level_upper = level.upper()
+        records = [r for r in records if r["level"] == level_upper]
+    if source:
+        records = [r for r in records if source in r["source"]]
+    tail = records[-limit:]
+    return {"logs": tail, "total": len(tail)}

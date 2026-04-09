@@ -8,7 +8,7 @@ from datetime import datetime, time as time_of_day, timezone
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
 try:
-    from .factor_registry import factor_registry, normalize_bars
+    from .factor_registry import factor_registry, normalize_bars  # noqa: F401 — resolve_factor_name via registry
     from .strategy_base import (
         GENERIC_FORMAL_TEMPLATE_ID,
         FactorConfig,
@@ -552,7 +552,8 @@ class GenericStrategy(FixedTemplateStrategy):
     ) -> List[Dict[str, Any]]:
         merged_rows = [dict(row) for row in bars]
         for indicator in config.indicators:
-            result = factor_registry.calculate(indicator.indicator_type, bars, indicator.params)
+            resolved_type = factor_registry.resolve_factor_name(indicator.indicator_type)
+            result = factor_registry.calculate(resolved_type, bars, indicator.params)
             for row, indicator_row in zip(merged_rows, result.rows):
                 primary_value = indicator_row.get(indicator.primary_output)
                 row[indicator.name] = primary_value
