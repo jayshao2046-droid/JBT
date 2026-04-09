@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import platform
+import re
 import socket
 import subprocess
 import sys
@@ -431,6 +432,20 @@ def get_collector_freshness() -> list[dict[str, Any]]:
             continue
 
         existing_dirs = [d for d in dirs if d.exists()]
+
+        # futures_minute: 新 pipeline 写入 {交易所}.{合约}/1min/，动态发现
+        if name in ("futures_minute", "futures_eod"):
+            _exchange_re = re.compile(r'^(SHFE|DCE|CZCE|INE|GFEX|CFFEX)\.')
+            subdir_key = "1min" if name == "futures_minute" else "daily"
+            try:
+                for d in DATA_ROOT.iterdir():
+                    if d.is_dir() and _exchange_re.match(d.name):
+                        sd = d / subdir_key
+                        if sd.exists():
+                            existing_dirs.append(sd)
+            except OSError:
+                pass
+
         if not existing_dirs:
             results.append({
                 "name": name, "label": label,
