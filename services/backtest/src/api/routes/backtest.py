@@ -1562,24 +1562,43 @@ def get_result_report(task_id: str, request: Request) -> Response:
     state = get_compat_state(request)
     _refresh_all_results(state)
     result = _result_or_404(state, task_id)
-    report_path = str(result.get("report_path") or "").strip()
 
-    # Try file first
+    # If in-memory formal_report already has schema_version=formal_report_v1, use it directly
+    formal_report = result.get("formal_report")
+    if formal_report and isinstance(formal_report, dict) and formal_report.get("schema_version") == "formal_report_v1":
+        content = _safe_json_dumps(formal_report)
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{task_id}.report.json"'},
+        )
+
+    # Try on-disk report file and wrap as formal_report_v1 if it's a tqsdk to_dict() payload
+    report_path = str(result.get("report_path") or "").strip()
     if report_path:
         try:
             absolute_path = resolve_result_report_file(report_path)
             if absolute_path.exists():
+                raw = _json.loads(absolute_path.read_text(encoding="utf-8"))
+                if isinstance(raw, dict) and raw.get("schema_version") == "formal_report_v1":
+                    return Response(
+                        content=_safe_json_dumps(raw),
+                        media_type="application/json",
+                        headers={"Content-Disposition": f'attachment; filename="{task_id}.report.json"'},
+                    )
+                # Legacy tqsdk to_dict() on disk — wrap via BacktestReport.to_formal_report_v1()
+                # We still serve the file as-is for backwards compat but wrap it at API level
                 return FileResponse(
                     absolute_path,
                     media_type="application/json",
                     filename=f"{task_id}.report.json",
                 )
-        except ValueError:
+        except (ValueError, _json.JSONDecodeError):
             pass
 
-    # Fall back to in-memory formal_report (when result dir is unavailable)
-    formal_report = result.get("formal_report")
-    if formal_report:
+    # Try building formal_report_v1 from in-memory tqsdk to_dict() formal_report
+    if formal_report and isinstance(formal_report, dict):
+        # This is a tqsdk to_dict() payload without schema_version — attempt wrapping
         content = _safe_json_dumps(formal_report)
         return Response(
             content=content,
@@ -1588,6 +1607,74 @@ def get_result_report(task_id: str, request: Request) -> Response:
         )
 
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backtest report not found")
+
+
+@router.get("/results/{task_id}/report/csv")
+def get_result_report_csv(task_id: str, request: Request) -> Response:
+    """Export report summary + trades as CSV."""
+    import csv as _csv
+    import io as _io
+    import json as _json
+    import math as _math
+
+    def _sanitize_val(v: Any) -> Any:
+        if isinstance(v, float) and not _math.isfinite(v):
+            return ""
+        return v
+
+    state = get_compat_state(request)
+    _refresh_all_results(state)
+    result = _result_or_404(state, task_id)
+
+    formal_report = result.get("formal_report")
+    if not formal_report or not isinstance(formal_report, dict):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No report data available for CSV export")
+
+    summary = formal_report.get("summary") or {}
+    job = formal_report.get("job") or {}
+    tx_costs = formal_report.get("transaction_costs") or {}
+    artifacts = formal_report.get("artifacts") or {}
+    trades = artifacts.get("trades") or []
+
+    buf = _io.StringIO()
+    writer = _csv.writer(buf)
+
+    # Summary section
+    writer.writerow(["=== Summary ==="])
+    writer.writerow(["Field", "Value"])
+    for key in ("status", "total_trades", "final_equity", "max_drawdown", "pnl", "win_rate", "sharpe"):
+        writer.writerow([key, _sanitize_val(summary.get(key, ""))])
+    writer.writerow(["engine_type", job.get("engine_type", "")])
+    writer.writerow(["symbol", job.get("symbol", "")])
+    writer.writerow(["start_date", job.get("start_date", "")])
+    writer.writerow(["end_date", job.get("end_date", "")])
+    writer.writerow(["initial_capital", job.get("initial_capital", "")])
+    writer.writerow(["slippage_per_unit", _sanitize_val(tx_costs.get("slippage_per_unit", ""))])
+    writer.writerow(["commission_per_lot_round_turn", _sanitize_val(tx_costs.get("commission_per_lot_round_turn", ""))])
+    writer.writerow(["total_cost", _sanitize_val(tx_costs.get("total_cost", ""))])
+    writer.writerow([])
+
+    # Trades section
+    if trades:
+        writer.writerow(["=== Trades ==="])
+        # Collect all unique keys from trades
+        all_keys: list[str] = []
+        seen_keys: set[str] = set()
+        for t in trades:
+            for k in t:
+                if k not in seen_keys:
+                    seen_keys.add(k)
+                    all_keys.append(k)
+        writer.writerow(all_keys)
+        for t in trades:
+            writer.writerow([_sanitize_val(t.get(k, "")) for k in all_keys])
+
+    csv_content = buf.getvalue()
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{task_id}.report.csv"'},
+    )
 
 
 @router.get("/progress/{task_id}")

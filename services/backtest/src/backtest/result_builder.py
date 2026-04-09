@@ -145,6 +145,63 @@ class BacktestReport:
             payload["tqsdk_snapshot"] = {}
         return payload
 
+    def to_formal_report_v1(self) -> Dict[str, Any]:
+        """Output unified formal_report_v1 root structure (§6.2.3 contract schema)."""
+        now_str = self.completed_at.isoformat() if self.completed_at else datetime.now().astimezone().isoformat()
+        pnl = self.final_equity - self.initial_capital
+
+        risk_events: List[Dict[str, Any]] = []
+        for idx, v in enumerate(self.risk_summary.violations):
+            risk_events.append({
+                "event_id": f"evt-{idx+1:04d}",
+                "engine_type": "tqsdk",
+                "trigger_reason": v.rule_name,
+                "threshold": v.threshold_value,
+                "observed": v.actual_value,
+                "event_time": v.observed_at.isoformat(),
+            })
+
+        equity_curve_data: List[Dict[str, Any]] = [
+            {
+                "bar_time": pt.timestamp.isoformat(),
+                "equity": round(pt.equity, 2),
+                "drawdown": round(pt.drawdown, 6),
+            }
+            for pt in self.equity_curve
+        ]
+
+        return {
+            "schema_version": "formal_report_v1",
+            "report_id": f"rpt-{self.result_id[:12]}",
+            "generated_at": now_str,
+            "job": {
+                "job_id": self.job_id,
+                "engine_type": "tqsdk",
+                "strategy_id": self.strategy_template_id,
+                "symbol": self.symbol,
+                "timeframe": self.timeframe,
+                "start_date": self.start_date.isoformat(),
+                "end_date": self.end_date.isoformat(),
+                "initial_capital": self.initial_capital,
+            },
+            "summary": {
+                "status": self.status,
+                "total_trades": self.total_trades,
+                "final_equity": round(self.final_equity, 2),
+                "max_drawdown": round(self.max_drawdown, 6),
+                "pnl": round(pnl, 2),
+                "win_rate": round(self.performance_metrics.win_rate, 4),
+                "sharpe": round(self.performance_metrics.sharpe_ratio, 4),
+            },
+            "transaction_costs": dict(self.transaction_costs),
+            "risk_events": risk_events,
+            "artifacts": {
+                "equity_curve": equity_curve_data,
+                "trades": list(self.trades),
+                "positions": None,
+            },
+        }
+
 
 class BacktestResultBuilder:
     def __init__(

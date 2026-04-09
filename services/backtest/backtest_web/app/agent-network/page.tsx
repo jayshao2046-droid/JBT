@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import api, { deleteStrategy, exportStrategyContent, saveStrategyParams, approveStrategyLocal, getApprovedStrategies, isStrategyApproved, revokeApprovedStrategy, markStrategyDelivered } from "@/src/utils/api"
+import ReportPanel from "@/src/components/ReportPanel"
 import { FALLBACK_CONTRACT_CATEGORIES, type ContractCategoryPreset, formatTimeframeValue, humanizeDataSource, normalizeContractCategories, resolveFieldLabel } from "@/src/utils/strategyPresentation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import EmptyState from "@/components/ui/empty-state"
@@ -902,6 +903,8 @@ export default function StrategyManagementPage() {
   const [approveConfirmTarget, setApproveConfirmTarget] = useState<string | null>(null)
   // 回测回调异常提示
   const [anomalyBanner, setAnomalyBanner] = useState<string | null>(null)
+  // 报告面板：选中的已完成回测结果
+  const [reportPanelData, setReportPanelData] = useState<{ taskId: string; report: any; strategyName: string } | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const multipleFileInputRef = useRef<HTMLInputElement>(null)
@@ -2626,6 +2629,28 @@ export default function StrategyManagementPage() {
                           <Button variant="ghost" size="icon" className="text-neutral-400 hover:text-blue-400 h-8 w-8" title="用当前策略 YAML 真值快速回测" onClick={async (e) => { e.stopPropagation(); await handleSaveParamsAndRun(s.name) }}>
                             <Play className="w-4 h-4" />
                           </Button>
+                          {/* 查看报告 */}
+                          {(() => {
+                            const lr = strategyLastResult(s.name)
+                            const canView = lr && (lr.status === "completed" || lr.status === "done") && lr.formal_report
+                            return (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={`h-8 w-8 ${canView ? "text-neutral-400 hover:text-cyan-400" : "text-neutral-700 cursor-not-allowed"}`}
+                                title={canView ? "查看回测报告" : "需先完成回测才能查看报告"}
+                                disabled={!canView}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (canView && lr) {
+                                    setReportPanelData({ taskId: lr.id || lr.task_id, report: lr.formal_report, strategyName: s.name })
+                                  }
+                                }}
+                              >
+                                <FileText className="w-4 h-4" />
+                              </Button>
+                            )
+                          })()}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -2713,6 +2738,32 @@ export default function StrategyManagementPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ─── 回测报告面板 ─────────────────────────────────────── */}
+      {reportPanelData && (
+        <Card className="bg-neutral-900 border-cyan-700/40">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-cyan-400 tracking-wider">
+                {reportPanelData.strategyName} — 报告详情
+              </CardTitle>
+              <button
+                onClick={() => setReportPanelData(null)}
+                className="text-neutral-500 hover:text-neutral-300 text-xs"
+              >
+                ✕ 关闭
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ReportPanel
+              taskId={reportPanelData.taskId}
+              report={reportPanelData.report}
+              strategyName={reportPanelData.strategyName}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* ─── 已审批策略（保存到生产）清单 ──────────────────────── */}
       {approvedStrategies.length > 0 && (

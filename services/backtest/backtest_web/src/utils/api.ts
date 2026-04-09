@@ -169,6 +169,27 @@ export async function downloadBacktestReport(taskId: string, strategyName?: stri
   return { filename }
 }
 
+export async function downloadBacktestReportCSV(taskId: string, strategyName?: string) {
+  const r = await fetchWithRetry(`${BASE}/api/backtest/results/${encodeURIComponent(taskId)}/report/csv`, { method: 'GET' })
+  const blob = await r.blob()
+  const disposition = r.headers.get('content-disposition') || ''
+  const matched = disposition.match(/filename="?([^";]+)"?/)?.[1]
+  const fallbackName = `${(strategyName || taskId).replace(/[^\w.-]+/g, '_')}_${taskId}.report.csv`
+  const filename = matched ? decodeURIComponent(matched) : fallbackName
+
+  if (typeof window === 'undefined') {
+    return { blob, filename }
+  }
+
+  const url = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 0)
+  return { filename }
+}
+
 export async function getProgress(taskId: string) {
   // 不使用重试机制，轮询时快速返回
   const r = await fetchWithTimeout(`${BASE}/api/backtest/progress/${encodeURIComponent(taskId)}`, { method: 'GET' }, 3000)
@@ -352,5 +373,6 @@ export default {
   revokeApprovedStrategy,
   markStrategyDelivered,
   downloadBacktestReport,
+  downloadBacktestReportCSV,
   friendlyError,
 }
