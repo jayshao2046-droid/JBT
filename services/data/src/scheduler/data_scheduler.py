@@ -71,11 +71,33 @@ def _get_notifier(config: dict[str, Any] | None = None) -> Any:
     return None
 
 
+def get_factor_notifier() -> Any:
+    """因子/信号通知器存根 — 模块尚未实现，返回只记日志的占位对象。"""
+    class _Stub:
+        def send_session_summary(self, session: str) -> bool:
+            logger.info("[STUB] 因子/信号%s报告: 因子通知模块尚未实现，跳过", session)
+            return True
+    return _Stub()
+
+
+def get_sla_tracker() -> Any:
+    """SLA 追踪器存根 — 模块尚未实现，返回只记日志的占位对象。"""
+    class _Stub:
+        def send_daily_sla_report(self) -> bool:
+            logger.info("[STUB] SLA 日报: SLA 模块尚未实现，跳过")
+            return True
+        def reset_daily(self) -> None:
+            logger.info("[STUB] SLA 重置: SLA 模块尚未实现，跳过")
+    return _Stub()
+
+
 _dispatcher = None
 # 24h 连续采集器不发启动/完成通知
 _SILENT_COLLECTORS = {"新闻API", "RSS聚合", "飞书新闻推送", "情绪指数"}
 _calendar = GlobalTradingCalendar()
 _last_snapshot: MarketSnapshot | None = None
+STOCK_MINUTE_ENABLED = False
+NEWS_STORAGE_SYNC_LIMIT_PER_SOURCE = 5000
 
 
 def _get_dispatcher() -> Any:
@@ -576,6 +598,9 @@ def job_overseas_minute_yf(config: dict[str, Any]) -> None:
 
 def job_stock_minute(config: dict[str, Any]) -> None:
     """A股分钟K线 — 每2分钟, 仅A股交易时段。"""
+    if not STOCK_MINUTE_ENABLED:
+        logger.info("A股分钟K线任务已暂停，跳过执行")
+        return
     if not _is_stock_trading_session():
         return
     from services.data.src.scheduler.pipeline import run_stock_minute_pipeline
@@ -815,7 +840,13 @@ def job_heartbeat(config: dict[str, Any]) -> None:
                 )
                 from services.data.src.notify.feishu import FeishuSender
                 sender = FeishuSender()
-                webhook = _os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or _os.environ.get("FEISHU_WEBHOOK_URL") or ""
+                webhook = (
+                    _os.environ.get("FEISHU_ALERT_WEBHOOK_URL")
+                    or _os.environ.get("FEISHU_WEBHOOK_URL")
+                    or _os.environ.get("FEISHU_NEWS_WEBHOOK_URL")
+                    or _os.environ.get("FEISHU_TRADING_WEBHOOK_URL")
+                    or ""
+                )
                 if webhook:
                     sender.send_card(webhook, card)
                     logger.info("✅ 2h 进程监控已发送 (新通知系统)")
@@ -964,7 +995,7 @@ def job_news_push_batch(config: dict[str, Any]) -> None:
         logger.info("▶ 开始执行: 新闻批量推送")
         from services.data.src.notify.news_pusher import NewsPusher
         pusher = NewsPusher()
-        sync_stats = pusher.sync_from_storage()
+        sync_stats = pusher.sync_from_storage(limit_per_source=NEWS_STORAGE_SYNC_LIMIT_PER_SOURCE)
         stats = pusher.flush()
         if stats and stats.get("deferred", 0) > 0:
             logger.info("✅ 新闻推送: 静默窗口内暂缓 %d 条", stats["deferred"])
@@ -1064,12 +1095,13 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
         job_overseas_minute_yf, IntervalTrigger(minutes=5),
         args=[config], id="overseas_minute_yf", name="外盘分钟K线(yfinance)",
     )
-    # [DEPRECATED LIFTED] A股分钟K线: 每2分钟，A股交易时段门控在函数内。
-    # 注意: 东方财富接口有频率限制，偶发 429，由 _safe_run 退避重试。
-    scheduler.add_job(
-        job_stock_minute, IntervalTrigger(minutes=2),
-        args=[config], id="stock_minute", name="A股分钟K线",
-    )
+    if STOCK_MINUTE_ENABLED:
+        scheduler.add_job(
+            job_stock_minute, IntervalTrigger(minutes=2),
+            args=[config], id="stock_minute", name="A股分钟K线",
+        )
+    else:
+        logger.info("A股分钟K线任务当前已暂停，不注册 APScheduler 任务")
     # [DEPRECATED LIFTED] Tushare期货五合一: 17:10，动态35品种近月合约。
     scheduler.add_job(
         job_tushare_futures, CronTrigger(hour=17, minute=10, day_of_week="mon-fri"),
@@ -1225,7 +1257,6 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
 _FALLBACK_JOBS: list[tuple[str, Callable[..., Any], int | None, str | None]] = [
     ("市场开休盘状态监听",      job_market_session_watch,    60,   None),
     ("分钟内盘K线",             job_minute_kline,          120,   None),
-    ("A股分钟K线",             job_stock_minute,        120,   None),
     ("外盘分钟K线(yfinance)",  job_overseas_minute_yf,  300,   None),
     ("日线K线",                job_daily_kline,         None,  "17:00"),
     ("外盘日线(美/欧)",         job_overseas_kline,      None,  "06:00"),
@@ -1241,8 +1272,8 @@ _FALLBACK_JOBS: list[tuple[str, Callable[..., Any], int | None, str | None]] = [
     ("外汇日线",               job_forex,               None,  "17:20"),
     ("CFTC持仓报告",           job_cftc,                None,  "10:00"),  # 周六
     ("期权行情",               job_options,             None,  "15:30"),
-    ("每日采集汇总",           job_daily_summary,       None,  "23:00"),
-    ("晚间审计日报",           job_evening_report,      None,  "23:05"),
+    # [DEPRECATED REMOVED] ("每日采集汇总", job_daily_summary)  — 已被 2h 心跳替代
+    # [DEPRECATED REMOVED] ("晚间审计日报", job_evening_report) — 已被 2h 心跳替代
     ("因子/信号早盘报告",      job_factor_signal_morning,    None, "11:35"),
     ("因子/信号午盘报告",      job_factor_signal_afternoon,  None, "15:05"),
     ("因子/信号收盘报告",      job_factor_signal_summary,    None, "23:05"),

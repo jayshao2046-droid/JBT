@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -80,7 +81,8 @@ SOURCE_CN_MAP: dict[str, str] = {
 }
 
 # ── 去重持久化文件 ──────────────────────────────────────
-_DEFAULT_DEDUP_FILE = Path("/runtime/data/news_dedup_uids.json")
+_DEFAULT_DEDUP_DIR = Path(os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data"))) / "logs"
+_DEFAULT_DEDUP_FILE = _DEFAULT_DEDUP_DIR / "news_dedup_uids.json"
 _MAX_DEDUP_SIZE = 50000  # 最大缓存条数
 
 
@@ -116,6 +118,7 @@ class NewsPusher:
     """新闻清洗 + 去重 + 批量推送管理器。"""
 
     BATCH_INTERVAL_SEC = 1800  # 30 分钟
+    DEFAULT_SYNC_LIMIT_PER_SOURCE = 5000
     DEFAULT_STORAGE_SOURCES = (
         ("news_api", "news_api"),
         ("rss", "news_rss"),
@@ -194,7 +197,7 @@ class NewsPusher:
         *,
         storage: Any | None = None,
         sources: list[tuple[str, str]] | tuple[tuple[str, str], ...] | None = None,
-        limit_per_source: int = 120,
+        limit_per_source: int = DEFAULT_SYNC_LIMIT_PER_SOURCE,
     ) -> dict[str, Any]:
         """从现有 news_api/rss 存储中同步新增新闻到批量缓冲。"""
         if storage is None:

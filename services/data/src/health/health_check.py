@@ -70,18 +70,18 @@ DATA_RULES: dict[str, dict] = {
     "futures_eod":     {"dir": DATA_ROOT / "futures_minute",       "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "国内期货EOD"},
     "overseas_minute": {"dir": DATA_ROOT / "overseas_kline" / "1m",    "max_age_h": 48,  "trading_only": False, "weekend_skip": True,  "label": "外盘期货分钟"},
     "overseas_daily":  {"dir": DATA_ROOT / "overseas_kline" / "1d",    "max_age_h": 50,  "trading_only": False, "weekend_skip": True,  "label": "外盘期货日线"},
-    "stock_minute":    {"dir": DATA_ROOT / "stock_minute",             "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "A股分钟"},
-    "stock_realtime":  {"dir": DATA_ROOT / "stock_minute",          "max_age_h": 2,   "trading_only": True,  "weekend_skip": False, "label": "A股实时"},
+    "stock_minute":    {"dir": DATA_ROOT / "stock_minute",             "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "A股分钟", "paused_reason": "已暂停采集"},
+    "stock_realtime":  {"dir": DATA_ROOT / "stock_minute",          "max_age_h": 2,   "trading_only": True,  "weekend_skip": False, "label": "A股实时", "paused_reason": "已暂停采集"},
     "watchlist":       {"dir": DATA_ROOT / "logs",                  "max_age_h": 26,  "trading_only": False, "weekend_skip": False, "label": "自选股"},
     "macro_global":    {"dir": DATA_ROOT / "macro_global",          "max_age_h": 720, "trading_only": False, "weekend_skip": False, "label": "宏观数据"},
-    "news_rss":        {"dir": DATA_ROOT / "news_collected",        "max_age_h": 3,   "trading_only": False, "weekend_skip": False, "label": "新闻RSS"},
+    "news_rss":        {"dirs": [DATA_ROOT / "news_rss", DATA_ROOT / "parquet" / "news_rss", DATA_ROOT / "parquet" / "rss_news"], "max_age_h": 3, "trading_only": False, "weekend_skip": False, "label": "新闻RSS"},
     "position_daily":  {"dir": DATA_ROOT / "position",              "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "持仓日报"},
     "position_weekly": {"dir": DATA_ROOT / "position",              "max_age_h": 200, "trading_only": False, "weekend_skip": False, "label": "持仓周报"},
     "volatility_cboe": {"dir": DATA_ROOT / "volatility_index",      "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "CBOE波动率"},
     "volatility_qvix": {"dir": DATA_ROOT / "volatility_index",      "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "QVIX波动率"},
     "shipping":        {"dir": DATA_ROOT / "shipping",              "max_age_h": 26,  "trading_only": False, "weekend_skip": False, "label": "海运运费"},
     "tushare":         {"dir": DATA_ROOT / "tushare",               "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "Tushare日线"},
-    "weather":         {"dir": DATA_ROOT / "weather",               "max_age_h": 14,  "trading_only": False, "weekend_skip": False, "label": "天气"},
+    "weather":         {"dir": DATA_ROOT / "weather",               "max_age_h": 14,  "trading_only": False, "weekend_skip": False, "label": "天气", "paused_reason": "采集管道待实现"},
     "sentiment":       {"dir": DATA_ROOT / "sentiment",             "max_age_h": 26,  "trading_only": False, "weekend_skip": False, "label": "情绪指数"},
     "forex":           {"dir": DATA_ROOT / "forex",                 "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "外汇日线"},
     "cftc":            {"dir": DATA_ROOT / "cftc",                  "max_age_h": 200, "trading_only": False, "weekend_skip": False, "label": "CFTC持仓"},
@@ -394,7 +394,19 @@ def get_collector_freshness() -> list[dict[str, Any]]:
     is_weekend = _is_weekend()
 
     for name, rule in DATA_RULES.items():
-        d: Path = rule["dir"]
+        paused_reason = str(rule.get("paused_reason") or "")
+        if paused_reason:
+            results.append({
+                "name": name, "label": rule["label"],
+                "ok": True, "age_h": -1, "age_str": paused_reason,
+                "threshold_h": rule["max_age_h"], "trading_only": rule["trading_only"], "skipped": True,
+            })
+            continue
+
+        configured_dirs = rule.get("dirs")
+        if configured_dirs is None:
+            configured_dirs = [rule["dir"]]
+        dirs = [Path(p) for p in configured_dirs]
         threshold_h: float = rule["max_age_h"]
         label: str = rule["label"]
         trading_only: bool = rule["trading_only"]
@@ -418,7 +430,8 @@ def get_collector_freshness() -> list[dict[str, Any]]:
             })
             continue
 
-        if not d.exists():
+        existing_dirs = [d for d in dirs if d.exists()]
+        if not existing_dirs:
             results.append({
                 "name": name, "label": label,
                 "ok": False, "age_h": -1, "age_str": "目录不存在",
@@ -429,14 +442,15 @@ def get_collector_freshness() -> list[dict[str, Any]]:
         # 查找目录下最新文件的 mtime
         latest_mtime: float = 0.0
         try:
-            for fp in d.rglob("*"):
-                if fp.is_file():
-                    try:
-                        t = fp.stat().st_mtime
-                        if t > latest_mtime:
-                            latest_mtime = t
-                    except OSError:
-                        pass
+            for data_dir in existing_dirs:
+                for fp in data_dir.rglob("*"):
+                    if fp.is_file():
+                        try:
+                            t = fp.stat().st_mtime
+                            if t > latest_mtime:
+                                latest_mtime = t
+                        except OSError:
+                            pass
         except Exception:
             pass
 
@@ -605,7 +619,7 @@ def evaluate_alarms(cpu: dict, mem: dict, disks: list, gpus: list, *, force_p0: 
 # ===================== 飞书 P0 立即告警 =====================
 def send_p0_alert(report: dict) -> None:
     """发送 P0 级别立即告警到飞书（使用新通知系统）。"""
-    webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or ""
+    webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or os.environ.get("FEISHU_NEWS_WEBHOOK_URL") or os.environ.get("FEISHU_TRADING_WEBHOOK_URL") or ""
     if not webhook:
         print("[警告] 无飞书 webhook，跳过 P0 告警")
         return
@@ -665,7 +679,7 @@ def send_p0_alert(report: dict) -> None:
 # ===================== 飞书修复确认消息 =====================
 def send_remediation_confirm(report: dict, remediation_results: list) -> None:
     """修复完成后发送确认消息（使用新通知系统）。"""
-    webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or ""
+    webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or os.environ.get("FEISHU_NEWS_WEBHOOK_URL") or os.environ.get("FEISHU_TRADING_WEBHOOK_URL") or ""
     if not webhook:
         return
 
@@ -708,7 +722,7 @@ def send_collector_alert(
     mem: dict,
 ) -> None:
     """按告警级别发送采集源 P1/P0 卡片到飞书（使用新通知系统）。"""
-    webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or ""
+    webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or os.environ.get("FEISHU_NEWS_WEBHOOK_URL") or os.environ.get("FEISHU_TRADING_WEBHOOK_URL") or ""
     if not webhook:
         print("[警告] 无飞书 webhook，跳过采集源告警")
         return
@@ -745,7 +759,7 @@ def send_recovery_notice(
     still_failed: list[dict[str, Any]],
 ) -> None:
     """发送采集源恢复通知（使用新通知系统）。"""
-    webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or ""
+    webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or os.environ.get("FEISHU_NEWS_WEBHOOK_URL") or os.environ.get("FEISHU_TRADING_WEBHOOK_URL") or ""
     if not webhook:
         return
 
@@ -772,7 +786,7 @@ def send_proxy_alert(services: dict) -> None:
     if proxy_status in ("全通", "未部署") or proxy_status.startswith("全通"):
         return  # 正常或不适用
 
-    webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or ""
+    webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or os.environ.get("FEISHU_NEWS_WEBHOOK_URL") or os.environ.get("FEISHU_TRADING_WEBHOOK_URL") or ""
     if not webhook:
         print("[警告] 无飞书 webhook，跳过代理告警")
         return

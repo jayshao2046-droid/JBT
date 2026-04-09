@@ -30,7 +30,17 @@ CN_TZ = timezone(timedelta(hours=8))
 # ── 环境变量键 ──────────────────────────────────────────────
 FEISHU_ALERT_URL_KEY = "FEISHU_ALERT_WEBHOOK_URL"
 FEISHU_TRADE_URL_KEY = "FEISHU_TRADE_WEBHOOK_URL"
+FEISHU_TRADING_URL_KEY = "FEISHU_TRADING_WEBHOOK_URL"
 FEISHU_INFO_URL_KEY = "FEISHU_INFO_WEBHOOK_URL"
+FEISHU_NEWS_URL_KEY = "FEISHU_NEWS_WEBHOOK_URL"
+
+
+def _first_nonempty_env(*keys: str) -> str:
+    for key in keys:
+        value = os.environ.get(key, "")
+        if value:
+            return value
+    return ""
 
 
 class ChannelState(enum.Enum):
@@ -98,12 +108,16 @@ class CollectionWindowItem:
 
 
 def _webhook_for_type(notify_type: NotifyType) -> str:
-    """根据通知类型返回对应 Webhook URL。"""
+    """根据通知类型返回对应 Webhook URL（含降级兜底链）。"""
     if notify_type in (NotifyType.P0, NotifyType.P1, NotifyType.P2):
-        return os.environ.get(FEISHU_ALERT_URL_KEY, "")
+        return _first_nonempty_env(
+            FEISHU_ALERT_URL_KEY, FEISHU_TRADE_URL_KEY, FEISHU_TRADING_URL_KEY, FEISHU_NEWS_URL_KEY,
+        )
     if notify_type == NotifyType.TRADE:
-        return os.environ.get(FEISHU_TRADE_URL_KEY, "")
-    return os.environ.get(FEISHU_INFO_URL_KEY, "")
+        return _first_nonempty_env(FEISHU_TRADE_URL_KEY, FEISHU_TRADING_URL_KEY, FEISHU_ALERT_URL_KEY)
+    if notify_type == NotifyType.NEWS:
+        return _first_nonempty_env(FEISHU_NEWS_URL_KEY, FEISHU_INFO_URL_KEY, FEISHU_ALERT_URL_KEY)
+    return _first_nonempty_env(FEISHU_INFO_URL_KEY, FEISHU_NEWS_URL_KEY, FEISHU_ALERT_URL_KEY)
 
 
 def _is_quiet_hours(now: datetime | None = None) -> bool:

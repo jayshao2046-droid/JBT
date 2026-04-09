@@ -115,20 +115,18 @@ class DeviceHealthReporter:
         mem_pct = psutil.virtual_memory().percent
         disk_pct = psutil.disk_usage("/").percent
 
-        # 进程状态 — 检查 data 相关进程
+        # 进程状态 — 通过 ps aux 检测 JBT 进程（与 job_heartbeat 对齐）
         import subprocess
         procs: list[dict] = []
         try:
-            plist_out = subprocess.run(
-                ["launchctl", "list"], capture_output=True, text=True, timeout=10,
+            ps_out = subprocess.run(
+                ["ps", "aux"], capture_output=True, text=True, timeout=10,
             ).stdout
-            for label, pname in [
-                ("数据调度", "com.botquant.data_scheduler"),
-                ("健康检查", "com.botquant.health"),
-                ("新闻采集", "com.botquant.news"),
-                ("数据API", "com.botquant.data_api"),
+            for label, keyword in [
+                ("数据采集调度", "data_scheduler"),
+                ("数据 API",     "services.data.src.main"),
             ]:
-                procs.append({"label": label, "ok": pname in plist_out, "uptime": ""})
+                procs.append({"label": label, "ok": keyword in ps_out, "uptime": ""})
         except Exception:
             pass
 
@@ -143,7 +141,13 @@ class DeviceHealthReporter:
         except Exception:
             latency_ms = -1
 
-        webhook = os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL") or ""
+        webhook = (
+            os.environ.get("FEISHU_ALERT_WEBHOOK_URL")
+            or os.environ.get("FEISHU_WEBHOOK_URL")
+            or os.environ.get("FEISHU_NEWS_WEBHOOK_URL")
+            or os.environ.get("FEISHU_TRADING_WEBHOOK_URL")
+            or ""
+        )
         if not webhook:
             logger.warning("no webhook, skipping health report")
             return
