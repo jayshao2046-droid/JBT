@@ -3,7 +3,7 @@
 ## Lock 信息
 
 - 任务 ID：TASK-0033
-- 当前总状态：`a_locked_b_active`
+- 当前总状态：`locked`
 - 执行 Agent：数据
 
 ## 批次状态
@@ -36,7 +36,7 @@
 	- `services/data/data_web/next.config.mjs`
 	- `services/data/data_web/package.json`
 	- `services/data/data_web/Dockerfile`
-4. 当前状态：`active`（3-day token，剩余 ~71h）
+4. 当前状态：`locked`（token `tok-f4bdc258` 已完成 lockback）
 
 ## 排除项
 

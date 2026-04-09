@@ -116,11 +116,10 @@
 ## 当前状态
 
 - 预审状态：已通过；A 批终审已通过；H0~H7 已全部完成终审并锁回
-- Token 状态：A=pending_lockback；B/C0/C/D/E0/E/F0/F/G=pending_manifest；H0~H7=locked
-- 解锁时间：A 批 active 窗口已用于本轮实施；其余批次待 Jay.S 按 Manifest 一次性签发；H0~H7 对应 token 已全部锁回
-- 锁回时间：A 批待执行 lockback；H0/H1/H2/H3/H4/H5 均已执行 lockback；H6/H7 尚未解锁
-- lockback 结果：A 批当前仅形成"可进入 lockback"结论，尚未实际执行 lockback；H0/H1/H2/H3/H4/H5=approved_locked；H6/H7=pending_token
+- Token 状态：A=locked；B/C0/C/D/E0/E/F0/F/G=pending_manifest（历史留痕）；H0~H7=locked
+- 锁回时间：A 批已执行 lockback；H0~H7 均已执行 lockback
+- lockback 结果：A=approved_locked；H0~H7=approved_locked
 
 ## 结论
 
-**`TASK-0021` 当前正式口径：A~G 的历史状态继续保留为既有留痕；H0~H5 已全部完成终审并按各自白名单执行实际 lockback，当前统一为 `locked`；H6/H7 已完成补充预审，当前统一为 `pending_token`。本次新增事项明确属于 `decision_web` 临时看板真数据化，不属于 `services/dashboard/**` 聚合看板。**
+**`TASK-0021` 当前正式口径：A~G 的历史状态继续保留为既有留痕；H0~H7 已全部完成终审并按各自白名单执行实际 lockback，当前统一为 `locked`。本次 `decision_web` 临时看板真数据化已完成收口，不属于 `services/dashboard/**` 聚合看板。TASK-0021 全部批次已关闭。**

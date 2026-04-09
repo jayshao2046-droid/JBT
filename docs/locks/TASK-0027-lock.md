@@ -48,11 +48,14 @@
 |------|------|------|----------|
 | services/data/src/ops/** | 新建 | 🔒 待解锁 | P1 |
 
-### A5 批次（联调）— 需 Jay.S Token
+### A5 批次（联调）— Jay.S 已签发 Token
 
 | 文件 | 操作 | 状态 | 保护级别 |
 |------|------|------|----------|
-| services/data/tests/** | 新建/修改 | 🔒 待解锁 | P1 |
+| services/data/tests/test_collectors.py | 修改 | 🔓 active (`tok-4f75a1c4`) | P1 |
+| services/data/tests/test_scheduler.py | 修改 | 🔓 active (`tok-4f75a1c4`) | P1 |
+| services/data/tests/test_main.py | 修改 | 🔓 active (`tok-4f75a1c4`) | P1 |
+| services/data/tests/test_notify.py | 修改 | 🔓 active (`tok-4f75a1c4`) | P1 |
 
 ### A6 批次（通知系统重做）— 需 Jay.S 签单 + Token
 
@@ -75,6 +78,7 @@
 | 时间 | 操作 | 批次 | 说明 |
 |------|------|------|------|
 | 2026-04-08 | 建档 | A0 | 创建锁控记录，A0 文件全部完成 |
+| 2026-04-10 | issue | A5 | Jay.S 签发 `tok-4f75a1c4`，4 文件，3-day TTL |
 
 ---
 

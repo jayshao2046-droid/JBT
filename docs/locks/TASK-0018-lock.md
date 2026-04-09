@@ -132,14 +132,22 @@
 
 ### 批次 F（P1，完整报告导出与展示）
 
-- 状态：pending_token
+- 状态：`active`
 - 保护路径：`services/backtest/**`、`services/backtest/backtest_web/**`
-- 白名单模板示例：
-  1. `services/backtest/src/**`
-  2. `services/backtest/tests/**`
-  3. `services/backtest/backtest_web/src/**`
-  4. `services/backtest/backtest_web/app/**`
-- token_id：pending
+- 白名单文件：
+  1. `services/backtest/src/backtest/result_builder.py`（修改：新增 to_formal_report_v1() 统一根结构）
+  2. `services/backtest/src/api/routes/backtest.py`（修改：统一输出 formal_report_v1，可选增 CSV 导出）
+  3. `services/backtest/src/backtest/local_engine.py`（修改：确保 local 引擎报告也走 formal_report_v1）
+  4. `services/backtest/backtest_web/app/agent-network/page.tsx`（修改：增加报告展示面板）
+  5. `services/backtest/backtest_web/src/utils/api.ts`（修改：适配 formal_report_v1 结构）
+  6. `services/backtest/tests/test_formal_report_api.py`（修改：修复旧断言 + 增加双引擎 schema 合规测试）
+  7. `services/backtest/backtest_web/src/components/ReportPanel.tsx`（新建：报告展示组件）
+- token_id：`tok-55b92b67-5054-4620-b560-72b845738865`
+- 签发时间：2026-04-10
+- TTL：3 天
+- 执行 Agent：回测
+- review-id：`REVIEW-TASK-0018-F`
+- 预审结论：项目架构师预审通过，7 文件白名单已冻结
 
 ## 补充执行口径冻结（2026-04-07）
 
