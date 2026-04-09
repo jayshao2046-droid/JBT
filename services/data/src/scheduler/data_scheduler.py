@@ -412,7 +412,7 @@ def _get_domestic_symbols() -> list[str]:
         "DCE.j2605",  "DCE.j2609",         # 焦炭（新增）
         "DCE.eb2605", "DCE.eb2609",        # 苯乙烯（新增）
         "DCE.pg2605", "DCE.pg2606",        # 液化气（新增）
-        "DCE.lh2606", "DCE.lh2608",        # 生猪（双月合约，新增）
+        "DCE.lh2607", "DCE.lh2609",        # 生猪（奇数月合约，新增）
         # ── CZCE 郑商所（10品种）────────────────────────────────────
         "CZCE.TA605", "CZCE.TA609",        # PTA
         "CZCE.MA605", "CZCE.MA609",        # 甲醇

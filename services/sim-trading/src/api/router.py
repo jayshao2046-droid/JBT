@@ -254,7 +254,7 @@ def save_ctp_config(req: CtpConfigRequest):
     return {"result": "ctp config saved"}
 
 @router.post("/ctp/connect")
-def ctp_connect():
+def ctp_connect(silent: bool = False):
     global _gateway
     import logging
     from src.gateway.simnow import SimNowGateway, _CTP_AVAILABLE
@@ -305,14 +305,15 @@ def ctp_connect():
     _system_state["last_disconnect_reason"] = st.get("last_md_disconnect_reason") or st.get("last_td_disconnect_reason")
     _system_state["last_disconnect_time"] = st.get("last_md_disconnect_time") or st.get("last_td_disconnect_time")
 
-    try:
-        from src.risk.guards import emit_alert
-        if st["md_connected"] or st["td_connected"]:
-            emit_alert("P2", "行情/交易接口连接成功", {"event_code": "CTP_CONNECTED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
-        else:
-            emit_alert("P1", "CTP 连接超时，行情与交易接口均未就绪", {"event_code": "CTP_CONNECT_FAILED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
-    except Exception:
-        pass
+    if not silent:
+        try:
+            from src.risk.guards import emit_alert
+            if st["md_connected"] or st["td_connected"]:
+                emit_alert("P2", "行情/交易接口连接成功", {"event_code": "CTP_CONNECTED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
+            else:
+                emit_alert("P1", "CTP 连接超时，行情与交易接口均未就绪", {"event_code": "CTP_CONNECT_FAILED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
+        except Exception:
+            pass
 
     return {
         "result": "connecting",

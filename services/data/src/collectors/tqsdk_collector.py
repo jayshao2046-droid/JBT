@@ -52,9 +52,17 @@ class TqSdkCollector(BaseCollector):
                 try:
                     klines_map[sym] = api.get_kline_serial(sym, duration_seconds=duration, data_length=200)
                 except Exception as exc:
+                    err_str = str(exc)
+                    if "non-existent" in err_str:
+                        self.logger.warning("tqsdk skip non-existent instrument: %s", sym)
+                        continue
                     self.logger.warning("tqsdk get_kline_serial failed for %s: %s", sym, exc)
 
-            api.wait_update()
+            # 带超时的 wait_update，防止单合约卡死拖垮全链
+            try:
+                api.wait_update(deadline=time.time() + 15)
+            except Exception as exc:
+                self.logger.warning("tqsdk wait_update error: %s, proceeding with available data", exc)
             time.sleep(1)
 
             for sym, klines in klines_map.items():

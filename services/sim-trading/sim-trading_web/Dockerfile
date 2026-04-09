@@ -2,7 +2,7 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml* ./
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+RUN npm install -g pnpm && pnpm config set registry https://registry.npmmirror.com && pnpm install --frozen-lockfile
 
 FROM node:20-alpine AS builder
 WORKDIR /app

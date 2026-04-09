@@ -1,24 +1,29 @@
-# ─── Stage 1: 依赖安装 ───────────────────────────────────────────────────────
+# --- Stage 1: dependencies -------------------------------------------------
 FROM python:3.11-slim AS builder
+
+ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
+ARG PIP_DEFAULT_TIMEOUT=120
 
 WORKDIR /app
 
 COPY requirements.txt .
-# openctp-ctp 仅有 amd64 wheel；arm64 环境跳过，运行时走 stub 模式
-RUN pip install --no-cache-dir --upgrade pip \
-    && grep -v '^openctp-ctp' requirements.txt | pip install --no-cache-dir -r /dev/stdin \
-    && pip install --no-cache-dir openctp-ctp 2>/dev/null || echo "openctp-ctp not available on this platform, using stub mode"
+RUN pip install --disable-pip-version-check --no-cache-dir --upgrade pip \
+    && grep -v "^openctp-ctp" requirements.txt > /tmp/requirements-core.txt \
+    && pip install --disable-pip-version-check --no-cache-dir --default-timeout ${PIP_DEFAULT_TIMEOUT} -i ${PIP_INDEX_URL} --trusted-host mirrors.aliyun.com -r /tmp/requirements-core.txt \
+    && (pip install --disable-pip-version-check --no-cache-dir --default-timeout ${PIP_DEFAULT_TIMEOUT} -i ${PIP_INDEX_URL} --trusted-host mirrors.aliyun.com openctp-ctp || echo "openctp-ctp not available on this platform, using stub mode")
 
-# ─── Stage 2: 运行镜像 ───────────────────────────────────────────────────────
+# --- Stage 2: runtime ------------------------------------------------------
 FROM python:3.11-slim AS runner
 
 WORKDIR /app
 
-# CTP SDK .so 加载时需要 en_US.UTF-8 locale；locales-all 预编译全量 locale 数据，避免 glibc locale-archive 兼容问题
-RUN apt-get update && apt-get install -y --no-install-recommends locales-all \
+# CTP SDK .so needs locale; LANG=C is glibc built-in, no extra packages needed
+RUN sed -i "s|deb.debian.org|mirrors.aliyun.com|g" /etc/apt/sources.list.d/debian.sources 2>/dev/null; \
+    sed -i "s|deb.debian.org|mirrors.aliyun.com|g" /etc/apt/sources.list 2>/dev/null; \
+    apt-get update && apt-get install -y --no-install-recommends locales-all \
     && rm -rf /var/lib/apt/lists/*
-ENV LANG=en_US.UTF-8
-ENV LC_ALL=en_US.UTF-8
+ENV LANG=C
+ENV LC_ALL=C
 
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin

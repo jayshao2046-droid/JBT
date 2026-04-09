@@ -35,6 +35,19 @@ export default function RiskPresetsPage() {
   const [rows, setRows] = useState<PresetRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
+  const [exchFilter, setExchFilter] = useState<string>("全部")
+
+  const EXCH_TABS = ["全部", "上期所(SHFE)", "大商所(DCE)", "郑商所(CZCE)", "中金所(CFFEX)", "能源/广期所"]
+  const EXCH_MAP: Record<string, string[]> = {
+    "上期所(SHFE)": ["上期所"],
+    "大商所(DCE)": ["大商所"],
+    "郑商所(CZCE)": ["郑商所"],
+    "中金所(CFFEX)": ["中金所"],
+    "能源/广期所": ["上海能源", "广期所"],
+  }
+  const filteredRows = exchFilter === "全部"
+    ? rows
+    : rows.filter(r => (EXCH_MAP[exchFilter] ?? []).includes(EXCHANGES[r.symbol.replace(/[0-9]/g, "")] ?? ""))
 
   const loadPresets = async () => {
     setIsLoading(true)
@@ -131,6 +144,29 @@ export default function RiskPresetsPage() {
         </CardContent>
       </Card>
 
+      {/* 品种分类筛选栏 */}
+      <div className="flex items-center gap-1 flex-wrap">
+        {EXCH_TABS.map(tab => (
+          <button
+            key={tab}
+            onClick={() => setExchFilter(tab)}
+            className={`px-3 py-1 text-xs rounded font-medium transition-colors ${
+              exchFilter === tab
+                ? "bg-orange-500 text-white"
+                : "text-neutral-400 hover:text-white hover:bg-neutral-700 border border-neutral-700"
+            }`}
+          >
+            {tab}
+            {tab !== "全部" && (
+              <span className="ml-1 opacity-60">
+                ({rows.filter(r => (EXCH_MAP[tab] ?? []).includes(EXCHANGES[r.symbol.replace(/[0-9]/g, "")] ?? "")).length})
+              </span>
+            )}
+          </button>
+        ))}
+        <span className="ml-2 text-xs text-neutral-600">共 {filteredRows.length} 个品种</span>
+      </div>
+
       {/* 风控预设表格 */}
       <Card className="bg-neutral-900 border-neutral-700">
         <CardHeader>
@@ -157,7 +193,7 @@ export default function RiskPresetsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(row => (
+                {filteredRows.map(row => (
                   <tr
                     key={row.symbol}
                     className={`border-b border-neutral-800 transition-colors ${

@@ -47,6 +47,16 @@ function fmtTurnover(v: number) {
 export default function MarketPage() {
   const [ticks, setTicks] = useState<Record<string, TickData>>({})
   const [activeTab, setActiveTab] = useState(0)
+  // 可编辑的自选列表（持久化到 localStorage）
+  const [customWls, setCustomWls] = useState<Array<{id:string;name:string;symbols:string[]}>>(() => {
+    if (typeof window === "undefined") return WATCHLISTS.map(w => ({ ...w }))
+    try {
+      const saved = localStorage.getItem("jbt_watchlists")
+      return saved ? JSON.parse(saved) : WATCHLISTS.map(w => ({ ...w }))
+    } catch { return WATCHLISTS.map(w => ({ ...w })) }
+  })
+  const [addInput, setAddInput] = useState("")
+  const [showAdd, setShowAdd] = useState(false)
   const [now, setNow] = useState<Date | null>(null)
   const [ctpStatus, setCtpStatus] = useState<"disconnected" | "connecting" | "live">("disconnected")
 
@@ -117,11 +127,36 @@ export default function MarketPage() {
     }
   }, [])
 
-  const watchlist = WATCHLISTS[activeTab]
+  const watchlist = customWls[activeTab] ?? WATCHLISTS[activeTab]
   const contracts = useMemo(
     () => ALL_CONTRACTS.filter(c => watchlist.symbols.includes(c.symbol)),
     [watchlist],
   )
+
+  const addSymbol = (sym: string) => {
+    const s = sym.trim().toUpperCase().replace(/M$/, "M")  // normalize
+    // 也接受小写 symbol
+    const match = ALL_CONTRACTS.find(c => c.symbol.toUpperCase() === s || c.symbol === sym.trim() || c.name.includes(sym.trim()))
+    const realSym = match?.symbol ?? sym.trim()
+    if (!realSym) return
+    const updated = customWls.map((wl, i) =>
+      i === activeTab && !wl.symbols.includes(realSym)
+        ? { ...wl, symbols: [...wl.symbols, realSym] }
+        : wl
+    )
+    setCustomWls(updated)
+    localStorage.setItem("jbt_watchlists", JSON.stringify(updated))
+    setAddInput("")
+    setShowAdd(false)
+  }
+
+  const removeSymbol = (sym: string) => {
+    const updated = customWls.map((wl, i) =>
+      i === activeTab ? { ...wl, symbols: wl.symbols.filter(s => s !== sym) } : wl
+    )
+    setCustomWls(updated)
+    localStorage.setItem("jbt_watchlists", JSON.stringify(updated))
+  }
 
   // 统计区：涨/跌/平
   const stats = useMemo(() => {
@@ -195,7 +230,7 @@ export default function MarketPage() {
             <tr className="bg-neutral-800 text-neutral-500 border-b border-neutral-700">
               <th className="px-2 py-2 text-left font-normal w-8">序</th>
               <th className="px-2 py-2 text-left font-normal w-20">代码</th>
-              <th className="px-2 py-2 text-left font-normal min-w-[120px]">名称</th>
+              <th className="px-2 py-2 text-left font-normal w-32 max-w-[128px]">名称</th>
               <th className="px-2 py-2 text-right font-normal w-20">最新</th>
               <th className="px-2 py-2 text-right font-normal w-16">涨幅</th>
               <th className="px-2 py-2 text-right font-normal w-16">涨跌</th>
@@ -210,6 +245,7 @@ export default function MarketPage() {
               <th className="px-2 py-2 text-right font-normal w-20">最高</th>
               <th className="px-2 py-2 text-right font-normal w-20">最低</th>
               <th className="px-2 py-2 text-right font-normal w-20">开盘</th>
+              {activeTab > 0 && <th className="px-2 py-2 w-6"></th>}
             </tr>
           </thead>
           <tbody>
@@ -284,6 +320,11 @@ export default function MarketPage() {
                   <td className="px-2 py-1.5 text-right font-mono text-neutral-500 tabular-nums">
                     {t ? fmtPrice(t.open, c.tick) : "--"}
                   </td>
+                  {activeTab > 0 && (
+                    <td className="px-1 py-1.5" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => removeSymbol(c.symbol)} className="text-neutral-700 hover:text-red-400 text-xs leading-none px-0.5">✕</button>
+                    </td>
+                  )}
                 </tr>
               )
             })}

@@ -161,15 +161,25 @@ export default function TradingDashboard() {
                       {serviceOnline ? "● 在线" : "● 离线"}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span>行情:</span>
-                    <span className={ctpMd ? "text-green-400 font-mono" : "text-neutral-500 font-mono"}>
-                      {ctpMd ? "● 已连接" : "○ 未连"}
-                    </span>
-                    <span className="text-neutral-600 ml-1">交易:</span>
-                    <span className={ctpTd ? "text-green-400 font-mono" : "text-neutral-500 font-mono"}>
-                      {ctpTd ? "●" : "○"}
-                    </span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-neutral-500 w-16 shrink-0">行情(MD):</span>
+                      <span className={ctpMd ? "text-green-400 font-mono" : "text-neutral-500 font-mono"}>
+                        {ctpMd ? "● 已连接" : "○ 未连"}
+                      </span>
+                    </div>
+                    {ctpMd && (
+                      <p className="text-neutral-600 text-[10px] pl-1">已登录 TTS 行情源，持续接收 Tick</p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span className="text-neutral-500 w-16 shrink-0">交易(TD):</span>
+                      <span className={ctpTd ? "text-green-400 font-mono" : "text-neutral-500 font-mono"}>
+                        {ctpTd ? "● 就绪" : "○ 未连"}
+                      </span>
+                    </div>
+                    {ctpTd && (
+                      <p className="text-neutral-600 text-[10px] pl-1">已登录 TTS 交易端，可发委托</p>
+                    )}
                   </div>
 
                   {/* 全局交易开关 */}
