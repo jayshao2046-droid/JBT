@@ -2,7 +2,7 @@
 # D108 — 统一管理各数据源的代码映射
 # 格式: 内部代码 → {yfinance, akshare_sina, akshare_em, alpha_vantage, twelvedata, 说明}
 #
-# 验证时间: 2026-03-22 (Tushare fut_basic 查询，全部合约均为当前主力)
+# 验证时间: 2026-04-10 (Tushare fut_basic 查询，全部合约均为当前主力)
 # 验证环境: Mini (AkShare 1.18.38, yfinance 1.2.0, twelvedata 1.2.28)
 
 # ═══════════════════════════════════════════
@@ -11,8 +11,8 @@
 domestic:
   # SHFE 上期所
   SHFE.rb:
-    sina_code: "rb2605"     # 当前主力 (2026-03-22 verified)
-    tqsdk: "SHFE.rb2605"
+    sina_code: "rb2610"     # 当前主力 (2026-03-22 verified)
+    tqsdk: "SHFE.rb2610"
     macro_drivers: ["cn_ind.mysteel_rebar_inventory", "cn_ind.rebar_social_inventory",
                     "cn_ind.steel_production", "CN.real_estate_sales",
                     "CN.fixed_asset_investment", "cn_ind.iron_ore_port_inventory"]
@@ -27,47 +27,47 @@ domestic:
     note: "铜"
 
   SHFE.au:
-    sina_code: "au2605"
-    tqsdk: "SHFE.au2605"
+    sina_code: "au2606"
+    tqsdk: "SHFE.au2606"
     macro_drivers: ["metal.gold_spot", "metal.dxy", "metal.vix", "metal.us10y_yield",
                     "fin.us_fed_rate", "fin.spdr_gold_holdings",
                     "fin.global_gold_etf_holdings", "cot.gold", "metal.tips_10y"]
     note: "黄金"
 
   SHFE.ag:
-    sina_code: "ag2605"
-    tqsdk: "SHFE.ag2605"
+    sina_code: "ag2606"
+    tqsdk: "SHFE.ag2606"
     macro_drivers: ["metal.silver_spot", "metal.dxy", "metal.vix",
                     "fin.us_fed_rate", "cot.silver", "metal.us10y_yield"]
     note: "白银"
 
   SHFE.hc:
-    sina_code: "hc2605"
-    tqsdk: "SHFE.hc2605"
+    sina_code: "hc2610"
+    tqsdk: "SHFE.hc2610"
     macro_drivers: ["cn_ind.mysteel_hrc_inventory", "cn_ind.steel_production",
                     "CN.industrial_output_yoy", "CN.fixed_asset_investment"]
     note: "热卷"
 
   # DCE 大商所
   DCE.i:
-    sina_code: "i2605"
-    tqsdk: "DCE.i2605"
+    sina_code: "i2609"
+    tqsdk: "DCE.i2609"
     macro_drivers: ["cn_ind.iron_ore_port_inventory", "cn_ind.steel_production",
                     "CN.real_estate_sales", "CN.fixed_asset_investment",
                     "ship.bdi", "ship.bci"]
     note: "铁矿石"
 
   DCE.m:
-    sina_code: "m2605"
-    tqsdk: "DCE.m2605"
+    sina_code: "m2609"
+    tqsdk: "DCE.m2609"
     macro_drivers: ["agri.usda_soybean_export", "cn_ind.soybean_warehouse",
                     "agri.brazil_soybean", "cot.soybean_meal",
                     "metal.usd_cny", "US.weather_soybean_belt"]
     note: "豆粕"
 
   DCE.p:
-    sina_code: "p2605"
-    tqsdk: "DCE.p2605"
+    sina_code: "p2609"
+    tqsdk: "DCE.p2609"
     macro_drivers: ["agri.mpob_palm_oil_production", "agri.mpob_palm_oil_export",
                     "agri.mpob_palm_oil_stock", "cn_ind.palm_oil_import",
                     "metal.usd_cny"]
@@ -81,8 +81,8 @@ domestic:
     note: "玉米"
 
   DCE.y:
-    sina_code: "y2605"
-    tqsdk: "DCE.y2605"
+    sina_code: "y2609"
+    tqsdk: "DCE.y2609"
     macro_drivers: ["agri.usda_soybean_export", "agri.mpob_palm_oil_stock",
                     "cot.soybean_oil", "metal.usd_cny"]
     note: "豆油"
@@ -108,9 +108,9 @@ domestic:
   CZCE.CF:
     macro_drivers: ["agri.china_cotton_supply", "cot.cotton",
                     "CN.retail_sales_yoy", "metal.usd_cny"]
-    sina_code: "CF605"
-    sina_alt: "CF2605"
-    tqsdk: "CZCE.CF605"
+    sina_code: "CF609"
+    sina_alt: "CF2609"
+    tqsdk: "CZCE.CF609"
     note: "棉花, Sina 分钟接口返回空 DataFrame"
 
   CZCE.TA:
@@ -177,8 +177,8 @@ domestic:
     note: "燃料油"
 
   SHFE.bu:
-    sina_code: "bu2605"
-    tqsdk: "SHFE.bu2605"
+    sina_code: "bu2606"
+    tqsdk: "SHFE.bu2606"
     overseas: ["NYMEX.CL"]
     overseas_src: "yfinance"
     overseas_minute: "CL=F"
@@ -187,8 +187,8 @@ domestic:
     note: "沥青, 与原油高相关"
 
   SHFE.ru:
-    sina_code: "ru2605"
-    tqsdk: "SHFE.ru2605"
+    sina_code: "ru2609"
+    tqsdk: "SHFE.ru2609"
     overseas: ["TOCOM.RSS3"]
     overseas_src: "akshare_hist_todo"
     macro_drivers: ["cn_ind.rubber_inventory_shfe", "cn_ind.tsr20_inventory_sgx",
@@ -280,8 +280,8 @@ domestic:
     note: "焦煤, 无标准西方外盘合约"
 
   DCE.jd:
-    sina_code: "jd2604"
-    tqsdk: "DCE.jd2604"
+    sina_code: "jd2606"
+    tqsdk: "DCE.jd2606"
     overseas: []
     macro_drivers: ["CN.retail_sales_yoy", "CN.official_manufacturing_pmi"]
     note: "鸡蛋, 无直接外盘对应"
@@ -323,8 +323,8 @@ domestic:
     note: "PVC"
 
   DCE.eg:
-    sina_code: "eg2604"
-    tqsdk: "DCE.eg2604"
+    sina_code: "eg2605"
+    tqsdk: "DCE.eg2605"
     overseas: ["NYMEX.CL", "NYMEX.NG"]
     overseas_src: "yfinance"
     overseas_minute: "CL=F"
@@ -412,8 +412,8 @@ domestic:
     note: "菜粕"
 
   CZCE.SR:
-    sina_code: "SR605"
-    tqsdk: "CZCE.SR605"
+    sina_code: "SR609"
+    tqsdk: "CZCE.SR609"
     overseas: ["ICE.SB"]
     overseas_src: "yfinance"
     overseas_minute: "SB=F"
@@ -583,8 +583,8 @@ domestic:
     note: "低硫燃料油"
 
   INE.nr:
-    sina_code: "nr2605"
-    tqsdk: "INE.nr2605"
+    sina_code: "nr2606"
+    tqsdk: "INE.nr2606"
     overseas: ["SGX.TSR20"]
     overseas_src: "akshare_hist_todo"
     macro_drivers: ["CN.auto_sales", "metal.usd_cny"]
@@ -880,7 +880,7 @@ overseas:
 # 验证记录
 # ═══════════════════════════════════════════
 verification:
-  date: "2026-03-15"
+  date: "2026-04-10"
   environment: "Mini M2 8G, AkShare 1.18.38, yfinance 1.2.0, twelvedata 1.2.28"
   results:
     yfinance: "ALL rate limited (YFRateLimitError) — 需退避或降频"
