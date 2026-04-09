@@ -259,24 +259,38 @@ def test_news_pusher_flush_dispatches_single_summary(tmp_path: Path):
 
 def test_job_news_push_batch_syncs_storage_before_flush(monkeypatch):
     from services.data.src.notify import news_pusher as news_pusher_module
-    from services.data.src.scheduler.data_scheduler import job_news_push_batch
+    from services.data.src.scheduler.data_scheduler import NEWS_STORAGE_SYNC_LIMIT_PER_SOURCE, job_news_push_batch
 
-    calls: list[str] = []
+    calls: list[tuple[str, int | None]] = []
 
     class FakeNewsPusher:
-        def sync_from_storage(self) -> dict[str, Any]:
-            calls.append("sync")
+        def sync_from_storage(self, *, limit_per_source: int) -> dict[str, Any]:
+            calls.append(("sync", limit_per_source))
             return {"new": 2}
 
         def flush(self) -> dict[str, Any]:
-            calls.append("flush")
+            calls.append(("flush", None))
             return {"pushed": 2}
 
     monkeypatch.setattr(news_pusher_module, "NewsPusher", FakeNewsPusher)
 
     job_news_push_batch({})
 
-    assert calls == ["sync", "flush"]
+    assert calls == [("sync", NEWS_STORAGE_SYNC_LIMIT_PER_SOURCE), ("flush", None)]
+
+
+def test_webhook_for_type_accepts_news_and_trading_compat_envs(monkeypatch):
+    from services.data.src.notify.dispatcher import NotifyType, _webhook_for_type
+
+    monkeypatch.delenv("FEISHU_INFO_WEBHOOK_URL", raising=False)
+    monkeypatch.delenv("FEISHU_TRADE_WEBHOOK_URL", raising=False)
+    monkeypatch.setenv("FEISHU_NEWS_WEBHOOK_URL", "https://news-webhook")
+    monkeypatch.setenv("FEISHU_TRADING_WEBHOOK_URL", "https://trading-webhook")
+
+    assert _webhook_for_type(NotifyType.NEWS) == "https://news-webhook"
+    assert _webhook_for_type(NotifyType.INFO) == "https://news-webhook"
+    assert _webhook_for_type(NotifyType.NOTIFY) == "https://news-webhook"
+    assert _webhook_for_type(NotifyType.TRADE) == "https://trading-webhook"
 
 
 # ═══════════════════════════════════════════════
