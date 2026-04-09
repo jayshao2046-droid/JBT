@@ -1,149 +1,108 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { AlertTriangle, Mail, MessageSquare } from "lucide-react"
+import { MessageSquare } from "lucide-react"
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts"
+  fetchSignalOverview,
+  type SignalOverviewResponse,
+  type NotificationChannelStatus,
+  type NotificationEventRecord,
+  type DailyReportSummary,
+} from "@/lib/api"
 
-// 通知报表数据暂无专用 API，展示空状态
-const kpiData: { label: string; value: string; unit: string; color: string }[] = []
-const systemAlerts: { id: number; message: string; time: string; severity: string }[] = []
-const riskControlAlerts: { id: number; message: string; time: string; severity: string }[] = []
-const notificationChannels: { channel: string; status: string; lastSent: string; successRate: number }[] = []
-const dailyStats = { strategyResearch: 0, completedResearch: 0, enterProduction: 0, intercepted: 0, sentToSim: 0 }
-const trendData: { time: string; alerts: number }[] = []
-
-const getSeverityColor = (severity: string) => {
-  switch (severity) {
-    case "warning":
-      return "bg-yellow-900/20 text-yellow-400 border-yellow-600/50"
+const getSeverityColor = (level: string) => {
+  switch (level) {
+    case "P0":
     case "alert":
       return "bg-red-900/20 text-red-400 border-red-600/50"
+    case "P1":
+    case "warning":
+      return "bg-yellow-900/20 text-yellow-400 border-yellow-600/50"
     default:
-      return "bg-neutral-900/20 text-neutral-400"
+      return "bg-neutral-900/20 text-neutral-400 border-neutral-700"
   }
 }
 
-const getKPIColor = (color: string) => {
-  switch (color) {
-    case "red":
-      return "text-red-400"
-    case "yellow":
-      return "text-yellow-400"
-    case "green":
-      return "text-green-400"
-    case "blue":
-      return "text-blue-400"
-    default:
-      return "text-white"
-  }
-}
+export default function NotificationsReport({ refreshToken }: { refreshToken?: number }) {
+  const [overview, setOverview] = useState<SignalOverviewResponse | null>(null)
 
-export default function NotificationsReport() {
+  useEffect(() => {
+    fetchSignalOverview().then(setOverview).catch(() => {})
+  }, [refreshToken])
+
+  const channels: NotificationChannelStatus[] = overview?.notification_channels ?? []
+  const events: NotificationEventRecord[] = overview?.recent_events ?? []
+  const dailyReport: DailyReportSummary | null = overview?.daily_report?.latest_report ?? null
+  const dispatcherState = overview?.dispatcher_state ?? "unknown"
+  const emptyStates = overview?.empty_states
+
+  const kpiData = dailyReport
+    ? [
+        { label: "策略总数", value: String(dailyReport.strategies_total), color: "white" },
+        { label: "活跃策略", value: String(dailyReport.strategies_active), color: "green" },
+        { label: "信号生成", value: String(dailyReport.signals_generated), color: "orange" },
+        { label: "信号通过", value: String(dailyReport.signals_approved), color: "green" },
+        { label: "信号拒绝", value: String(dailyReport.signals_rejected), color: "red" },
+        { label: "推送模拟", value: String(dailyReport.publishes_to_sim), color: "blue" },
+      ]
+    : []
+
   return (
     <div className="p-6 space-y-6 bg-neutral-950 min-h-screen">
+      {/* 派发器状态 */}
+      <div className="flex items-center gap-3 mb-2">
+        <span className="text-sm text-neutral-400">派发器状态：</span>
+        <Badge className={dispatcherState === "idle" ? "bg-green-900 text-green-400" : "bg-yellow-900 text-yellow-400"}>
+          {dispatcherState}
+        </Badge>
+      </div>
+
       {/* KPI 卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-        {kpiData.map((kpi, idx) => (
-          <Card key={idx} className="bg-neutral-900 border-neutral-700">
-            <CardContent className="p-3">
-              <p className="text-xs text-neutral-400 mb-1 truncate">{kpi.label}</p>
-              <p className={`text-lg font-bold ${getKPIColor(kpi.color)}`}>{kpi.value}</p>
-              {kpi.unit && <p className="text-xs text-neutral-500 mt-1">{kpi.unit}</p>}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {kpiData.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {kpiData.map((kpi, idx) => (
+            <Card key={idx} className="bg-neutral-900 border-neutral-700">
+              <CardContent className="p-3">
+                <p className="text-xs text-neutral-400 mb-1 truncate">{kpi.label}</p>
+                <p className={`text-lg font-bold ${kpi.color === "green" ? "text-green-400" : kpi.color === "red" ? "text-red-400" : kpi.color === "orange" ? "text-orange-400" : kpi.color === "blue" ? "text-blue-400" : "text-white"}`}>
+                  {kpi.value}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-      {/* 系统报警 + 风控报警 + 因子与同步告警 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 系统报警 */}
-        <Card className="bg-neutral-900 border-neutral-700">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-neutral-300">系统报警 ({systemAlerts.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 max-h-80 overflow-y-auto">
-            {systemAlerts.map((alert) => (
-              <div key={alert.id} className={`border rounded p-2 ${getSeverityColor(alert.severity)}`}>
-                <p className="text-xs font-medium mb-1">{alert.message}</p>
-                <p className="text-xs opacity-70">{alert.time}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* 风控报警 */}
-        <Card className="bg-neutral-900 border-neutral-700">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-neutral-300">风控报警 ({riskControlAlerts.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 max-h-80 overflow-y-auto">
-            {riskControlAlerts.map((alert) => (
-              <div key={alert.id} className={`border rounded p-2 ${getSeverityColor(alert.severity)}`}>
-                <p className="text-xs font-medium mb-1">{alert.message}</p>
-                <p className="text-xs opacity-70">{alert.time}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* 因子与同步告警 */}
-        <Card className="bg-neutral-900 border-neutral-700">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-neutral-300">因子与同步告警</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 max-h-80 overflow-y-auto">
-            <div className="border border-red-600/50 bg-red-900/20 rounded p-2">
-              <p className="text-xs font-medium text-red-400 mb-1">BOLL 同步失败</p>
-              <p className="text-xs text-red-300">需要重新计算回测数据</p>
-              <p className="text-xs text-red-400/70 mt-1">14:42</p>
-            </div>
-            <div className="border border-yellow-600/50 bg-yellow-900/20 rounded p-2">
-              <p className="text-xs font-medium text-yellow-400 mb-1">KDJ 漂移</p>
-              <p className="text-xs text-yellow-300">有效性从 82% 下降到 72%</p>
-              <p className="text-xs text-yellow-400/70 mt-1">13:50</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 信号工作流汇报 + 通知通道状态 */}
+      {/* 最近事件 + 通知通道 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 信号工作流汇报 */}
+        {/* 最近通知事件 */}
         <Card className="bg-neutral-900 border-neutral-700">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-neutral-300">信号工作流汇报</CardTitle>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-neutral-300">最近通知事件 ({events.length})</CardTitle>
           </CardHeader>
-          <CardContent className="pt-4">
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trendData} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#404040" />
-                  <XAxis dataKey="time" stroke="#737373" style={{ fontSize: "11px" }} tick={{ fill: "#a3a3a3" }} tickMargin={8} />
-                  <YAxis stroke="#737373" style={{ fontSize: "11px" }} tick={{ fill: "#a3a3a3" }} tickMargin={8} width={30} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#1f2937",
-                      border: "1px solid #404040",
-                      borderRadius: "6px",
-                      padding: "8px 12px",
-                    }}
-                    labelStyle={{ color: "#fff", marginBottom: "4px" }}
-                    itemStyle={{ color: "#f97316" }}
-                  />
-                  <Line type="monotone" dataKey="alerts" stroke="#f97316" strokeWidth={2} dot={false} name="信号数" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+          <CardContent className="space-y-2 max-h-96 overflow-y-auto">
+            {events.length > 0 ? events.map((evt, idx) => (
+              <div key={idx} className={`border rounded p-2 ${getSeverityColor(evt.notify_level)}`}>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <p className="text-xs font-medium">{evt.title}</p>
+                  <Badge className="bg-neutral-800 text-neutral-300 text-[10px]">{evt.event_type}</Badge>
+                </div>
+                <div className="flex items-center gap-3 text-xs opacity-70">
+                  <span>{evt.dispatched_at?.slice(11, 19)}</span>
+                  <span>{evt.dispatch_state}</span>
+                  <span>
+                    {evt.channels.feishu && "飞书 "}
+                    {evt.channels.email && "邮件"}
+                  </span>
+                </div>
+              </div>
+            )) : (
+              <p className="text-sm text-neutral-500 text-center py-8">
+                {emptyStates?.events ? "暂无通知事件" : "加载中…"}
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -153,160 +112,98 @@ export default function NotificationsReport() {
             <CardTitle className="text-sm font-medium text-neutral-300">通知通道状态</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {notificationChannels.map((channel, idx) => (
+            {channels.length > 0 ? channels.map((ch, idx) => (
               <div key={idx} className="border border-neutral-700 rounded p-3">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-4 h-4 text-neutral-400" />
-                    <span className="text-sm font-medium text-white">{channel.channel}</span>
+                    <span className="text-sm font-medium text-white">{ch.channel}</span>
                   </div>
-                  <Badge className="bg-green-900 text-green-400">{channel.status}</Badge>
+                  <Badge className={ch.status === "configured" || ch.status === "active" ? "bg-green-900 text-green-400" : "bg-neutral-700 text-neutral-300"}>
+                    {ch.status}
+                  </Badge>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-3 gap-3 text-xs">
                   <div>
-                    <p className="text-neutral-400 mb-1">最后发送</p>
-                    <p className="text-neutral-200">{channel.lastSent}</p>
+                    <p className="text-neutral-400 mb-1">尝试</p>
+                    <p className="text-neutral-200">{ch.attempts}</p>
+                  </div>
+                  <div>
+                    <p className="text-neutral-400 mb-1">成功</p>
+                    <p className="text-green-400">{ch.successes}</p>
                   </div>
                   <div>
                     <p className="text-neutral-400 mb-1">成功率</p>
-                    <p className="text-neutral-200">{channel.successRate}%</p>
+                    <p className="text-neutral-200">{ch.success_rate != null ? `${(ch.success_rate * 100).toFixed(0)}%` : "—"}</p>
                   </div>
                 </div>
+                {ch.last_error && (
+                  <p className="text-xs text-red-400 mt-2">最近错误：{ch.last_error}</p>
+                )}
               </div>
-            ))}
+            )) : (
+              <p className="text-sm text-neutral-500 text-center py-8">暂无通道数据</p>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* 日报周报月报 */}
+      {/* 日报 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 今日统计 */}
+        {/* 日报详情 */}
         <Card className="bg-neutral-900 border-neutral-700">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-neutral-300">今日统计</CardTitle>
+            <CardTitle className="text-sm font-medium text-neutral-300">最新日报</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="border border-neutral-700 rounded p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-neutral-400">策略研究数</span>
-                <span className="text-xl font-bold text-orange-400">{dailyStats.strategyResearch}</span>
-              </div>
-            </div>
-            <div className="border border-neutral-700 rounded p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-neutral-400">完成研究数</span>
-                <span className="text-xl font-bold text-green-400">{dailyStats.completedResearch}</span>
-              </div>
-            </div>
-            <div className="border border-neutral-700 rounded p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-neutral-400">进入生产候选</span>
-                <span className="text-xl font-bold text-blue-400">{dailyStats.enterProduction}</span>
-              </div>
-            </div>
-            <div className="border border-neutral-700 rounded p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-neutral-400">被拦截数</span>
-                <span className="text-xl font-bold text-red-400">{dailyStats.intercepted}</span>
-              </div>
-            </div>
-            <div className="border border-neutral-700 rounded p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-neutral-400">推送模拟交易</span>
-                <span className="text-xl font-bold text-cyan-400">{dailyStats.sentToSim}</span>
-              </div>
-            </div>
+            {dailyReport ? (
+              <>
+                <div className="text-xs text-neutral-500 mb-3">{dailyReport.report_date} · 生成于 {dailyReport.generated_at?.slice(11, 19)}</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="border border-neutral-700 rounded p-3">
+                    <span className="text-sm text-neutral-400">研究会话</span>
+                    <p className="text-xl font-bold text-orange-400">{dailyReport.research_sessions_total}</p>
+                    <p className="text-xs text-neutral-500">完成 {dailyReport.research_sessions_completed} / 失败 {dailyReport.research_sessions_failed}</p>
+                  </div>
+                  <div className="border border-neutral-700 rounded p-3">
+                    <span className="text-sm text-neutral-400">发布到模拟</span>
+                    <p className="text-xl font-bold text-cyan-400">{dailyReport.publishes_to_sim}</p>
+                    <p className="text-xs text-neutral-500">成功 {dailyReport.publishes_success} / 失败 {dailyReport.publishes_failed}</p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-neutral-500 text-center py-8">暂无日报数据</p>
+            )}
           </CardContent>
         </Card>
 
-        {/* 日报发送状态 */}
+        {/* 日报历史 */}
         <Card className="bg-neutral-900 border-neutral-700">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-neutral-300">日报发送状态</CardTitle>
+            <CardTitle className="text-sm font-medium text-neutral-300">日报发送历史</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="border border-green-600/50 bg-green-900/20 rounded p-3">
-              <div className="flex items-start gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full bg-green-400 mt-1 flex-shrink-0"></div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-green-400">日报已发送</p>
-                  <p className="text-xs text-green-300/70 mt-1">2024-04-05 21:00</p>
+          <CardContent className="space-y-2 max-h-80 overflow-y-auto">
+            {overview?.daily_report?.history && overview.daily_report.history.length > 0 ? (
+              overview.daily_report.history.map((h, idx) => (
+                <div key={idx} className="border border-neutral-700 rounded p-2 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-neutral-300">{h.report_date}</p>
+                    <p className="text-xs text-neutral-500">{h.generated_at?.slice(11, 19)}</p>
+                  </div>
+                  <Badge className={h.dispatch_state === "sent" ? "bg-green-900 text-green-400" : "bg-yellow-900 text-yellow-400"}>
+                    {h.dispatch_state}
+                  </Badge>
                 </div>
-              </div>
-              <p className="text-xs text-green-300 ml-4">
-                收件组: @量化决策组, @运营团队
+              ))
+            ) : (
+              <p className="text-sm text-neutral-500 text-center py-8">
+                {emptyStates?.daily_history ? "暂无发送历史" : "加载中…"}
               </p>
-            </div>
-            <div className="border border-neutral-700 rounded p-3">
-              <p className="text-sm font-medium text-neutral-300 mb-2">周报计划</p>
-              <p className="text-xs text-neutral-400">周一 09:30 发送本周回顾</p>
-            </div>
-            <div className="border border-neutral-700 rounded p-3">
-              <p className="text-sm font-medium text-neutral-300 mb-2">月报计划</p>
-              <p className="text-xs text-neutral-400">每月1日 10:00 发送月度总结</p>
-            </div>
-            <div className="space-y-2 pt-2">
-              <Button className="w-full bg-orange-600 hover:bg-orange-700 text-white text-sm">
-                立即发送日报
-              </Button>
-              <Button variant="outline" className="w-full border-neutral-700 text-neutral-400 hover:bg-neutral-800 text-sm">
-                查看日报模板
-              </Button>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
-
-      {/* 失败重试情况 */}
-      <Card className="bg-neutral-900 border-neutral-700">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-neutral-300">失败重试情况</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-neutral-700">
-                  <th className="text-left py-2 px-3 text-neutral-400 font-medium">通知类型</th>
-                  <th className="text-center py-2 px-3 text-neutral-400 font-medium">发送时间</th>
-                  <th className="text-center py-2 px-3 text-neutral-400 font-medium">状态</th>
-                  <th className="text-center py-2 px-3 text-neutral-400 font-medium">重试次数</th>
-                  <th className="text-left py-2 px-3 text-neutral-400 font-medium">详情</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-neutral-800 hover:bg-neutral-800/50">
-                  <td className="py-2 px-3 text-neutral-300">研究完成通知</td>
-                  <td className="py-2 px-3 text-center text-neutral-300">14:32</td>
-                  <td className="py-2 px-3 text-center">
-                    <Badge className="bg-green-900 text-green-400">成功</Badge>
-                  </td>
-                  <td className="py-2 px-3 text-center text-neutral-400">0</td>
-                  <td className="py-2 px-3 text-neutral-500">MA交叉策略 v2.2.0</td>
-                </tr>
-                <tr className="border-b border-neutral-800 hover:bg-neutral-800/50">
-                  <td className="py-2 px-3 text-neutral-300">因子同步告警</td>
-                  <td className="py-2 px-3 text-center text-neutral-300">14:42</td>
-                  <td className="py-2 px-3 text-center">
-                    <Badge className="bg-green-900 text-green-400">成功</Badge>
-                  </td>
-                  <td className="py-2 px-3 text-center text-neutral-400">1</td>
-                  <td className="py-2 px-3 text-neutral-500">BOLL 回测缺失</td>
-                </tr>
-                <tr className="border-b border-neutral-800 hover:bg-neutral-800/50">
-                  <td className="py-2 px-3 text-neutral-300">模型状态通知</td>
-                  <td className="py-2 px-3 text-center text-neutral-300">13:15</td>
-                  <td className="py-2 px-3 text-center">
-                    <Badge className="bg-yellow-900 text-yellow-400">超时</Badge>
-                  </td>
-                  <td className="py-2 px-3 text-center text-yellow-400">3</td>
-                  <td className="py-2 px-3 text-neutral-500">邮件通道暂时故障</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

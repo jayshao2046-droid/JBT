@@ -4,8 +4,8 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ChevronRight, FileText, Download, Upload, Trash2 } from "lucide-react"
-import { fetchStrategies, type StrategyPackage } from "@/lib/api"
+import { ChevronRight, FileText, Download, Upload, Trash2, Loader2 } from "lucide-react"
+import { fetchStrategies, publishStrategy, type StrategyPackage } from "@/lib/api"
 
 // 8 状态机：导入→预约→研究中→研究完成→回测确认→待执行→生产中→已下架
 const LIFECYCLE_CN: Record<string, string> = {
@@ -91,24 +91,84 @@ const canEnterPublish = (strategy: Strategy) => {
   return strategy.status === "待执行"
 }
 
-export default function StrategyRepository() {
+export default function StrategyRepository({ refreshToken }: { refreshToken?: number }) {
   const [rawStrategies, setRawStrategies] = useState<StrategyPackage[]>([])
   const [loading, setLoading] = useState(true)
+  const [publishing, setPublishing] = useState(false)
+  const [publishResult, setPublishResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [selectedFolder, setSelectedFolder] = useState("全部策略")
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null)
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({})
 
-  useEffect(() => {
+  const reload = () => {
+    setLoading(true)
     fetchStrategies()
       .then(data => {
         setRawStrategies(data)
-        if (data.length > 0) setSelectedStrategy(mapStrategy(data[0]))
+        if (data.length > 0 && !selectedStrategy) setSelectedStrategy(mapStrategy(data[0]))
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { reload() }, [refreshToken])
 
   const strategies = rawStrategies.map(mapStrategy)
+
+  /* 发布策略到模拟交易 */
+  const handlePublish = async (strategy: Strategy) => {
+    setPublishing(true)
+    setPublishResult(null)
+    try {
+      const res = await publishStrategy(strategy.id, { target: "sim-trading" })
+      setPublishResult({ ok: true, msg: res.message ?? "发布成功" })
+      reload()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "发布失败"
+      setPublishResult({ ok: false, msg })
+    } finally {
+      setPublishing(false)
+    }
+  }
+
+  /* 导出策略 JSON */
+  const handleExport = (strategy: Strategy) => {
+    const pkg = rawStrategies.find(s => s.strategy_id === strategy.id)
+    if (!pkg) return
+    const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `${pkg.strategy_id}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  /* 导入策略 JSON — 调用 POST /strategies */
+  const handleImport = () => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = ".json"
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      try {
+        const text = await file.text()
+        const body = JSON.parse(text)
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_DECISION_API_BASE ?? "/api/decision"}/strategies`,
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+        )
+        if (!res.ok) throw new Error(`Import failed: ${res.status}`)
+        setPublishResult({ ok: true, msg: "策略导入成功" })
+        reload()
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "导入失败"
+        setPublishResult({ ok: false, msg })
+      }
+    }
+    input.click()
+  }
 
   const kpiData = [
     { label: "策略包总数", value: String(strategies.length) },
@@ -287,11 +347,21 @@ export default function StrategyRepository() {
                 <div className="space-y-2 pt-2">
                   <Button
                     className="w-full bg-orange-600 hover:bg-orange-700 text-white text-xs h-8"
-                    disabled={!canEnterPublish(selectedStrategy)}
+                    disabled={!canEnterPublish(selectedStrategy) || publishing}
+                    onClick={() => handlePublish(selectedStrategy)}
                   >
-                    进入发布流转
+                    {publishing ? (
+                      <><Loader2 className="w-3 h-3 mr-1 animate-spin" />发布中…</>
+                    ) : (
+                      "进入发布流转 → 模拟交易"
+                    )}
                   </Button>
-                  {!canEnterPublish(selectedStrategy) && (
+                  {publishResult && (
+                    <p className={`text-xs text-center ${publishResult.ok ? "text-green-400" : "text-red-400"}`}>
+                      {publishResult.msg}
+                    </p>
+                  )}
+                  {!canEnterPublish(selectedStrategy) && !publishResult && (
                     <p className="text-xs text-neutral-500 text-center">
                       {selectedStrategy.status === "待执行"
                         ? ""
@@ -301,13 +371,25 @@ export default function StrategyRepository() {
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 pt-2">
-                  <Button size="sm" variant="outline" className="border-neutral-700 text-neutral-400 hover:bg-neutral-800 h-7 text-xs">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-neutral-700 text-neutral-400 hover:bg-neutral-800 h-7 text-xs"
+                    onClick={handleImport}
+                    title="导入策略 JSON"
+                  >
                     <Upload className="w-3 h-3" />
                   </Button>
-                  <Button size="sm" variant="outline" className="border-neutral-700 text-neutral-400 hover:bg-neutral-800 h-7 text-xs">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-neutral-700 text-neutral-400 hover:bg-neutral-800 h-7 text-xs"
+                    onClick={() => handleExport(selectedStrategy)}
+                    title="导出策略 JSON"
+                  >
                     <Download className="w-3 h-3" />
                   </Button>
-                  <Button size="sm" variant="outline" className="border-red-700 text-red-400 hover:bg-red-500/10 h-7 text-xs">
+                  <Button size="sm" variant="outline" className="border-red-700 text-red-400 hover:bg-red-500/10 h-7 text-xs" disabled title="下架（未来）">
                     <Trash2 className="w-3 h-3" />
                   </Button>
                 </div>

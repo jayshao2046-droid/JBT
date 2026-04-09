@@ -4,260 +4,355 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { AlertTriangle } from "lucide-react"
-import { fetchModelStatus, type ModelStatus } from "@/lib/api"
-
-const getHeatmapColor = (value: number) => {
-  if (value >= 0.9) return "bg-green-800 text-green-300"
-  if (value >= 0.8) return "bg-cyan-800 text-cyan-300"
-  if (value >= 0.7) return "bg-yellow-800 text-yellow-300"
-  return "bg-red-800 text-red-300"
-}
-
-const getStatusBadgeColor = (status: string) => {
-  switch (status) {
-    case "pass":
-      return "bg-green-900 text-green-400"
-    case "warning":
-      return "bg-yellow-900 text-yellow-400"
-    case "alert":
-      return "bg-red-900 text-red-400"
-    default:
-      return "bg-neutral-700 text-neutral-300"
-  }
-}
+import { fetchModelStatus, fetchRuntimeOverview, routeModel, type ModelStatus, type ModelRuntimeOverview } from "@/lib/api"
+import { Loader2 } from "lucide-react"
 
 const getModelStatusColor = (status: string) => {
   switch (status) {
-    case "running":
-      return "bg-green-900 text-green-400"
-    case "ready":
-      return "bg-blue-900 text-blue-400"
-    case "standby":
-      return "bg-yellow-900 text-yellow-400"
-    case "disabled":
-      return "bg-neutral-800 text-neutral-500"
-    default:
-      return "bg-neutral-700 text-neutral-300"
+    case "running": return "bg-green-900 text-green-400"
+    case "ready": return "bg-blue-900 text-blue-400"
+    case "configured": return "bg-cyan-900 text-cyan-400"
+    case "standby": return "bg-yellow-900 text-yellow-400"
+    case "disabled": return "bg-neutral-800 text-neutral-500"
+    default: return "bg-neutral-700 text-neutral-300"
   }
 }
 
-export default function ModelsFactors() {
-  const [activeTab, setActiveTab] = useState("validity")
+/* 决策层级定义 — 参照总计划 5.6 模型路由 */
+const DECISION_LAYERS = [
+  { id: "signal", label: "信号输入", desc: "因子 + 市场上下文 → 策略生成原始信号", color: "bg-blue-600" },
+  { id: "L1", label: "L1 门禁审查", desc: "Qwen2.5：快速过滤，低延迟 gate/deny 决策", color: "bg-orange-500" },
+  { id: "L2", label: "L2 主审", desc: "Qwen3 14B：深度分析，因子评估，置信度打分", color: "bg-purple-500" },
+  { id: "L3", label: "L3 在线确认", desc: "（未来）外部大模型二次确认，高风险信号必经", color: "bg-neutral-600" },
+  { id: "gate", label: "发布门禁", desc: "回测证书 + 研究快照 + 资格检查 → 允许/拒绝发布", color: "bg-cyan-600" },
+  { id: "target", label: "执行目标", desc: "通过门禁后推送到模拟交易 / 实盘交易", color: "bg-green-600" },
+]
+
+/* 因子类别 — 参照 v0 策略页因子分类 */
+const FACTOR_CATEGORIES = [
+  { name: "动量因子", examples: ["MACD", "RSI", "KDJ", "ROC", "CMO", "WilliamsR"], color: "text-orange-400 border-orange-600/40" },
+  { name: "均值回归", examples: ["Bollinger", "ZScore", "MeanDev", "Hurst", "KeltnerChannel"], color: "text-blue-400 border-blue-600/40" },
+  { name: "突破因子", examples: ["DonchianBreak", "ATRBreakout", "VolExpansion", "RangeBreak"], color: "text-green-400 border-green-600/40" },
+  { name: "成交量", examples: ["OBV", "VWAP", "VolumeRatio", "MFI", "ADLine", "ChaikinFlow"], color: "text-cyan-400 border-cyan-600/40" },
+  { name: "波动率", examples: ["ATR", "HistVol", "Parkinson", "GarmanKlass", "YangZhang"], color: "text-yellow-400 border-yellow-600/40" },
+]
+
+export default function ModelsFactors({ refreshToken }: { refreshToken?: number }) {
+  const [activeTab, setActiveTab] = useState("flow")
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null)
+  const [runtime, setRuntime] = useState<ModelRuntimeOverview | null>(null)
+  const [routeStrategyId, setRouteStrategyId] = useState("")
+  const [routeResult, setRouteResult] = useState<{ allowed: boolean; reason: string } | null>(null)
+  const [routing, setRouting] = useState(false)
 
   useEffect(() => {
-    fetchModelStatus()
-      .then(setModelStatus)
-      .catch(() => {})
-  }, [])
+    fetchModelStatus().then(setModelStatus).catch(() => {})
+    fetchRuntimeOverview().then(setRuntime).catch(() => {})
+  }, [refreshToken])
 
-  const kpiData = [
-    { label: "执行门禁状态", value: modelStatus ? (modelStatus.execution_gate_enabled ? "启用" : "关闭") : "—", status: modelStatus?.execution_gate_enabled ? "pass" : "warning", color: "green" },
-    { label: "实盘门禁", value: modelStatus ? (modelStatus.live_trading_gate_locked ? "锁定" : "开放") : "—", status: modelStatus?.live_trading_gate_locked ? "pass" : "alert", color: "blue" },
-    { label: "回测证书要求", value: modelStatus ? (modelStatus.model_router_require_backtest_cert ? "强制" : "宽松") : "—", status: "pass", color: "orange" },
-    { label: "研究快照要求", value: modelStatus ? (modelStatus.model_router_require_research_snapshot ? "强制" : "宽松") : "—", status: "pass", color: "purple" },
-    { label: "执行目标", value: modelStatus?.execution_gate_target ?? "—", status: "pass", color: "yellow" },
-    { label: "因子数据", value: "—", status: "pass", color: "red" },
-  ]
+  async function handleRouteTest() {
+    if (!routeStrategyId.trim()) return
+    setRouting(true)
+    setRouteResult(null)
+    try {
+      const res = await routeModel({ strategy_id: routeStrategyId.trim() })
+      setRouteResult(res)
+    } catch {
+      setRouteResult({ allowed: false, reason: "请求失败" })
+    } finally {
+      setRouting(false)
+    }
+  }
 
-  const factorValidityData: { name: string; validity: number; stability: number; recent: number }[] = []
-  const factorSyncData: { name: string; synced: number; expired: number; missing: number; waiting: number }[] = []
-  const models: { name: string; type: string; status: string; latency: string; accuracy: number; capacity: string }[] = []
+  const localModels = runtime?.local_models ?? []
+  const onlineModels = runtime?.online_models ?? []
+  const allModels = [...localModels, ...onlineModels]
+  const factorSync = runtime?.factor_sync
+  const modelRouter = runtime?.model_router
+  const researchWindow = runtime?.research_window
 
   return (
     <div className="p-6 space-y-6 bg-neutral-950 min-h-screen">
-      {/* KPI 卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-        {kpiData.map((kpi, idx) => (
+      {/* KPI 行 */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {[
+          { label: "本地模型", value: localModels.length, color: "text-cyan-400" },
+          { label: "在线模型", value: onlineModels.length, color: "text-purple-400" },
+          { label: "执行门禁", value: modelStatus?.execution_gate_enabled ? "启用" : "关闭", color: modelStatus?.execution_gate_enabled ? "text-green-400" : "text-neutral-500" },
+          { label: "实盘门禁", value: modelStatus?.live_trading_gate_locked ? "锁定" : "开放", color: modelStatus?.live_trading_gate_locked ? "text-red-400" : "text-green-400" },
+          { label: "因子对齐", value: factorSync ? `${factorSync.aligned}` : "—", color: "text-green-400" },
+          { label: "因子失配", value: factorSync ? `${factorSync.mismatch}` : "—", color: factorSync && factorSync.mismatch > 0 ? "text-yellow-400" : "text-green-400" },
+        ].map((kpi, idx) => (
           <Card key={idx} className="bg-neutral-900 border-neutral-700">
-            <CardContent className="p-3">
-              <p className="text-xs text-neutral-400 mb-1">{kpi.label}</p>
-              <div className="flex items-end justify-between">
-                <p className="text-lg font-bold text-white">{kpi.value}</p>
-                <Badge className={getStatusBadgeColor(kpi.status)} style={{ height: "20px" }}>
-                  {kpi.status === "pass" ? "✓" : kpi.status === "warning" ? "⚠" : "!"}
-                </Badge>
-              </div>
+            <CardContent className="p-4">
+              <p className="text-xs text-neutral-400 mb-2">{kpi.label}</p>
+              <p className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* 因子热力图 + 排行榜 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 因子热力图 */}
-        <Card className="bg-neutral-900 border-neutral-700 lg:col-span-2">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-neutral-300">因子热力图</CardTitle>
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-auto">
-                <TabsList className="bg-neutral-800 border border-neutral-700 h-8">
-                  <TabsTrigger value="validity" className="text-xs data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=inactive]:text-neutral-400 h-7 px-3">因子有效性</TabsTrigger>
-                  <TabsTrigger value="sync" className="text-xs data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=inactive]:text-neutral-400 h-7 px-3">同步状态</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {activeTab === "validity" && (
-              <div className="space-y-3">
-                <div className="flex gap-2 mb-4 pb-2 border-b border-neutral-800">
-                  <div className="w-20"></div>
-                  <div className="w-20 text-center text-xs text-neutral-400 font-medium">贡献度</div>
-                  <div className="w-20 text-center text-xs text-neutral-400 font-medium">稳定性</div>
-                  <div className="w-20 text-center text-xs text-neutral-400 font-medium">近阶段</div>
-                </div>
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
-                  {factorValidityData.map((factor, idx) => (
-                    <div key={idx} className="flex items-center gap-2 py-1 hover:bg-neutral-800/50 rounded px-1 transition-colors">
-                      <div className="w-20 text-sm font-mono text-neutral-300">{factor.name}</div>
-                      <div className={`w-20 h-8 flex items-center justify-center text-xs font-medium rounded-md ${getHeatmapColor(factor.validity)}`}>
-                        {(factor.validity * 100).toFixed(0)}%
+      {/* Tab 切换：决策流 / 模型栈 / 因子 */}
+      <Card className="bg-neutral-900 border-neutral-700">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium text-neutral-300">模型与因子</CardTitle>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-auto">
+              <TabsList className="bg-neutral-800 border border-neutral-700 h-8">
+                <TabsTrigger value="flow" className="text-xs data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=inactive]:text-neutral-400 h-7 px-3">决策流</TabsTrigger>
+                <TabsTrigger value="models" className="text-xs data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=inactive]:text-neutral-400 h-7 px-3">模型栈</TabsTrigger>
+                <TabsTrigger value="factors" className="text-xs data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=inactive]:text-neutral-400 h-7 px-3">因子分类</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {/* ---- 决策流 ---- */}
+          {activeTab === "flow" && (
+            <div className="space-y-6">
+              {/* 决策路径可视化 */}
+              <div>
+                <p className="text-xs text-neutral-500 mb-4 uppercase tracking-wider">决策路径 — 信号从生成到执行的全链路</p>
+                <div className="flex items-stretch gap-2 overflow-x-auto pb-2">
+                  {DECISION_LAYERS.map((layer, idx) => {
+                    const matchedModel = allModels.find(m =>
+                      (layer.id === "L1" && m.route_role === "gate_review") ||
+                      (layer.id === "L2" && m.route_role === "primary_local_review")
+                    )
+                    return (
+                      <div key={layer.id} className="flex items-center gap-2 flex-shrink-0">
+                        <div className="w-36 border border-neutral-700 rounded-lg p-3 bg-neutral-800">
+                          <div className={`w-full h-1 ${layer.color} rounded mb-2`} />
+                          <p className="text-xs font-medium text-white mb-1">{layer.label}</p>
+                          <p className="text-[10px] text-neutral-400 leading-snug">{layer.desc}</p>
+                          {matchedModel && (
+                            <div className="mt-2 pt-2 border-t border-neutral-700">
+                              <p className="text-[10px] text-neutral-500">当前：</p>
+                              <p className="text-[11px] text-cyan-400 font-medium truncate">{matchedModel.model_name}</p>
+                              <Badge className={`${getModelStatusColor(matchedModel.status)} mt-1`} style={{ fontSize: "9px", height: "16px" }}>
+                                {matchedModel.status}
+                              </Badge>
+                            </div>
+                          )}
+                          {layer.id === "L3" && onlineModels.length === 0 && (
+                            <div className="mt-2 pt-2 border-t border-neutral-700">
+                              <p className="text-[10px] text-neutral-600 italic">未配置</p>
+                            </div>
+                          )}
+                          {layer.id === "target" && runtime?.execution_gate && (
+                            <div className="mt-2 pt-2 border-t border-neutral-700">
+                              <p className="text-[10px] text-neutral-500">目标：</p>
+                              <p className="text-[11px] text-green-400 font-medium">{runtime.execution_gate.target}</p>
+                            </div>
+                          )}
+                        </div>
+                        {idx < DECISION_LAYERS.length - 1 && (
+                          <span className="text-neutral-600 text-lg">→</span>
+                        )}
                       </div>
-                      <div className={`w-20 h-8 flex items-center justify-center text-xs font-medium rounded-md ${getHeatmapColor(factor.stability)}`}>
-                        {(factor.stability * 100).toFixed(0)}%
-                      </div>
-                      <div className={`w-20 h-8 flex items-center justify-center text-xs font-medium rounded-md ${getHeatmapColor(factor.recent)}`}>
-                        {(factor.recent * 100).toFixed(0)}%
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {activeTab === "sync" && (
-              <div className="space-y-3">
-                <div className="flex gap-2 mb-4 pb-2 border-b border-neutral-800">
-                  <div className="w-20"></div>
-                  <div className="w-20 text-center text-xs text-neutral-400 font-medium">已同步</div>
-                  <div className="w-20 text-center text-xs text-neutral-400 font-medium">已过期</div>
-                  <div className="w-20 text-center text-xs text-neutral-400 font-medium">缺失回测</div>
-                  <div className="w-20 text-center text-xs text-neutral-400 font-medium">待同步</div>
-                </div>
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
-                  {factorSyncData.map((factor, idx) => (
-                    <div key={idx} className="flex items-center gap-2 py-1 hover:bg-neutral-800/50 rounded px-1 transition-colors">
-                      <div className="w-20 text-sm font-mono text-neutral-300">{factor.name}</div>
-                      <div className={`w-20 h-8 flex items-center justify-center text-xs font-medium rounded-md ${factor.synced ? "bg-green-900/80 text-green-400" : "bg-neutral-800 text-neutral-600"}`}>
-                        {factor.synced ? "✓" : "-"}
-                      </div>
-                      <div className={`w-20 h-8 flex items-center justify-center text-xs font-medium rounded-md ${factor.expired ? "bg-red-900/80 text-red-400" : "bg-neutral-800 text-neutral-600"}`}>
-                        {factor.expired ? "✕" : "-"}
-                      </div>
-                      <div className={`w-20 h-8 flex items-center justify-center text-xs font-medium rounded-md ${factor.missing ? "bg-yellow-900/80 text-yellow-400" : "bg-neutral-800 text-neutral-600"}`}>
-                        {factor.missing ? "!" : "-"}
-                      </div>
-                      <div className={`w-20 h-8 flex items-center justify-center text-xs font-medium rounded-md ${factor.waiting ? "bg-blue-900/80 text-blue-400" : "bg-neutral-800 text-neutral-600"}`}>
-                        {factor.waiting ? "⏳" : "-"}
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
 
-        {/* 因子排行榜与告警 */}
-        <div className="space-y-4">
-          {/* 因子排行榜 */}
-          <Card className="bg-neutral-900 border-neutral-700">
-            <CardHeader>
-              <CardTitle className="text-sm font-medium text-neutral-300">因子排行榜</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {factorValidityData.slice(0, 5).map((factor, idx) => (
-                  <div key={idx} className="flex items-center justify-between py-1">
-                    <span className="text-sm text-neutral-300">{idx + 1}. {factor.name}</span>
-                    <span className="text-sm font-bold text-orange-400">{(factor.validity * 100).toFixed(0)}%</span>
+              {/* 何时用哪个模型 */}
+              <div>
+                <p className="text-xs text-neutral-500 mb-3 uppercase tracking-wider">模型选择策略 — 何时用哪个模型</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="border border-orange-600/40 rounded-lg p-4 bg-orange-900/10">
+                    <p className="text-sm font-medium text-orange-400 mb-2">L1 门禁审查</p>
+                    <ul className="text-xs text-neutral-400 space-y-1 list-disc list-inside">
+                      <li>所有信号必经，延迟 &lt; 100ms</li>
+                      <li>快速 gate / deny 二分决策</li>
+                      <li>轻量模型（7B 级），过滤噪声信号</li>
+                      <li>仅判断信号是否值得深入审查</li>
+                    </ul>
+                  </div>
+                  <div className="border border-purple-600/40 rounded-lg p-4 bg-purple-900/10">
+                    <p className="text-sm font-medium text-purple-400 mb-2">L2 主审</p>
+                    <ul className="text-xs text-neutral-400 space-y-1 list-disc list-inside">
+                      <li>通过 L1 后进入，延迟可达数秒</li>
+                      <li>深度因子评估 + 市场上下文分析</li>
+                      <li>生成置信度打分和推理摘要</li>
+                      <li>本地 14B 级模型，无外部依赖</li>
+                    </ul>
+                  </div>
+                  <div className="border border-neutral-600/40 rounded-lg p-4 bg-neutral-800/50">
+                    <p className="text-sm font-medium text-neutral-400 mb-2">L3 在线确认（未来）</p>
+                    <ul className="text-xs text-neutral-500 space-y-1 list-disc list-inside">
+                      <li>高风险/高金额信号必经</li>
+                      <li>外部大模型（DeepSeek / GPT）二次确认</li>
+                      <li>联网能力：实时新闻、宏观数据</li>
+                      <li>当前尚未启用，计划 Phase H</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ---- 模型栈 ---- */}
+          {activeTab === "models" && (
+            <div className="space-y-4">
+              {allModels.length === 0 ? (
+                <p className="text-sm text-neutral-500 text-center py-8">暂无已配置模型</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {allModels.map((model, idx) => (
+                    <Card key={idx} className="bg-neutral-800 border-neutral-700">
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="text-sm text-white truncate">{model.model_name}</CardTitle>
+                            <p className="text-xs text-neutral-400 mt-1">{model.deployment_class} · {model.route_role}</p>
+                          </div>
+                          <Badge className={getModelStatusColor(model.status)} style={{ height: "20px", fontSize: "11px" }}>
+                            {model.status}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-xs text-neutral-500 mb-2">{model.source}</p>
+                        <div className="text-[10px] text-neutral-600">
+                          {model.route_role === "gate_review" && "作用：门禁层快速过滤，判断信号是否值得深入审查"}
+                          {model.route_role === "primary_local_review" && "作用：主审层深度分析，生成置信度与推理摘要"}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {/* 模型路由统计 */}
+              {modelRouter && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                  <div className="border border-neutral-700 rounded p-3 text-center">
+                    <p className="text-xs text-neutral-400 mb-1">回测证书</p>
+                    <Badge className={modelRouter.require_backtest_cert ? "bg-green-900 text-green-400" : "bg-neutral-700 text-neutral-300"}>
+                      {modelRouter.require_backtest_cert ? "强制" : "宽松"}
+                    </Badge>
+                  </div>
+                  <div className="border border-neutral-700 rounded p-3 text-center">
+                    <p className="text-xs text-neutral-400 mb-1">研究快照</p>
+                    <Badge className={modelRouter.require_research_snapshot ? "bg-green-900 text-green-400" : "bg-neutral-700 text-neutral-300"}>
+                      {modelRouter.require_research_snapshot ? "强制" : "宽松"}
+                    </Badge>
+                  </div>
+                  <div className="border border-neutral-700 rounded p-3 text-center">
+                    <p className="text-xs text-neutral-400 mb-1">合格策略</p>
+                    <p className="text-lg font-bold text-green-400">{modelRouter.eligible_strategies}</p>
+                  </div>
+                  <div className="border border-neutral-700 rounded p-3 text-center">
+                    <p className="text-xs text-neutral-400 mb-1">阻塞策略</p>
+                    <p className="text-lg font-bold text-red-400">{modelRouter.blocked_strategies}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* 路由测试 */}
+              <div className="border border-neutral-700 rounded-lg p-4 bg-neutral-800/50 mt-4">
+                <p className="text-xs text-neutral-500 mb-3 uppercase tracking-wider">路由资格测试</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="输入策略 ID"
+                    value={routeStrategyId}
+                    onChange={e => setRouteStrategyId(e.target.value)}
+                    className="flex-1 h-8 rounded bg-neutral-900 border border-neutral-600 px-3 text-sm text-white placeholder:text-neutral-500 outline-none focus:border-cyan-500"
+                  />
+                  <button
+                    onClick={handleRouteTest}
+                    disabled={routing || !routeStrategyId.trim()}
+                    className="h-8 px-4 rounded bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white text-xs font-medium flex items-center gap-1"
+                  >
+                    {routing && <Loader2 className="w-3 h-3 animate-spin" />}
+                    测试路由
+                  </button>
+                </div>
+                {routeResult && (
+                  <div className={`mt-2 text-xs p-2 rounded ${routeResult.allowed ? "bg-green-900/30 text-green-400" : "bg-red-900/30 text-red-400"}`}>
+                    {routeResult.allowed ? "✅ 允许发布" : "❌ 阻塞"} — {routeResult.reason}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ---- 因子分类 ---- */}
+          {activeTab === "factors" && (
+            <div className="space-y-4">
+              {/* 因子同步状态 */}
+              {factorSync && (
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="text-center p-4 bg-green-900/20 border border-green-600/30 rounded-lg">
+                    <p className="text-2xl font-bold text-green-400">{factorSync.aligned}</p>
+                    <p className="text-xs text-neutral-400 mt-1">已对齐</p>
+                  </div>
+                  <div className="text-center p-4 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
+                    <p className="text-2xl font-bold text-yellow-400">{factorSync.mismatch}</p>
+                    <p className="text-xs text-neutral-400 mt-1">失配</p>
+                  </div>
+                  <div className="text-center p-4 bg-neutral-800 border border-neutral-700 rounded-lg">
+                    <p className="text-2xl font-bold text-neutral-400">{factorSync.unknown}</p>
+                    <p className="text-xs text-neutral-400 mt-1">未知</p>
+                  </div>
+                </div>
+              )}
+
+              {/* 因子类别卡片 — 参照 v0 五大类 */}
+              <p className="text-xs text-neutral-500 uppercase tracking-wider">因子类别参考（基于策略模板标准分类）</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {FACTOR_CATEGORIES.map((cat, idx) => (
+                  <div key={idx} className={`border rounded-lg p-4 bg-neutral-800/50 ${cat.color}`}>
+                    <p className="text-sm font-medium mb-2">{cat.name}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {cat.examples.map((f) => (
+                        <span key={f} className="text-[10px] px-2 py-0.5 rounded bg-neutral-700/50 text-neutral-300">{f}</span>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
 
-          {/* 漂移告警 */}
-          <Card className="bg-neutral-900 border-neutral-700">
-            <CardHeader>
-              <CardTitle className="text-sm font-medium text-neutral-300">漂移告警</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex items-start gap-2 p-2 bg-yellow-900/20 border border-yellow-600/50 rounded">
-                <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
-                <div className="text-xs">
-                  <p className="text-yellow-300 font-medium">KDJ 有效性下降</p>
-                  <p className="text-yellow-400/70">近7日平均 72%</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 同步失败告警 */}
-          <Card className="bg-neutral-900 border-neutral-700">
-            <CardHeader>
-              <CardTitle className="text-sm font-medium text-neutral-300">同步失败</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex items-start gap-2 p-2 bg-red-900/20 border border-red-600/50 rounded">
-                <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                <div className="text-xs">
-                  <p className="text-red-300 font-medium">BOLL 回测数据缺失</p>
-                  <p className="text-red-400/70">需要重新计算</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* 模型栈卡片 */}
-      <Card className="bg-neutral-900 border-neutral-700">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-neutral-300">模型治理中心 - 完整模型栈</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {models.map((model, idx) => (
-              <Card key={idx} className="bg-neutral-800 border-neutral-700">
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <CardTitle className="text-sm text-white">{model.name}</CardTitle>
-                      <p className="text-xs text-neutral-400 mt-1">{model.type}</p>
-                    </div>
-                    <Badge className={getModelStatusColor(model.status)} style={{ height: "20px", fontSize: "11px" }}>
-                      {model.status === "running" ? "运行" : model.status === "ready" ? "就绪" : model.status === "standby" ? "待命" : "禁用"}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <p className="text-neutral-500">延迟</p>
-                      <p className="text-neutral-200 font-medium">{model.latency}</p>
-                    </div>
-                    <div>
-                      <p className="text-neutral-500">准确率</p>
-                      <p className="text-neutral-200 font-medium">{(model.accuracy * 100).toFixed(0)}%</p>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-neutral-500 text-xs mb-1">容量</p>
-                    <p className="text-neutral-300 text-xs">{model.capacity}</p>
-                  </div>
-                  {model.status === "disabled" && (
-                    <div className="p-2 bg-neutral-900 border border-neutral-700 rounded text-xs text-neutral-400">
-                      灰态保留，预留后端抽象
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+              {factorSync && (
+                <p className="text-xs text-neutral-500 mt-2">{factorSync.note}</p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* 研究窗口 */}
+      {researchWindow && (
+        <Card className="bg-neutral-900 border-neutral-700">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-neutral-300">研究窗口</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="border border-neutral-700 rounded p-3">
+                <p className="text-xs text-neutral-400 mb-1">窗口时间</p>
+                <p className="text-sm font-medium text-white">{researchWindow.start} ~ {researchWindow.end}</p>
+              </div>
+              <div className="border border-neutral-700 rounded p-3">
+                <p className="text-xs text-neutral-400 mb-1">时区</p>
+                <p className="text-sm font-medium text-white">{researchWindow.timezone}</p>
+              </div>
+              <div className="border border-neutral-700 rounded p-3">
+                <p className="text-xs text-neutral-400 mb-1">当前状态</p>
+                <Badge className={researchWindow.is_open ? "bg-green-900 text-green-400" : "bg-red-900 text-red-400"}>
+                  {researchWindow.is_open ? "开放中" : "已关闭"}
+                </Badge>
+              </div>
+              <div className="border border-neutral-700 rounded p-3">
+                <p className="text-xs text-neutral-400 mb-1">当前时间</p>
+                <p className="text-sm font-medium text-neutral-300">{researchWindow.current_time}</p>
+              </div>
+            </div>
+            <p className="text-xs text-neutral-500 mt-3">{researchWindow.rule}</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

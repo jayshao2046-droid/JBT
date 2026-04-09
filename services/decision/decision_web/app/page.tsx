@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Sidebar from "@/components/layout/sidebar"
@@ -11,6 +11,7 @@ import StrategyRepository from "@/components/decision/strategy-repository"
 import ResearchCenter from "@/components/decision/research-center"
 import NotificationsReport from "@/components/decision/notifications-report"
 import ConfigRuntime from "@/components/decision/config-runtime"
+import { fetchHealth, fetchRuntimeOverview, type HealthStatus, type ModelRuntimeOverview } from "@/lib/api"
 
 const sectionNames: Record<string, string> = {
   overview: "总览",
@@ -22,13 +23,92 @@ const sectionNames: Record<string, string> = {
   config: "配置与运行",
 }
 
+function formatStatusTime(raw?: string | null) {
+  if (!raw) return new Date().toLocaleString("zh-CN")
+  const date = new Date(raw)
+  return Number.isNaN(date.getTime()) ? raw : date.toLocaleString("zh-CN")
+}
+
+function getDotClass(active: boolean, activeColor: string) {
+  return `w-2 h-2 rounded-full ${active ? activeColor : "bg-neutral-600"}`
+}
+
+function getTextClass(active: boolean, activeColor: string, inactiveColor = "text-neutral-500") {
+  return active ? activeColor : inactiveColor
+}
+
 export default function DecisionConsole() {
   const [activeSection, setActiveSection] = useState("overview")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [refreshToken, setRefreshToken] = useState(0)
+  const [headerLoading, setHeaderLoading] = useState(true)
+  const [health, setHealth] = useState<HealthStatus | null>(null)
+  const [runtime, setRuntime] = useState<ModelRuntimeOverview | null>(null)
+  const [lastRefreshAt, setLastRefreshAt] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadHeader() {
+      setHeaderLoading(true)
+
+      try {
+        const [healthSnapshot, runtimeSnapshot] = await Promise.all([
+          fetchHealth(),
+          fetchRuntimeOverview(),
+        ])
+
+        if (cancelled) return
+        setHealth(healthSnapshot)
+        setRuntime(runtimeSnapshot)
+        setLastRefreshAt(new Date().toISOString())
+      } catch {
+        if (cancelled) return
+        setHealth(null)
+        setRuntime(null)
+      } finally {
+        if (!cancelled) {
+          setHeaderLoading(false)
+        }
+      }
+    }
+
+    void loadHeader()
+
+    return () => {
+      cancelled = true
+    }
+  }, [refreshToken])
+
+  const renderContent = () => {
+    const props = { refreshToken }
+
+    switch (activeSection) {
+      case "overview":
+        return <DecisionOverview {...props} />
+      case "signal":
+        return <SignalReview {...props} />
+      case "models":
+        return <ModelsFactors {...props} />
+      case "repository":
+        return <StrategyRepository {...props} />
+      case "research":
+        return <ResearchCenter {...props} />
+      case "notifications":
+        return <NotificationsReport {...props} />
+      case "config":
+        return <ConfigRuntime {...props} />
+      default:
+        return <DecisionOverview {...props} />
+    }
+  }
+
+  const localModelsReady = (runtime?.local_models.length ?? 0) > 0 && health?.status === "ok"
+  const onlineModelsReady = (runtime?.online_models.length ?? 0) > 0
+  const researchWindowOpen = runtime?.research_window?.is_open ?? false
 
   return (
     <div className="flex h-screen bg-neutral-950">
-      {/* 侧边栏 */}
       <Sidebar
         activeSection={activeSection}
         collapsed={sidebarCollapsed}
@@ -36,11 +116,9 @@ export default function DecisionConsole() {
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
-      {/* 主内容区 */}
       <div
         className={`flex-1 flex flex-col transition-all duration-300 ${sidebarCollapsed ? "ml-16" : "ml-64"}`}
       >
-        {/* 顶部状态条 */}
         <div className="h-14 bg-neutral-800 border-b border-neutral-700 flex items-center justify-between px-6 shrink-0">
           <div className="flex items-center gap-6 text-sm">
             <span className="text-neutral-400">
@@ -48,42 +126,42 @@ export default function DecisionConsole() {
             </span>
             <div className="flex items-center gap-4 ml-4 border-l border-neutral-700 pl-4">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                <span className="text-neutral-400 text-xs">本地模型: <span className="text-green-400">就绪</span></span>
+                <div className={getDotClass(localModelsReady, "bg-green-400")}></div>
+                <span className="text-neutral-400 text-xs">
+                  本地模型: <span className={getTextClass(localModelsReady, "text-green-400")}>{localModelsReady ? "就绪" : headerLoading ? "加载中" : "缺失"}</span>
+                </span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-                <span className="text-neutral-400 text-xs">在线L3: <span className="text-blue-400">连接</span></span>
+                <div className={getDotClass(onlineModelsReady, "bg-blue-400")}></div>
+                <span className="text-neutral-400 text-xs">
+                  在线L3: <span className={getTextClass(onlineModelsReady, "text-blue-400")}>{onlineModelsReady ? "连接" : headerLoading ? "加载中" : "未配置"}</span>
+                </span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-orange-400"></div>
-                <span className="text-neutral-400 text-xs">研究窗: <span className="text-orange-400">开启</span></span>
+                <div className={getDotClass(researchWindowOpen, "bg-orange-400")}></div>
+                <span className="text-neutral-400 text-xs">
+                  研究窗: <span className={getTextClass(researchWindowOpen, "text-orange-400")}>{researchWindowOpen ? "开启" : headerLoading ? "加载中" : "关闭"}</span>
+                </span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-xs text-neutral-500">
-              {new Date().toLocaleString("zh-CN")}
+              {formatStatusTime(lastRefreshAt)}
             </span>
             <Button
               variant="ghost"
               size="icon"
               className="text-neutral-400 hover:text-orange-500 hover:bg-neutral-700"
+              onClick={() => setRefreshToken((value) => value + 1)}
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className={`w-4 h-4 ${headerLoading ? "animate-spin" : ""}`} />
             </Button>
           </div>
         </div>
 
-        {/* 页面内容 */}
         <div className="flex-1 overflow-auto bg-neutral-950">
-          {activeSection === "overview" && <DecisionOverview />}
-          {activeSection === "signal" && <SignalReview />}
-          {activeSection === "models" && <ModelsFactors />}
-          {activeSection === "repository" && <StrategyRepository />}
-          {activeSection === "research" && <ResearchCenter />}
-          {activeSection === "notifications" && <NotificationsReport />}
-          {activeSection === "config" && <ConfigRuntime />}
+          {renderContent()}
         </div>
       </div>
     </div>

@@ -1,298 +1,214 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { TrendingUp } from "lucide-react"
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts"
+import { fetchStrategyOverview, fetchRuntimeOverview, type StrategyOverviewResponse, type ModelRuntimeOverview } from "@/lib/api"
 
-// 研究中心数据暂无专用 API，展示空状态
-const kpiData: { label: string; value: string; unit: string; trend: string }[] = []
-const scheduleData: { time: string; active: number; label: string }[] = []
-const completionTrendData: { time: string; completed: number }[] = []
-const bestResultsData: { strategy: string; improvement: number; sharpeRatio: number; maxDD: number; winRate: number }[] = []
-const activeTasksData: { id: number; strategy: string; taskType: string; progress: number; eta: string; status: string }[] = []
-const researchCompleteNotification: {
-  strategy: string; bestResult: number; sharpeRatio: number; maxDD: number; winRate: number; version: string; timestamp: string
-} | null = null
+export default function ResearchCenter({ refreshToken }: { refreshToken?: number }) {
+  const [strategyOv, setStrategyOv] = useState<StrategyOverviewResponse | null>(null)
+  const [runtime, setRuntime] = useState<ModelRuntimeOverview | null>(null)
 
+  useEffect(() => {
+    fetchStrategyOverview().then(setStrategyOv).catch(() => {})
+    fetchRuntimeOverview().then(setRuntime).catch(() => {})
+  }, [refreshToken])
 
+  const rr = strategyOv?.research_readiness
+  const rw = runtime?.research_window
 
-export default function ResearchCenter() {
+  const kpiData = rr
+    ? [
+        { label: "研究就绪", value: String(rr.research_ready), status: rr.research_ready > 0 ? "pass" : "neutral" },
+        { label: "研究缺失", value: String(rr.research_missing), status: rr.research_missing > 0 ? "warning" : "pass" },
+        { label: "回测就绪", value: String(rr.backtest_ready), status: rr.backtest_ready > 0 ? "pass" : "neutral" },
+        { label: "回测缺失", value: String(rr.backtest_missing), status: rr.backtest_missing > 0 ? "warning" : "pass" },
+        { label: "因子对齐", value: String(rr.factor_aligned), status: "pass" },
+        { label: "因子失配", value: String(rr.factor_mismatch), status: rr.factor_mismatch > 0 ? "alert" : "pass" },
+      ]
+    : []
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case "pass": return "bg-green-900 text-green-400"
+      case "warning": return "bg-yellow-900 text-yellow-400"
+      case "alert": return "bg-red-900 text-red-400"
+      default: return "bg-neutral-700 text-neutral-300"
+    }
+  }
+
   return (
     <div className="p-6 space-y-6 bg-neutral-950 min-h-screen">
       {/* KPI 卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {kpiData.map((kpi, idx) => (
           <Card key={idx} className="bg-neutral-900 border-neutral-700">
-            <CardContent className="p-4">
-              <p className="text-xs text-neutral-400 mb-2">{kpi.label}</p>
+            <CardContent className="p-3">
+              <p className="text-xs text-neutral-400 mb-1">{kpi.label}</p>
               <div className="flex items-end justify-between">
-                <div>
-                  <p className="text-2xl font-bold text-white">{kpi.value}</p>
-                  {kpi.unit && <p className="text-xs text-neutral-500 mt-1">{kpi.unit}</p>}
-                </div>
-                <span className={`text-sm font-medium ${kpi.trend.startsWith("+") || kpi.trend === "↑" ? "text-green-400" : kpi.trend === "→" ? "text-neutral-400" : "text-orange-400"}`}>
-                  {kpi.trend}
-                </span>
+                <p className="text-lg font-bold text-white">{kpi.value}</p>
+                <Badge className={getStatusBadgeColor(kpi.status)} style={{ height: "20px" }}>
+                  {kpi.status === "pass" ? "✓" : kpi.status === "warning" ? "⚠" : "!"}
+                </Badge>
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* 研究调度时间轴 + 完成趋势 */}
+      {/* 研究窗口 + 生命周期管道 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 研究调度时间轴 */}
+        {/* 研究窗口 */}
         <Card className="bg-neutral-900 border-neutral-700">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-neutral-300">24小时研究调度时间轴</CardTitle>
+            <CardTitle className="text-sm font-medium text-neutral-300">研究调度窗口</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {rw ? (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="border border-neutral-700 rounded p-3">
+                    <p className="text-xs text-neutral-400 mb-1">窗口时间</p>
+                    <p className="text-sm font-medium text-white">{rw.start} ~ {rw.end}</p>
+                    <p className="text-xs text-neutral-500 mt-1">{rw.timezone}</p>
+                  </div>
+                  <div className="border border-neutral-700 rounded p-3">
+                    <p className="text-xs text-neutral-400 mb-1">当前状态</p>
+                    <Badge className={rw.is_open ? "bg-green-900 text-green-400" : "bg-red-900 text-red-400"}>
+                      {rw.is_open ? "研究窗口开放" : "研究窗口关闭"}
+                    </Badge>
+                    <p className="text-xs text-neutral-500 mt-1">当前 {rw.current_time}</p>
+                  </div>
+                </div>
+                <div className="p-3 bg-orange-900/20 border border-orange-600/50 rounded">
+                  <p className="text-xs text-orange-300 font-medium">⏰ 调度规则</p>
+                  <p className="text-xs text-orange-400/70 mt-1">{rw.rule}</p>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-neutral-500 text-center py-8">加载中…</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 策略生命周期管道 */}
+        <Card className="bg-neutral-900 border-neutral-700">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-neutral-300">策略生命周期管道</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {scheduleData.map((slot, idx) => (
-                <div key={idx} className="flex items-center gap-3">
-                  <div className="w-10 text-xs text-neutral-400 font-mono">{slot.time}</div>
-                  <div className="flex-1 h-6 bg-neutral-800 rounded flex items-center">
-                    {slot.active > 0 && (
-                      <div
-                        className="h-full bg-green-600 rounded flex items-center justify-center text-xs text-white font-bold"
-                        style={{ width: `${slot.active * 40}%` }}
-                      >
-                        {`${slot.active}任务`}
+            {strategyOv?.pipeline && strategyOv.pipeline.length > 0 ? (
+              <div className="space-y-2">
+                {strategyOv.pipeline.map((stage, idx) => {
+                  const stageDesc: Record<string, string> = {
+                    imported: "已导入，待编辑",
+                    draft: "草稿编辑中",
+                    backtesting: "回测验证中",
+                    confirmed: "已确认，待审批",
+                    pending_execution: "待执行推送",
+                    sim_running: "模拟盘运行中",
+                    live_running: "实盘运行中",
+                    retired: "已退役",
+                  }
+                  return (
+                    <div key={idx} className="flex items-center gap-3">
+                      <div className="w-24 text-xs text-neutral-400 text-right">{stage.label}</div>
+                      <div className="flex-1 h-6 bg-neutral-800 rounded overflow-hidden relative">
+                        <div
+                          className="h-full bg-orange-500 rounded flex items-center justify-center text-xs text-white font-bold"
+                          style={{ width: `${strategyOv.kpis.total > 0 ? Math.max((stage.count / strategyOv.kpis.total) * 100, 8) : 0}%` }}
+                        >
+                          {stage.count}
+                        </div>
                       </div>
-                    )}
-                    {slot.label.includes("交易") && (
-                      <div className="ml-2 text-xs text-orange-400 font-medium">{slot.label.split("交")[1]}</div>
-                    )}
-                  </div>
-                  <div className="text-xs text-neutral-500 w-24 truncate">{slot.label}</div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 p-3 bg-orange-900/20 border border-orange-600/50 rounded">
-              <p className="text-xs text-orange-300 font-medium">⏰ 交易时段规则</p>
-              <p className="text-xs text-orange-400/70 mt-1">
-                09:30-15:00 期货交易时段禁止自动调参和重训练，保护生产策略。非交易时段可持续研究。
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 完成趋势 */}
-        <Card className="bg-neutral-900 border-neutral-700">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-neutral-300">研究完成趋势</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={completionTrendData} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-                  <defs>
-                    <linearGradient id="completeGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#404040" />
-                  <XAxis dataKey="time" stroke="#737373" style={{ fontSize: "11px" }} tick={{ fill: "#a3a3a3" }} tickMargin={8} />
-                  <YAxis stroke="#737373" style={{ fontSize: "11px" }} tick={{ fill: "#a3a3a3" }} tickMargin={8} width={30} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#1f2937",
-                      border: "1px solid #404040",
-                      borderRadius: "6px",
-                      padding: "8px 12px",
-                    }}
-                    labelStyle={{ color: "#fff", marginBottom: "4px" }}
-                    itemStyle={{ color: "#22c55e" }}
-                  />
-                  <Area type="monotone" dataKey="completed" fill="url(#completeGradient)" stroke="#22c55e" strokeWidth={2} name="完成数" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+                      <div className="w-28 text-[10px] text-neutral-500 truncate">{stageDesc[stage.key] ?? ""}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-500 text-center py-8">暂无策略数据</p>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* 最优回测结果 + 正在运行任务 */}
+      {/* 阻塞项 + 待处理动作 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 最优回测结果卡 */}
+        {/* 阻塞项 */}
         <Card className="bg-neutral-900 border-neutral-700">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-neutral-300">本轮最优回测结果</CardTitle>
+            <CardTitle className="text-sm font-medium text-neutral-300">研究阻塞项</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {bestResultsData.map((result, idx) => (
-              <div key={idx} className="border border-neutral-700 rounded p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium text-white">{result.strategy}</p>
-                  <Badge className="bg-green-900 text-green-400">↑ {result.improvement}%</Badge>
-                </div>
-                <div className="grid grid-cols-4 gap-2 text-xs">
-                  <div>
-                    <p className="text-neutral-400">Sharpe</p>
-                    <p className="text-neutral-200 font-medium">{result.sharpeRatio.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-neutral-400">最大回撤</p>
-                    <p className="text-neutral-200 font-medium">{result.maxDD}%</p>
-                  </div>
-                  <div>
-                    <p className="text-neutral-400">胜率</p>
-                    <p className="text-neutral-200 font-medium">{result.winRate}%</p>
-                  </div>
-                  <div>
-                    <p className="text-neutral-400">推荐</p>
-                    <Button size="sm" className="mt-1 h-6 text-xs bg-orange-600 hover:bg-orange-700">
-                      采用
-                    </Button>
+          <CardContent className="space-y-2">
+            {strategyOv?.blockers && strategyOv.blockers.length > 0 ? (
+              strategyOv.blockers.map((b, idx) => (
+                <div key={idx} className={`border rounded p-2 ${b.severity === "error" ? "border-red-600/50 bg-red-900/20" : "border-yellow-600/50 bg-yellow-900/20"}`}>
+                  <div className="flex items-center justify-between">
+                    <p className={`text-xs font-medium ${b.severity === "error" ? "text-red-400" : "text-yellow-400"}`}>{b.label}</p>
+                    <Badge className={b.severity === "error" ? "bg-red-900 text-red-400" : "bg-yellow-900 text-yellow-400"}>
+                      {b.count}
+                    </Badge>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-sm text-neutral-500 text-center py-4">无阻塞项</p>
+            )}
           </CardContent>
         </Card>
 
-        {/* 正在运行任务列表 */}
+        {/* 待处理动作 */}
         <Card className="bg-neutral-900 border-neutral-700">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-neutral-300">当前运行任务</CardTitle>
+            <CardTitle className="text-sm font-medium text-neutral-300">研究待处理</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {activeTasksData.map((task) => (
-              <div key={task.id} className="border border-neutral-700 rounded p-3">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="text-sm font-medium text-white">{task.strategy}</p>
-                    <p className="text-xs text-neutral-400 mt-1">{task.taskType}</p>
+          <CardContent className="space-y-2 max-h-80 overflow-y-auto">
+            {strategyOv?.pending_actions && strategyOv.pending_actions.length > 0 ? (
+              strategyOv.pending_actions.map((pa, idx) => (
+                <div key={idx} className="border border-neutral-700 rounded p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-white">{pa.strategy_name}</p>
+                      <p className="text-xs text-neutral-400 mt-1">{pa.detail}</p>
+                    </div>
+                    <Badge className="bg-orange-900 text-orange-400">{pa.type}</Badge>
                   </div>
-                  <Badge className={task.status === "运行中" ? "bg-green-900 text-green-400" : "bg-blue-900 text-blue-400"}>
-                    {task.status}
-                  </Badge>
+                  <p className="text-xs text-neutral-500 mt-2">{pa.updated_at}</p>
                 </div>
-                <div className="h-2 bg-neutral-800 rounded overflow-hidden mb-2">
-                  <div
-                    className="h-full bg-orange-500"
-                    style={{ width: `${task.progress}%` }}
-                  ></div>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-neutral-400">{task.progress}%</span>
-                  <span className="text-neutral-500">预计 {task.eta}</span>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-sm text-neutral-500 text-center py-4">无待处理动作</p>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* 研究完成通知卡 */}
-      <Card className="bg-neutral-900 border-green-600/50">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-green-400 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4" />
-            研究完成通知卡
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {researchCompleteNotification ? (
-          <div className="bg-neutral-800 border border-neutral-700 rounded p-4 space-y-3">
-            <div>
-              <p className="text-xs text-neutral-400 mb-1">策略</p>
-              <p className="text-white font-medium">{researchCompleteNotification.strategy}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-neutral-400 mb-1">收益提升</p>
-                <p className="text-lg font-bold text-green-400">+{researchCompleteNotification.bestResult}%</p>
+      {/* 因子同步摘要 */}
+      {runtime?.factor_sync && (
+        <Card className="bg-neutral-900 border-neutral-700">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-neutral-300">因子同步摘要</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center p-4 bg-green-900/20 border border-green-600/30 rounded-lg">
+                <p className="text-2xl font-bold text-green-400">{runtime.factor_sync.aligned}</p>
+                <p className="text-xs text-neutral-400 mt-1">已对齐</p>
               </div>
-              <div>
-                <p className="text-xs text-neutral-400 mb-1">Sharpe比率</p>
-                <p className="text-lg font-bold text-blue-400">{researchCompleteNotification.sharpeRatio}</p>
+              <div className="text-center p-4 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
+                <p className="text-2xl font-bold text-yellow-400">{runtime.factor_sync.mismatch}</p>
+                <p className="text-xs text-neutral-400 mt-1">失配</p>
               </div>
-              <div>
-                <p className="text-xs text-neutral-400 mb-1">最大回撤</p>
-                <p className="text-lg font-bold text-neutral-300">{researchCompleteNotification.maxDD}%</p>
-              </div>
-              <div>
-                <p className="text-xs text-neutral-400 mb-1">胜率</p>
-                <p className="text-lg font-bold text-cyan-400">{researchCompleteNotification.winRate}%</p>
+              <div className="text-center p-4 bg-neutral-800 border border-neutral-700 rounded-lg">
+                <p className="text-2xl font-bold text-neutral-400">{runtime.factor_sync.unknown}</p>
+                <p className="text-xs text-neutral-400 mt-1">未知</p>
               </div>
             </div>
-            <div className="border-t border-neutral-700 pt-3">
-              <p className="text-xs text-neutral-400 mb-2">通知详情</p>
-              <div className="space-y-1 text-xs text-neutral-300">
-                <p>✓ 已推送至飞书 @量化团队</p>
-                <p>✓ 最优回测结果版本: {researchCompleteNotification.version}</p>
-                <p>✓ 因子版本: v1.2.3 已同步</p>
-                <p>✓ 推荐动作: 导出冻结版后人工审核</p>
-              </div>
-              <p className="text-xs text-neutral-500 mt-2">时间: {researchCompleteNotification.timestamp}</p>
-            </div>
-          </div>
-          ) : (
-            <p className="text-center text-neutral-500 py-8">暂无研究完成通知</p>
-          )}
-          <div className="flex gap-2">
-            <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm">
-              查看飞书通知
-            </Button>
-            <Button variant="outline" className="flex-1 border-neutral-700 text-neutral-400 hover:bg-neutral-800 text-sm">
-              导出策略包
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 参数搜索结果面板 */}
-      <Card className="bg-neutral-900 border-neutral-700">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-neutral-300">参数搜索结果面板</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-neutral-700">
-                  <th className="text-left py-2 px-3 text-neutral-400 font-medium">参数组合</th>
-                  <th className="text-center py-2 px-3 text-neutral-400 font-medium">年化收益</th>
-                  <th className="text-center py-2 px-3 text-neutral-400 font-medium">Sharpe</th>
-                  <th className="text-center py-2 px-3 text-neutral-400 font-medium">最大回撤</th>
-                  <th className="text-center py-2 px-3 text-neutral-400 font-medium">胜率</th>
-                  <th className="text-center py-2 px-3 text-neutral-400 font-medium">推荐</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { params: "MA5, MA20, RSI≥70", return: 15.2, sharpe: 2.14, dd: 8.5, wr: 62, rank: 1 },
-                  { params: "MA5, MA20, RSI≥65", return: 14.8, sharpe: 2.09, dd: 8.8, wr: 61, rank: 2 },
-                  { params: "MA5, MA20, RSI≥75", return: 13.5, sharpe: 1.98, dd: 7.9, wr: 63, rank: 3 },
-                ].map((row, idx) => (
-                  <tr key={idx} className="border-b border-neutral-800 hover:bg-neutral-800/50">
-                    <td className="py-2 px-3 text-neutral-300">{row.params}</td>
-                    <td className="py-2 px-3 text-center text-green-400 font-medium">+{row.return}%</td>
-                    <td className="py-2 px-3 text-center text-cyan-400">{row.sharpe.toFixed(2)}</td>
-                    <td className="py-2 px-3 text-center text-neutral-400">{row.dd}%</td>
-                    <td className="py-2 px-3 text-center text-neutral-400">{row.wr}%</td>
-                    <td className="py-2 px-3 text-center">
-                      {row.rank === 1 && <Badge className="bg-orange-600 text-white">最优</Badge>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+            <p className="text-xs text-neutral-500 mt-3">{runtime.factor_sync.note}</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

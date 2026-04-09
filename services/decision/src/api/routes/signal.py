@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from collections import Counter
 import uuid
 from datetime import datetime, timezone
 
@@ -5,7 +8,9 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from ...model.router import route
+from ...notifier.dispatcher import get_dispatcher
 from ...publish.gate import PublishGate
+from ...reporting.daily import get_daily_reporter
 
 router = APIRouter(prefix="/signals", tags=["signal"])
 
@@ -77,6 +82,83 @@ class DecisionRequest(BaseModel):
     submitted_at: str
 
 
+def _sorted_decisions() -> list[dict]:
+    return sorted(
+        _decisions.values(),
+        key=lambda item: item.get("generated_at") or "",
+        reverse=True,
+    )
+
+
+def _stage_counts(decisions: list[dict]) -> list[dict]:
+    total = len(decisions)
+    eligible = sum(1 for item in decisions if item.get("eligibility_status") == "eligible")
+    blocked = sum(1 for item in decisions if item.get("eligibility_status") in {"blocked", "expired"})
+    ready = sum(1 for item in decisions if item.get("publish_workflow_status") == "ready_for_publish")
+    locked = sum(1 for item in decisions if item.get("publish_workflow_status") == "locked_visible")
+    held = sum(1 for item in decisions if item.get("action") == "hold")
+    return [
+        {"key": "generated", "label": "已生成", "count": total},
+        {"key": "eligible", "label": "资格通过", "count": eligible},
+        {"key": "blocked", "label": "资格阻塞", "count": blocked},
+        {"key": "ready_for_publish", "label": "待发布", "count": ready},
+        {"key": "locked_visible", "label": "实盘锁定可见", "count": locked},
+        {"key": "held", "label": "保持观望", "count": held},
+    ]
+
+
+@router.get("/overview")
+def get_signal_overview() -> dict:
+    decisions = _sorted_decisions()
+    dispatcher_snapshot = get_dispatcher().runtime_snapshot(recent_limit=20)
+    daily_snapshot = get_daily_reporter().runtime_snapshot(limit=7)
+
+    total = len(decisions)
+    ready = sum(1 for item in decisions if item.get("publish_workflow_status") == "ready_for_publish")
+    approved = sum(1 for item in decisions if item.get("action") == "approve")
+    blocked = sum(1 for item in decisions if item.get("eligibility_status") in {"blocked", "expired"})
+    locked = sum(1 for item in decisions if item.get("publish_workflow_status") == "locked_visible")
+    hold = sum(1 for item in decisions if item.get("action") == "hold")
+
+    timeline = [
+        {
+            "decision_id": item.get("decision_id"),
+            "generated_at": item.get("generated_at"),
+            "strategy_id": item.get("strategy_id"),
+            "symbol": item.get("symbol"),
+            "action": item.get("action"),
+            "eligibility_status": item.get("eligibility_status"),
+            "publish_workflow_status": item.get("publish_workflow_status"),
+            "summary": item.get("reasoning_summary"),
+        }
+        for item in decisions[:12]
+    ]
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "kpis": {
+            "total": total,
+            "approved": approved,
+            "hold": hold,
+            "blocked": blocked,
+            "ready_for_publish": ready,
+            "locked_visible": locked,
+        },
+        "stage_counts": _stage_counts(decisions),
+        "timeline": timeline,
+        "recent_signals": decisions[:20],
+        "notification_channels": dispatcher_snapshot["channels"],
+        "recent_events": dispatcher_snapshot["recent_events"],
+        "dispatcher_state": dispatcher_snapshot["dispatcher_state"],
+        "daily_report": daily_snapshot,
+        "empty_states": {
+            "signals": total == 0,
+            "events": len(dispatcher_snapshot["recent_events"]) == 0,
+            "daily_history": not daily_snapshot["has_sent_history"],
+        },
+    }
+
+
 @router.post("/review", status_code=status.HTTP_201_CREATED)
 def review_signal(req: DecisionRequest) -> dict:
     decision_id = f"dd-{uuid.uuid4().hex[:12]}"
@@ -134,13 +216,29 @@ def review_signal(req: DecisionRequest) -> dict:
         "request_id": req.request_id,
         "trace_id": req.trace_id,
         "strategy_id": req.strategy_id,
+        "requested_target": req.requested_target,
+        "symbol": req.symbol,
+        "requested_signal": req.signal,
+        "requested_signal_strength": req.signal_strength,
+        "factor_count": len(req.factors),
+        "factor_names": [factor.name for factor in req.factors],
+        "market_context": req.market_context.model_dump(),
         "action": action,
         "confidence": confidence,
         "layer": layer,
         "model_profile": model_profile,
         "eligibility_status": eligibility_status,
         "publish_target": req.requested_target,
+        "publish_gate_eligible": publish_result.eligible,
         "publish_workflow_status": publish_workflow_status,
+        "gate_reasons": reasons,
+        "decision_stage": (
+            "ready_for_publish"
+            if publish_workflow_status == "ready_for_publish"
+            else "locked_visible"
+            if publish_workflow_status == "locked_visible"
+            else eligibility_status
+        ),
         "reasoning_summary": reasoning_summary,
         "notification_event_id": None,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -151,7 +249,7 @@ def review_signal(req: DecisionRequest) -> dict:
 
 @router.get("")
 def list_decisions() -> list[dict]:
-    return list(_decisions.values())
+    return _sorted_decisions()
 
 
 @router.get("/{decision_id}")
@@ -160,3 +258,29 @@ def get_decision(decision_id: str) -> dict:
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Decision {decision_id} not found")
     return result
+
+
+@router.get("/dashboard/signals")
+def dashboard_signals() -> list[dict]:
+    """最近信号摘要（只读聚合，供临时看板使用）。"""
+    return [
+        {
+            "strategy_id": item.get("strategy_id"),
+            "signal": item.get("requested_signal"),
+            "signal_strength": item.get("requested_signal_strength"),
+            "timestamp": item.get("generated_at"),
+        }
+        for item in _sorted_decisions()[:50]
+    ]
+
+
+@router.get("/dashboard/notifications")
+def dashboard_notifications() -> list[dict]:
+    """最近通知列表（只读聚合，供临时看板使用）。"""
+    return get_dispatcher().dashboard_notifications()
+
+
+@router.get("/dashboard/reports")
+def dashboard_reports() -> list[dict]:
+    """最近日报摘要（只读聚合，供临时看板使用）。"""
+    return get_daily_reporter().dashboard_reports()

@@ -99,6 +99,8 @@ def _make_reporter() -> DailyReporter:
     # 替换 dispatcher 为 mock
     reporter._dispatcher = mock.MagicMock()
     reporter._dispatcher.dispatch.return_value = None
+    # 隔离运行态数据源，避免测试污染
+    reporter._build_runtime_counts = lambda: ({k: 0 for k in reporter._counters}, [])
     return reporter
 
 
