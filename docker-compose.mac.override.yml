@@ -1,0 +1,18 @@
+services:
+  sim-trading:
+    # macOS Docker 不支持 network_mode: host，改用端口映射
+    network_mode: bridge
+    ports:
+      - "8101:8101"
+    environment:
+      # openctp 7x24 前置（与 ECS 一致）
+      SIMNOW_MD_FRONT: tcp://trading.openctp.cn:30011
+      SIMNOW_TRADE_FRONT: tcp://trading.openctp.cn:30001
+      SIMNOW_APP_ID: ""
+      SIMNOW_AUTH_CODE: ""
+
+  sim-trading-web:
+    build:
+      context: ./services/sim-trading/sim-trading_web
+      args:
+        BACKEND_BASE_URL: http://host.docker.internal:8101
