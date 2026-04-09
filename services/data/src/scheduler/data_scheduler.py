@@ -722,53 +722,17 @@ def job_evening_report(config: dict[str, Any]) -> None:
 
 
 def job_heartbeat(config: dict[str, Any]) -> None:
-    """每 2 小时进程监控 — 推送 Mini + Studio 硬件 + 全进程状态卡片到飞书。"""
+    """每 2 小时进程监控 — 推送 Mini 硬件 + JBT 进程状态 + 采集源新鲜度到飞书。"""
     try:
         logger.info("▶ 开始执行: 2h 进程监控")
         import os as _os
         import importlib.util
         import subprocess as _sp
-        import json as _json
 
-        # ── Mini 进程定义（27 个 plist，全覆盖）────────────────────────
-        _MINI_PROCS = [
-            ("数据采集调度",  "data_scheduler.py",           "com.botquant.data_scheduler"),
-            ("设备监控",      "mini_monitor.py",             "com.botquant.mini_monitor"),
-            ("健康检查",      "health_check.py",             "com.botquant.health"),
-            ("数据 API",      "data_api",                    "com.botquant.data_api"),
-            ("数据服务",      "data_server",                 "com.botquant.data_server"),
-            ("期货日线",      "futures_minute_scheduler.py", "com.botquant.futures.eod"),
-            ("期货分钟线",    "futures_minute_scheduler.py", "com.botquant.futures.minute"),
-            ("宏观数据",      "macro_scheduler.py",          "com.botquant.macro"),
-            ("VPN 代理",      "vpn_proxy_manager.py",        "com.botquant.mihomo"),
-            ("新闻采集",      "news_scheduler.py",           "com.botquant.news"),
-            ("海外日线",      "overseas_minute_scheduler.py","com.botquant.overseas.daily"),
-            ("海外分钟线",    "overseas_minute_scheduler.py","com.botquant.overseas.minute"),
-            ("持仓日报",      "position_scheduler.py",       "com.botquant.position.daily"),
-            ("持仓周报",      "position_scheduler.py",       "com.botquant.position.weekly"),
-            ("情绪指数",      "sentiment_scheduler.py",      "com.botquant.sentiment"),
-            ("海运运费",      "shipping_scheduler.py",       "com.botquant.shipping"),
-            ("A股分钟线",     "stock_minute_scheduler.py",   "com.botquant.stock.minute"),
-            ("A股实时",       "stock_minute_scheduler.py",   "com.botquant.stock.realtime"),
-            ("存储告警",      "storage_alert.sh",            "com.botquant.storage.alert"),
-            ("Tushare日线",   "tushare_daily_scheduler.py",  "com.botquant.tushare"),
-            ("美股日线",      "us_stock_backfill.py",        "com.botquant.us_stock_daily"),
-            ("波动率CBOE",    "volatility_scheduler.py",     "com.botquant.volatility.cboe"),
-            ("波动率QVIX",    "volatility_scheduler.py",     "com.botquant.volatility.qvix"),
-            ("自选股监控",    "watchlist_manager.py",        "com.botquant.watchlist"),
-            ("天气数据",      "weather_scheduler.py",        "com.botquant.weather"),
-            ("每周备份",      "mini_backup_weekly.sh",       "com.botquant.backup.weekly"),
-            ("每日审计",      "daily_audit.py",              "com.botquant.daily_audit"),
-        ]
-        # ── Studio 进程定义 ───────────────────────────────────────────
-        _STUDIO_PROCS = [
-            ("量化交易",     "factor_live_trader.py",     "com.botquant.factor.trader"),
-            ("决策引擎 API", "decision_api",              "com.botquant.decision_api"),
-            ("风控监控",     "risk_monitor.py",           "com.botquant.risk_monitor"),
-            ("交易接口 API", "trading_api",               "com.botquant.trading_api"),
-            ("盘前预测",     "prediction_report.py",      "com.botquant.prediction"),
-            ("每日审计",     "daily_audit.py",            "com.botquant.daily_audit"),
-            ("存储告警",     "storage_alert",             "com.botquant.storage.alert"),
+        # ── JBT 进程定义（通过 ps 检测实际进程）──────────────────────
+        _JBT_PROCS = [
+            ("数据采集调度", "data_scheduler"),
+            ("数据 API",     "services.data.src.main"),
         ]
 
         # ── 加载 health_check 模块 ────────────────────────────────────
@@ -786,89 +750,23 @@ def job_heartbeat(config: dict[str, Any]) -> None:
         mini_mem = float(mem.get("used_percent", 0.0))
         mini_disk = float(disks[0]["used_percent"]) if disks else 0.0
 
-        # ── Mini launchctl ────────────────────────────────────────────
+        # ── 通过 ps 检测 JBT 进程 ─────────────────────────────────────
         try:
-            plist_out = _sp.run(
-                ["launchctl", "list"], capture_output=True, text=True, timeout=10,
+            ps_out = _sp.run(
+                ["ps", "aux"], capture_output=True, text=True, timeout=10,
             ).stdout
         except Exception:
-            plist_out = ""
+            ps_out = ""
 
         mini_processes = [
-            {"label": label, "script": script,
-             "ok": plist_name in plist_out}
-            for label, script, plist_name in _MINI_PROCS
+            {"label": label, "ok": keyword in ps_out}
+            for label, keyword in _JBT_PROCS
         ]
-
-        # ── Studio 采集（SSH，超时 15s）────────────────────────────────
-        _studio_hw_cmd = (
-            "python3 -c \""
-            "import psutil,json;"
-            "m=psutil.virtual_memory();"
-            "d={p.mountpoint:round(psutil.disk_usage(p.mountpoint).percent,1)"
-            " for p in psutil.disk_partitions(all=False)"
-            " if p.mountpoint in ['/','/Volumes/BotQuantSSD']};"
-            "print(json.dumps({'cpu':psutil.cpu_percent(0.3),'mem':m.percent,'disks':d}))"
-            "\""
-        )
-        studio_available = False
-        studio_cpu = studio_mem = studio_main_disk = studio_ext_disk = 0.0
-        studio_processes: list[dict[str, Any]] = []
-
-        _ssh_cmd = ["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
-                    "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=2"]
-        for _attempt in range(2):  # 最多重试1次，规避瞬间抖动
-            try:
-                _hw_res = _sp.run(
-                    _ssh_cmd + ["studio", _studio_hw_cmd],
-                    capture_output=True, text=True, timeout=20,
-                )
-                if _hw_res.returncode == 0 and _hw_res.stdout.strip():
-                    _hw = _json.loads(_hw_res.stdout.strip())
-                    studio_cpu = float(_hw.get("cpu", 0.0))
-                    studio_mem = float(_hw.get("mem", 0.0))
-                    _disks = _hw.get("disks", {})
-                    studio_main_disk = float(_disks.get("/", 0.0))
-                    studio_ext_disk = float(_disks.get("/Volumes/BotQuantSSD", 0.0))
-
-                    # Studio launchctl
-                    _lc_res = _sp.run(
-                        _ssh_cmd + ["studio", "launchctl list"],
-                        capture_output=True, text=True, timeout=15,
-                    )
-                    studio_lc = _lc_res.stdout if _lc_res.returncode == 0 else ""
-                    studio_processes = [
-                        {"label": label, "script": script,
-                         "ok": plist_name in studio_lc}
-                        for label, script, plist_name in _STUDIO_PROCS
-                    ]
-                    studio_available = True
-                    logger.info("✅ Studio 硬件及进程状态已获取 cpu=%.1f%% mem=%.1f%%",
-                                studio_cpu, studio_mem)
-                    break
-                else:
-                    raise RuntimeError(f"ssh returncode={_hw_res.returncode} stderr={_hw_res.stderr[:80]}")
-            except Exception as _e:
-                if _attempt == 0:
-                    logger.warning("⚠️ Studio SSH 第1次失败，3s后重试: %s", _e)
-                    import time as _time_mod
-                    _time_mod.sleep(3)
-                else:
-                    logger.warning("⚠️ Studio SSH 连接失败（已重试）: %s", _e)
 
         # ── 判断是否有异常 ─────────────────────────────────────────────
         has_issues = any(not s["ok"] and not s.get("skipped") for s in freshness)
         has_issues = has_issues or (mini_cpu >= 85) or (mini_mem >= 85)
         has_issues = has_issues or any(not p["ok"] for p in mini_processes)
-        if studio_available:
-            has_issues = has_issues or any(not p["ok"] for p in studio_processes)
-        else:
-            has_issues = True  # SSH 失败也算异常
-
-        # from src.monitor.feishu_card_templates import heartbeat_card
-        # from src.monitor.notify_feishu import FeishuNotifier
-
-        now_str = datetime.now().strftime("%H:%M")
 
         # ── 使用新通知系统 ─────────────────────────────────────────
         d = _get_dispatcher()
@@ -880,11 +778,7 @@ def job_heartbeat(config: dict[str, Any]) -> None:
                     cpu_pct=mini_cpu,
                     mem_pct=mini_mem,
                     disk_pct=mini_disk,
-                    processes=[
-                        {"label": p["label"], "ok": p["ok"]} for p in mini_processes
-                    ] + ([
-                        {"label": p["label"], "ok": p["ok"]} for p in studio_processes
-                    ] if studio_available else []),
+                    processes=mini_processes,
                     sources=freshness,
                     has_issues=has_issues,
                 )
@@ -897,7 +791,7 @@ def job_heartbeat(config: dict[str, Any]) -> None:
                 else:
                     logger.warning("⚠️ 无飞书 webhook，跳过进程监控推送")
             except Exception as _e:
-                logger.error("新通知系统发送失败: %s, 回退旧方式", _e)
+                logger.error("新通知系统发送失败: %s", _e)
         else:
             logger.warning("⚠️ dispatcher 不可用，跳过进程监控推送")
     except Exception:
@@ -971,7 +865,7 @@ def job_daily_email_report(config: dict[str, Any]) -> None:
         from services.data.src.notify.email_notify import EmailSender, build_daily_report_html
 
         # 加载 health_check 获取设备指标
-        _hc_path = str(PROJECT_ROOT / "scripts" / "health_check.py")
+        _hc_path = str(PROJECT_ROOT / "health" / "health_check.py")
         _spec = importlib.util.spec_from_file_location("health_check_mod", _hc_path)
         _mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
         _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
@@ -986,18 +880,17 @@ def job_daily_email_report(config: dict[str, Any]) -> None:
              "age_str": s.get("age_str", "")} for s in freshness
         ]
 
-        # 进程状态
+        # 进程状态 — 通过 ps 检测实际运行的 JBT 进程
         import subprocess as _sp
         try:
-            plist_out = _sp.run(["launchctl", "list"], capture_output=True, text=True, timeout=10).stdout
+            ps_out = _sp.run(["ps", "aux"], capture_output=True, text=True, timeout=10).stdout
         except Exception:
-            plist_out = ""
+            ps_out = ""
         procs = [
-            {"label": label, "ok": pname in plist_out, "uptime": ""}
-            for label, _, pname in [
-                ("数据调度", "data_scheduler.py", "com.botquant.data_scheduler"),
-                ("健康检查", "health_check.py", "com.botquant.health"),
-                ("新闻采集", "news_scheduler.py", "com.botquant.news"),
+            {"label": label, "ok": keyword in ps_out, "uptime": ""}
+            for label, keyword in [
+                ("数据调度", "data_scheduler"),
+                ("数据 API", "services.data.src.main"),
             ]
         ]
 
