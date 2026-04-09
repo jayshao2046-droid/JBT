@@ -132,7 +132,7 @@
 
 ### 批次 F（P1，完整报告导出与展示）
 
-- 状态：`active`
+- 状态：`locked`
 - 保护路径：`services/backtest/**`、`services/backtest/backtest_web/**`
 - 白名单文件：
   1. `services/backtest/src/backtest/result_builder.py`（修改：新增 to_formal_report_v1() 统一根结构）
@@ -148,6 +148,10 @@
 - 执行 Agent：回测
 - review-id：`REVIEW-TASK-0018-F`
 - 预审结论：项目架构师预审通过，7 文件白名单已冻结
+- 终审结论：通过（to_formal_report_v1 符合契约 §6.2.3，CSV 端点无路径穿越，前端无外部依赖，to_dict 未破坏）
+- 自校验：4 passed in 1.74s
+- lockback 结果：approved
+- 当前状态：`locked`
 
 ## 补充执行口径冻结（2026-04-07）
 
