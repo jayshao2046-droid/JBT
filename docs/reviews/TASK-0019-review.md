@@ -29,9 +29,9 @@
 ## 三、当前轮次代码 Token 策略
 
 1. 当前轮次只涉及 P-LOG 协同账本区，不申请代码 Token。
-2. `TASK-0019-B0` 若进入实施，`services/sim-trading/.env.example` 需要单文件 P0 Token。
-3. `TASK-0019-B1` 若进入实施，`services/sim-trading/src/main.py`、`src/notifier/email.py`、`src/ledger/service.py` 与最多 2 个测试文件需要 P1 Token。
-4. `TASK-0019-B2` 若进入实施，`services/sim-trading/src/gateway/simnow.py`、`src/ledger/service.py`、`src/api/router.py` 与最多 2 个测试文件需要 P1 Token。
+2. `TASK-0019-B0` 若进入实施，`services/sim-trading/.env.example` 需要单文件 P0 Token，且默认由 Atlas / Jay.S 处理。
+3. `TASK-0019-B1` 若进入实施，`services/sim-trading/src/main.py`、`src/notifier/email.py`、`src/ledger/service.py`、`tests/test_notifier.py`、`tests/test_report_scheduler.py`（允许新增）需要 P1 Token。
+4. `TASK-0019-B2` 若进入实施，`services/sim-trading/src/gateway/simnow.py`、`src/ledger/service.py`、`src/api/router.py`、`tests/test_ctp_notify.py`、`tests/test_report_scheduler.py` 需要 P1 Token。
 5. 后续若新增跨服务报表契约到 `shared/contracts/**`，需要 P0 Token。
 
 ## 四、正式冻结结论
@@ -60,4 +60,11 @@
 
 1. **TASK-0019 预审通过。**
 2. **当前轮次只完成收盘统计邮件 / 定时报表治理冻结，不进入代码执行。**
-3. **后续进入实施前，必须由 Jay.S 先确认晚间时间窗最终值，并按 B0（如需要）→ B1 → B2 顺序签发对应 P0 / P1 Token。**
+3. **后续进入实施前，必须由 Jay.S 先确认晚间时间窗最终值，并在 `TASK-0014-A4`、`TASK-0017-A4`、`TASK-0022-B` 收口后，按 B0（如需要）→ B1 → B2 顺序签发对应 P0 / P1 Token。**
+
+## 八、2026-04-09 扩展预审补录
+
+1. `TASK-0019-B0` 已升级为“剩余通知 / 报表模板占位合并批次”，文件严格限于 `services/sim-trading/.env.example`，默认由 Atlas / Jay.S 处理，不派发模拟交易 Agent。
+2. `TASK-0019-B1` 的测试白名单已收紧为 `services/sim-trading/tests/test_notifier.py` 与 `services/sim-trading/tests/test_report_scheduler.py`（允许新增）。
+3. `TASK-0019-B2` 的测试白名单已收紧为 `services/sim-trading/tests/test_ctp_notify.py` 与 `services/sim-trading/tests/test_report_scheduler.py`。
+4. 串行关系冻结为：`TASK-0019-B1` / `TASK-0019-B2` 均需等待 `TASK-0014-A4`、`TASK-0017-A4`、`TASK-0022-B` 收口；B0 若启用，必须在 B1 前独立完成。

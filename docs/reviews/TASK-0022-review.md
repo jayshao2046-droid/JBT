@@ -161,3 +161,9 @@
 1. **`TASK-0022-A` 第二次正式终审通过，可 lockback / 已 lockback。**
 2. **本批结论严格基于 5 个白名单文件，不受仓库其他 dirty files 干扰。**
 3. **`TASK-0022-B` 继续保持 `pending_token`，当前不得自动启动。**
+
+## 十一、2026-04-09 B 批次补录
+
+1. `TASK-0022-B` 继续保持独立归属，不并入 `TASK-0017`；原因是其目标是“最小只读日志能力”，而不是部署前本地 clean pre-deploy。
+2. `services/sim-trading/tests/test_log_view_api.py` 在本轮被明确允许作为新增测试文件，不再视为治理漂移。
+3. `TASK-0022-B` 必须等待 `TASK-0014-A4` 与 `TASK-0017-A4` 锁回后再启动，因为共享 `src/main.py` / `src/api/router.py` / `app/intelligence/page.tsx`。

@@ -3,16 +3,18 @@
 ## Lock 信息
 
 - 任务 ID：TASK-0014
-- 阶段：sim-trading 风控通知链路预审
-- 当前任务是否仍处于“预审未执行”状态：整体否；`TASK-0014-A1` 已实施并锁回，`TASK-0014-A2` 待执行
+- 阶段：sim-trading 风控通知链路预审 + 扩展预审补录
+- 当前任务是否仍处于“预审未执行”状态：整体否；`TASK-0014-A1` 与 `TASK-0014-A2` 已实施并锁回，`TASK-0014-A3` / `TASK-0014-A4` 待执行
 - 执行 Agent：
   - 项目架构师（当前 P-LOG 治理文件）
   - 模拟交易 Agent（后续服务实现主体）
 - Token 摘要：
   - P-LOG 协同账本区文件：不需要文件级 Token
   - `TASK-0014-A1`：P1 token_id `tok-7ab3cadf-043b-4709-b8e7-d00519f1ae81`，文件严格限于 `services/sim-trading/src/main.py`、`src/notifier/dispatcher.py`、`src/risk/guards.py`、`tests/test_notifier.py`、`tests/test_risk_hooks.py`，对应提交 `d4b5817`，lockback review-id `REVIEW-TASK-0014-A1`，当前状态 `locked`
-  - `TASK-0014-A2`：`services/sim-trading/src/api/router.py`、`src/gateway/simnow.py` + 最多 2 个测试文件，后续 P1 Token
-  - `services/sim-trading/.env.example`：后续单文件 P0 Token
+  - `TASK-0014-A2`：P1 token_id `tok-3ab9a9ea-edfe-40fe-9750-1e7dd9ab200b`，文件严格限于 `services/sim-trading/src/notifier/feishu.py`、`src/gateway/simnow.py`、`tests/test_notifier.py`，对应提交 `78cad42`，lockback review-id `REVIEW-TASK-0014-A2`，当前状态 `locked`
+  - `TASK-0014-A3`：`services/sim-trading/src/notifier/dispatcher.py`、`src/notifier/email.py`、`src/notifier/feishu.py`、`src/risk/guards.py`、`tests/test_notifier.py`，后续 P1 Token
+  - `TASK-0014-A4`：`services/sim-trading/src/main.py`、`src/api/router.py`、`src/gateway/simnow.py`、`tests/test_ctp_notify.py`、`tests/test_risk_hooks.py`，后续 P1 Token
+  - `services/sim-trading/.env.example`：本轮不再由 `TASK-0014` 单独签发；若需要新增剩余通知 / 报表模板占位，统一并入 `TASK-0019-B0` 单文件 P0 Token
   - `shared/contracts/**` 若补通知事件契约：后续 P0 Token
 
 ## 治理文件白名单（本轮已使用）
@@ -76,6 +78,35 @@
 11. lockback review-id：`REVIEW-TASK-0014-A2`
 12. 当前 Token 状态：locked
 
+### 补充批次 A3（待签发）
+
+1. 批次名称：补充批次 A3 — 通知内核专业化
+2. 执行 Agent：模拟交易
+3. 保护级别：P1
+4. 业务白名单：
+  - `services/sim-trading/src/notifier/dispatcher.py`
+  - `services/sim-trading/src/notifier/email.py`
+  - `services/sim-trading/src/notifier/feishu.py`
+  - `services/sim-trading/src/risk/guards.py`
+  - `services/sim-trading/tests/test_notifier.py`
+5. 批次目标：完善 RiskEvent / 通知分类、去重 / 抑制 / 恢复 / 升级策略与双通道失败收口，不扩展到 ledger / report 逻辑。
+6. 当前 Token 状态：pending_token
+
+### 补充批次 A4（待签发）
+
+1. 批次名称：补充批次 A4 — 运行时事件源与守护恢复接线
+2. 执行 Agent：模拟交易
+3. 保护级别：P1
+4. 业务白名单：
+  - `services/sim-trading/src/main.py`
+  - `services/sim-trading/src/api/router.py`
+  - `services/sim-trading/src/gateway/simnow.py`
+  - `services/sim-trading/tests/test_ctp_notify.py`
+  - `services/sim-trading/tests/test_risk_hooks.py`
+5. 批次目标：把 guardian / connect / disconnect / auth / login / recovery 等运行时事件正式接线到 A3 内核，不扩展到 `.env.example`、ledger 或报表调度。
+6. 执行顺序：仅能在 A3 完成自校验并锁回后启动。
+7. 当前 Token 状态：pending_token
+
 ### 凭证来源治理
 
 1. Jay.S 已明确允许 legacy `J_BotQuant/.env` 作为“凭证来源”。
@@ -94,14 +125,16 @@
 
 1. `TASK-0009`、`TASK-0013` 必须先闭环。
 2. `TASK-0010` 必须先完成最小风险事件输出与风控钩子占位。
-3. `TASK-0014-A2` 仍需由 Jay.S 签发对应 P1 Token；若未来需 reopen `TASK-0014-A1` 或扩大白名单，必须重新签发。
-4. 若后续需要补 `services/sim-trading/.env.example` 通知占位，必须另拆单文件 P0 批次。
-5. A2 若涉及测试文件，必须先冻结精确到文件的最多 2 个测试文件名单，再签发 Token。
+3. `TASK-0014-A1` 与 `TASK-0014-A2` 已锁回；若未来需 reopen 已锁回文件或扩大白名单，必须重新签发。
+4. `TASK-0014-A3` 需由 Jay.S 为模拟交易 Agent 签发对应 P1 Token，文件严格限于 A3 冻结白名单。
+5. `TASK-0014-A4` 仅能在 A3 完成自校验并锁回后启动，且需单独签发对应 P1 Token。
+6. 剩余通知 / 报表模板占位如需补齐，统一进入 `TASK-0019-B0` 单文件 P0，不再由 `TASK-0014` 单独 issue `.env.example` Token。
+7. `TASK-0022-B` 若要启动，必须等待 `TASK-0014-A4` 收口后再签发。
 
 ## 当前状态
 
-- 预审状态：已通过；`TASK-0014-A1` 已终审并锁回，`TASK-0014-A2` 待执行
-- Token 状态：主任务代码 Token 不适用；`TASK-0014-A1` 已 lockback 且状态 `locked`；`TASK-0014-A2` 已 lockback 且状态 `locked`
+- 预审状态：已通过；`TASK-0014-A1` / `TASK-0014-A2` 已终审并锁回，`TASK-0014-A3` / `TASK-0014-A4` 待执行
+- Token 状态：主任务代码 Token 不适用；`TASK-0014-A1` / `TASK-0014-A2` = `locked`；`TASK-0014-A3` / `TASK-0014-A4` = `pending_token`
 - 解锁时间：A1 已执行；A2 2026-04-07
 - 失效时间：N/A
 - 锁回时间：A1 已完成；A2 2026-04-07
@@ -109,4 +142,4 @@
 
 ## 结论
 
-**TASK-0014 补充批次 A1 与 A2 均已实施、终审与锁回完成；待 Jay.S 确认后可进入 .env.example 补占位（需单独 P0 Token）。**
+**`TASK-0014` 当前状态更新为：补充批次 A1 / A2 已实施、终审与锁回完成；补充批次 A3 / A4 已完成扩展预审并进入 `pending_token`；剩余 `.env.example` 模板占位不再由 `TASK-0014` 单独签发，统一并入 `TASK-0019-B0`。**

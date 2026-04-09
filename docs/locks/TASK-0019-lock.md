@@ -10,9 +10,9 @@
   - 模拟交易 Agent（后续服务实现主体）
 - Token 摘要：
   - P-LOG 协同账本区文件：不需要文件级 Token
-  - `TASK-0019-B0`：`services/sim-trading/.env.example`，后续单文件 P0 Token
-  - `TASK-0019-B1`：`services/sim-trading/src/main.py`、`src/notifier/email.py`、`src/ledger/service.py` + 最多 2 个测试文件，后续 P1 Token
-  - `TASK-0019-B2`：`services/sim-trading/src/gateway/simnow.py`、`src/ledger/service.py`、`src/api/router.py` + 最多 2 个测试文件，后续 P1 Token
+  - `TASK-0019-B0`：`services/sim-trading/.env.example`，后续单文件 P0 Token（默认 Atlas / Jay.S 处理）
+  - `TASK-0019-B1`：`services/sim-trading/src/main.py`、`src/notifier/email.py`、`src/ledger/service.py`、`tests/test_notifier.py`、`tests/test_report_scheduler.py`（允许新增），后续 P1 Token
+  - `TASK-0019-B2`：`services/sim-trading/src/gateway/simnow.py`、`src/ledger/service.py`、`src/api/router.py`、`tests/test_ctp_notify.py`、`tests/test_report_scheduler.py`，后续 P1 Token
 
 ## 治理文件白名单（本轮已使用）
 
@@ -36,7 +36,7 @@
 ### B0
 
 1. 批次名称：补充批次 B0 — 报表收件人 / 时间窗配置占位（如需要）
-2. 执行 Agent：模拟交易
+2. 执行 Agent：Atlas / Jay.S 指定角色
 3. 保护级别：P0
 4. 建议白名单：`services/sim-trading/.env.example`
 5. 当前 Token 状态：待 Jay.S 确认是否需要该批次；如需要则为 pending_token
@@ -50,7 +50,8 @@
    - `services/sim-trading/src/main.py`
    - `services/sim-trading/src/notifier/email.py`
    - `services/sim-trading/src/ledger/service.py`
-   - 最多 2 个 `services/sim-trading/tests/**` 测试文件
+  - `services/sim-trading/tests/test_notifier.py`
+  - `services/sim-trading/tests/test_report_scheduler.py`（允许新增）
 5. 当前 Token 状态：pending_token
 
 ### B2
@@ -62,7 +63,8 @@
    - `services/sim-trading/src/gateway/simnow.py`
    - `services/sim-trading/src/ledger/service.py`
    - `services/sim-trading/src/api/router.py`
-   - 最多 2 个 `services/sim-trading/tests/**` 测试文件
+  - `services/sim-trading/tests/test_ctp_notify.py`
+  - `services/sim-trading/tests/test_report_scheduler.py`
 5. 执行顺序：B2 仅能在 B1 完成自校验并锁回后启动。
 6. 当前 Token 状态：pending_token
 
@@ -75,10 +77,11 @@
 
 ## 进入执行前需要的 Token / 授权
 
-1. `TASK-0014-A1` 与 `TASK-0014-A2` 应先于本任务执行。
+1. `TASK-0014-A3` 与 `TASK-0014-A4` 应先于本任务执行。
 2. Jay.S 需最终确认晚间时间窗采用 `23:10` 还是 `23:40`。
-3. B0 若需要，必须先以单文件 P0 方式签发 `services/sim-trading/.env.example`。
-4. B1 / B2 需要先冻结精确到文件的最多 2 个测试文件名单，再分别签发 P1 Token。
+3. `TASK-0017-A4` 与 `TASK-0022-B` 应先于 `TASK-0019-B1` / `TASK-0019-B2` 收口，避免共享文件交叉污染。
+4. B0 若需要，必须先以单文件 P0 方式签发 `services/sim-trading/.env.example`，并独立提交 / 独立锁回。
+5. B1 / B2 的测试文件名单已冻结为精确白名单，可分别按既定 5 文件范围签发 P1 Token。
 
 ## 当前状态
 
@@ -91,4 +94,4 @@
 
 ## 结论
 
-**TASK-0019 当前仍处于“预审未执行”状态；收盘统计邮件 / 定时报表继续锁定，后续仅能按 B0（如需要）→ B1 → B2 顺序进入执行。**
+**`TASK-0019` 当前仍处于“预审未执行”状态；收盘统计邮件 / 定时报表继续锁定，后续仅能在 `TASK-0014-A4`、`TASK-0017-A4`、`TASK-0022-B` 收口后，按 B0（如需要）→ B1 → B2 顺序进入执行。**

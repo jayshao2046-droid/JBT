@@ -83,8 +83,9 @@
    - `services/sim-trading/src/main.py`
    - `services/sim-trading/src/api/router.py`
    - `services/sim-trading/sim-trading_web/app/intelligence/page.tsx`
-   - `services/sim-trading/tests/test_log_view_api.py`
+   - `services/sim-trading/tests/test_log_view_api.py`（允许新增）
 5. 目标：最小只读日志查看。
+6. 前置关系：必须等待 `TASK-0014-A4` 与 `TASK-0017-A4` 锁回后再启动。
 
 ## 当前继续禁止修改的路径说明
 
@@ -101,8 +102,8 @@
 
 ## 进入执行前需要的 Token / 授权
 
-1. Jay.S 需先为模拟交易 Agent 签发 `TASK-0022-A` 的 P1 Token。
-2. Jay.S 需在批次 A 执行完成并回交后，再决定是否签发 `TASK-0022-B` 的 P1 Token。
+1. `TASK-0022-A` 已完成第二次正式终审并锁回，无需再签发 A 批 Token。
+2. Jay.S 需在 `TASK-0014-A4` 与 `TASK-0017-A4` 锁回后，再决定是否签发 `TASK-0022-B` 的 P1 Token。
 3. 若 Jay.S 要求批次 B 扩展为“文件级历史日志 / 下载 / 路径选择”，当前批次 B 立即失效，必须回交补充预审。
 
 ## 当前状态
@@ -116,4 +117,4 @@
 
 ## 结论
 
-**`TASK-0022` 当前状态更新为：批次 A 已完成第二次正式终审并已 lockback；当前有效锁回 token_id 为 `tok-6610ebec-c5ab-4271-8e62-b5cb12f85666`，review-id 为 `REVIEW-TASK-0022-A`，结果 `approved`，状态 `locked`。批次 B 继续 `pending_token`。除 A 批五个白名单文件外，继续锁定 `services/**`、`shared/contracts/**`、`.env.example`、`docker-compose.dev.yml` 及其他非白名单文件。**
+**`TASK-0022` 当前状态更新为：批次 A 已完成第二次正式终审并已 lockback；当前有效锁回 token_id 为 `tok-6610ebec-c5ab-4271-8e62-b5cb12f85666`，review-id 为 `REVIEW-TASK-0022-A`，结果 `approved`，状态 `locked`。批次 B 继续 `pending_token`，且必须等待 `TASK-0014-A4` 与 `TASK-0017-A4` 收口后再启动。除 A 批五个白名单文件外，继续锁定 `services/**`、`shared/contracts/**`、`.env.example`、`docker-compose.dev.yml` 及其他非白名单文件。**

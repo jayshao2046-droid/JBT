@@ -89,18 +89,22 @@
 
 ### 3. 批次拆分
 
-1. **B0**：如需新增独立报表收件人 / 时间窗配置到 `services/sim-trading/.env.example`，则单独拆成 **P0** 单文件批次。
-2. **B1**：scheduler 与最小邮件报表骨架，保护级别冻结为 **P1**；建议白名单：
+1. **B0**：如需统一补齐剩余通知 / 报表模板占位，则把 `services/sim-trading/.env.example` 作为 **P0** 单文件批次；本批默认由 Atlas / Jay.S 处理，不派发模拟交易 Agent。
+2. **B1**：scheduler 与最小邮件报表骨架，保护级别冻结为 **P1**；白名单冻结为：
    - `services/sim-trading/src/main.py`
    - `services/sim-trading/src/notifier/email.py`
    - `services/sim-trading/src/ledger/service.py`
-   - 最多 2 个 `services/sim-trading/tests/**` 测试文件
-3. **B2**：账户 / 持仓 / 成交报表充实，保护级别冻结为 **P1**；建议白名单：
+   - `services/sim-trading/tests/test_notifier.py`
+   - `services/sim-trading/tests/test_report_scheduler.py`（允许新增）
+3. **B2**：账户 / 持仓 / 成交报表充实，保护级别冻结为 **P1**；白名单冻结为：
    - `services/sim-trading/src/gateway/simnow.py`
    - `services/sim-trading/src/ledger/service.py`
    - `services/sim-trading/src/api/router.py`
-   - 最多 2 个 `services/sim-trading/tests/**` 测试文件
+   - `services/sim-trading/tests/test_ctp_notify.py`
+   - `services/sim-trading/tests/test_report_scheduler.py`
 4. 执行顺序冻结为 `TASK-0019-B0`（如需要）→ `TASK-0019-B1` → `TASK-0019-B2`。
+5. `TASK-0019-B1` 与 `TASK-0019-B2` 均不得先于 `TASK-0014-A4`、`TASK-0017-A4`、`TASK-0022-B` 启动。
+6. `TASK-0019-B0` 可一次性预签，但若启用，必须单独提交、单独锁回，并在 B1 启动前完成。
 
 ### 4. legacy env 映射建议
 
@@ -115,8 +119,8 @@
 
 1. 当前轮次：P-LOG，仅治理账本，不申请代码 Token。
 2. `TASK-0019-B0` 若进入实施：`services/sim-trading/.env.example` 单文件按 **P0** 处理。
-3. `TASK-0019-B1` 若进入实施：`services/sim-trading/src/main.py`、`src/notifier/email.py`、`src/ledger/service.py` 与最多 2 个测试文件按 **P1** 处理。
-4. `TASK-0019-B2` 若进入实施：`services/sim-trading/src/gateway/simnow.py`、`src/ledger/service.py`、`src/api/router.py` 与最多 2 个测试文件按 **P1** 处理。
+3. `TASK-0019-B1` 若进入实施：`services/sim-trading/src/main.py`、`src/notifier/email.py`、`src/ledger/service.py`、`tests/test_notifier.py`、`tests/test_report_scheduler.py`（允许新增）按 **P1** 处理。
+4. `TASK-0019-B2` 若进入实施：`services/sim-trading/src/gateway/simnow.py`、`src/ledger/service.py`、`src/api/router.py`、`tests/test_ctp_notify.py`、`tests/test_report_scheduler.py` 按 **P1** 处理。
 5. 若未来需要补跨服务报表契约到 `shared/contracts/**`：**P0**。
 
 ---
@@ -142,5 +146,5 @@
 
 1. **`TASK-0019` 正式成立。**
 2. **`TASK-0019` 独立于 `TASK-0014`，因为它属于定时编排 + 报表数据面，不再是单条风险事件消费。**
-3. **执行顺序冻结为 `TASK-0014-A1` → `TASK-0014-A2` → `TASK-0019-B0`（如需要）→ `TASK-0019-B1` → `TASK-0019-B2`。**
+3. **执行顺序冻结为 `TASK-0014-A3` → `TASK-0014-A4`；`TASK-0017-A4` 可并行；`TASK-0022-B` 收口后再进入 `TASK-0019-B0`（如需要）→ `TASK-0019-B1` → `TASK-0019-B2`。**
 4. **当前轮次仅完成治理冻结，不进入代码 Token 申请。**

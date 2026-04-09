@@ -129,7 +129,7 @@
 
 根据“单批尽量不超过 5 个业务文件”的约束，当前建议拆为 2 个 P1 批次，默认顺序执行。
 
-### 批次 A：自动补齐 + 账户口径 + L2 说明收口
+### 批次 A：自动补齐 + 账户口径 + L2 说明收口（已完成并锁回）
 
 - 批次标识：`TASK-0022-A`
 - 执行 Agent：模拟交易 Agent
@@ -172,7 +172,7 @@
 1. `services/sim-trading/src/main.py`
 2. `services/sim-trading/src/api/router.py`
 3. `services/sim-trading/sim-trading_web/app/intelligence/page.tsx`
-4. `services/sim-trading/tests/test_log_view_api.py`
+4. `services/sim-trading/tests/test_log_view_api.py`（允许新增）
 
 #### 本批次目标
 
@@ -191,10 +191,10 @@
 
 ## 七、Token 策略
 
-1. 当前任务 **仅涉及 P1 服务文件**；批次 A 与批次 B 都不需要 P0 Token。
-2. `services/sim-trading/src/api/router.py` 与 `services/sim-trading/sim-trading_web/app/intelligence/page.tsx` 在 A / B 两批均被引用，因此两批默认 **顺序执行**，不并行签发。
-3. 若执行中要求把 50 万本金改成可配置项并写入 `services/sim-trading/.env.example`，当前批次立即失效，必须补充 **P0** 预审。
-4. 若执行中要求修改 `shared/contracts/sim-trading/account.md` 或新增跨服务字段，也必须另行补充 **P0** 预审。
+1. 当前任务剩余待执行批次仅 `TASK-0022-B`，且 **只涉及 P1 服务文件**；本任务不需要 P0 Token。
+2. `TASK-0022-B` 与 `TASK-0014-A4` 共享 `services/sim-trading/src/main.py` / `src/api/router.py`，与 `TASK-0017-A4` 共享 `services/sim-trading/sim-trading_web/app/intelligence/page.tsx`，因此 B 批必须等待上述两批全部锁回后再签发。
+3. `services/sim-trading/tests/test_log_view_api.py` 在本轮被明确允许作为新建测试文件，不视为“缺文件漂移”。
+4. 若执行中要求把 50 万本金改成可配置项并写入 `services/sim-trading/.env.example`，或要求修改 `shared/contracts/**` / 部署文件，当前批次立即失效，必须补充 **P0** 预审。
 
 ---
 
@@ -213,6 +213,6 @@
 
 1. **`TASK-0022` 正式成立。**
 2. **本事项不并入 `TASK-0017`，也不复用 `TASK-0015`；当前明确归属 `services/sim-trading/**` 单服务范围。**
-3. **当前 4 项需求已冻结为 2 个 P1 批次：A 为自动补齐 + 账户口径 + L2 说明收口，B 为最小只读日志查看。**
-4. **两批默认顺序执行，均待 Jay.S 为模拟交易 Agent 签发 P1 Token 后方可进入服务代码实施。**
+3. **当前 4 项需求已冻结为 2 个 P1 批次：A 为自动补齐 + 账户口径 + L2 说明收口（已锁回），B 为最小只读日志查看（待签发）。**
+4. **`TASK-0022-B` 必须等待 `TASK-0014-A4` 与 `TASK-0017-A4` 收口后，再由 Jay.S 为模拟交易 Agent 签发对应 P1 Token。**
 5. **当前轮次仅完成治理冻结，不进入代码执行，不申请 `lockctl`。**

@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0017
 - 审核角色：项目架构师
-- 审核阶段：sim-trading Docker 化与 Mini 部署预审
-- 审核时间：2026-04-06
-- 审核结论：通过（主任务部署治理冻结保持有效；2026-04-06 已补充冻结 A1 单文件 P1 执行批次，待 Jay.S / Atlas 为模拟交易 Agent 签发 Token）
+- 审核阶段：sim-trading Docker 化与 Mini 部署预审 + 2026-04-09 扩展预审补录
+- 审核时间：2026-04-09
+- 审核结论：通过（主任务部署治理冻结保持有效；A1 / A2 / A3 为历史闭环，2026-04-09 已补充冻结 A4 本地 clean pre-deploy 扩展批次）
 
 ---
 
@@ -62,8 +62,8 @@
 1. **TASK-0017 预审通过。**
 2. **当前轮次只完成 Docker 与 Mini 部署治理冻结，不进入代码执行或远端运维执行。**
 3. **后续进入实施前，必须先补齐白名单、P0 / P1 Token 与 Mini 运维授权。**
-4. **补充批次 A1 已冻结待签发；当前唯一建议进入执行的业务文件为 `services/sim-trading/Dockerfile`。**
-5. **补充批次 A2 已于 2026-04-06 完成预审，待 Jay.S / Atlas 为模拟交易 Agent 签发双文件 P1 Token。**
+4. **补充批次 A1 / A2 / A3 已形成历史闭环并锁回。**
+5. **2026-04-09 新增补充批次 A4（本地 clean pre-deploy / 假交互去伪），当前状态为 `pending_token`。**
 
 ---
 
@@ -124,3 +124,11 @@
    - `services/sim-trading/Dockerfile`（P1）：模拟交易
    - `docker-compose.dev.yml`（P0）：Jay.S 指定角色（可复用 A2 扩展已签发 P0 Token，如仍有效）
 8. **当前 Token 状态**：pending_token；`Dockerfile` 须签发 P1 Token；`docker-compose.dev.yml` 须签发 P0 Token（或确认 A2 扩展 P0 Token 仍有效）；两者可并行签发，但须分别独立提交。
+
+## 十一、2026-04-09 本地 clean pre-deploy 扩展预审补录
+
+1. 本轮“sim-trading 清理 / 本地 clean pre-deploy”继续挂在 `TASK-0017`，不新开任务号。
+2. 新增 `TASK-0017-A4`：`services/sim-trading/sim-trading_web/app/operations/page.tsx` + `app/intelligence/page.tsx`，保护级别 **P1**，执行 Agent 固定为模拟交易。
+3. A4 目标仅限去除骨架阶段假成功反馈，改成明确的未接入 / 待账户就绪 / 只读提示或禁用态；不新增 API，不修改 `src/main.py` / `src/api/router.py`，不 reopen `docker-compose.dev.yml` 或 `.env.example`。
+4. 并行结论：A4 可与 `TASK-0014-A3` / `TASK-0014-A4` 并行；`TASK-0022-B` 必须等待 A4 锁回后再启动。
+5. 当前扩展批次状态更新为：A1 / A2 / A3 = `locked`，A4 = `pending_token`。

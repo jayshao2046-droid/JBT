@@ -51,8 +51,8 @@
 
 ## 当前授权状态
 
-1. 当前只完成治理账本闭环，不含任何代码 Token或远端运维授权。
-2. 当前不允许进入仓内 Docker 文件、`docker-compose.dev.yml`、`.env.example` 或远端 Mini 执行。
+1. `TASK-0017-A1` / `A2` / `A3` 已完成实施、终审与锁回；当前扩展批次仅 `TASK-0017-A4` 为 `pending_token`。
+2. 当前不允许 reopen `docker-compose.dev.yml`、任一 `.env.example` 或远端 Mini 运维动作。
 
 ## 向 Atlas 汇报摘要
 
@@ -62,6 +62,14 @@
 
 ## 下一步建议
 
-1. 先完成 `TASK-0010` 到 `TASK-0016` 的执行前置条件。
-2. 再由 Atlas 准备部署相关四类清单与 Token 申请项。
-3. 未获授权前，所有服务 Agent 与 Atlas 继续保持待命。
+1. 先按 `TASK-0017-A4` 收口本地 clean pre-deploy / 假交互去伪。
+2. `TASK-0022-B` 必须等待 `TASK-0017-A4` 与 `TASK-0014-A4` 锁回后再签发。
+3. 未获授权前，不 reopen `docker-compose.dev.yml`、`.env.example` 或任何远端 Mini 命令。
+
+## 九、2026-04-09 扩展预审更新（以本节为准）
+
+1. 本轮“sim-trading 清理 / 本地 clean pre-deploy”继续复用 `TASK-0017`，不新开任务号。
+2. 新增 `TASK-0017-A4`：`services/sim-trading/sim-trading_web/app/operations/page.tsx` + `app/intelligence/page.tsx`，保护级别 **P1**，执行 Agent 固定为模拟交易。
+3. A4 目标只限去除骨架阶段假成功反馈，不新增 API，不修改 `src/main.py` / `src/api/router.py`，不修改 `docker-compose.dev.yml` 或任一 `.env.example`。
+4. `TASK-0017-A4` 可与 `TASK-0014-A3` / `TASK-0014-A4` 并行；`TASK-0022-B` 必须等待 A4 锁回后再启动。
+5. 根级 compose、`.env.example`、治理账本与远端运维动作继续保留给 Atlas / Jay.S 处理。

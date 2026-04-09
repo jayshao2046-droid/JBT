@@ -50,7 +50,7 @@
 1. `services/sim-trading/src/main.py`
 2. `services/sim-trading/src/api/router.py`
 3. `services/sim-trading/sim-trading_web/app/intelligence/page.tsx`
-4. `services/sim-trading/tests/test_log_view_api.py`
+4. `services/sim-trading/tests/test_log_view_api.py`（允许新增）
 
 #### 目标
 
@@ -64,6 +64,7 @@
 2. 当前不解锁 `shared/contracts/**`；若执行中要求修改正式契约，必须回交补充预审。
 3. 当前不解锁 `services/sim-trading/.env.example`；若执行中要求把 50 万本金变成配置项，必须回交 P0 补审。
 4. 当前不解锁任何部署文件；禁止把日志查看或主卡片改动混入 `TASK-0017` / `TASK-0020`。
+5. `TASK-0022-B` 必须等待 `TASK-0014-A4` 与 `TASK-0017-A4` 锁回后再启动。
 
 ## 五、向 Jay.S 汇报摘要
 
@@ -74,6 +75,6 @@
 
 ## 六、下一步建议
 
-1. 先由 Jay.S 决定是否立即签发 `TASK-0022-A` 的 P1 Token。
-2. 批次 A 完成并回交自校验后，再决定是否签发 `TASK-0022-B` 的 P1 Token。
-3. 在 Jay.S 未确认前，不派发模拟交易 Agent 进入 `TASK-0022` 代码写入。
+1. `TASK-0022-A` 已锁回，无需再为 A 批签发 Token。
+2. 待 `TASK-0014-A4` 与 `TASK-0017-A4` 锁回后，再由 Jay.S 决定是否签发 `TASK-0022-B` 的 P1 Token。
+3. 在 Jay.S 未确认前，不派发模拟交易 Agent 进入 `TASK-0022-B` 代码写入。

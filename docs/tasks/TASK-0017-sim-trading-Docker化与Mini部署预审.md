@@ -225,7 +225,7 @@
 1. **`TASK-0017` 正式成立。**
 2. **F Docker 化与 Mini 部署必须作为独立部署任务推进，不得与 `TASK-0011` legacy 清退混并。**
 3. **在文件级白名单与 Mini 运维授权补齐前，本任务暂不进入代码 Token 或远端执行。**
-4. **2026-04-06 已补充冻结 A1 单文件 P1 执行批次；当前仅建议为模拟交易 Agent 签发 `services/sim-trading/Dockerfile` 的单文件 Token。**
+4. **2026-04-06 / 2026-04-07 的 A1 / A2 / A3 已形成历史闭环并锁回；2026-04-09 新增 A4“本地 clean pre-deploy / 假交互去伪”扩展批次预审。**
 
 ---
 
@@ -266,3 +266,23 @@
 3. Token 状态：**pending_token** — `services/sim-trading/Dockerfile` 须由 Jay.S / Atlas 为模拟交易 Agent 签发 P1 Token；`docker-compose.dev.yml` 须单独签发 P0 Token（可复用 A2 扩展已签发的 P0 Token，如仍有效）。
 4. 执行前置：本 A3 批次相对 A1/A2 无强制顺序依赖，可与 A2 剩余 Token 签发并行推进；但 P0 与 P1 须分别签发、独立提交。
 5. 签名：项目架构师，2026-04-07。
+
+## 十二、2026-04-09 本地 clean pre-deploy 扩展预审补录
+
+### 1. 归属裁决
+
+1. 本轮“sim-trading 清理 / 本地 clean pre-deploy”继续复用 `TASK-0017`，不新开任务号。
+2. 原因：该事项属于部署前本地控制台可信度与演示安全收口，不新增业务能力，也不等于 `TASK-0022-B` 的最小只读日志能力。
+
+### 2. 补充批次 A4
+
+1. 批次名称：补充批次 A4 — 本地 clean pre-deploy / 假交互去伪
+2. 执行 Agent：模拟交易
+3. 保护级别：P1
+4. 业务白名单：
+   - `services/sim-trading/sim-trading_web/app/operations/page.tsx`
+   - `services/sim-trading/sim-trading_web/app/intelligence/page.tsx`
+5. 批次目标：去除骨架阶段“已下单 / 已发送 / 已下发 / 已重置”这类假成功反馈，改为明确的未接入 / 待账户就绪 / 只读提示或禁用态。
+6. 范围排除：不新增 API，不修改 `src/main.py` / `src/api/router.py`，不 reopen `docker-compose.dev.yml`，不修改任一 `.env.example`。
+7. 并行结论：`TASK-0017-A4` 可与 `TASK-0014-A3` / `TASK-0014-A4` 并行，因为不共享业务文件；`TASK-0022-B` 必须在 `TASK-0017-A4` 锁回后再启动，因为共享 `app/intelligence/page.tsx`。
+8. P0 结论：本轮不 reopen `docker-compose.dev.yml`，也不新增 `.env.example` Token。

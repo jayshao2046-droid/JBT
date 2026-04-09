@@ -142,7 +142,7 @@
 
 1. **`TASK-0014` 正式成立。**
 2. **C 风控通知必须作为独立任务推进，不得并入 `TASK-0010` 或 `TASK-0017`。**
-3. **即时通知继续归入 `TASK-0014` 的补充批次 A1 / A2；其中 `TASK-0014-A1` 已于 2026-04-07 完成实施、终审与锁回，`TASK-0014-A2` 当前保持待执行。**
+3. **即时通知继续归入 `TASK-0014` 的补充批次 A1 / A2 / A3 / A4；其中 `TASK-0014-A1` 与 `TASK-0014-A2` 已完成实施、终审与锁回，2026-04-09 新增 A3 / A4 扩展批次预审。**
 4. **legacy `J_BotQuant/.env` 只可作为部署侧凭证来源，不得把外部路径耦合进服务代码。**
 
 ## 十、2026-04-07 TASK-0014-A1 收口补录
@@ -152,4 +152,25 @@
 3. 最小自校验结果为 `13 passed, 1 skipped`。
 4. 对应代码提交为 `d4b5817`；对应 P1 token_id 为 `tok-7ab3cadf-043b-4709-b8e7-d00519f1ae81`；lockback review-id 为 `REVIEW-TASK-0014-A1`，当前状态 `locked`。
 5. 本批未扩展到 scheduler、日报、CTP 事件接线或 legacy `.env` 路径读取。
-6. 当前通知 / 报表子线下一执行顺序保持为 `TASK-0014-A2` → `TASK-0019-B0`（如需要）→ `TASK-0019-B1` → `TASK-0019-B2`。
+6. 当前通知主线下一执行顺序调整为 `TASK-0014-A3` → `TASK-0014-A4`；若剩余通知 / 报表模板占位需要补齐，统一并入 `TASK-0019-B0`，随后再进入 `TASK-0022-B` 与 `TASK-0019-B1` → `TASK-0019-B2`。
+
+## 十一、2026-04-09 扩展预审补录
+
+1. 本轮“通知系统扩容”继续复用 `TASK-0014`，不新开任务号。
+2. `TASK-0014-A1` 与 `TASK-0014-A2` 已完成历史闭环；本轮新增冻结的执行批次为 A3 / A4。
+3. `TASK-0014-A3` 冻结为“通知内核专业化”，保护级别 **P1**；业务白名单严格限于：
+	- `services/sim-trading/src/notifier/dispatcher.py`
+	- `services/sim-trading/src/notifier/email.py`
+	- `services/sim-trading/src/notifier/feishu.py`
+	- `services/sim-trading/src/risk/guards.py`
+	- `services/sim-trading/tests/test_notifier.py`
+4. `TASK-0014-A4` 冻结为“运行时事件源与守护恢复接线”，保护级别 **P1**；业务白名单严格限于：
+	- `services/sim-trading/src/main.py`
+	- `services/sim-trading/src/api/router.py`
+	- `services/sim-trading/src/gateway/simnow.py`
+	- `services/sim-trading/tests/test_ctp_notify.py`
+	- `services/sim-trading/tests/test_risk_hooks.py`
+5. 串行关系冻结为 `TASK-0014-A3` → `TASK-0014-A4`；A4 不得先于 A3 启动。
+6. 并行关系冻结为：`TASK-0017-A4` 可与 `TASK-0014-A3` / `TASK-0014-A4` 并行，因为不共享业务文件；`TASK-0022-B` 不得先于 `TASK-0014-A4` 启动，因为共享 `src/main.py` 与 `src/api/router.py`。
+7. 为避免 `services/sim-trading/.env.example` 在多个任务里重复签发，剩余通知 / 报表模板占位统一并入 `TASK-0019-B0`；`TASK-0014` 本轮不再单独拆 `.env.example` 的 P0 批次。
+8. 成交 / 持仓 / 账后统计类通知本轮不扩展到 `services/sim-trading/src/ledger/service.py`，保持由 `TASK-0019-B2` 与后续 execution / ledger 主线承接。
