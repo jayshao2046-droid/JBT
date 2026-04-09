@@ -6,7 +6,7 @@
 3. 告警升级：P2 → P1 → P0 按时间自动升级
 4. 渠道降级：飞书失败 → 自动邮件补发；双通道失败 → 本地 alarm.log
 5. 告警去重冷却：同一事件 5 分钟内不重复推送
-6. 夜间静默：22:00-08:00 仅 P0 和黑天鹅即时推送
+6. 夜间静默：默认 22:00-08:00；NEWS 单独延后到 08:30
 """
 
 from __future__ import annotations
@@ -85,6 +85,18 @@ class DataEvent:
         return hashlib.md5(raw.encode()).hexdigest()
 
 
+@dataclass
+class CollectionWindowItem:
+    """采集完成结果的窗口缓冲项。"""
+
+    collector_name: str
+    status: str
+    record_count: int
+    elapsed_sec: float
+    error_msg: str = ""
+    finished_at: datetime = field(default_factory=lambda: datetime.now(CN_TZ))
+
+
 def _webhook_for_type(notify_type: NotifyType) -> str:
     """根据通知类型返回对应 Webhook URL。"""
     if notify_type in (NotifyType.P0, NotifyType.P1, NotifyType.P2):
@@ -94,10 +106,24 @@ def _webhook_for_type(notify_type: NotifyType) -> str:
     return os.environ.get(FEISHU_INFO_URL_KEY, "")
 
 
-def _is_quiet_hours() -> bool:
-    """22:00-08:00 静默时段。"""
-    now = datetime.now(CN_TZ)
+def _is_quiet_hours(now: datetime | None = None) -> bool:
+    """默认 22:00-08:00 静默时段。"""
+    now = now or datetime.now(CN_TZ)
     return now.hour >= 22 or now.hour < 8
+
+
+def _is_news_quiet_hours(now: datetime | None = None) -> bool:
+    """NEWS 专用静默时段：22:00-08:30。"""
+    now = now or datetime.now(CN_TZ)
+    minutes = now.hour * 60 + now.minute
+    return minutes >= 22 * 60 or minutes < 8 * 60 + 30
+
+
+def _is_quiet_hours_for_type(notify_type: NotifyType, now: datetime | None = None) -> bool:
+    """按通知类型判断静默窗口。"""
+    if notify_type == NotifyType.NEWS:
+        return _is_news_quiet_hours(now)
+    return _is_quiet_hours(now)
 
 
 class NotifierDispatcher:
@@ -107,20 +133,37 @@ class NotifierDispatcher:
     UPGRADE_P2_TO_P1_SEC = 1800  # 30 分钟
     UPGRADE_P1_TO_P0_SEC = 3600  # 60 分钟
     P0_REPEAT_SEC = 900  # P0 每 15 分钟重复
+    COLLECTION_WINDOW_SEC = 60.0
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        feishu_sender: Any | None = None,
+        email_sender: Any | None = None,
+        collector_window_sec: float | None = None,
+    ) -> None:
         from services.data.src.notify.feishu import FeishuSender
         from services.data.src.notify.email_notify import EmailSender
 
-        self._feishu = FeishuSender()
-        self._email = EmailSender()
+        self._feishu = feishu_sender or FeishuSender()
+        self._email = email_sender or EmailSender()
         self._state = ChannelState.NORMAL
         self._lock = threading.Lock()
+        self._collector_window_sec = max(
+            0.0,
+            float(
+                self.COLLECTION_WINDOW_SEC if collector_window_sec is None else collector_window_sec,
+            ),
+        )
 
         # 去重：dedup_key → last_push_ts
         self._dedup_cache: dict[str, float] = {}
         # 告警升级：event_key → AlertState
         self._alert_states: dict[str, AlertState] = {}
+        # 采集完成窗口聚合
+        self._collection_window: list[CollectionWindowItem] = []
+        self._collection_window_started_at: float | None = None
+        self._collection_timer: threading.Timer | None = None
         # 告警日志
         self._alarm_log = Path(os.environ.get("JBT_DATA_LOG_DIR", "/runtime/logs")) / "alarm.log"
 
@@ -136,7 +179,7 @@ class NotifierDispatcher:
         now = time.time()
 
         # 夜间静默：仅 P0 或显式 bypass 通过
-        if _is_quiet_hours() and (not event.bypass_quiet_hours) and event.notify_type not in (NotifyType.P0,):
+        if _is_quiet_hours_for_type(event.notify_type) and (not event.bypass_quiet_hours) and event.notify_type not in (NotifyType.P0,):
             logger.debug("quiet hours, skipping: %s", event.event_code)
             return True
 
@@ -149,10 +192,13 @@ class NotifierDispatcher:
             self._dedup_cache[event.dedup_key] = now
 
         channels = event.channels or {"feishu", "email"}
+        feishu_attempted = False
+        email_attempted = False
 
         # 发送飞书（按 channels 路由）
         feishu_ok = True
         if "feishu" in channels:
+            feishu_attempted = True
             webhook_url = _webhook_for_type(event.notify_type)
             feishu_ok = self._feishu.send(
                 webhook_url=webhook_url,
@@ -164,27 +210,172 @@ class NotifierDispatcher:
         if "email" in channels:
             # 默认策略：P0/P1 总是发；其他仅在飞书失败时降级发
             if event.notify_type in (NotifyType.P0, NotifyType.P1):
+                email_attempted = True
                 email_ok = self._email.send(event=event)
             elif "feishu" in channels:
                 if not feishu_ok:
                     logger.warning("feishu failed for %s, degrading to email", event.event_code)
+                    email_attempted = True
                     email_ok = self._email.send(event=event)
             else:
                 # 仅邮件模式时直接发送
+                email_attempted = True
                 email_ok = self._email.send(event=event)
 
         # 更新通道状态
-        if feishu_ok and email_ok:
-            self._state = ChannelState.NORMAL
-        elif not feishu_ok and email_ok:
-            self._state = ChannelState.FEISHU_FAILED
-        elif feishu_ok and not email_ok:
-            self._state = ChannelState.EMAIL_FAILED
-        else:
+        if feishu_attempted and not feishu_ok and email_attempted and not email_ok:
             self._state = ChannelState.ALL_FAILED
             self._write_alarm_log(event)
+        elif feishu_attempted and not feishu_ok:
+            self._state = ChannelState.FEISHU_FAILED
+        elif email_attempted and not email_ok:
+            self._state = ChannelState.EMAIL_FAILED
+        else:
+            self._state = ChannelState.NORMAL
 
-        return feishu_ok or email_ok
+        return (feishu_attempted and feishu_ok) or (email_attempted and email_ok) or (not feishu_attempted and not email_attempted)
+
+    def record_collection_result(
+        self,
+        *,
+        collector_name: str,
+        record_count: int,
+        elapsed_sec: float,
+        status: str,
+        error_msg: str = "",
+        finished_at: datetime | None = None,
+    ) -> int:
+        """缓冲采集完成结果，并在同窗内合并成单条飞书摘要。"""
+        item = CollectionWindowItem(
+            collector_name=collector_name,
+            status=status,
+            record_count=max(0, int(record_count)),
+            elapsed_sec=max(0.0, float(elapsed_sec)),
+            error_msg=error_msg,
+            finished_at=finished_at or datetime.now(CN_TZ),
+        )
+
+        timer_to_start: threading.Timer | None = None
+        with self._lock:
+            if self._collection_window_started_at is None:
+                self._collection_window_started_at = item.finished_at.timestamp()
+            self._collection_window.append(item)
+            pending_count = len(self._collection_window)
+            if self._collection_timer is None and self._collector_window_sec > 0:
+                timer_to_start = threading.Timer(self._collector_window_sec, self.flush_collection_window)
+                timer_to_start.daemon = True
+                self._collection_timer = timer_to_start
+
+        if timer_to_start is not None:
+            timer_to_start.start()
+
+        return pending_count
+
+    def flush_collection_window(self) -> bool:
+        """立刻发送当前采集完成窗口摘要。"""
+        timer_to_cancel: threading.Timer | None = None
+        with self._lock:
+            if not self._collection_window:
+                self._collection_timer = None
+                self._collection_window_started_at = None
+                return True
+
+            items = list(self._collection_window)
+            started_at = self._collection_window_started_at or time.time()
+            self._collection_window.clear()
+            self._collection_window_started_at = None
+            timer_to_cancel = self._collection_timer
+            self._collection_timer = None
+
+        if timer_to_cancel is not None and timer_to_cancel is not threading.current_thread():
+            timer_to_cancel.cancel()
+
+        event = self._build_collection_summary_event(items=items, started_at=started_at)
+        return self.dispatch(event)
+
+    @staticmethod
+    def _collection_status_icon(status: str) -> str:
+        return {
+            "success": "🟢",
+            "zero_output": "🟡",
+            "failed": "🔴",
+        }.get(status, "🟢")
+
+    @staticmethod
+    def _collection_status_label(status: str) -> str:
+        return {
+            "success": "完成",
+            "zero_output": "0产出",
+            "failed": "异常",
+        }.get(status, "完成")
+
+    def _build_collection_summary_event(
+        self,
+        *,
+        items: list[CollectionWindowItem],
+        started_at: float,
+    ) -> DataEvent:
+        started_dt = datetime.fromtimestamp(started_at, CN_TZ)
+        finished_dt = max((item.finished_at for item in items), default=started_dt)
+        success_count = sum(1 for item in items if item.status == "success")
+        zero_count = sum(1 for item in items if item.status == "zero_output")
+        failed_count = sum(1 for item in items if item.status == "failed")
+
+        lines: list[str] = []
+        for item in items:
+            prefix = self._collection_status_icon(item.status)
+            if item.status == "failed":
+                detail = " ".join(str(item.error_msg or "未提供错误信息").split())[:120]
+                lines.append(f"{prefix} **{item.collector_name}** 异常 | {detail}")
+            elif item.status == "zero_output":
+                lines.append(
+                    f"{prefix} **{item.collector_name}** 0产出 | {item.record_count:,} 条 | {item.elapsed_sec:.1f}s",
+                )
+            else:
+                lines.append(
+                    f"{prefix} **{item.collector_name}** 完成 | {item.record_count:,} 条 | {item.elapsed_sec:.1f}s",
+                )
+
+        if len(items) == 1:
+            single = items[0]
+            title = f"{single.collector_name} {self._collection_status_label(single.status)}"
+        else:
+            parts: list[str] = []
+            if success_count:
+                parts.append(f"成功 {success_count}")
+            if zero_count:
+                parts.append(f"0产出 {zero_count}")
+            if failed_count:
+                parts.append(f"异常 {failed_count}")
+            suffix = f"（{' / '.join(parts)}）" if parts else ""
+            title = f"采集摘要 {started_dt.strftime('%H:%M')}{suffix}"
+
+        batch_hash = hashlib.md5(
+            "|".join(
+                f"{item.collector_name}:{item.status}:{item.record_count}:{item.finished_at.isoformat()}"
+                for item in items
+            ).encode("utf-8"),
+        ).hexdigest()
+
+        return DataEvent(
+            event_code="collector_window_summary",
+            notify_type=NotifyType.NOTIFY,
+            title=title,
+            body_md="\n".join(lines),
+            body_rows=[
+                ("采集器数", str(len(items))),
+                ("成功", str(success_count)),
+                ("0产出", str(zero_count)),
+                ("异常", str(failed_count)),
+            ],
+            trace_rows=[
+                ("窗口开始", started_dt.strftime("%Y-%m-%d %H:%M:%S")),
+                ("窗口结束", finished_dt.strftime("%Y-%m-%d %H:%M:%S")),
+            ],
+            source_name=f"collector_window:{started_dt.strftime('%Y%m%d%H%M%S')}:{batch_hash}",
+            channels={"feishu"},
+            bypass_quiet_hours=True,
+        )
 
     def check_alert_escalation(self, event_key: str, current_level: str) -> str:
         """检查告警升级。

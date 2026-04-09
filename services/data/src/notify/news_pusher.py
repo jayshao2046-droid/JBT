@@ -15,6 +15,7 @@ import hashlib
 import json
 import logging
 import re
+import threading
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -115,6 +116,10 @@ class NewsPusher:
     """新闻清洗 + 去重 + 批量推送管理器。"""
 
     BATCH_INTERVAL_SEC = 1800  # 30 分钟
+    DEFAULT_STORAGE_SOURCES = (
+        ("news_api", "news_api"),
+        ("rss", "news_rss"),
+    )
 
     def __init__(
         self,
@@ -122,9 +127,11 @@ class NewsPusher:
         dedup_file: Path | None = None,
     ) -> None:
         self._dedup_file = dedup_file or _DEFAULT_DEDUP_FILE
-        self._dedup_uids: set[str] = set()
+        self._dispatched_uids: set[str] = set()
+        self._pending_uids: set[str] = set()
         self._push_buffer: list[dict[str, Any]] = []
         self._last_push_ts: float = time.time()
+        self._lock = threading.Lock()
 
         # 统计
         self._total_collected = 0
@@ -137,8 +144,8 @@ class NewsPusher:
         if self._dedup_file.exists():
             try:
                 data = json.loads(self._dedup_file.read_text(encoding="utf-8"))
-                self._dedup_uids = set(data.get("uids", []))
-                logger.info("loaded %d dedup uids from %s", len(self._dedup_uids), self._dedup_file)
+                self._dispatched_uids = set(data.get("uids", []))
+                logger.info("loaded %d dedup uids from %s", len(self._dispatched_uids), self._dedup_file)
             except Exception as exc:
                 logger.warning("dedup cache load failed: %s", exc)
 
@@ -146,10 +153,10 @@ class NewsPusher:
         try:
             self._dedup_file.parent.mkdir(parents=True, exist_ok=True)
             # 保留最近的条目
-            uids = list(self._dedup_uids)
+            uids = list(self._dispatched_uids)
             if len(uids) > _MAX_DEDUP_SIZE:
                 uids = uids[-_MAX_DEDUP_SIZE:]
-                self._dedup_uids = set(uids)
+                self._dispatched_uids = set(uids)
             self._dedup_file.write_text(
                 json.dumps({"uids": uids, "updated": datetime.now(CN_TZ).isoformat()}, ensure_ascii=False),
                 encoding="utf-8",
@@ -157,54 +164,114 @@ class NewsPusher:
         except Exception as exc:
             logger.warning("dedup cache save failed: %s", exc)
 
+    @staticmethod
+    def _normalize_record(record: dict[str, Any]) -> dict[str, Any] | None:
+        payload = record.get("payload") if isinstance(record.get("payload"), dict) else None
+        source_name = str(record.get("source") or record.get("symbol_or_indicator") or "")
+        if payload is not None:
+            source_name = str(payload.get("source") or payload.get("provider") or payload.get("feed") or source_name)
+            return {
+                "title": payload.get("title") or payload.get("title_zh") or "",
+                "url": payload.get("url") or payload.get("link") or "",
+                "summary": payload.get("summary") or payload.get("summary_zh") or payload.get("content") or payload.get("full_text") or "",
+                "source": source_name,
+                "timestamp": record.get("timestamp") or payload.get("time") or datetime.now(CN_TZ).isoformat(),
+                "uid": payload.get("uid") or record.get("uid") or "",
+            }
+        if not isinstance(record, dict):
+            return None
+        return {
+            "title": record.get("title") or record.get("title_zh") or "",
+            "url": record.get("url") or record.get("link") or "",
+            "summary": record.get("summary") or record.get("summary_zh") or record.get("content") or record.get("full_text") or "",
+            "source": source_name,
+            "timestamp": record.get("timestamp") or datetime.now(CN_TZ).isoformat(),
+            "uid": record.get("uid") or "",
+        }
+
+    def sync_from_storage(
+        self,
+        *,
+        storage: Any | None = None,
+        sources: list[tuple[str, str]] | tuple[tuple[str, str], ...] | None = None,
+        limit_per_source: int = 120,
+    ) -> dict[str, Any]:
+        """从现有 news_api/rss 存储中同步新增新闻到批量缓冲。"""
+        if storage is None:
+            from services.data.src.data.storage import HDF5Storage
+
+            storage = HDF5Storage()
+
+        raw_records: list[dict[str, Any]] = []
+        for data_type, symbol in sources or self.DEFAULT_STORAGE_SOURCES:
+            try:
+                rows = storage.read_records(
+                    data_type=data_type,
+                    symbol=symbol,
+                    sort_by="timestamp",
+                    ascending=False,
+                    limit=limit_per_source,
+                )
+                raw_records.extend(reversed(rows))
+            except Exception as exc:
+                logger.warning("news storage sync failed for %s/%s: %s", data_type, symbol, exc)
+
+        if not raw_records:
+            return {"collected": 0, "cleaned": 0, "new": 0, "breaking": []}
+        return self.ingest(raw_records)
+
     def ingest(self, raw_records: list[dict[str, Any]]) -> dict[str, Any]:
         """接收原始采集结果，清洗 + 去重 + 分类。
 
         Returns stats: {"collected": int, "cleaned": int, "new": int, "breaking": list}
         """
-        self._total_collected += len(raw_records)
         cleaned: list[dict[str, Any]] = []
         breaking: list[dict[str, Any]] = []
 
-        for record in raw_records:
-            title = _clean_html(str(record.get("title") or record.get("title_zh") or ""))
-            if not title or len(title) < 4:
-                continue
+        with self._lock:
+            self._total_collected += len(raw_records)
 
-            url = str(record.get("url") or record.get("link") or "")
-            source = str(record.get("source") or record.get("provider") or record.get("feed") or "")
-            summary = _clean_html(str(record.get("summary") or record.get("summary_zh") or ""))
-            source_cn = SOURCE_CN_MAP.get(source, source)
+            for record in raw_records:
+                normalized = self._normalize_record(record)
+                if normalized is None:
+                    continue
 
-            uid = _dedup_key(title, url, source)
-            if uid in self._dedup_uids:
-                continue
-            self._dedup_uids.add(uid)
+                title = _clean_html(str(normalized.get("title") or ""))
+                if not title or len(title) < 4:
+                    continue
 
-            item = {
-                "title": title,
-                "url": url,
-                "source": source,
-                "source_cn": source_cn,
-                "summary": summary,
-                "uid": uid,
-                "timestamp": record.get("timestamp") or datetime.now(CN_TZ).isoformat(),
-            }
+                url = str(normalized.get("url") or "")
+                source = str(normalized.get("source") or "")
+                summary = _clean_html(str(normalized.get("summary") or ""))
+                source_cn = SOURCE_CN_MAP.get(source, source)
 
-            # 黑天鹅检测
-            kw_hit = _is_black_swan(title, summary)
-            if kw_hit:
-                item["breaking"] = True
-                item["keyword_hit"] = kw_hit
-                breaking.append(item)
-            elif _is_market_related(title, url):
-                item["market_related"] = True
+                uid = str(normalized.get("uid") or "") or _dedup_key(title, url, source)
+                if uid in self._dispatched_uids or uid in self._pending_uids:
+                    continue
 
-            cleaned.append(item)
+                item = {
+                    "title": title,
+                    "url": url,
+                    "source": source,
+                    "source_cn": source_cn,
+                    "summary": summary,
+                    "uid": uid,
+                    "timestamp": normalized.get("timestamp") or datetime.now(CN_TZ).isoformat(),
+                }
 
-        self._total_cleaned += len(cleaned)
-        self._push_buffer.extend(cleaned)
-        self._save_dedup_cache()
+                kw_hit = _is_black_swan(title, summary)
+                if kw_hit:
+                    item["breaking"] = True
+                    item["keyword_hit"] = kw_hit
+                    breaking.append(dict(item))
+                elif _is_market_related(title, url):
+                    item["market_related"] = True
+
+                self._pending_uids.add(uid)
+                self._push_buffer.append(item)
+                cleaned.append(item)
+
+            self._total_cleaned += len(cleaned)
 
         return {
             "collected": len(raw_records),
@@ -235,11 +302,192 @@ class NewsPusher:
 
         return major, industry
 
-    def flush_batch(self) -> None:
-        """清空推送缓冲区并更新计数。"""
-        self._total_pushed += len(self._push_buffer)
-        self._push_buffer.clear()
-        self._last_push_ts = time.time()
+    def _mark_as_dispatched(self, items: list[dict[str, Any]]) -> int:
+        if not items:
+            return 0
+
+        item_uids = {item.get("uid", "") for item in items}
+        item_uids.discard("")
+        dispatched = 0
+
+        with self._lock:
+            remaining: list[dict[str, Any]] = []
+            for item in self._push_buffer:
+                uid = str(item.get("uid") or "")
+                if uid and uid in item_uids:
+                    self._pending_uids.discard(uid)
+                    self._dispatched_uids.add(uid)
+                    dispatched += 1
+                    continue
+                remaining.append(item)
+
+            self._push_buffer = remaining
+            self._total_pushed += dispatched
+            self._last_push_ts = time.time()
+            self._save_dedup_cache()
+
+        return dispatched
+
+    @staticmethod
+    def _build_breaking_body(item: dict[str, Any]) -> str:
+        lines = []
+        title = item.get("title", "")
+        url = item.get("url", "")
+        if url:
+            lines.append(f"**标题:** [{title}]({url})")
+        else:
+            lines.append(f"**标题:** {title}")
+        if item.get("source_cn"):
+            lines.append(f"**来源:** {item['source_cn']}")
+        if item.get("keyword_hit"):
+            lines.append(f"**关键词命中:** {item['keyword_hit']}")
+        if item.get("summary"):
+            lines.append(f"**摘要:** {str(item['summary'])[:300]}")
+        return "\n".join(lines)
+
+    def dispatch_breaking(self, dispatcher: Any | None = None) -> dict[str, int]:
+        """立即下发缓冲中的黑天鹅新闻，成功后从批量队列移除。"""
+        if dispatcher is None:
+            from services.data.src.notify.dispatcher import get_dispatcher
+
+            dispatcher = get_dispatcher()
+
+        with self._lock:
+            breaking_items = [dict(item) for item in self._push_buffer if item.get("breaking")]
+
+        if not breaking_items:
+            return {"breaking_pushed": 0}
+
+        from services.data.src.notify.dispatcher import DataEvent, NotifyType
+
+        sent_items: list[dict[str, Any]] = []
+        for item in breaking_items:
+            event = DataEvent(
+                event_code="news_breaking",
+                notify_type=NotifyType.P0,
+                title=item.get("title", "突发重大新闻"),
+                body_md=self._build_breaking_body(item),
+                body_rows=[
+                    ("来源", str(item.get("source_cn") or item.get("source") or "")),
+                    ("关键词", str(item.get("keyword_hit") or "")),
+                ],
+                source_name=str(item.get("uid") or item.get("source") or "news_breaking"),
+                channels={"feishu"},
+                bypass_quiet_hours=True,
+            )
+            if dispatcher.dispatch(event):
+                sent_items.append(item)
+
+        return {"breaking_pushed": self._mark_as_dispatched(sent_items)}
+
+    @staticmethod
+    def _build_batch_body(items: list[dict[str, Any]]) -> str:
+        lines = []
+        for item in items[:20]:
+            source_cn = item.get("source_cn") or item.get("source") or ""
+            source_tag = f" ({source_cn})" if source_cn else ""
+            title = str(item.get("title") or "")[:180]
+            prefix = "🚨" if item.get("breaking") else "•"
+            if item.get("url"):
+                lines.append(f"{prefix} [{title}]({item['url']}){source_tag}")
+            else:
+                lines.append(f"{prefix} {title}{source_tag}")
+        hidden = len(items) - min(len(items), 20)
+        if hidden > 0:
+            lines.append(f"… 其余 {hidden} 条已合并在本批次中")
+        return "\n".join(lines)
+
+    def _build_batch_event(self, items: list[dict[str, Any]]) -> Any:
+        from services.data.src.notify.dispatcher import DataEvent, NotifyType
+
+        batch_hash = hashlib.md5(
+            "|".join(sorted(str(item.get("uid") or "") for item in items)).encode("utf-8")
+        ).hexdigest()
+        breaking_count = sum(1 for item in items if item.get("breaking"))
+        market_count = sum(1 for item in items if item.get("market_related"))
+        title_suffix = datetime.now(CN_TZ).strftime("%H:%M")
+        title = f"新闻摘要 {title_suffix}"
+        if breaking_count:
+            title += f"（含突发 {breaking_count} 条）"
+
+        return DataEvent(
+            event_code="news_batch_summary",
+            notify_type=NotifyType.NEWS,
+            title=title,
+            body_md=self._build_batch_body(items),
+            body_rows=[
+                ("摘要条数", str(len(items))),
+                ("行业相关", str(market_count)),
+                ("突发新闻", str(breaking_count)),
+            ],
+            trace_rows=[
+                ("累计采集", str(self._total_collected)),
+                ("累计清洗", str(self._total_cleaned)),
+                ("已推送", str(self._total_pushed)),
+                ("去重缓存", str(len(self._dispatched_uids))),
+            ],
+            source_name=f"news_batch:{batch_hash}",
+            channels={"feishu"},
+        )
+
+    def flush(
+        self,
+        *,
+        dispatcher: Any | None = None,
+        now: datetime | None = None,
+    ) -> dict[str, int]:
+        """发送当前新闻缓冲区的一条合并摘要通知。"""
+        if dispatcher is None:
+            from services.data.src.notify.dispatcher import get_dispatcher
+
+            dispatcher = get_dispatcher()
+
+        breaking_stats = self.dispatch_breaking(dispatcher)
+
+        with self._lock:
+            items = [dict(item) for item in self._push_buffer if not item.get("breaking")]
+
+        if not items:
+            return {
+                "pushed": 0,
+                "breaking_pushed": breaking_stats.get("breaking_pushed", 0),
+                "buffer_size": self.stats["buffer_size"],
+            }
+
+        from services.data.src.notify.dispatcher import NotifyType, _is_quiet_hours_for_type
+
+        if _is_quiet_hours_for_type(NotifyType.NEWS, now):
+            return {
+                "pushed": 0,
+                "breaking_pushed": breaking_stats.get("breaking_pushed", 0),
+                "deferred": len(items),
+                "buffer_size": self.stats["buffer_size"],
+            }
+
+        event = self._build_batch_event(items)
+        if not dispatcher.dispatch(event):
+            return {
+                "pushed": 0,
+                "breaking_pushed": breaking_stats.get("breaking_pushed", 0),
+                "failed": len(items),
+                "buffer_size": self.stats["buffer_size"],
+            }
+
+        pushed = self._mark_as_dispatched(items)
+        return {
+            "pushed": pushed,
+            "breaking_pushed": breaking_stats.get("breaking_pushed", 0),
+            "buffer_size": self.stats["buffer_size"],
+        }
+
+    def flush_batch(
+        self,
+        *,
+        dispatcher: Any | None = None,
+        now: datetime | None = None,
+    ) -> dict[str, int]:
+        """兼容旧接口，统一走同一条新闻摘要推送路径。"""
+        return self.flush(dispatcher=dispatcher, now=now)
 
     @property
     def stats(self) -> dict[str, int]:
@@ -247,6 +495,6 @@ class NewsPusher:
             "total_collected": self._total_collected,
             "total_cleaned": self._total_cleaned,
             "total_pushed": self._total_pushed,
-            "dedup_cache_size": len(self._dedup_uids),
+            "dedup_cache_size": len(self._dispatched_uids),
             "buffer_size": len(self._push_buffer),
         }

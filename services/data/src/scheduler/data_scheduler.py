@@ -90,6 +90,47 @@ def _get_dispatcher() -> Any:
     return _dispatcher
 
 
+def _extract_record_count(result: Any) -> int:
+    """从采集返回值中提取记录数。"""
+    if isinstance(result, dict):
+        total = 0
+        for value in result.values():
+            if isinstance(value, (int, float)):
+                total += int(value)
+        return total
+    if isinstance(result, (int, float)):
+        return int(result)
+    if isinstance(result, (list, tuple, set)):
+        return len(result)
+    return 0
+
+
+def _enqueue_collection_result(
+    dispatcher: Any,
+    *,
+    collector_name: str,
+    record_count: int,
+    elapsed_sec: float,
+    status: str,
+    error_msg: str = "",
+) -> None:
+    """将采集结果加入同窗摘要缓冲。"""
+    if dispatcher is None:
+        return
+
+    enqueue = getattr(dispatcher, "record_collection_result", None)
+    if not callable(enqueue):
+        return
+
+    enqueue(
+        collector_name=collector_name,
+        record_count=record_count,
+        elapsed_sec=elapsed_sec,
+        status=status,
+        error_msg=error_msg,
+    )
+
+
 def _emit_market_transition_notifications() -> None:
     """检测开盘/休盘状态变更并推送飞书通知。
 
@@ -262,46 +303,32 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
         t0 = time.time()
         result = func(**kwargs)
         elapsed = round(time.time() - t0, 2)
-        total = sum(result.values()) if isinstance(result, dict) else 0
-        logger.info("✅ %s 完成: %d 条记录, 耗时 %ss", name, total, elapsed)
+        total = _extract_record_count(result)
+        zero_output = total <= 0
+        if zero_output:
+            logger.warning("⚠️ %s 0产出: %d 条记录, 耗时 %ss", name, total, elapsed)
+        else:
+            logger.info("✅ %s 完成: %d 条记录, 耗时 %ss", name, total, elapsed)
 
-        # 发送完成通知
-        if d and not silent:
-            try:
-                from services.data.src.notify.dispatcher import DataEvent, NotifyType
-                channels = {"feishu", "email"}
-                if name in {"持仓仓单日报"}:
-                    # 明细仅邮件；飞书只发摘要（下面追加一条 feishu-only）。
-                    channels = {"email"}
-                d.dispatch(DataEvent(
-                    event_code="collector_done",
-                    title=f"{name} 完成",
-                    notify_type=NotifyType.NOTIFY,
-                    body_md=f"{name} 完成",
-                    body_rows=[("采集器", name), ("记录数", f"{total:,} 条"), ("耗时", f"{elapsed}s")],
-                    source_name=name,
-                    channels=channels,
-                    bypass_quiet_hours=True,
-                ))
-
-                if name in {"持仓仓单日报"}:
-                    d.dispatch(DataEvent(
-                        event_code="collector_done_feishu_summary",
-                        title=f"{name} 完成（摘要）",
-                        notify_type=NotifyType.NOTIFY,
-                        body_md=f"{name} 完成（摘要）",
-                        body_rows=[("采集器", name), ("状态", "已完成"), ("明细", "仓单/持仓明细已发送邮件")],
-                        source_name=name,
-                        channels={"feishu"},
-                        bypass_quiet_hours=True,
-                    ))
-            except Exception:
-                pass
+        if not silent:
+            _enqueue_collection_result(
+                d,
+                collector_name=name,
+                record_count=total,
+                elapsed_sec=elapsed,
+                status="zero_output" if zero_output else "success",
+            )
 
         # 记录到旧通知器
         n = _get_notifier(kwargs.get("config"))
         if n:
-            n.record_result(name, records=total, elapsed=elapsed, success=True)
+            n.record_result(
+                name,
+                records=total,
+                elapsed=elapsed,
+                success=not zero_output,
+                error="zero_output" if zero_output else None,
+            )
     except Exception:
         logger.error("❌ %s 失败:\n%s", name, traceback.format_exc())
         err_msg = traceback.format_exc()[-200:]
@@ -321,6 +348,16 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
                 ))
             except Exception:
                 pass
+
+        if not silent:
+            _enqueue_collection_result(
+                d,
+                collector_name=name,
+                record_count=0,
+                elapsed_sec=0,
+                status="failed",
+                error_msg=err_msg,
+            )
 
         n = _get_notifier(kwargs.get("config"))
         if n:
@@ -701,14 +738,8 @@ def job_market_session_watch(config: dict[str, Any]) -> None:
 
 
 def job_feishu_news_hourly(config: dict[str, Any]) -> None:
-    """飞书新闻推送 — 每小时。"""
-    from scripts.feishu_news_hourly import job_feishu_news_hourly as _run
-    try:
-        logger.info("▶ 开始执行: 飞书新闻推送")
-        _run(config)
-        logger.info("✅ 飞书新闻推送完成")
-    except Exception:
-        logger.error("❌ 飞书新闻推送失败:\n%s", traceback.format_exc())
+    """[DEPRECATED] 旧飞书新闻小时任务已收口到新闻批量推送。"""
+    logger.info("[DEPRECATED] job_feishu_news_hourly 已停用，统一由 job_news_push_batch 负责新闻摘要推送")
 
 
 def job_daily_summary(config: dict[str, Any]) -> None:
@@ -855,6 +886,9 @@ def job_sla_reset(config: dict[str, Any]) -> None:
 def job_daily_reset(config: dict[str, Any]) -> None:
     """每日统计重置 — 00:00 清零当日计数器。"""
     n = _get_notifier(config)
+    if n:
+        n.reset_daily()
+        logger.info("✅ 每日采集计数器已重置")
 
 
 def job_daily_email_report(config: dict[str, Any]) -> None:
@@ -930,16 +964,18 @@ def job_news_push_batch(config: dict[str, Any]) -> None:
         logger.info("▶ 开始执行: 新闻批量推送")
         from services.data.src.notify.news_pusher import NewsPusher
         pusher = NewsPusher()
+        sync_stats = pusher.sync_from_storage()
         stats = pusher.flush()
-        if stats and stats.get("pushed", 0) > 0:
+        if stats and stats.get("deferred", 0) > 0:
+            logger.info("✅ 新闻推送: 静默窗口内暂缓 %d 条", stats["deferred"])
+        elif stats and stats.get("pushed", 0) > 0:
             logger.info("✅ 新闻推送: %d 条", stats["pushed"])
+        elif sync_stats and sync_stats.get("new", 0) > 0:
+            logger.info("✅ 新闻推送: 已同步 %d 条，当前无需推送", sync_stats["new"])
         else:
             logger.info("✅ 新闻推送: 无新内容")
     except Exception:
         logger.error("❌ 新闻推送异常:\n%s", traceback.format_exc())
-    if n:
-        n.reset_daily()
-        logger.info("✅ 每日采集计数器已重置")
 
 
 def job_session_notify(config: dict[str, Any], session_name: str = "") -> None:
@@ -1089,11 +1125,6 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
         job_options, CronTrigger(hour=15, minute=30, day_of_week="mon-fri"),
         args=[config], id="options_daily", name="期权行情",
     )
-    # [DEPRECATED LIFTED] 飞书新闻推送: 每1小时
-    scheduler.add_job(
-        job_feishu_news_hourly, IntervalTrigger(hours=1),
-        args=[config], id="feishu_news_hourly", name="飞书新闻推送",
-    )
     # ── 采集监控通知 ──
     # [DEPRECATED] 每日采集汇总: 23:00 — 已被 2h 心跳卡片替代
     # scheduler.add_job(
@@ -1210,7 +1241,6 @@ _FALLBACK_JOBS: list[tuple[str, Callable[..., Any], int | None, str | None]] = [
     ("外汇日线",               job_forex,               None,  "17:20"),
     ("CFTC持仓报告",           job_cftc,                None,  "10:00"),  # 周六
     ("期权行情",               job_options,             None,  "15:30"),
-    ("飞书新闻推送",           job_feishu_news_hourly,  3600,  None),
     ("每日采集汇总",           job_daily_summary,       None,  "23:00"),
     ("晚间审计日报",           job_evening_report,      None,  "23:05"),
     ("因子/信号早盘报告",      job_factor_signal_morning,    None, "11:35"),

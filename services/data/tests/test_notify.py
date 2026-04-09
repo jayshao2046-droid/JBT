@@ -14,6 +14,7 @@ import os
 import sys
 from pathlib import Path
 from datetime import datetime
+from typing import Any
 
 # 确保项目根目录在 sys.path
 ROOT = Path(__file__).resolve().parents[3]
@@ -24,21 +25,55 @@ sys.path.insert(0, str(ROOT))
 # Unit / Smoke Tests (pytest)
 # ═══════════════════════════════════════════════
 
+
+class FakeFeishuSender:
+    def __init__(self) -> None:
+        self.events: list[Any] = []
+
+    def send(self, *, webhook_url: str, event: Any) -> bool:
+        self.events.append({"webhook_url": webhook_url, "event": event})
+        return True
+
+
+class FakeEmailSender:
+    def __init__(self) -> None:
+        self.events: list[Any] = []
+
+    def send(self, *, event: Any) -> bool:
+        self.events.append(event)
+        return True
+
+
+class CaptureDispatcher:
+    def __init__(self) -> None:
+        self.events: list[Any] = []
+
+    def dispatch(self, event: Any) -> bool:
+        self.events.append(event)
+        return True
+
 def test_import_dispatcher():
     from services.data.src.notify.dispatcher import (
         DataEvent, NotifierDispatcher, NotifyType, get_dispatcher,
     )
     assert NotifyType.P0.value == "P0"
     assert NotifyType.NOTIFY.value == "NOTIFY"
-    evt = DataEvent(title="test", notify_type=NotifyType.NOTIFY, body_rows=[("k", "v")])
+    evt = DataEvent(
+        event_code="test_event",
+        title="test",
+        notify_type=NotifyType.NOTIFY,
+        body_md="test body",
+        body_rows=[("k", "v")],
+    )
     assert evt.title == "test"
+    assert isinstance(get_dispatcher(), NotifierDispatcher)
 
 
 def test_import_card_templates():
     from services.data.src.notify import card_templates as ct
-    card = ct.service_lifecycle_card(action="启动", detail="data-service v0.2.1")
-    assert "header" in card
-    assert card["header"]["template"] == "turquoise"
+    card = ct.service_lifecycle_card(action="启动", version="v0.2.1")
+    assert "card" in card
+    assert card["card"]["header"]["template"] == "turquoise"
 
 
 def test_import_feishu_sender():
@@ -72,6 +107,7 @@ def test_import_news_pusher():
     pusher = NewsPusher()
     assert hasattr(pusher, "ingest")
     assert hasattr(pusher, "flush")
+    assert hasattr(pusher, "flush_batch")
 
 
 def test_card_templates_all():
@@ -118,6 +154,129 @@ def test_card_templates_all():
 
     for i, card in enumerate(cards):
         assert "msg_type" in card or "header" in card.get("card", {}), f"card {i} invalid"
+
+
+def test_collection_summary_merges_same_window_and_skips_email():
+    from services.data.src.notify.dispatcher import NotifierDispatcher
+
+    feishu = FakeFeishuSender()
+    email = FakeEmailSender()
+    dispatcher = NotifierDispatcher(
+        feishu_sender=feishu,
+        email_sender=email,
+        collector_window_sec=0,
+    )
+
+    dispatcher.record_collection_result(
+        collector_name="日线K线",
+        record_count=128,
+        elapsed_sec=1.2,
+        status="success",
+    )
+    dispatcher.record_collection_result(
+        collector_name="外盘分钟K线",
+        record_count=0,
+        elapsed_sec=2.4,
+        status="zero_output",
+    )
+
+    assert dispatcher.flush_collection_window() is True
+    assert len(feishu.events) == 1
+    assert email.events == []
+
+    event = feishu.events[0]["event"]
+    assert event.title.startswith("采集摘要")
+    assert "日线K线" in event.body_md
+    assert "外盘分钟K线" in event.body_md
+    assert "0产出" in event.body_md
+
+
+def test_zero_output_is_not_reported_as_complete():
+    from services.data.src.notify.dispatcher import NotifierDispatcher
+
+    feishu = FakeFeishuSender()
+    dispatcher = NotifierDispatcher(
+        feishu_sender=feishu,
+        email_sender=FakeEmailSender(),
+        collector_window_sec=0,
+    )
+
+    dispatcher.record_collection_result(
+        collector_name="外盘分钟K线",
+        record_count=0,
+        elapsed_sec=3.5,
+        status="zero_output",
+    )
+    dispatcher.flush_collection_window()
+
+    event = feishu.events[0]["event"]
+    assert event.title == "外盘分钟K线 0产出"
+    assert "完成" not in event.title
+
+
+def test_news_quiet_window_boundary_only_applies_to_news():
+    from services.data.src.notify.dispatcher import CN_TZ, NotifyType, _is_quiet_hours_for_type
+
+    assert _is_quiet_hours_for_type(NotifyType.NEWS, datetime(2026, 4, 9, 8, 29, tzinfo=CN_TZ)) is True
+    assert _is_quiet_hours_for_type(NotifyType.NEWS, datetime(2026, 4, 9, 8, 30, tzinfo=CN_TZ)) is False
+    assert _is_quiet_hours_for_type(NotifyType.NOTIFY, datetime(2026, 4, 9, 8, 15, tzinfo=CN_TZ)) is False
+
+
+def test_news_pusher_flush_dispatches_single_summary(tmp_path: Path):
+    from services.data.src.notify.news_pusher import NewsPusher
+    from services.data.src.notify.dispatcher import CN_TZ
+
+    pusher = NewsPusher(dedup_file=tmp_path / "news_dedup.json")
+    stats = pusher.ingest([
+        {
+            "title": "央行公开市场操作保持流动性合理充裕",
+            "url": "https://example.com/news-1",
+            "summary": "公开市场操作公告",
+            "source": "xinhua",
+        },
+        {
+            "title": "螺纹钢主力合约夜盘延续偏强走势",
+            "url": "https://example.com/news-2",
+            "summary": "黑色系夜盘波动上行",
+            "source": "cls",
+        },
+    ])
+    assert stats["new"] == 2
+
+    dispatcher = CaptureDispatcher()
+    result = pusher.flush(
+        dispatcher=dispatcher,
+        now=datetime(2026, 4, 9, 9, 0, tzinfo=CN_TZ),
+    )
+
+    assert result["pushed"] == 2
+    assert len(dispatcher.events) == 1
+    event = dispatcher.events[0]
+    assert event.event_code == "news_batch_summary"
+    assert "新闻摘要" in event.title
+    assert "螺纹钢" in event.body_md
+
+
+def test_job_news_push_batch_syncs_storage_before_flush(monkeypatch):
+    from services.data.src.notify import news_pusher as news_pusher_module
+    from services.data.src.scheduler.data_scheduler import job_news_push_batch
+
+    calls: list[str] = []
+
+    class FakeNewsPusher:
+        def sync_from_storage(self) -> dict[str, Any]:
+            calls.append("sync")
+            return {"new": 2}
+
+        def flush(self) -> dict[str, Any]:
+            calls.append("flush")
+            return {"pushed": 2}
+
+    monkeypatch.setattr(news_pusher_module, "NewsPusher", FakeNewsPusher)
+
+    job_news_push_batch({})
+
+    assert calls == ["sync", "flush"]
 
 
 # ═══════════════════════════════════════════════
