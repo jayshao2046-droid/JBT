@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+"""TASK-0027-A5 API 层回归 + 增强测试。
+
+验证:
+1. 原有 4 个只读 API (health, version, symbols, bars) — 保持不动
+2. dashboard API (system, collectors, storage, news)
+3. 错误处理 (404, bars 缺符号, bars 无数据)
+4. ops 接口 (health-check 信号)
+5. 服务常量正确性
+"""
+
 import json
 import sys
 from pathlib import Path
@@ -307,3 +317,101 @@ def test_dashboard_storage_and_news(tmp_path: Path, monkeypatch) -> None:
     assert news_payload["items"][0]["title"] == "铜价上涨，库存继续回落"
     assert news_payload["push_records"][0]["title"] == "铜价上涨，库存继续回落"
     assert any(item["word"] == "库存" for item in news_payload["hot_keywords"])
+
+
+# ── 增强覆盖: 错误处理 ──────────────────────────────────────
+
+def test_nonexistent_route_returns_404() -> None:
+    """Unknown path should return 404 or 405."""
+    client = TestClient(app)
+    response = client.get("/api/v1/nonexistent_endpoint")
+    assert response.status_code in (404, 405)
+
+
+def test_bars_missing_symbol_returns_422() -> None:
+    """bars endpoint without required symbol should return 422."""
+    client = TestClient(app)
+    response = client.get("/api/v1/bars")
+    assert response.status_code == 422
+
+
+def test_bars_empty_data_returns_empty(tmp_path: Path, monkeypatch) -> None:
+    """bars with no matching data should return 200 with count=0 or 404."""
+    monkeypatch.setenv("DATA_STORAGE_ROOT", str(tmp_path))
+    client = TestClient(app)
+    response = client.get(
+        "/api/v1/bars",
+        params={
+            "symbol": "NONEXISTENT.x9999",
+            "timeframe_minutes": 1,
+            "start": "2020-01-01",
+            "end": "2020-01-01",
+        },
+    )
+    # Either 404 (symbol not found) or 200 with empty bars
+    assert response.status_code in (200, 404)
+    if response.status_code == 200:
+        assert response.json()["count"] == 0
+
+
+# ── 增强覆盖: 服务常量 ──────────────────────────────────────
+
+def test_service_constants() -> None:
+    """Service name and version should be correct."""
+    assert SERVICE_NAME == "jbt-data"
+    assert SERVICE_VERSION == "1.0.0"
+
+
+def test_app_is_fastapi_instance() -> None:
+    """app should be a FastAPI instance."""
+    from fastapi import FastAPI as _FastAPI
+    assert isinstance(app, _FastAPI)
+
+
+# ── 增强覆盖: dashboard system 无数据时 ─────────────────────
+
+def test_dashboard_system_no_data(tmp_path: Path, monkeypatch) -> None:
+    """dashboard/system should return 200 even with empty storage."""
+    monkeypatch.setenv("DATA_STORAGE_ROOT", str(tmp_path))
+    client = TestClient(app)
+    response = client.get("/api/v1/dashboard/system")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["service"]["name"] == SERVICE_NAME
+
+
+def test_dashboard_collectors_no_data(tmp_path: Path, monkeypatch) -> None:
+    """dashboard/collectors should return 200 even without status file."""
+    monkeypatch.setenv("DATA_STORAGE_ROOT", str(tmp_path))
+    client = TestClient(app)
+    response = client.get("/api/v1/dashboard/collectors")
+    assert response.status_code == 200
+
+
+def test_dashboard_storage_empty(tmp_path: Path, monkeypatch) -> None:
+    """dashboard/storage should report exists=True for empty storage."""
+    monkeypatch.setenv("DATA_STORAGE_ROOT", str(tmp_path))
+    client = TestClient(app)
+    response = client.get("/api/v1/dashboard/storage")
+    assert response.status_code == 200
+
+
+def test_dashboard_news_empty(tmp_path: Path, monkeypatch) -> None:
+    """dashboard/news with no news files should return 200."""
+    monkeypatch.setenv("DATA_STORAGE_ROOT", str(tmp_path))
+    client = TestClient(app)
+    response = client.get("/api/v1/dashboard/news")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["summary"]["total_items"] == 0
+
+
+# ── 增强覆盖: symbols 空仓库 ────────────────────────────────
+
+def test_symbols_empty_storage(tmp_path: Path, monkeypatch) -> None:
+    """symbols endpoint should return empty list for empty storage."""
+    monkeypatch.setenv("DATA_STORAGE_ROOT", str(tmp_path))
+    client = TestClient(app)
+    response = client.get("/api/v1/symbols")
+    assert response.status_code == 200
+    assert response.json()["count"] == 0

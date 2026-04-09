@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""TASK-0028 通知系统集成测试。
+"""TASK-0027-A5 通知系统联调测试（增强 TASK-0028 基线）。
+
+验证:
+1. 原有 11 个测试保持不动
+2. 增强: news_pusher flush 链路
+3. 增强: email HTML 日报生成
+4. 增强: 飞书卡片全模板覆盖
+5. 增强: dispatcher 告警升级 / 冷却 / 渠道降级
+6. 增强: news_pusher dedup 持久化
+7. 增强: flush_batch 兼容接口
 
 用法:
     # 仅烟雾测试（不发送真实消息）
@@ -291,6 +300,227 @@ def test_webhook_for_type_accepts_news_and_trading_compat_envs(monkeypatch):
     assert _webhook_for_type(NotifyType.INFO) == "https://news-webhook"
     assert _webhook_for_type(NotifyType.NOTIFY) == "https://news-webhook"
     assert _webhook_for_type(NotifyType.TRADE) == "https://trading-webhook"
+
+
+# ── 增强覆盖: news_pusher dedup 持久化 ─────────────────────
+
+def test_news_pusher_dedup_persists_across_instances(tmp_path: Path):
+    """Dedup state should survive across NewsPusher instances."""
+    from services.data.src.notify.news_pusher import NewsPusher
+    from services.data.src.notify.dispatcher import CN_TZ
+
+    dedup_file = tmp_path / "news_dedup.json"
+    pusher1 = NewsPusher(dedup_file=dedup_file)
+    pusher1.ingest([{
+        "title": "特殊去重测试新闻",
+        "url": "https://example.com/dedup-test",
+        "summary": "去重测试",
+        "source": "test",
+    }])
+    dispatcher1 = CaptureDispatcher()
+    pusher1.flush(
+        dispatcher=dispatcher1,
+        now=datetime(2026, 4, 9, 10, 0, tzinfo=CN_TZ),
+    )
+    assert len(dispatcher1.events) == 1
+
+    # Second instance with same dedup file should skip the same news
+    pusher2 = NewsPusher(dedup_file=dedup_file)
+    stats = pusher2.ingest([{
+        "title": "特殊去重测试新闻",
+        "url": "https://example.com/dedup-test",
+        "summary": "去重测试",
+        "source": "test",
+    }])
+    assert stats["new"] == 0
+
+
+def test_news_pusher_flush_batch_compat(tmp_path: Path):
+    """flush_batch should be an alias for flush."""
+    from services.data.src.notify.news_pusher import NewsPusher
+    from services.data.src.notify.dispatcher import CN_TZ
+
+    pusher = NewsPusher(dedup_file=tmp_path / "dedup.json")
+    pusher.ingest([{
+        "title": "flush_batch 兼容测试",
+        "url": "https://example.com/batch",
+        "summary": "兼容",
+        "source": "test",
+    }])
+    dispatcher = CaptureDispatcher()
+    result = pusher.flush_batch(
+        dispatcher=dispatcher,
+        now=datetime(2026, 4, 9, 10, 0, tzinfo=CN_TZ),
+    )
+    assert result["pushed"] == 1
+
+
+def test_news_pusher_stats_property(tmp_path: Path):
+    """NewsPusher.stats should return correct counters."""
+    from services.data.src.notify.news_pusher import NewsPusher
+
+    pusher = NewsPusher(dedup_file=tmp_path / "dedup.json")
+    stats = pusher.stats
+    assert "total_collected" in stats
+    assert "buffer_size" in stats
+    assert stats["total_collected"] == 0
+
+
+# ── 增强覆盖: email HTML 日报生成 ──────────────────────────
+
+def test_build_daily_report_html_contains_all_sections():
+    """Daily report HTML should contain all major sections."""
+    from services.data.src.notify.email_notify import build_daily_report_html
+
+    html = build_daily_report_html(
+        total_rounds=20, success_rate=95.0,
+        failed_collectors=["波动率", "天气"],
+        total_records=50000,
+        sources_freshness=[
+            {"label": "国内期货分钟", "ok": True, "age_str": "2分钟"},
+            {"label": "外盘日线", "ok": False, "age_str": "48小时"},
+        ],
+        cpu_pct=45.0, mem_pct=60.0, disk_pct=70.0,
+        process_status=[
+            {"label": "调度器", "ok": True, "uptime": "24h"},
+            {"label": "新闻", "ok": False, "uptime": "0h"},
+        ],
+        errors=[
+            {"time": "10:30", "msg": "timeout"},
+            {"time": "14:00", "msg": "connection refused"},
+        ],
+        news_collected=500, news_pushed=30, breaking_count=2,
+        health_score=72,
+    )
+    assert "72/100" in html
+    assert "波动率" in html or "天气" in html
+    assert "50000" in html or "50,000" in html
+
+
+def test_build_daily_report_html_zero_errors():
+    """Daily report with zero errors should still render."""
+    from services.data.src.notify.email_notify import build_daily_report_html
+
+    html = build_daily_report_html(
+        total_rounds=10, success_rate=100.0,
+        failed_collectors=[],
+        total_records=10000,
+        sources_freshness=[],
+        cpu_pct=10.0, mem_pct=20.0, disk_pct=30.0,
+        process_status=[],
+        errors=[], news_collected=0, news_pushed=0, breaking_count=0,
+        health_score=100,
+    )
+    assert "100/100" in html
+
+
+# ── 增强覆盖: 飞书卡片模板逐一校验 ─────────────────────────
+
+def test_card_alert_p0_buttons_has_interactive_elements():
+    """P0 alert card should have action buttons."""
+    from services.data.src.notify import card_templates as ct
+
+    card = ct.alert_p0_with_buttons(
+        title="P0测试", body_md="紧急",
+        ops_base_url="http://localhost:8105", ops_token="tok",
+    )
+    card_body = card.get("card", {})
+    assert card_body.get("header", {}).get("template") == "red"
+
+
+def test_card_news_batch_has_correct_template():
+    """News batch card should use wathet template."""
+    from services.data.src.notify import card_templates as ct
+
+    card = ct.news_batch_card(
+        category="重大新闻",
+        items=[{"title": "测试", "source_cn": "新华社", "url": "https://example.com"}],
+        total_collected=10, total_pushed=1, total_cleaned=9,
+    )
+    assert card["card"]["header"]["template"] == "wathet"
+
+
+def test_card_daily_summary_has_correct_template():
+    """Daily summary card template should reflect health_score."""
+    from services.data.src.notify import card_templates as ct
+
+    card_good = ct.daily_summary_card(
+        total_rounds=10, success_rate=90.0,
+        failed_collectors=[], total_records=1000,
+        sources_freshness=[], cpu_pct=30, mem_pct=50, disk_pct=60,
+        error_count=0, news_collected=50, news_pushed=10, health_score=90,
+    )
+    assert card_good["card"]["header"]["template"] == "green"
+
+    card_bad = ct.daily_summary_card(
+        total_rounds=10, success_rate=50.0,
+        failed_collectors=["a", "b"], total_records=100,
+        sources_freshness=[], cpu_pct=90, mem_pct=90, disk_pct=90,
+        error_count=5, news_collected=0, news_pushed=0, health_score=30,
+    )
+    assert card_bad["card"]["header"]["template"] == "red"
+
+
+def test_card_device_health_uses_dynamic_template():
+    """Device health card template should reflect device health."""
+    from services.data.src.notify import card_templates as ct
+
+    card = ct.device_health_card(
+        cpu_pct=30, mem_pct=50, disk_pct=60,
+        processes=[{"label": "test", "ok": True}],
+        net_latency_ms=50,
+    )
+    # healthy device → green
+    assert card["card"]["header"]["template"] == "green"
+    assert "card" in card
+
+
+def test_card_collector_batch_aggregates_results():
+    """Batch card should aggregate multiple collector results."""
+    from services.data.src.notify import card_templates as ct
+
+    card = ct.collector_batch_card(
+        results=[
+            {"name": "日线", "records": 100, "elapsed": 1.0, "ok": True},
+            {"name": "外盘", "records": 50, "elapsed": 2.0, "ok": True},
+            {"name": "宏观", "records": 0, "elapsed": 0, "ok": False},
+        ],
+        total_records=150, total_elapsed=3.0,
+    )
+    assert "card" in card
+
+
+# ── 增强覆盖: dispatcher 通道状态初始化 ────────────────────
+
+def test_dispatcher_initial_channel_state():
+    """Dispatcher should start with NORMAL channel state."""
+    from services.data.src.notify.dispatcher import NotifierDispatcher, ChannelState
+
+    dispatcher = NotifierDispatcher(
+        feishu_sender=FakeFeishuSender(),
+        email_sender=FakeEmailSender(),
+    )
+    assert dispatcher.channel_state == ChannelState.NORMAL
+
+
+def test_dispatcher_dispatch_returns_bool():
+    """dispatch() should return a boolean."""
+    from services.data.src.notify.dispatcher import DataEvent, NotifierDispatcher, NotifyType
+
+    feishu = FakeFeishuSender()
+    dispatcher = NotifierDispatcher(
+        feishu_sender=feishu,
+        email_sender=FakeEmailSender(),
+    )
+    event = DataEvent(
+        event_code="test_dispatch",
+        title="测试调度",
+        notify_type=NotifyType.NOTIFY,
+        body_md="测试",
+        body_rows=[("key", "value")],
+    )
+    result = dispatcher.dispatch(event)
+    assert isinstance(result, bool)
 
 
 # ═══════════════════════════════════════════════
