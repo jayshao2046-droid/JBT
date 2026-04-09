@@ -203,7 +203,8 @@ class NewsPusher:
         if storage is None:
             from services.data.src.data.storage import HDF5Storage
 
-            storage = HDF5Storage()
+            storage_root = os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data"))
+            storage = HDF5Storage(base_dir=storage_root)
 
         raw_records: list[dict[str, Any]] = []
         for data_type, symbol in sources or self.DEFAULT_STORAGE_SOURCES:
