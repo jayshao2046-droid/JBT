@@ -2,9 +2,9 @@
 
 把下面这段直接交给新的 Atlas 窗口：
 
-你现在继续接管 JBT 项目的总项目经理工作，这一轮只处理“Studio 旧 J_BotQuant 决策端清洗升级后迁移到 JBT 决策端”的治理与派发准备。请严格按以下顺序读取并继续，不要跳过：
+你现在继续接管 JBT 项目的总项目经理工作，这一轮只处理“Studio 旧 J_BotQuant 决策端清洗升级后迁移到 JBT 决策端”的治理与派发准备。JBT 当前是唯一项目管理来源；`J_BotQuant` 在本任务中只承担旧决策域代码的只读参考，不再承担 prompt / plan / context 来源。请严格按以下顺序读取并继续，不要跳过：
 
-1. `Atlas_prompt.md`
+1. `ATLAS_PROMPT.md`
 2. `docs/plans/ATLAS_MASTER_PLAN.md`
 3. `PROJECT_CONTEXT.md`
 4. `WORKFLOW.md`
@@ -17,8 +17,9 @@
 11. `docs/reviews/TASK-0016-review.md`
 12. `docs/locks/TASK-0016-lock.md`
 13. `docs/handoffs/TASK-0016-Studio-正式接入预审交接单.md`
-14. `services/decision/README.md`
-15. 以下 legacy 决策端文件，明确只读：
+14. `docs/handoffs/Atlas-全员协同执行提示词.md`
+15. `services/decision/README.md`
+16. 以下 legacy 决策端文件，明确只读：
    - `J_BotQuant/src/api/decision_api.py`
    - `J_BotQuant/src/strategy/ai_engine/base.py`
    - `J_BotQuant/src/strategy/ai_engine/decision_layer.py`
@@ -30,12 +31,13 @@
 
 读取后先汇报以下事实，不要跳过：
 
-1. Jay.S 已明确授权：本轮可以只读读取 `J_BotQuant` 旧决策端代码，用于清洗升级和迁移拆解；仍然禁止在 legacy 目录写入。
-2. JBT 当前 `services/decision/` 仍只有骨架（README + `.env.example`），正式业务代码尚未启动。
-3. legacy 决策端不是单一 API 文件，而是一整套决策系统：`decision_api`、AI 分层决策引擎、Mini 数据上下文拉取、向 trading_api 推送 approve、SQLite 缓存 / 审计、AI 配置、Docker 与 LaunchAgent。
-4. `TASK-0016` 当前冻结的是“Studio 正式 API 接入”边界，不自动等于“旧决策端整体清洗迁移”；新窗口中的 Atlas 不能直接把整个决策端迁移混并进 `TASK-0016`。
-5. 这件事是跨边界、跨服务、带 legacy 清洗的架构迁移任务，默认需要项目架构师 / Livis 先做边界判定，再决定是否新建正式任务。
-6. 当前没有任何针对 `services/decision/**`、`shared/contracts/**`、`integrations/legacy-botquant/**` 的新代码 Token；未建档、未白名单、未解锁前，不得启动代码写入。
+1. JBT 已是唯一项目管理来源；`J_BotQuant` 在本任务里只承担旧决策端代码的只读参考，不再作为开工 prompt / plan / progress 来源。
+2. Jay.S 已明确授权：本轮可以只读读取 `J_BotQuant` 旧决策端代码，用于清洗升级和迁移拆解；仍然禁止在 legacy 目录写入。
+3. JBT 当前 `services/decision/` 仍只有骨架（README + `.env.example`），正式业务代码尚未启动。
+4. legacy 决策端不是单一 API 文件，而是一整套决策系统：`decision_api`、AI 分层决策引擎、Mini 数据上下文拉取、向 trading_api 推送 approve、SQLite 缓存 / 审计、AI 配置、Docker 与 LaunchAgent。
+5. `TASK-0016` 当前冻结的是“Studio 正式 API 接入”边界，不自动等于“旧决策端整体清洗迁移”；新窗口中的 Atlas 不能直接把整个决策端迁移混并进 `TASK-0016`。
+6. 这件事是跨边界、跨服务、带 legacy 清洗的架构迁移任务，默认需要项目架构师 / Livis 先做边界判定，再决定是否新建正式任务。
+7. 当前没有任何针对 `services/decision/**`、`shared/contracts/**`、`integrations/legacy-botquant/**` 的新代码 Token；未建档、未白名单、未解锁前，不得启动代码写入。
 
 你在新窗口中的第一轮工作重点：
 

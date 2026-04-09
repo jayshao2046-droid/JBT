@@ -4,7 +4,7 @@
 
 - 任务 ID：TASK-0018
 - 阶段：D201 建档预审
-- 当前状态：batch_e_locked_b_c_active
+- 当前状态：batch_a_b_c_c_sup_d_e_all_locked_f_pending
 - 执行 Agent：
   - 项目架构师（当前建档）
   - 数据 Agent（批次 B）
@@ -42,17 +42,20 @@
 
 ### 批次 B（P1，data 最小只读 API）
 
-- 状态：active
+- 状态：locked
 - 保护路径：`services/data/**`
 - 当前有效业务白名单：
   1. `services/data/src/main.py`
   2. `services/data/tests/test_main.py`
 - 最小能力冻结：只允许 `health`、`version`、`symbols`、`bars` 四类只读 API，不得扩展到策略逻辑、跨服务直读或运行态写入。
-- token_id：`tok-9ef072bb-776e-4e02-a814-7072fa63c836`
+- 历史 token_id：`tok-9ef072bb-776e-4e02-a814-7072fa63c836`
+- 当前有效 token_id：`tok-040a489d-5546-4be4-abd1-4cc5cb4758fe`
 - review-id：`REVIEW-TASK-0018-B`
-- validate：passed（2026-04-07）
 - 执行 Agent：数据
-- 当前阶段：Token 已签发并通过 validate，可进入代码实施
+- lockback 摘要：`TASK-0018-B 完成最小实施与终审留证据，自校验通过，执行锁回`
+- lockback 结果：approved
+- lockback 终端结果：exit code=0
+- 当前阶段：lockback 已实际执行，当前状态 `locked`
 
 ### 批次 C（P1，backtest 双引擎执行编排层）
 
@@ -73,11 +76,17 @@
 - 补充预审冻结的未闭环范围：
   1. 最小业务白名单：`services/backtest/src/backtest/local_engine.py`、`services/backtest/src/api/routes/backtest.py`、`services/backtest/tests/test_local_engine_generic.py`
   2. 用途限定：`ApiDataProvider + YAML 驱动本地成交回测`
-  3. token_id：`tok-bfd51a47-63e2-40a5-aa62-25e705a75584`
-  4. review-id：`REVIEW-TASK-0018-C-SUP`
-  5. validate：passed（2026-04-07）
-  6. 当前状态：active
-  7. 说明：该补充范围已完成独立签发与 validate，回测 Agent 可按白名单进入代码实施
+  3. 历史初始 token_id：`tok-bfd51a47-63e2-40a5-aa62-25e705a75584`
+  4. 当前执行口径：3 天窗口 replacement active token 已到位，完整 token_id 待 Atlas 锁回时回填
+  5. review-id：`REVIEW-TASK-0018-C-SUP`
+  6. validate：passed（2026-04-07，历史初始留痕）
+  7. 终审证据：白名单 3 文件当前无未提交差异；静态诊断无错；`pytest services/backtest/tests/test_local_engine_generic.py -q` = `3 passed`
+  8. 核心能力收口：保留无 YAML MVP fallback；带 `strategy_yaml_filename` 时走 data API 真数据 + YAML 驱动链路；`requested_symbol` / `executed_data_symbol` / `source_kind` 已进入结果与报告；compat route local 路径已接入 `ApiDataProvider`
+  9. 当前有效 token_id：`tok-393d60ba-f539-4f9c-8a56-02ed156fa914`
+  10. lockback 摘要：`TASK-0018-C-SUP ApiDataProvider+YAML驱动本地回测完成，3测试通过，终审通过，执行锁回`
+  11. lockback 结果：approved
+  12. 当前状态：locked
+  13. 说明：Atlas 于 2026-04-09 完成 lockback
 
 ### 批次 D（P1，系统级风控联动层）
 
@@ -141,8 +150,8 @@
 ## 当前锁定范围
 
 1. `shared/contracts/**`（批次 A 解锁前保持锁定）
-2. `services/data/**` 中除批次 B 当前 active 白名单 `services/data/src/main.py`、`services/data/tests/test_main.py` 外，其余保持锁定
-3. `services/backtest/**` 中除批次 C 补充范围当前 active 白名单 `services/backtest/src/backtest/local_engine.py`、`services/backtest/src/api/routes/backtest.py`、`services/backtest/tests/test_local_engine_generic.py` 外，其余保持锁定
+2. `services/data/**` 中批次 B 业务白名单已完成 replacement token lockback，其余全部保持锁定
+3. `services/backtest/**` 中批次 C 主批次与补充范围均已 lockback；补充范围 token `tok-393d60ba-f539-4f9c-8a56-02ed156fa914` 已 locked；其余保持锁定
 4. `services/backtest/backtest_web/**` 当前因批次 E 已锁回、批次 F 未解锁，全部保持锁定
 5. 所有非白名单文件保持锁定
 

@@ -3,10 +3,10 @@
 ## Lock 信息
 
 - 任务 ID：TASK-0021
-- 阶段：H0~H4 终审收口同步
+- 阶段：H0~H7 补批治理同步
 - 当前执行组织：项目架构师 + 决策 agent
 - 当前是否使用 Livis：否
-- 当前总体状态：A~G 历史留痕继续保留；H0/H1/H2/H3/H4 已完成终审并锁回；`services/decision/decision_web/next.config.mjs` 已从 H0 白名单外历史脏改收口为独立补充批次 `TASK-0021-H5`，当前待 Jay.S 签发单文件 P1 Token
+- 当前总体状态：A~G 历史留痕继续保留；H0/H1/H2/H3/H4/H5 已完成终审并锁回；当前新增 `TASK-0021-H6` / `H7` 已完成预审，状态为 `pending_token`
 
 ## 本轮治理同步文件白名单
 
@@ -100,14 +100,27 @@
 | `TASK-0021-H4` | `tok-1211b456-68eb-4291-b604-d6b97a32d452` / `tok-bf30ecb6-9559-4407-9a1b-a4d788b84300` | `locked` | `approved` | 已完成 | 最新补修严格限于 `publish/gate.py` 与 `tests/test_publish.py`；`get_errors = 0`、`pytest tests/test_publish.py tests/test_strategy.py -q = 38 passed`、本地模拟联调确认 `imported` 路径返回 `409 gate_rejected`；两张 H4 token 已按 `REVIEW-TASK-0021-H4` 完成 `approved` lockback |
 | `TASK-0021-H5` | `tok-06be4004-b5c6-4cd6-8efd-8b5369c0877b` | `locked` | `approved` | 已完成 | 单文件 `next.config.mjs` rewrites 收口，commit `0ead4c2`，REVIEW-TASK-0021-H5 |
 
+## 2026-04-09 H6~H7 临时看板真数据化锁控冻结
+
+1. 基于 `TASK-0021-H0`~`H5` 已完成终审并锁回的既有事实，decision 临时看板去 mock + API 收口继续挂在 `TASK-0021` 下新增 `H6` / `H7`，不新开第二个 decision 主任务。
+2. 当前明确继续使用 `services/decision/decision_web/**` 作为临时看板真数据化载体，**不进入 `services/dashboard/**`**；dashboard 聚合看板仍保持后续独立任务。
+3. 当前新增补充批次冻结如下：
+
+| 批次 | 执行 Agent | 保护级别 | 状态 | 说明 |
+|---|---|---|---|---|
+| `TASK-0021-H6` | 决策 Agent | P1 | `locked` | `services/decision/src/api/routes/strategy.py`、`signal.py`、`model.py`、`src/notifier/dispatcher.py`、`src/reporting/daily.py`，用于 decision 临时看板只读聚合口；token `tok-5bd0cb03`，REVIEW-TASK-0021-H6，approved |
+| `TASK-0021-H7` | 决策 Agent | P1 | `locked` | `services/decision/decision_web/lib/api.ts`、`app/page.tsx` 与 7 个 `components/decision/*.tsx` 文件，用于 decision_web 去 mock 与布局收口；token `tok-f906d7db`，REVIEW-TASK-0021-H7，approved |
+
+4. 当前明确排除：`services/dashboard/**`、`services/decision/decision_web/next.config.mjs`、`package.json`、`Dockerfile`、`services/decision/src/api/routes/approval.py`、`services/decision/src/publish/**`、`services/decision/.env.example`、`docker-compose.dev.yml`、`shared/contracts/**` 与任一跨服务目录。
+
 ## 当前状态
 
-- 预审状态：已通过；A 批终审已通过；H0~H5 已完成终审
-- Token 状态：A=pending_lockback；B/C0/C/D/E0/E/F0/F/G=pending_manifest；H0/H1/H2/H3/H4/H5=locked
-- 解锁时间：A 批 active 窗口已用于本轮实施；其余批次待 Jay.S 按 Manifest 一次性签发；H0~H5 对应 token 已全部锁回
-- 锁回时间：A 批待执行 lockback；H0/H1/H2/H3/H4/H5 均已执行 lockback
-- lockback 结果：A 批当前仅形成"可进入 lockback"结论，尚未实际执行 lockback；H0/H1/H2/H3/H4/H5=approved_locked
+- 预审状态：已通过；A 批终审已通过；H0~H7 已全部完成终审并锁回
+- Token 状态：A=pending_lockback；B/C0/C/D/E0/E/F0/F/G=pending_manifest；H0~H7=locked
+- 解锁时间：A 批 active 窗口已用于本轮实施；其余批次待 Jay.S 按 Manifest 一次性签发；H0~H7 对应 token 已全部锁回
+- 锁回时间：A 批待执行 lockback；H0/H1/H2/H3/H4/H5 均已执行 lockback；H6/H7 尚未解锁
+- lockback 结果：A 批当前仅形成"可进入 lockback"结论，尚未实际执行 lockback；H0/H1/H2/H3/H4/H5=approved_locked；H6/H7=pending_token
 
 ## 结论
 
-**`TASK-0021` 当前正式口径：A~G 的历史状态继续保留为既有留痕；H0~H5 已全部完成终审并按各自白名单执行实际 lockback，当前统一为 `locked`。决策端代码层落地已全部闭环。**
+**`TASK-0021` 当前正式口径：A~G 的历史状态继续保留为既有留痕；H0~H5 已全部完成终审并按各自白名单执行实际 lockback，当前统一为 `locked`；H6/H7 已完成补充预审，当前统一为 `pending_token`。本次新增事项明确属于 `decision_web` 临时看板真数据化，不属于 `services/dashboard/**` 聚合看板。**

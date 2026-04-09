@@ -64,14 +64,27 @@
 5. `H5` 只处理 `decision_web` 单文件 rewrites，不得借此 reopen `Dockerfile`、`docker-compose.dev.yml`、`.env.example`、页面代码或后端代码。
 6. 当前不把 `services/decision/.env.example` 或 `docker-compose.dev.yml` 纳入首轮；若实施中证明现有占位不足，再另起 **P0** 补审。
 
+## 2026-04-09 临时看板真数据化补批裁决
+
+1. 基于 `TASK-0021-H0`~`H5` 已完成终审并锁回的既有事实，decision 临时看板去 mock + API 收口继续归属 `TASK-0021`，新增 `H6` / `H7`，**不新开第二个 decision 主任务**。
+2. 当前正式架构口径冻结为：继续使用 `services/decision/decision_web/**` 作为临时看板真数据化载体，**不进入 `services/dashboard/**`**；dashboard 聚合看板仍保留为后续独立任务。
+3. 当前新增补充批次冻结如下：
+
+| 批次 | 执行 agent | 保护级别 | 白名单 | 目的 | 是否可并行 |
+|---|---|---|---|---|---|
+| `H6` | 决策 agent | P1 | `services/decision/src/api/routes/strategy.py`、`signal.py`、`model.py`、`src/notifier/dispatcher.py`、`src/reporting/daily.py` | decision 临时看板只读聚合口 | 建议最先签发；`H7` 依赖其完成 |
+| `H7` | 决策 agent | P1 | `services/decision/decision_web/lib/api.ts`、`app/page.tsx`、`components/decision/overview.tsx`、`strategy-repository.tsx`、`signal-review.tsx`、`models-factors.tsx`、`research-center.tsx`、`notifications-report.tsx`、`config-runtime.tsx` | decision_web 去 mock 与布局收口 | 依赖 `H6`；不可与 `H6` 并行 |
+
+4. 当前明确排除：`services/dashboard/**`、`services/decision/decision_web/next.config.mjs`、`services/decision/decision_web/package.json`、`services/decision/decision_web/Dockerfile`、`services/decision/src/api/routes/approval.py`、`services/decision/src/publish/**`、`services/decision/.env.example`、`docker-compose.dev.yml`、`shared/contracts/**` 与任一跨服务目录。
+
 ## 建议签发顺序
 
 1. A 已 active，立即开工。
 2. B、C0、C、D、E0、E、F0、F、G 按本 Manifest 一次性签发到位。
 3. 实际执行时仍按批次顺序推进：A → B → C0 → C → D → E0 → E → F0 → F → G。
-4. 对“部署后立即开工”阻塞，最稳妥补签顺序冻结为：`H0` → `H1` → `H2` → `H3` → `H4` → `H5`；其中 `H0` 可与 `H1` / `H3` 并行，`H2` 必须在 `H1` 之后，`H4` 必须在 `H2` 与 `H3` 之后。
-5. `TASK-0023-A` 在本轮命名空间冻结后可与 `H4` 并行推进，但最终端到端验收需两边同时完成。
-6. `H5` 不依赖 `H0`~`H4` 的业务状态，但必须保持单文件回滚边界，不得混入其他 decision_web 改动。
+4. 对“部署后立即开工”阻塞，历史补签顺序已完成至 `H5`；当前新增临时看板真数据化补签顺序冻结为：`H6` → `H7`，`H7` 必须在 `H6` 之后。
+5. `TASK-0023-A` 在本轮命名空间冻结后可与 `H4` 并行推进的历史口径保持不变；当前 `H6` / `H7` 只服务于 decision 临时看板真数据化，不改变 `TASK-0023` 的独立回滚边界。
+6. `H6` / `H7` 不得扩展到 `services/dashboard/**`、`next.config.mjs`、`package.json`、`Dockerfile`、`approval.py`、`src/publish/**`、`.env.example`、`docker-compose.dev.yml`、`shared/contracts/**` 或任一跨服务目录。
 
 ## 关联交接单
 

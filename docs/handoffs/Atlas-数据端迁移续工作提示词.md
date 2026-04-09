@@ -2,20 +2,20 @@
 
 把下面这段直接交给新的 Atlas 窗口：
 
-你现在继续接管 JBT 项目的总项目经理工作，这一轮只处理“把 Mini 上已经稳定运行的 legacy 数据采集 / 调度 / 通知体系迁移到 JBT data Docker 体系”的治理、派发与续窗执行准备。请严格按以下顺序读取并继续，不要跳过：
+你现在继续接管 JBT 项目的总项目经理工作，这一轮只处理“把 Mini 上已经稳定运行的 legacy 数据采集 / 调度 / 通知体系迁移到 JBT data Docker 体系”的治理、派发与续窗执行准备。JBT 当前是唯一项目管理来源；`J_BotQuant` 在本任务中只承担现网 inventory 的只读参考，不再承担 prompt / plan / context 来源。请严格按以下顺序读取并继续，不要跳过：
 
-1. `Atlas_prompt.md`
-2. `docs/plans/ATLAS_MASTER_PLAN.md`；若不存在，改读 `JBT/docs/JBT_MASTER_PLAN.md`
+1. `ATLAS_PROMPT.md`
+2. `docs/plans/ATLAS_MASTER_PLAN.md`
 3. `PROJECT_CONTEXT.md`
-4. `JBT/WORKFLOW.md`
-5. `JBT/docs/prompts/总项目经理调度提示词.md`
-6. `JBT/docs/prompts/公共项目提示词.md`
-7. `JBT/docs/prompts/agents/总项目经理提示词.md`
-8. `JBT/services/data/README.md`
-9. `JBT/services/data/.env.example`
-10. `JBT/services/data/src/main.py`
-11. `JBT/services/data/tests/test_main.py`
-12. `JBT/docs/reviews/TASK-0024-deployment-readiness-review.md`
+4. `WORKFLOW.md`
+5. `docs/prompts/总项目经理调度提示词.md`
+6. `docs/prompts/公共项目提示词.md`
+7. `docs/prompts/agents/总项目经理提示词.md`
+8. `services/data/README.md`
+9. `services/data/.env.example`
+10. `services/data/src/main.py`
+11. `services/data/tests/test_main.py`
+12. `docs/handoffs/Atlas-全员协同执行提示词.md`
 13. 只读检查 Mini 现网数据侧（需要命令时先向 Jay.S 展示命令并等确认）：
    - `~/J_BotQuant/collectors/`
    - `~/J_BotQuant/scripts/`
@@ -24,12 +24,13 @@
 
 读取后先汇报以下事实，不要跳过：
 
-1. JBT `services/data/` 当前只是最小供数 API，不等于已完成数据端迁移。
-2. Mini 现网数据采集已经基本完整，但真实生产运行仍大量依赖 legacy system 级脚本、cron 与运维脚本，而不是纯 Docker 编排。
-3. 这次用户要求的不是“补一个 data API”，而是把 **system 级采集 / 调度 / 健康检查 / 通知** 整体迁入 JBT Docker 体系。
-4. 本次迁移的最高约束是：**24 小时连续执行，不允许停采，不允许因为迁移导致罢工。**
-5. 飞书 / 邮件通道可以沿用，但 Mini 上已有旧 `send_feishu_*` / `send_email_*` 与其他旧消息推送实现；迁移前必须先盘点消息来源，避免新旧链路同时推送造成重复告警。
-6. 当前 `TASK-0018-B` active token 只覆盖 `services/data/src/main.py` 与 `services/data/tests/test_main.py` 两文件，不足以承接这次完整迁移；**默认不得借该 token 越权开工。**
+1. JBT 已是唯一项目管理来源；`J_BotQuant` 在本任务里只承担现网 inventory 的只读参考，不再作为开工 prompt / plan / progress 来源。
+2. JBT `services/data/` 当前只是最小供数 API，不等于已完成数据端迁移。
+3. Mini 现网数据采集已经基本完整，但真实生产运行仍大量依赖 legacy system 级脚本、cron 与运维脚本，而不是纯 Docker 编排。
+4. 这次用户要求的不是“补一个 data API”，而是把 **system 级采集 / 调度 / 健康检查 / 通知** 整体迁入 JBT Docker 体系。
+5. 本次迁移的最高约束是：**24 小时连续执行，不允许停采，不允许因为迁移导致罢工。**
+6. 飞书 / 邮件通道可以沿用，但 Mini 上已有旧 `send_feishu_*` / `send_email_*` 与其他旧消息推送实现；迁移前必须先盘点消息来源，避免新旧链路同时推送造成重复告警。
+7. 当前 `TASK-0018-B` active token 只覆盖 `services/data/src/main.py` 与 `services/data/tests/test_main.py` 两文件，不足以承接这次完整迁移；**默认不得借该 token 越权开工。**
 
 你在新窗口中的第一轮工作重点：
 

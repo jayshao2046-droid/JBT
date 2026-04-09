@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0021
 - 审核角色：项目架构师
-- 审核阶段：H0~H4 批终审
-- 审核时间：2026-04-08
-- 审核结论：通过（`TASK-0021-H0`、`TASK-0021-H1`、`TASK-0021-H2`、`TASK-0021-H3`、`TASK-0021-H4` 当前均可 lockback；`services/decision/decision_web/next.config.mjs` 明确不属于 H0 结论范围；H4 最新补修已消除上一轮 lifecycle 阻断，lockback 前仍需 Atlas / Jay.S 提供完整 JWT 文本）
+- 审核阶段：H0~H7 批终审
+- 审核时间：2026-04-10
+- 审核结论：通过（`TASK-0021-H0`~`H7` 全部已完成终审与 lockback；H6 token `tok-5bd0cb03` 95 tests passed；H7 decision_web pnpm build 成功 + 9 文件 0 errors）
 
 ---
 
@@ -107,6 +107,42 @@
 2. 若 Jay.S 允许并行，可让 `H0` 与 `H1` / `H3` 并行；`H2` 必须在 `H1` 之后；`H4` 必须在 `H2` 与 `H3` 之后。
 3. `TASK-0023-A` 在本轮命名空间冻结为 `/api/v1/strategy/publish` 后，可与 `H4` 并行推进，但最终端到端验收需两边同时完成。
 4. `H5` 不依赖 `H0`~`H4` 的业务状态，但必须保持单文件回滚边界，不得与新的 decision_web 页面或部署批次混写。
+
+## 五B、2026-04-09 decision 临时看板真数据化补批审核结论
+
+### 1. 任务归属裁决
+
+1. 基于 `TASK-0021-H0`~`H5` 已完成终审并锁回的既有事实，decision 临时看板去 mock + API 收口继续挂在 `TASK-0021` 下新增 `H6` / `H7`，**不新开第二个 decision 任务**。
+2. `H6` 归属 `services/decision/**` 单服务只读聚合口，`H7` 归属 `services/decision/decision_web/**` 临时看板前端收口；执行组织继续固定为项目架构师 + 决策 agent。
+3. 本次明确继续使用 `services/decision/decision_web` 作为临时看板真数据化载体，**不进入 `services/dashboard/**`**；dashboard 聚合看板仍属后续独立任务。
+
+### 2. 明确排除项
+
+1. `services/dashboard/**`
+2. `services/decision/decision_web/next.config.mjs`、`services/decision/decision_web/package.json`、`services/decision/decision_web/Dockerfile`
+3. `services/decision/src/api/routes/approval.py`
+4. `services/decision/src/publish/**`
+5. `services/decision/.env.example`、`docker-compose.dev.yml`、`shared/contracts/**`
+6. 任一跨服务目录
+
+### 3. 补充批次冻结
+
+| 批次 | 执行 Agent | 保护级别 | 是否可并行 | 业务白名单 | 目的 |
+|---|---|---|---|---|---|
+| `TASK-0021-H6` | 决策 Agent | P1 | 建议最先签发；`H7` 依赖其完成 | `services/decision/src/api/routes/strategy.py`、`services/decision/src/api/routes/signal.py`、`services/decision/src/api/routes/model.py`、`services/decision/src/notifier/dispatcher.py`、`services/decision/src/reporting/daily.py` | decision 临时看板只读聚合口 |
+| `TASK-0021-H7` | 决策 Agent | P1 | 依赖 `H6`；不可与 `H6` 并行 | `services/decision/decision_web/lib/api.ts`、`services/decision/decision_web/app/page.tsx`、`services/decision/decision_web/components/decision/overview.tsx`、`services/decision/decision_web/components/decision/strategy-repository.tsx`、`services/decision/decision_web/components/decision/signal-review.tsx`、`services/decision/decision_web/components/decision/models-factors.tsx`、`services/decision/decision_web/components/decision/research-center.tsx`、`services/decision/decision_web/components/decision/notifications-report.tsx`、`services/decision/decision_web/components/decision/config-runtime.tsx` | decision_web 去 mock 与布局收口 |
+
+### 4. 建议签发顺序
+
+1. `H0`~`H5` 已属历史锁回事实；本轮新增补签顺序冻结为：`H6` → `H7`。
+2. `H6` 先冻结 decision 单服务只读聚合口，`H7` 再接入 decision_web 去 mock 与布局收口；两批不得并行混写。
+3. `H6` / `H7` 当前统一为 `pending_token`，不得复用 `H4` / `H5` 或 dashboard 历史白名单顺手执行。
+
+### 5. 当前结论
+
+1. `TASK-0021` 继续作为 decision 主线；`H0`~`H5` 已完成终审与 lockback。
+2. `H6` / `H7` 已完成补充预审，当前状态冻结为 `pending_token`。
+3. 本次事项明确属于 `decision_web` 临时看板真数据化，不是 `services/dashboard/**` 聚合看板。
 
 ## 六、终审结论
 

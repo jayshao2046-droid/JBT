@@ -348,6 +348,71 @@
 2. 不扩展到 Dockerfile、compose、`.env.example`、页面代码或后端代码。
 3. `decision_web` 读取 next 配置时不因该文件报错，且本地最小构建/诊断口径保持可用。
 
+### 2026-04-09 decision 临时看板真数据化补批裁决
+
+1. 基于 `TASK-0021-H0`~`H5` 已完成终审并锁回的既有事实，decision 临时看板去 mock + API 收口继续归属 `TASK-0021`，新增补充批次 `H6` 与 `H7`，**不新开第二个 decision 主任务**。
+2. 当前架构口径继续冻结为：临时看板收口继续使用 `services/decision/decision_web/**`，**不进入 `services/dashboard/**`**；dashboard 聚合看板仍保留为后续独立任务。
+3. 当前明确排除：`services/dashboard/**`、`services/decision/decision_web/next.config.mjs`、`services/decision/decision_web/package.json`、`services/decision/decision_web/Dockerfile`、`services/decision/src/api/routes/approval.py`、`services/decision/src/publish/**`、`services/decision/.env.example`、`docker-compose.dev.yml`、`shared/contracts/**` 与任一跨服务目录。
+4. 当前推荐顺序冻结为：`H6` → `H7`；`H7` 依赖 `H6`，且两批不得复用 `H4` / `H5` 或 dashboard 历史白名单顺手执行。
+
+#### 补充批次 H6：decision 临时看板只读聚合口
+
+- 批次标识：`TASK-0021-H6`
+- 执行 Agent：决策 Agent
+- 保护级别：**P1**
+- 是否可并行：建议最先签发；`H7` 依赖其完成
+
+业务白名单：
+
+1. `services/decision/src/api/routes/strategy.py`
+2. `services/decision/src/api/routes/signal.py`
+3. `services/decision/src/api/routes/model.py`
+4. `services/decision/src/notifier/dispatcher.py`
+5. `services/decision/src/reporting/daily.py`
+
+本批次目的：
+
+1. 为 decision 临时看板补最小只读聚合口，不再要求前端继续消费本地 mock 数据。
+2. 把策略仓库、信号审阅、模型因子、通知日报等只读数据统一收口到 `services/decision/**` 单服务范围。
+3. 明确本轮只做 decision 单服务读模型收口，不触碰 publish、审批或跨服务实现。
+
+本批次验收标准：
+
+1. 临时看板所需核心只读数据由 `services/decision/**` 内最小聚合口提供，不再依赖前端 mock 常量。
+2. 不扩展到 `services/decision/src/api/routes/approval.py`、`services/decision/src/publish/**`、`services/dashboard/**` 或任一跨服务目录。
+3. 不触碰 `decision_web` 的 `next.config.mjs`、`package.json`、`Dockerfile`、`.env.example`、`docker-compose.dev.yml` 或 `shared/contracts/**`。
+
+#### 补充批次 H7：decision_web 去 mock 与布局收口
+
+- 批次标识：`TASK-0021-H7`
+- 执行 Agent：决策 Agent
+- 保护级别：**P1**
+- 是否可并行：依赖 `H6`；不可与 `H6` 并行
+
+业务白名单：
+
+1. `services/decision/decision_web/lib/api.ts`
+2. `services/decision/decision_web/app/page.tsx`
+3. `services/decision/decision_web/components/decision/overview.tsx`
+4. `services/decision/decision_web/components/decision/strategy-repository.tsx`
+5. `services/decision/decision_web/components/decision/signal-review.tsx`
+6. `services/decision/decision_web/components/decision/models-factors.tsx`
+7. `services/decision/decision_web/components/decision/research-center.tsx`
+8. `services/decision/decision_web/components/decision/notifications-report.tsx`
+9. `services/decision/decision_web/components/decision/config-runtime.tsx`
+
+本批次目的：
+
+1. 去掉 decision_web 临时看板中的本地 mock 数据与硬编码占位流程。
+2. 统一接入 `H6` 提供的 decision 单服务只读聚合口，并完成首页与 7 个决策页面的布局收口。
+3. 明确该批次仍属于 `decision_web` 临时看板真数据化，不转入 `services/dashboard/**` 聚合看板。
+
+本批次验收标准：
+
+1. 上述 9 个前端文件通过 `lib/api.ts` 消费真实 decision 只读聚合口，不再内置 mock 数据源。
+2. 不扩展到 `services/decision/decision_web/next.config.mjs`、`services/decision/decision_web/package.json`、`services/decision/decision_web/Dockerfile`。
+3. 不触碰 `services/dashboard/**`、`services/decision/src/api/routes/approval.py`、`services/decision/src/publish/**`、`services/decision/.env.example`、`docker-compose.dev.yml`、`shared/contracts/**` 或任一跨服务目录。
+
 #### 跨服务拆任务协同说明
 
 1. `TASK-0021-H4` 只修正 decision 侧发布入口与 adapter 命名空间，不写 `services/sim-trading/**`。
@@ -365,7 +430,7 @@
 6. 后续批次 F：`services/decision/**` 通知体系，**P1**。
 7. 任意 `.env.example` 改动，必须另拆 **P0** 批次。
 8. `TASK-0021-H0` 为 `services/decision/decision_web/Dockerfile` 单文件 **P0**。
-9. `TASK-0021-H1`、`H2`、`H3`、`H4`、`H5` 均为 **P1**，其中 `H1` / `H2` 共享 `state_store.py`，不得并行混写。
+9. `TASK-0021-H1`、`H2`、`H3`、`H4`、`H5`、`H6`、`H7` 均为 **P1**，其中 `H1` / `H2` 共享 `state_store.py`，不得并行混写，`H7` 依赖 `H6`。
 10. `TASK-0023-A` 为独立 sim-trading 单服务 **P1** 任务，不得借用 `H4` 白名单。
 
 ---
@@ -397,5 +462,6 @@
 1. **`TASK-0021` 正式成立。**
 2. **本轮只做立项、治理和拆批冻结，不进入代码实施。**
 3. **下一检查点不是写代码，而是冻结首批契约批次的文件级白名单与 Token 申请草案。**
-4. **基于实际代码结构，decision 收口继续挂在 `TASK-0021` 下新增 `H0`~`H4` 补充批次，不新开第二个 decision 任务。**
+4. **基于实际代码结构，decision 收口继续挂在 `TASK-0021` 下新增 `H0`~`H7` 补充批次，不新开第二个 decision 任务。**
 5. **`sim-trading` 发布接收接口必须拆成独立 `TASK-0023`，不得并入 `TASK-0021`。**
+6. **当前既有事实为 `H0`~`H5` 已锁回；本次新增 `H6` / `H7` 已完成预审待签发，且明确属于 `decision_web` 临时看板真数据化，不属于 `services/dashboard/**` 聚合看板。**

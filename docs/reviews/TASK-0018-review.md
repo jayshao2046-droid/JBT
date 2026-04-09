@@ -4,9 +4,9 @@
 
 - 任务 ID：TASK-0018
 - 审核角色：项目架构师
-- 审核阶段：D201（自建回测系统）建档预审 + 2026-04-07 锁控同步收口
-- 审核时间：2026-04-07
-- 审核结论：条件通过（建档通过；批次 A/C/D/E 已锁回；批次 B 已签发并 validate 通过、当前 active；批次 C 补充范围已签发并 validate 通过、当前 active）
+- 审核阶段：D201（自建回测系统）建档预审 + 2026-04-09 批次 B / C-SUP 终审收口
+- 审核时间：2026-04-09
+- 审核结论：条件通过（建档通过；批次 A/B/C/D/E 已锁回；批次 C 补充范围终审通过并已完成 lockback）
 
 ---
 
@@ -52,8 +52,8 @@
 ## 六、当前下一步准入条件
 
 1. 批次 E 已完成 Atlas lockback，当前状态 `locked`；lockback review-id=`REVIEW-TASK-0018-E`，锁回摘要为“批次E终审通过；两文件白名单边界合规，允许锁回。”。
-2. 批次 B 当前有效业务白名单为 `services/data/src/main.py` 与 `services/data/tests/test_main.py`；对应 token=`tok-9ef072bb-776e-4e02-a814-7072fa63c836`，review-id=`REVIEW-TASK-0018-B`，validate 已通过，当前状态 `active`，数据 Agent 可进入最小只读 API 实施。
-3. 批次 C 主批次已锁回；当前补充范围有效业务白名单为 `services/backtest/src/backtest/local_engine.py`、`services/backtest/src/api/routes/backtest.py`、`services/backtest/tests/test_local_engine_generic.py`；对应 token=`tok-bfd51a47-63e2-40a5-aa62-25e705a75584`，review-id=`REVIEW-TASK-0018-C-SUP`，validate 已通过，当前状态 `active`，回测 Agent 可进入补充范围实施。
+2. 批次 B 当前有效业务白名单为 `services/data/src/main.py` 与 `services/data/tests/test_main.py`；当前执行口径已切换为 replacement token=`tok-040a489d-5546-4be4-abd1-4cc5cb4758fe`，review-id=`REVIEW-TASK-0018-B`，lockback 已实际执行，当前状态 `locked`。
+3. 批次 C 主批次已锁回；补充范围有效业务白名单为 `services/backtest/src/backtest/local_engine.py`、`services/backtest/src/api/routes/backtest.py`、`services/backtest/tests/test_local_engine_generic.py`；`REVIEW-TASK-0018-C-SUP` 执行 token 为 `tok-393d60ba-f539-4f9c-8a56-02ed156fa914`（3 天窗口 replacement token）；2026-04-07 初始 token `tok-bfd51a47-63e2-40a5-aa62-25e705a75584` 为历史留痕；Atlas 已于 2026-04-09 执行 lockback，当前状态 `locked`。
 4. 新增统一执行口径：3 年分钟 K 回测场景中，`requested_symbol` 可继续来自用户 YAML 的 `DCE.p2605`，但 `executed_data_symbol` 必须使用 Mini 上具备完整区间的 p 品种连续主力 `KQ_m_DCE_p` / `DCE.p` 连续主力完成 `2023-04-03` 至 `2026-04-03` 的 3 年回测；结果与报告必须显式区分两者，避免误导为“全程直接使用交割月 `DCE.p2605` 分钟数据回放”。
 5. 同一输入下，两引擎结果仍必须可解释，允许数值差异，但必须保留证据链与执行口径说明。
 
@@ -191,8 +191,8 @@
 ### 当前状态
 
 1. 批次 E：locked（lockback 已完成，review-id=`REVIEW-TASK-0018-E`，摘要“批次E终审通过；两文件白名单边界合规，允许锁回。”）。
-2. 批次 B：active（token=`tok-9ef072bb-776e-4e02-a814-7072fa63c836`，review-id=`REVIEW-TASK-0018-B`，validate=passed；白名单=`services/data/src/main.py`、`services/data/tests/test_main.py`）。
-3. 批次 C 补充范围：active（token=`tok-bfd51a47-63e2-40a5-aa62-25e705a75584`，review-id=`REVIEW-TASK-0018-C-SUP`，validate=passed；白名单=`services/backtest/src/backtest/local_engine.py`、`services/backtest/src/api/routes/backtest.py`、`services/backtest/tests/test_local_engine_generic.py`）。
+2. 批次 B：locked（replacement token=`tok-040a489d-5546-4be4-abd1-4cc5cb4758fe`，review-id=`REVIEW-TASK-0018-B`，lockback=approved；摘要“TASK-0018-B 完成最小实施与终审留证据，自校验通过，执行锁回”；白名单=`services/data/src/main.py`、`services/data/tests/test_main.py`）。
+3. 批次 C 补充范围：pending_lockback（review-id=`REVIEW-TASK-0018-C-SUP`；当前执行口径以 3 天窗口 replacement active token 为准，完整 token_id 待 Atlas 锁回时回填；历史初始 token=`tok-bfd51a47-63e2-40a5-aa62-25e705a75584` 已降为 validate 留痕；白名单=`services/backtest/src/backtest/local_engine.py`、`services/backtest/src/api/routes/backtest.py`、`services/backtest/tests/test_local_engine_generic.py`）。
 
 ---
 
@@ -232,3 +232,66 @@
 1. Atlas 是否已执行 lockback：是。
 2. 当前批次状态：`locked`。
 3. 说明：正式 `locked` 口径已完成回写；锁回摘要为“批次E终审通过；两文件白名单边界合规，允许锁回。”。
+
+---
+
+## 批次 B 终审（2026-04-09）
+
+### 终审基本信息
+
+1. 终审时间：2026-04-09
+2. review-id：`REVIEW-TASK-0018-B`
+3. 当前有效执行 token：`tok-040a489d-5546-4be4-abd1-4cc5cb4758fe`
+4. 历史 token：`tok-9ef072bb-776e-4e02-a814-7072fa63c836` 已退化为历史留痕，不再作为当前执行口径。
+5. 终审范围：仅 `services/data/src/main.py` 与 `services/data/tests/test_main.py`
+
+### 实际实施收口
+
+1. `services/data/src/main.py` 已把 Python 3.10 风格的 `str | None` 收口为 `Optional[str]`，修复 Python 3.9.6 下导入失败问题。
+2. `services/data/tests/test_main.py` 已把版本断言改为读取 `SERVICE_NAME` 与 `SERVICE_VERSION` 常量，避免硬编码漂移。
+
+### 验证证据
+
+1. 本地静态诊断：`services/data/src/main.py` 与 `services/data/tests/test_main.py` 均为 `No errors found`。
+2. 本地测试：在 `/Users/jayshao/JBT` 执行 `pytest services/data/tests/test_main.py -q`，结果 `4 passed in 0.95s`。
+
+### 终审结论
+
+1. 白名单边界通过：未发现超出 `services/data/src/main.py` 与 `services/data/tests/test_main.py` 的业务改动。
+2. 契约治理通过：未发现 `shared/contracts/**` 漂移或跨服务契约越界。
+3. 行为回归检查通过：本次兼容性修复与测试收口未发现新的行为回退。
+4. 当前执行口径已切换到 replacement token `tok-040a489d-5546-4be4-abd1-4cc5cb4758fe`，review-id 继续使用 `REVIEW-TASK-0018-B`。
+5. 终端 lockback 事实已确认：`review-id=REVIEW-TASK-0018-B`、`token=tok-040a489d-5546-4be4-abd1-4cc5cb4758fe`、`summary=TASK-0018-B 完成最小实施与终审留证据，自校验通过，执行锁回`、`result=approved`，exit code=0。
+6. 当前状态为 `locked`；本批次不再保留 `pending_lockback` 口径。
+
+---
+
+## 批次 C 补充范围终审（2026-04-09）
+
+### 终审基本信息
+
+1. 终审时间：2026-04-09
+2. review-id：`REVIEW-TASK-0018-C-SUP`
+3. 当前执行口径：3 天窗口 replacement active token 已到位，完整 token_id 待 Atlas 锁回时回填；2026-04-07 初始 token `tok-bfd51a47-63e2-40a5-aa62-25e705a75584` 仅保留为历史 validate 留痕。
+4. 终审范围：仅 `services/backtest/src/backtest/local_engine.py`、`services/backtest/src/api/routes/backtest.py`、`services/backtest/tests/test_local_engine_generic.py`
+
+### 只读复核与验证证据
+
+1. 白名单 3 文件当前无未提交差异，未见白名单外污染。
+2. 3 文件静态诊断当前无错误。
+3. 本地执行 `pytest services/backtest/tests/test_local_engine_generic.py -q`，结果 `3 passed`。
+4. 本轮未新增代码写入；终审基于当前仓内实现与回测 Agent 自校验事实完成。
+
+### 能力收口确认
+
+1. `local_engine.py` 在未传 `strategy_yaml_filename` 时继续保留无 YAML 的 MVP fallback。
+2. 传入 `strategy_yaml_filename` 后，local 路径已切换为 data API 真数据 + YAML 驱动的本地成交回测链路。
+3. `requested_symbol`、`executed_data_symbol` 与 `source_kind` 已进入结果与报告留痕，满足 3 年分钟 K 执行口径的可追溯要求。
+4. compat route 的 `engine_type=local` 路径已接入 `ApiDataProvider`，与补充范围目标一致。
+
+### 终审结论
+
+1. 白名单边界通过：未发现超出 3 文件范围的业务污染或跨服务 import。
+2. 行为口径通过：补充范围要求的 `ApiDataProvider + YAML 驱动本地成交回测 + 请求/执行标的区分留痕` 已闭环。
+3. 当前执行口径应以 3 天窗口 replacement active token 为准；因本次未取得完整 replacement token_id，账本不虚构，待 Atlas 实际 lockback 时回填。
+4. 当前状态为 `pending_lockback`，结论 **通过，可 lockback**；仍待 Atlas 执行最后 lockback 动作。
