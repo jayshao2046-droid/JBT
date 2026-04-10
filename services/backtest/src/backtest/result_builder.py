@@ -113,6 +113,7 @@ class BacktestReport:
     transaction_cost_summary: Dict[str, Any] = field(default_factory=dict)
     trades: List[Dict[str, Any]] = field(default_factory=list)
     tqsdk_snapshot: Dict[str, Any] = field(default_factory=dict)
+    yaml_snapshot_hash: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         payload = asdict(self)
@@ -183,6 +184,7 @@ class BacktestReport:
                 "start_date": self.start_date.isoformat(),
                 "end_date": self.end_date.isoformat(),
                 "initial_capital": self.initial_capital,
+                "yaml_snapshot_hash": self.yaml_snapshot_hash,
             },
             "summary": {
                 "status": self.status,
@@ -353,6 +355,7 @@ class BacktestResultBuilder:
                 "account": dict(artifacts.tqsdk_account_snapshot),
                 "position": dict(artifacts.tqsdk_position_snapshot),
             },
+            yaml_snapshot_hash=getattr(strategy_definition, "yaml_snapshot_hash", None) if strategy_definition else None,
         )
 
     def _build_metrics(

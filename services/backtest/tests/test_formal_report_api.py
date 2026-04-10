@@ -196,6 +196,9 @@ def test_formal_generic_strategy_run_and_report_download(monkeypatch, tmp_path: 
     assert compat_payload["job_id"] == task_id
     assert compat_payload["strategy_template_id"] == "generic_formal_strategy_v1"
     assert compat_payload["strategy_yaml_filename"] == "palmoil_formal.yaml"
+    # §6.3.3: yaml_snapshot_hash must be present for YAML→Execution→Report traceability
+    assert isinstance(compat_payload.get("yaml_snapshot_hash"), str)
+    assert len(compat_payload["yaml_snapshot_hash"]) == 64  # SHA-256 hex digest
 
 
 def test_formal_report_v1_schema_compliance(monkeypatch, tmp_path: Path) -> None:
