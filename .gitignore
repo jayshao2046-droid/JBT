@@ -27,7 +27,6 @@ out/
 *.tsbuildinfo
 
 # Local IDE / tools
-.roo/
 
 # CTP binary response files
 *.con

@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "sequentialthinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "jbt-governance": {
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "governance/roo_jbt_mcp_server.py"
+      ],
+      "alwaysAllow": [
+        "workflow_status",
+        "check_token_access",
+        "append_atlas_log"
+      ],
+      "timeout": 60
+    }
+  }
+}

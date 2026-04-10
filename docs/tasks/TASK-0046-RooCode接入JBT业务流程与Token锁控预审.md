@@ -68,9 +68,9 @@
 - 范围：仅 `docs/tasks/**`、`docs/reviews/**`、`docs/locks/**`、`docs/handoffs/**`
 - 说明：当前批次只负责完成独立编号留痕，不进入 Roo 接入实施。
 
-### A1：Roo 仓库级接入配置（待 Token）
+### A1：Roo 仓库级接入配置（已完成）
 
-- 状态：`pending_token`
+- 状态：`completed`
 - 保护口径：仓库级治理配置，按 P0 同等审慎执行
 - 冻结白名单：
   1. `ATLAS_PROMPT.md`
@@ -89,6 +89,19 @@
 6. 只读巡检类若确认需要正式改代码，必须先回到"预审 -> 白名单 -> Token -> 实施"标准流程；不得借 `ATLAS_PROMPT.md` 回写或 `.roo/**` 接入口径直接落写业务文件。
 7. 每批次终审通过后，必须由 Atlas 按既有职责执行 lockback、独立 git commit 与两地同步；未完成前不得视为闭环。
 8. 若 A1 实施中发现需要第 6 个非 P-LOG 白名单项，或需要触及 `.roo/**` 下白名单外文件，必须先回交补充预审。
+
+### A2：.roo 目录版本控制持久化（已完成）
+
+- 状态：`completed`
+- 保护口径：仓库级配置
+- 冻结白名单：
+  1. `.gitignore`
+
+执行硬约束：
+
+1. 仅允许移除 `.gitignore` 中的 `.roo/` 排除规则，使 `.roo/mcp.json` 和 `.roo/rules/**` 纳入版本控制。
+2. 不得改动 `.gitignore` 中的其他规则。
+3. 变更后必须验证 `git status` 能正确追踪 `.roo/mcp.json` 和 `.roo/rules/01-jbt-governance.md`。
 
 ---
 
@@ -117,4 +130,5 @@
 ## 九、预审结论
 
 1. `TASK-0046` 正式成立。
-2. 当前仅完成 A0 治理建档；A1 Roo 接入配置批次状态冻结为 `pending_token`。
+2. A0 治理建档已完成；A1 Roo 接入配置批次已终审通过并锁回（token_id: tok-731e8346-50cc-4822-831d-8479fcdfe152，review-id: REVIEW-TASK-0046-A1，commit: 76d59d5）。
+3. A2 `.roo/` 版本控制持久化已终审通过并锁回（token_id: tok-1f28c19b-b4dd-461a-8f50-c01de9ecac64，review-id: REVIEW-TASK-0046-A2）。

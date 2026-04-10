@@ -52,7 +52,7 @@ docs/locks/TASK-0046-lock.md
 docs/handoffs/TASK-0046-架构预审交接单.md
 ```
 
-### A1 批次（待签发）
+### A1 批次（已终审通过并锁回）
 
 ```
 ATLAS_PROMPT.md
@@ -61,6 +61,17 @@ ATLAS_PROMPT.md
 .roo/rules/**
 governance/roo_jbt_mcp_server.py
 ```
+
+### A2 批次（已终审通过并锁回）
+
+```
+.gitignore
+```
+
+- Token：tok-1f28c19b-b4dd-461a-8f50-c01de9ecac64
+- Review-ID：REVIEW-TASK-0046-A2
+- 审核结果：✅ 终审通过
+- 说明：仅移除 `.gitignore` 中 `.roo/` 排除规则，使 `.roo/mcp.json` 和 `.roo/rules/01-jbt-governance.md` 纳入版本控制
 
 ---
 
