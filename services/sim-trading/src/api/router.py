@@ -341,7 +341,12 @@ def get_instruments(product: str = ""):
 # ---------- 系统状态控制 ----------
 @router.get("/system/state")
 def get_system_state():
-    return _system_state
+    safe = {**_system_state}
+    # 脱敏：永远不返回凭证明文
+    for key in ("ctp_password", "ctp_auth_code"):
+        if safe.get(key):
+            safe[key] = "***"
+    return safe
 
 @router.post("/system/pause")
 def pause_trading(req: PauseRequest):
