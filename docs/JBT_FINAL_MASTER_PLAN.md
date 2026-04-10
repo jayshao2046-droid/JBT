@@ -72,7 +72,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 |------|------|------|
 | CTP/SimNow 网关 | ✅ 已部署 | `src/gateway/simnow.py`，Mini 容器运行中 |
 | API 路由 | ✅ 基本完成 | `src/api/router.py`，含 system_state/connect/disconnect/strategy/publish |
-| 期货公式接通 | ❌ 未完成 | 当前尚未完成期货公式/策略公式到 sim-trading 的执行链路，需等待 decision Phase C 真闭环 |
+| 期货公司接通 | ❌ 未完成 | 当前尚未完成期货公司 sim-trading 的执行链路，需等待 decision Phase C 真闭环 |
 | 风控守卫 | 🔶 骨架 | `src/risk/guards.py`，emit_alert 已接线，但规则引擎待完善 |
 | 交易执行 | 🔶 骨架 | `src/execution/`，待调试 |
 | 账本 | 🔶 骨架 | `src/ledger/service.py`，待调试 |
@@ -82,13 +82,13 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | Docker/Mini | ✅ 已部署 | TASK-0017-A3，待开盘验证CTP |
 | 临时看板 | ✅ 基本可用 | `sim-trading_web/`，operations+intelligence 页面 |
 
-**已完成任务：** TASK-0002(契约), TASK-0014-A1, TASK-0017-A3, TASK-0022-A, TASK-0023-A
+**已完成任务：** TASK-0002(契约), TASK-0009(治理闭环), TASK-0013(治理闭环), TASK-0014(A1~A4全锁回), TASK-0017-A3, TASK-0019(B1/B2锁回), TASK-0022-A, TASK-0023-A [修订 2026-04-10]
 **当前活跃：** TASK-0017(待开盘验证)
-**排队任务：** TASK-0014-A2 → TASK-0009 → TASK-0013 → TASK-0010 → TASK-0019 → TASK-0022-B
+**排队任务：** TASK-0010 → TASK-0022-B [修订 2026-04-10 TASK-0009/0013已闭环]
 
-> **[修订 2026-04-10] 当前 sim-trading 只完成 SimNow 网关、发布接口、运行态基础与 Mini 部署，尚未接通期货公司 / 策略公式执行链路；不得把当前状态误判为已具备完整公式驱动交易能力。**
+> **[修订 2026-04-10] 当前 sim-trading 只完成 SimNow 网关、发布接口、运行态基础与 Mini 部署，尚未接通期货公司 **
 
-### 2.2 决策 decision — 10%
+### 2.2 决策 decision — 90% [修订 2026-04-10 代码审计校正]
 
 **负责 Agent：决策**
 **服务目录：`services/decision/`**
@@ -96,20 +96,22 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
-| API 骨架 | ✅ 已完成 | `src/api/routes/`（strategy/signal） |
-| 策略仓库 | ✅ 基本完成 | `src/strategy/repository.py`，8态生命周期 |
-| 策略发布 | ✅ 已完成 | `src/publish/`（gate+sim_adapter+executor），H4生命周期门禁已闭环 |
-| 研究中心 | 🔶 骨架 | `src/research/`（factor_loader/trainer/optuna/shap/onnx），但真实数据接入有限 |
-| 模型路由 | 🔶 骨架 | `src/model/router.py`，待接入本地模型 |
+| API 骨架 | ✅ 已完成 | `src/api/routes/`（strategy/signal/model） |
+| 策略仓库 | ✅ 已完成 | `src/strategy/repository.py`，8态生命周期完整 |
+| 策略发布 | ✅ 已完成 | `src/publish/`（gate+sim_adapter+executor），H4闭环 |
+| 研究中心 | ✅ 已完成 | `src/research/`（factor_loader真实data API接入/trainer/optuna/shap/onnx） |
+| 模型路由 | 🔶 资格验证 | `src/model/router.py`，版本对齐+因子HASH校验，无实际推理加载（P2） |
 | 门控 | ✅ 已完成 | `src/gating/`（backtest_gate/research_gate） |
 | 持久化 | ✅ 已完成 | `src/persistence/`（FileStateStore） |
-| 通知 | 🔶 骨架 | `src/notifier/`（dispatcher/email/feishu） |
-| 报告 | 🔶 骨架 | `src/reporting/`（daily/research_summary） |
-| 临时看板 | 🔶 部分 | `decision_web/`，overview/signal-review/models-factors/strategy-repository 有内容，research-center/notifications/config 为空壳 |
+| 通知 | ✅ 已完成 | `src/notifier/`（飞书+邮件双通道投产，6级通知，JBT统一颜色） |
+| 报告 | ✅ 已完成 | `src/reporting/`（daily+research_summary投产） |
+| 临时看板 | ✅ 已完成 | `decision_web/` 7页面全部接真实数据（H6/H7完成去mock） |
 | Dockerfile | ✅ 已修复 | TASK-0021-H0 |
+| 测试 | ✅ 98用例 | `tests/` 全通过 |
 
-**已完成任务：** TASK-0021(A契约+H0~H4全锁回), TASK-0024(部署审查)
-**排队任务：** TASK-0021续批(研发中心/真实data接入/信号闭环) → TASK-0025(SimNow备用方案) → TASK-0016(正式接入)
+**已完成任务：** TASK-0021(A契约+H0~H7全批次锁回), TASK-0024(部署审查) [修订 2026-04-10]
+**剩余缺口（P2/P3）：** 模型路由无推理加载、Sharpe真实计算、ONNX存储路径、models-factors页数据绑定
+**排队任务：** TASK-0025(SimNow备用方案) → TASK-0016(正式接入)
 
 ### 2.3 数据 data — 5%
 
@@ -232,12 +234,12 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | TASK-0018-B | backtest 数据API | data | 数据 | active | P1 |
 | TASK-0018-C-SUP | 本地引擎补数据 | backtest | 回测 | active | P1 |
 | TASK-0017 | Mini开盘验证 | sim-trading | 模拟交易 | 待开盘 | P1 |
-| TASK-0014-A2 | 系统事件接线 | sim-trading | 模拟交易 | pending_token | P1 |
-| TASK-0019 | 收盘统计邮件 | sim-trading | 模拟交易 | pending_token | P1 |
+| TASK-0014-A2 | 系统事件接线 | sim-trading | 模拟交易 | ✅ locked | P1 |
+| TASK-0019 | 收盘统计邮件 | sim-trading | 模拟交易 | ✅ B1/B2 locked | P1 |
 | TASK-0022-B | 只读日志查看 | sim-trading | 模拟交易 | pending_token | P2 |
-| TASK-0009 | 严格风控验收 | sim-trading | 模拟交易 | pending_token | P1 |
-| TASK-0013 | 统一风控核心 | sim-trading+live | 项目架构师 | pending_token | P1 |
-| TASK-0010 | 服务骨架完善 | sim-trading | 模拟交易 | pending_token | P1 |
+| TASK-0009 | 严格风控验收 | sim-trading | 模拟交易 | ✅ 治理闭环 [2026-04-10] | P1 |
+| TASK-0013 | 统一风控核心 | sim-trading+live | 项目架构师 | ✅ 治理闭环 [2026-04-10] | P1 |
+| TASK-0010 | 服务骨架完善 | sim-trading | 模拟交易 | 前置已满足，待签发 [2026-04-10] | P1 |
 | TASK-0025 | SimNow备用方案 | decision | 决策 | 预审 | P2 |
 | TASK-0026 | 新增因子+别名 | backtest | 回测 | ✅ locked_back | P1 |
 | TASK-0008 | 泛化引擎+报告导出 | backtest | 回测 | ✅ locked | P1 |
@@ -276,12 +278,12 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 | 序号 | 任务 | Agent | 依赖 | 验收标准 |
 |------|------|-------|------|---------|
-| B1 | TASK-0014-A2 系统事件接线 | 模拟交易 | A2完成 | CTP断连/重连/成交事件自动触发飞书+邮件 |
-| B2 | TASK-0009 严格风控验收 | 模拟交易 | B1完成 | 所有风控规则可触发；违规自动报警+平仓 |
-| B3 | TASK-0013 统一风控核心 | 项目架构师 | B2完成 | sim/live共用风控核心+各自适配层 |
-| B4 | TASK-0010 骨架完善 | 模拟交易 | B3完成 | .env.example完整；服务骨架达标 |
-| B5 | TASK-0019 收盘报表 | 模拟交易 | B4完成 | 15:20/23:10/02:40 三时间窗邮件报表 |
-| B6 | TASK-0022-B 只读日志 | 模拟交易 | B4完成 | 运维人员可在Web查看近期日志 |
+| B1 | TASK-0014 风控通知链路 | 模拟交易 | Phase A | ✅ A1~A4全锁回 [修订 2026-04-10] |
+| B2 | TASK-0009 严格风控验收 | 项目架构师 | B1完成 | ✅ 治理闭环 [2026-04-10] |
+| B3 | TASK-0013 统一风控核心 | 项目架构师 | B2完成 | ✅ 治理闭环 [2026-04-10] |
+| B4 | TASK-0010 骨架完善 | 模拟交易 | B3完成 | 前置已满足，待签发 |
+| B5 | TASK-0019 收盘报表 | 模拟交易 | B4完成 | ✅ B1/B2 locked [修订 2026-04-10] |
+| B6 | TASK-0022-B 只读日志 | 模拟交易 | B4完成 | pending_token |
 
 **并行规则：** B1→B2→B3→B4，之后 B5⊥B6
 
@@ -660,7 +662,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | ✅ P1 | TASK-0007-C | 2 | 回测 | 前端8004收口 locked [2026-04-10] |
 | 🟢 P2 | TASK-0022-B | 4 | 模拟交易 | main.py/router.py/intelligence/page.tsx + test |
 | ✅ P2 | TASK-0005 | 1 | 回测 | docker-compose.yml locked [2026-04-10] |
-| 🟢 P2 | TASK-0013 | TBD | 架构师 | 跨服务风控核心(需预审) |
+| ✅ P2 | TASK-0013 | N/A | 架构师 | 纯治理闭环(无代码Token) [2026-04-10] |
 | 🟢 P2 | TASK-0036 | TBD | 架构师 | 灾备演练场景脚本(待Phase B) [修订 2026-04-09] |
 | 🟢 P2 | TASK-0037 | TBD | 决策 | PBO检验+CPCV+mlfinlab(决策端内置，待Phase C) [修订 2026-04-09] |
 
