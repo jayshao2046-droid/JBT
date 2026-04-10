@@ -92,8 +92,8 @@ def get_sla_tracker() -> Any:
 
 
 _dispatcher = None
-# 24h 连续采集器不发启动/完成通知；外盘分钟K线由自身 session 逻辑管理，不走 _safe_run 通知
-_SILENT_COLLECTORS = {"新闻API", "RSS聚合", "飞书新闻推送", "情绪指数", "外盘分钟K线(yfinance)"}
+# 24h 连续采集器不发启动/完成通知；外盘/国内分钟K线由自身 session 逻辑管理，不走 _safe_run 通知
+_SILENT_COLLECTORS = {"新闻API", "RSS聚合", "飞书新闻推送", "情绪指数", "外盘分钟K线(yfinance)", "分钟内盘K线"}
 _calendar = GlobalTradingCalendar()
 _last_snapshot: MarketSnapshot | None = None
 STOCK_MINUTE_ENABLED = False
@@ -106,6 +106,15 @@ _overseas_minute_session: dict[str, Any] = {
     "total_bars": 0,     # 累计 bar 数
     "consecutive_zeros": 0,  # 连续 0产出计数
     "alerted": False,    # 是否已发过连续0告警（防重复）
+}
+
+# ── 国内期货分钟K线 session 跟踪（日盘13:30-15:00 / 夜盘21:00-02:30）─────────────
+_domestic_minute_session: dict[str, Any] = {
+    "runs": 0,
+    "zero_runs": 0,
+    "total_bars": 0,
+    "consecutive_zeros": 0,
+    "alerted": False,
 }
 
 
@@ -535,14 +544,128 @@ def _get_overseas_symbols() -> list[str]:
 def job_minute_kline(config: dict[str, Any]) -> None:
     """分钟内盘K线 — 每 2 分钟，仅交易时段。
 
-    从 plist 迁回 JBT APScheduler。动态读取 _get_domestic_symbols() 所有 35 品种。
-    备注：时段门控由 _is_trading_session() 完成，函数本身只在交易时段执行。
+    通知策略:
+    - 盘中每轮静默（不发启动/完成通知）
+    - 连续 3 轮 0产出（约 6 分钟）→ 发一次 P2 告警
+    - 有数据后自动重置连续计数
+    - 收盘由 job_domestic_minute_day_close / job_domestic_minute_night_close 发摘要
     """
     if not _is_trading_session():
         return
+
     from services.data.src.scheduler.pipeline import run_minute_pipeline
+    import time as _time
+
     symbols = _get_domestic_symbols()
-    _safe_run("分钟内盘K线", run_minute_pipeline, symbols=symbols, config=config)
+    t0 = _time.time()
+    try:
+        result = run_minute_pipeline(symbols=symbols, config=config)
+        bars = sum(result.values()) if isinstance(result, dict) else int(result or 0)
+        elapsed = round(_time.time() - t0, 1)
+    except Exception:
+        bars, elapsed = 0, round(_time.time() - t0, 1)
+        logger.error("国内期货分钟K线 pipeline 异常:\n%s", traceback.format_exc())
+
+    # ── session 状态更新 ──────────────────────────────────────
+    _domestic_minute_session["runs"] += 1
+    _domestic_minute_session["total_bars"] += bars
+    if bars == 0:
+        _domestic_minute_session["zero_runs"] += 1
+        _domestic_minute_session["consecutive_zeros"] += 1
+    else:
+        _domestic_minute_session["consecutive_zeros"] = 0
+        _domestic_minute_session["alerted"] = False
+
+    consecutive = _domestic_minute_session["consecutive_zeros"]
+    logger.info(
+        "国内期货分钟K线: bars=%d elapsed=%ss consecutive_zeros=%d",
+        bars, elapsed, consecutive,
+    )
+
+    # ── 连续 3 轮 0产出 → 单次 P2 告警 ──────────────────────
+    ZERO_ALERT_THRESHOLD = 3
+    if consecutive >= ZERO_ALERT_THRESHOLD and not _domestic_minute_session["alerted"]:
+        d = _get_dispatcher()
+        if d:
+            try:
+                from services.data.src.notify.dispatcher import DataEvent, NotifyType
+                d.dispatch(DataEvent(
+                    event_code="domestic_minute_consecutive_zero",
+                    title=f"国内期货分钟K线连续 {consecutive} 轮 0产出",
+                    notify_type=NotifyType.P2,
+                    body_md=(
+                        f"🟡 国内期货分钟K线 已连续 **{consecutive}** 轮 0产出，"
+                        f"可能存在数据源问题或行情异常。\n"
+                        f"本 session 累计: {_domestic_minute_session['runs']} 轮 / "
+                        f"{_domestic_minute_session['total_bars']:,} bars"
+                    ),
+                    body_rows=[
+                        ("连续0产出", str(consecutive)),
+                        ("session总轮次", str(_domestic_minute_session["runs"])),
+                        ("累计bars", str(_domestic_minute_session["total_bars"])),
+                        ("耗时(本轮)", f"{elapsed}s"),
+                    ],
+                    source_name="domestic_minute_kline",
+                    channels={"feishu"},
+                ))
+                _domestic_minute_session["alerted"] = True
+            except Exception:
+                pass
+
+
+def _domestic_minute_close_summary(session_name: str) -> None:
+    """国内期货分钟K线收盘摘要（日盘/夜盘通用）。"""
+    s = _domestic_minute_session
+    runs = s["runs"]
+    if runs == 0:
+        return
+
+    zero_runs = s["zero_runs"]
+    total_bars = s["total_bars"]
+    success_runs = runs - zero_runs
+    completeness = round(success_runs / runs * 100, 1) if runs else 0
+    status_icon = "🟢" if completeness >= 80 else ("🟡" if completeness >= 50 else "🔴")
+
+    d = _get_dispatcher()
+    if d:
+        try:
+            from services.data.src.notify.dispatcher import DataEvent, NotifyType
+            d.dispatch(DataEvent(
+                event_code="domestic_minute_session_close",
+                title=f"{status_icon} 国内期货分钟K线{session_name}摘要 完整度 {completeness}%",
+                notify_type=NotifyType.NOTIFY,
+                body_md=(
+                    f"{status_icon} **国内期货分钟K线** {session_name}已结束\n"
+                    f"完整度: **{completeness}%** ({success_runs}/{runs} 轮有数据)\n"
+                    f"累计采集: **{total_bars:,} bars** | 0产出轮次: {zero_runs}"
+                ),
+                body_rows=[
+                    ("完整度", f"{completeness}%"),
+                    ("有数据轮次", f"{success_runs}/{runs}"),
+                    ("累计bars", f"{total_bars:,}"),
+                    ("0产出轮次", str(zero_runs)),
+                ],
+                source_name="domestic_minute_kline",
+                channels={"feishu"},
+            ))
+        except Exception:
+            pass
+
+    _domestic_minute_session.update({
+        "runs": 0, "zero_runs": 0, "total_bars": 0,
+        "consecutive_zeros": 0, "alerted": False,
+    })
+    logger.info("国内期货分钟K线 %s session 已重置", session_name)
+
+
+def job_domestic_minute_day_close(config: dict[str, Any]) -> None:
+    """国内期货分钟K线日盘收盘摘要 — 15:05 触发。"""
+    _domestic_minute_close_summary("日盘")
+
+
+def job_domestic_minute_night_close(config: dict[str, Any]) -> None:
+    """国内期货分钟K线夜盘收盘摘要 — 02:35 触发。"""
+    _domestic_minute_close_summary("夜盘")
 
 
 def job_daily_kline(config: dict[str, Any]) -> None:
@@ -1192,9 +1315,19 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
 
     # [DEPRECATED LIFTED] 分钟内盘K线: 每2分钟，交易时段门控在函数内。
     # 已迁回 JBT APScheduler，停用 com.botquant.futures.minute plist。
+    # 通知策略: 盘中静默，连续3轮0产出发P2，日盘15:05/夜盘02:35发收盘摘要。
     scheduler.add_job(
         job_minute_kline, IntervalTrigger(minutes=2),
         args=[config], id="minute_kline", name="分钟内盘K线",
+    )
+    # 国内期货分钟K线收盘摘要: 日盘 15:05 / 夜盘 02:35
+    scheduler.add_job(
+        job_domestic_minute_day_close, CronTrigger(hour=15, minute=5, day_of_week="mon-fri"),
+        args=[config], id="domestic_minute_day_close", name="国内期货日盘收盘摘要",
+    )
+    scheduler.add_job(
+        job_domestic_minute_night_close, CronTrigger(hour=2, minute=35, day_of_week="tue-sat"),
+        args=[config], id="domestic_minute_night_close", name="国内期货夜盘收盘摘要",
     )
     # 日线K线: 每日 17:00
     scheduler.add_job(
