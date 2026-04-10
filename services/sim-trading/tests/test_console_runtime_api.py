@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 import threading
+import time
 
 from src.api import router as router_mod
 from src.gateway import simnow as simnow_mod
@@ -139,3 +140,88 @@ def test_on_rtn_order_records_exchange_rejection_from_status_message():
     assert api._orders["1"]["status_msg"] == "15:已撤单报单被拒绝SHFE:客户没有在该会员开户"
     assert api._order_errors[-1]["source"] == "exchange_status"
     assert api._order_errors[-1]["instrument_id"] == "rb2605"
+
+
+def test_schedule_reconnect_only_once_per_channel():
+    gateway = simnow_mod.SimNowGateway(
+        broker_id="9999",
+        user_id="demo",
+        password="demo",
+        md_front="tcp://md",
+        td_front="tcp://td",
+    )
+    with gateway._lock:
+        gateway._md_status = "md_disconnected"
+
+    called = threading.Event()
+    attempts = {"count": 0}
+
+    def fake_connect():
+        attempts["count"] += 1
+        with gateway._lock:
+            gateway._md_status = "md_logged_in"
+        called.set()
+
+    gateway._connect_md = fake_connect
+
+    assert gateway._schedule_reconnect("md", delay_seconds=0.01) is True
+    assert gateway._schedule_reconnect("md", delay_seconds=0.01) is False
+    assert called.wait(2.0) is True
+    time.sleep(0.05)
+    assert attempts["count"] == 1
+
+
+def test_disconnect_prevents_reconnect_scheduling():
+    gateway = simnow_mod.SimNowGateway(
+        broker_id="9999",
+        user_id="demo",
+        password="demo",
+        md_front="tcp://md",
+        td_front="tcp://td",
+    )
+
+    gateway.disconnect()
+    with gateway._lock:
+        gateway._md_status = "md_disconnected"
+
+    assert gateway._schedule_reconnect("md", delay_seconds=0.01) is False
+
+
+def test_system_state_endpoint_syncs_gateway_status_and_masks_credentials():
+    class _StatusGatewayStub:
+        @property
+        def status(self):
+            return {
+                "md": "md_logged_in",
+                "td": "td_ready",
+                "md_connected": True,
+                "td_connected": True,
+                "last_md_disconnect_reason": 7,
+                "last_md_disconnect_time": 123.45,
+                "last_td_disconnect_reason": None,
+                "last_td_disconnect_time": None,
+            }
+
+    original_gateway = router_mod._gateway
+    original_state = dict(router_mod._system_state)
+    router_mod._gateway = _StatusGatewayStub()
+    router_mod._system_state["ctp_md_connected"] = False
+    router_mod._system_state["ctp_td_connected"] = False
+    router_mod._system_state["ctp_password"] = "secret"
+    router_mod._system_state["ctp_auth_code"] = "auth-secret"
+
+    try:
+        response = client.get("/api/v1/system/state")
+    finally:
+        router_mod._gateway = original_gateway
+        router_mod._system_state.clear()
+        router_mod._system_state.update(original_state)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ctp_md_connected"] is True
+    assert data["ctp_td_connected"] is True
+    assert data["last_disconnect_reason"] == 7
+    assert data["last_disconnect_time"] == 123.45
+    assert data["ctp_password"] == "***"
+    assert data["ctp_auth_code"] == "***"

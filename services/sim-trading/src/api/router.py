@@ -194,6 +194,19 @@ def _build_ctp_snapshot(connected: bool, account: Optional[Dict[str, Any]] = Non
         "note": note,
     }
 
+
+def _sync_gateway_state() -> Optional[Dict[str, Any]]:
+    gw = _get_gateway()
+    if gw is None:
+        return None
+
+    st = gw.status
+    _system_state["ctp_md_connected"] = st["md_connected"]
+    _system_state["ctp_td_connected"] = st["td_connected"]
+    _system_state["last_disconnect_reason"] = st.get("last_md_disconnect_reason") or st.get("last_td_disconnect_reason")
+    _system_state["last_disconnect_time"] = st.get("last_md_disconnect_time") or st.get("last_td_disconnect_time")
+    return st
+
 # ---------- 基础状态 ----------
 @router.get("/status")
 def get_status():
@@ -341,6 +354,7 @@ def get_instruments(product: str = ""):
 # ---------- 系统状态控制 ----------
 @router.get("/system/state")
 def get_system_state():
+    _sync_gateway_state()
     safe = {**_system_state}
     # 脱敏：永远不返回凭证明文
     for key in ("ctp_password", "ctp_auth_code"):
@@ -450,11 +464,7 @@ def ctp_connect(silent: bool = False):
             break
         time.sleep(0.5)
 
-    st = _gateway.status
-    _system_state["ctp_md_connected"] = st["md_connected"]
-    _system_state["ctp_td_connected"] = st["td_connected"]
-    _system_state["last_disconnect_reason"] = st.get("last_md_disconnect_reason") or st.get("last_td_disconnect_reason")
-    _system_state["last_disconnect_time"] = st.get("last_md_disconnect_time") or st.get("last_td_disconnect_time")
+    st = _sync_gateway_state() or _gateway.status
 
     if not silent:
         try:
@@ -501,13 +511,7 @@ def ctp_status():
                 "md_connected": False, "td_connected": False,
                 "last_disconnect_reason": _system_state.get("last_disconnect_reason"),
                 "last_disconnect_time": _system_state.get("last_disconnect_time")}
-    st = _gateway.status
-    # 同步回 system_state
-    _system_state["ctp_md_connected"] = st["md_connected"]
-    _system_state["ctp_td_connected"] = st["td_connected"]
-    _system_state["last_disconnect_reason"] = st.get("last_md_disconnect_reason") or st.get("last_td_disconnect_reason")
-    _system_state["last_disconnect_time"] = st.get("last_md_disconnect_time") or st.get("last_td_disconnect_time")
-    return st
+    return _sync_gateway_state() or _gateway.status
 
 
 @router.get("/ticks")

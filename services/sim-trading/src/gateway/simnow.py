@@ -7,6 +7,7 @@ SimNow CTP 网关实现（openctp-ctp 6.7.7）
 import logging
 import re
 import threading
+import time
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger("simnow-gateway")
@@ -129,6 +130,7 @@ def _make_md_spi_class():
                 emit_alert("P1", f"CTP 行情前置断开 reason={nReason}", {"event_code": "CTP_FRONT_DISCONNECTED", "source": "simnow_md"})
             except Exception:
                 pass
+            self._api._schedule_reconnect("md")
 
         def OnRspUserLogin(self, pRspUserLogin, pRspInfo, nRequestID, bIsLast):
             if pRspInfo and pRspInfo.ErrorID != 0:
@@ -215,6 +217,7 @@ def _make_td_spi_class():
                 emit_alert("P1", f"CTP 交易前置断开 reason={nReason}", {"event_code": "CTP_FRONT_DISCONNECTED", "source": "simnow_td"})
             except Exception:
                 pass
+            self._api._schedule_reconnect("td")
 
         def OnRspAuthenticate(self, p, pRspInfo, nRequestID, bIsLast):
             if pRspInfo and pRspInfo.ErrorID != 0:
@@ -527,6 +530,8 @@ class SimNowGateway:
         self._pending_subscribe: list = []
         # 持仓查询中间缓冲（CTP 逐条回调，bIsLast 时 flush）
         self._pending_positions: list = []
+        self._shutdown = False
+        self._reconnect_threads: Dict[str, Optional[threading.Thread]] = {"md": None, "td": None}
 
     @property
     def status(self):
@@ -545,6 +550,74 @@ class SimNowGateway:
     def latest_tick(self, symbol):
         with self._lock:
             return self._ticks.get(symbol)
+
+    def _channel_status(self, channel: str) -> str:
+        if channel == "md":
+            return self._md_status
+        return self._td_status
+
+    def _release_channel_api(self, channel: str):
+        api_attr = "_md_api" if channel == "md" else "_td_api"
+        spi_attr = "_md_spi" if channel == "md" else "_td_spi"
+        api = getattr(self, api_attr, None)
+        if api is not None:
+            try:
+                api.Release()
+            except Exception as exc:
+                logger.warning("[gateway] release %s api failed: %s", channel, exc)
+        setattr(self, api_attr, None)
+        setattr(self, spi_attr, None)
+
+    def _reconnect_loop(self, channel: str, delay_seconds: float):
+        delay = max(delay_seconds, 1.0)
+        disconnected_status = f"{channel}_disconnected"
+        connect_fn = self._connect_md if channel == "md" else self._connect_td
+
+        try:
+            while True:
+                time.sleep(delay)
+                with self._lock:
+                    if self._shutdown:
+                        logger.info("[gateway] %s reconnect worker exits: shutdown", channel)
+                        return
+                    current_status = self._channel_status(channel)
+
+                if current_status != disconnected_status:
+                    logger.info("[gateway] %s reconnect worker exits: status=%s", channel, current_status)
+                    return
+
+                logger.info("[gateway] %s still disconnected after %.1fs, reconnecting", channel, delay)
+                self._release_channel_api(channel)
+                try:
+                    connect_fn()
+                except Exception as exc:
+                    logger.warning("[gateway] %s reconnect attempt failed: %s", channel, exc)
+                delay = min(delay * 2, 60.0)
+        finally:
+            with self._lock:
+                current = self._reconnect_threads.get(channel)
+                if current is threading.current_thread():
+                    self._reconnect_threads[channel] = None
+
+    def _schedule_reconnect(self, channel: str, delay_seconds: float = 5.0) -> bool:
+        disconnected_status = f"{channel}_disconnected"
+        with self._lock:
+            if self._shutdown:
+                return False
+            if self._channel_status(channel) != disconnected_status:
+                return False
+            worker = self._reconnect_threads.get(channel)
+            if worker is not None and worker.is_alive():
+                return False
+            worker = threading.Thread(
+                target=self._reconnect_loop,
+                args=(channel, delay_seconds),
+                daemon=True,
+                name=f"ctp-{channel}-reconnect",
+            )
+            self._reconnect_threads[channel] = worker
+        worker.start()
+        return True
 
     def all_ticks(self):
         with self._lock:
@@ -742,6 +815,8 @@ class SimNowGateway:
         self._connect_td()
 
     def _connect_md(self):
+        with self._lock:
+            self._shutdown = False
         import tempfile
         d = tempfile.mkdtemp(prefix="ctp_md_")
         self._md_api = _mdmod.CThostFtdcMdApi.CreateFtdcMdApi(d + "/")
@@ -752,6 +827,8 @@ class SimNowGateway:
         logger.info("[gateway] md Init → %s", self._md_front)
 
     def _connect_td(self):
+        with self._lock:
+            self._shutdown = False
         import tempfile
         d = tempfile.mkdtemp(prefix="ctp_td_")
         self._td_api = _tdmod.CThostFtdcTraderApi.CreateFtdcTraderApi(d + "/")
@@ -876,6 +953,8 @@ class SimNowGateway:
         return {"order_ref": order_ref, "status": "cancel_submitted"}
 
     def disconnect(self):
+        with self._lock:
+            self._shutdown = True
         for attr in ("_md_api", "_td_api"):
             api = getattr(self, attr, None)
             if api:
