@@ -46,15 +46,18 @@
 ## 当前状态
 
 - 预审状态：已通过
-- Token 状态：待本轮即时执行确认
-- 解锁时间：N/A
-- 失效时间：N/A
-- 锁回时间：N/A
-- lockback 结果：N/A
+- Token 状态：locked（已锁回）
+- Token ID：tok-fe18d064-cbef-466f-9a68-e8e39982c255
+- 解锁时间：2026-04-10
+- 锁回时间：2026-04-10
+- lockback 结果：approved
+- lockback 摘要：容器命名统一: backtest-api→JBT-BACKTEST-8103, backtest-dashboard→JBT-BACKTEST-3001
+- Git commit：30215e5
+- 终审：PASS（项目架构师）
 
 ## 结论
 
-**TASK-0005 当前已完成范围冻结与锁控留痕；可直接申请 `services/backtest/docker-compose.yml` 的单文件 P1 Token。**# TASK-0005 Lock 记录
+**TASK-0005 容器命名规范统一已完成。API→JBT-BACKTEST-8103，Dashboard→JBT-BACKTEST-3001。Phase E 全闭环。**# TASK-0005 Lock 记录
 
 ## Lock 信息
 

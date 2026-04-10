@@ -23,11 +23,12 @@
 ## 当前状态
 
 - `TASK-0029`、`TASK-0030`、`TASK-0031`、`TASK-0032` 已完成并锁回；其中 `TASK-0034` 已补建为 `TASK-0031` 后续 data 单服务 U0 直修的事后审计锚点。
-- 数据端下一条主线是“Mini system 级采集 / 调度 / 通知迁移到 JBT Docker 体系”，当前先做治理准备，不直接写代码。
+- 数据端下一条主线是“Mini system 级采集 / 调度 / 通知迁移到 JBT Docker 体系”，原因是当前真实 24h 运行链路仍大量依赖 legacy system；当前先做治理准备，不直接写代码。
 - `TASK-0034` 当前只负责 U0 审计账本、prompt 同步与独立远端备份，不反写 `TASK-0031` 的 6 文件标准热修边界，也不继续扩展 data 代码范围。
-- 统一聚合 dashboard 已完成规划冻结：正式归属 `services/dashboard/**`，但尚未建正式任务 / 白名单 / Token。
-- 模拟交易维持 `TASK-0017` 待开盘验证状态，不主动扩新范围。
+- 统一聚合 dashboard 已完成规划冻结：正式归属 `services/dashboard/**`，但在 sim-trading / decision / data 三端临时看板未基本收口前，不进入正式实施。
+- 模拟交易维持 `TASK-0017` 待开盘验证状态；当前尚未接通期货公式 / 策略公式执行链路，不主动扩新范围。
 - 回测维持“阶段性结案 / 维护观察”。
+- live-trading 当前明确后置，待 sim-trading 在 Mini 上连续稳定运行 2~3 个月后再评估是否启动。
 - 决策若继续推进 legacy 迁移，必须先走专项 handoff 和治理判边。
 
 ## 接管要求

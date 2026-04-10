@@ -72,6 +72,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 |------|------|------|
 | CTP/SimNow 网关 | ✅ 已部署 | `src/gateway/simnow.py`，Mini 容器运行中 |
 | API 路由 | ✅ 基本完成 | `src/api/router.py`，含 system_state/connect/disconnect/strategy/publish |
+| 期货公式接通 | ❌ 未完成 | 当前尚未完成期货公式/策略公式到 sim-trading 的执行链路，需等待 decision Phase C 真闭环 |
 | 风控守卫 | 🔶 骨架 | `src/risk/guards.py`，emit_alert 已接线，但规则引擎待完善 |
 | 交易执行 | 🔶 骨架 | `src/execution/`，待调试 |
 | 账本 | 🔶 骨架 | `src/ledger/service.py`，待调试 |
@@ -84,6 +85,8 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **已完成任务：** TASK-0002(契约), TASK-0014-A1, TASK-0017-A3, TASK-0022-A, TASK-0023-A
 **当前活跃：** TASK-0017(待开盘验证)
 **排队任务：** TASK-0014-A2 → TASK-0009 → TASK-0013 → TASK-0010 → TASK-0019 → TASK-0022-B
+
+> **[修订 2026-04-10] 当前 sim-trading 只完成 SimNow 网关、发布接口、运行态基础与 Mini 部署，尚未接通期货公司 / 策略公式执行链路；不得把当前状态误判为已具备完整公式驱动交易能力。**
 
 ### 2.2 决策 decision — 10%
 
@@ -121,7 +124,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 健康检查 | 🔶 有误报 | `src/health/health_check.py`，stock/news 判定有误报 |
 | 通知 | 🔶 部分修复 | TASK-0028-B6 已修复通知体验，飞书/邮件恢复 |
 | 新闻推送 | 🔶 部分修复 | `src/notify/news_pusher.py`，批量推送已恢复 |
-| data_web | ❌ 未开始 | 6页临时看板已规划，待独立任务 |
+| data_web | 🔶 部分 | 临时原型已导入，6页正式化与独立前端容器未完成 |
 | Docker化 | 🔶 部分 | Mini 容器运行中(JBT-DATA-8105)，但调度仍为 legacy cron |
 | 存储 | ✅ 已完成 | `src/data/storage.py`，Mini `~/jbt-data/` 目录体系 |
 
@@ -129,7 +132,9 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **当前活跃：** TASK-0031(非夜盘热修 pending_token)
 **排队任务：** TASK-0031 → TASK-0027(全量迁移) → data_web独立任务
 
-### 2.4 回测 backtest — 75%
+> **[修订 2026-04-10] data 端仍要做“system 级迁移”的原因是：当前 Mini 现网真实 24h 采集、调度、健康检查和通知仍大量依赖 legacy collectors / scripts / crontab；JBT data 目前只承接最小供数 API、部分通知修复与 data_web 前端原型。若不完成 system 级迁移，JBT data 仍只是供数 API 壳层，无法满足无中断、可观测、可回滚的正式运行要求。**
+
+### 2.4 回测 backtest — 95% [修订 2026-04-10 Phase E 全闭环，进入维护态]
 
 **负责 Agent：回测**
 **服务目录：`services/backtest/`**
@@ -145,13 +150,14 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 结果构建 | ✅ 已完成 | `src/backtest/result_builder.py` |
 | 引擎选择器 | ✅ 已完成 | 前端+后端双路径 |
 | 看板两页 | ✅ 已完成 | agent-network + operations |
-| 泛化引擎 | 🔸 预审完成 | TASK-0008，generic_strategy 模板化 |
-| 新增因子 | 🔸 预审完成 | TASK-0026，Spread/Spread_RSI |
-| 8004并回 | 🔶 部分 | TASK-0007，A/D locked，B/C pending |
+| 泛化引擎 | ✅ 已完成 | TASK-0008 A/B/C/D 四批全锁回 [修订 2026-04-10] |
+| 新增因子 | ✅ 已完成 | TASK-0026 A/B/C 三批全 locked_back [修订 2026-04-10] |
+| 8004并回 | ✅ 已完成 | TASK-0007 A/B/C/D 全锁回 [修订 2026-04-10] |
+| 容器命名 | ✅ 已完成 | TASK-0005 JBT-BACKTEST-8103/3001 [修订 2026-04-10] |
 
-**已完成任务：** TASK-0003(A/B/R1/R2/R3全锁回), TASK-0004(锁回), TASK-0005(预审), TASK-0007(A/D锁回), TASK-0018(A/C/D/E锁回)
-**当前活跃：** TASK-0018-B(data API active), TASK-0018-C-SUP(本地引擎补active)
-**排队任务：** TASK-0018续 → TASK-0008 → TASK-0026 → TASK-0007-B/C
+**已完成任务：** TASK-0003(全锁回), TASK-0004(锁回), TASK-0005(锁回), TASK-0007(A/B/C/D全锁回), TASK-0008(A/B/C/D全锁回), TASK-0018(A/C/D/E锁回), TASK-0026(A/B/C全锁回) [修订 2026-04-10]
+**Phase E 状态：全部闭环，回测进入维护态** [修订 2026-04-10]
+**排队任务：** 无新排队
 
 > **[修订 2026-04-09] 双回测分离原则：** Air 人工回测在 Phase E 完成后进入维护态（只修 bug、不加功能）。PBO/CPCV 等研究级能力归决策端内置研究回测引擎（Phase C / Section 5.4 沙箱），两端引擎代码不共享、职责不交叉。
 
@@ -171,6 +177,8 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **定位：** 看板端为最后完成的服务。所有后端服务（sim-trading/decision/data/backtest）先完成 API 和数据能力，看板端最后纵观全局、一次性部署所有聚合功能。各服务容器内的临时看板跟随各自后端 Agent 配套更新，不受此顺序约束。
 **排队任务：** TASK-0015(SimNow临时看板，已有参考前端) → 聚合看板独立任务（等所有后端 Phase 基本完成后启动）
 
+> **[修订 2026-04-10] 聚合 dashboard 继续后置。当前 sim-trading / decision / data 三端临时看板均未全部收口，因此总看板不进入实施，只继续保留治理与信息架构冻结。**
+
 ### 2.6 实盘交易 live-trading — 0%
 
 **负责 Agent：实盘交易**
@@ -182,8 +190,10 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | README.md | ✅ 存在 | 占位 |
 | src/ | ❌ 空目录 | 零代码 |
 
-**前置条件：** 模拟交易契约稳定 + 统一风控核心(TASK-0013)完成后启动
+**前置条件：** 模拟交易契约稳定 + 统一风控核心(TASK-0013)完成 + sim-trading 连续稳定运行 2~3 个月并经 Jay.S 再次确认后启动 [修订 2026-04-10]
 **排队任务：** 契约复用 → 骨架 → 网关 → 执行 → 风控 → 账本 → 通知
+
+> **[修订 2026-04-10] live-trading 不进入当前执行窗口。当前明确后置，待 sim-trading 在 Mini 上连续稳定运行 2~3 个月后，再单独评估是否启动 Phase H。**
 
 ---
 
@@ -229,11 +239,11 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | TASK-0013 | 统一风控核心 | sim-trading+live | 项目架构师 | pending_token | P1 |
 | TASK-0010 | 服务骨架完善 | sim-trading | 模拟交易 | pending_token | P1 |
 | TASK-0025 | SimNow备用方案 | decision | 决策 | 预审 | P2 |
-| TASK-0026 | 新增因子+别名 | backtest | 回测 | pending_token | P1 |
-| TASK-0008 | 泛化引擎+报告导出 | backtest | 回测 | pending_token | P1 |
-| TASK-0007-B | 正式后端并回 | backtest | 回测 | pending_token | P1 |
-| TASK-0007-C | 前端8004收口 | backtest | 回测 | pending_token | P1 |
-| TASK-0005 | 容器命名统一 | backtest | 回测 | pending_token | P2 |
+| TASK-0026 | 新增因子+别名 | backtest | 回测 | ✅ locked_back | P1 |
+| TASK-0008 | 泛化引擎+报告导出 | backtest | 回测 | ✅ locked | P1 |
+| TASK-0007-B | 正式后端并回 | backtest | 回测 | ✅ locked | P1 |
+| TASK-0007-C | 前端8004收口 | backtest | 回测 | ✅ locked | P1 |
+| TASK-0005 | 容器命名统一 | backtest | 回测 | ✅ locked | P2 |
 | TASK-0027 | data全量采集迁移 | data | 数据 | 预审 | P1 |
 | TASK-0015 | SimNow临时看板 | dashboard | 看板 | 预审 | P2 |
 | TASK-0020 | ECS云部署 | 运维 | 运维 | 阻塞 | P2 |
@@ -308,7 +318,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ### Phase D — 数据端全量迁移
 
-**目标：** Mini数据端从legacy cron完全迁移到JBT Docker体系
+**目标：** Mini数据端从legacy cron完全迁移到JBT Docker体系。当前必须做 system 级迁移，因为真实 24h 运行链路仍在 legacy system 上；若不迁移，JBT data 仍无法成为正式运行承载面。 [修订 2026-04-10]
 
 | 序号 | 任务 | Agent | 依赖 | 验收标准 |
 |------|------|-------|------|---------|
@@ -337,6 +347,8 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 > **看板端定位：** 看板是所有后端能力的只读聚合层，不产生业务数据。因此看板端排在最后完成——等 sim-trading/decision/data/backtest 四端 API 稳定后，看板一次性对接全部后端，避免反复返工。各服务容器内临时看板（*_web）跟随后端配套更新，不受此顺序约束。
 
+> **[修订 2026-04-10] 除后端 API 稳定外，还需等待 sim-trading / decision / data 三端临时看板先基本收口；在此前，总看板不启动实施。**
+
 | 序号 | 任务 | Agent | 依赖 | 验收标准 |
 |------|------|-------|------|---------|
 | F1 | TASK-0015 SimNow临时看板 | 看板 | Phase B基本完成 | dashboard聚合sim-trading只读数据 |
@@ -353,9 +365,11 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | G2 | 数据目录迁移 | 数据 | G1完成 | ~/J_BotQuant/BotQuan_Data → ~/jbt-data 完全切换 |
 | G3 | cron/launchctl 清退 | 运维 | G1完成 | 无legacy定时任务残留 |
 
-### Phase H — 实盘交易（最终阶段）
+### Phase H — 实盘交易（最终阶段，延后启动）
 
 **目标：** 启用真实交易能力
+
+> **[修订 2026-04-10] 本阶段不进入当前执行窗口；仅在 sim-trading 连续稳定运行 2~3 个月后，由 Jay.S 再次确认是否启动。**
 
 | 序号 | 任务 | Agent | 依赖 | 验收标准 |
 |------|------|-------|------|---------|
@@ -567,8 +581,8 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **任务队列：**
 
 ```
-┌─ TASK-0015  SimNow临时看板        ← 等Phase B基本完成 + 白名单
-└─ 聚合看板（新任务）               ← 等Phase B/C/D/E基本完成后一次性启动
+┌─ TASK-0015  SimNow临时看板        ← 等 sim-trading 临时看板链路再收口 + 白名单
+└─ 聚合看板（新任务）               ← 等各服务临时看板基本收口 + Phase B/C/D/E基本完成后一次性启动
 ```
 
 **交接要点：**
@@ -589,7 +603,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **任务队列：**
 
 ```
-等待 Phase B(TASK-0013 统一风控核心) 完成后启动
+等待 sim-trading 连续稳定运行 2~3 个月 + Phase B(TASK-0013 统一风控核心) 完成 + Jay.S 再确认后启动
 ```
 
 **交接要点：**
@@ -620,12 +634,12 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 模块 | 完成 | 目标 | 当前Phase | 下一里程碑 |
 |------|------|------|----------|-----------|
 | 治理 | 100% | 100% | ✅ 完成 | 维护 |
-| sim-trading | 27% | 100% | Phase A→B | 开盘验证通过 |
+| sim-trading | 27% | 100% | Phase A→B | 开盘验证通过 + 期货公式接通 |
 | decision | 10% | 100% | Phase A→C | data API真实接入 |
 | data | 5% | 100% | Phase A→D | 热修完成+Docker化 |
 | backtest | 75% | 100% | Phase A→E | 本地引擎补真实数据 |
-| dashboard | 5% | 100% | Phase F | 待Phase B完成 |
-| live-trading | 0% | 100% | Phase H | 待Phase B(TASK-0013) |
+| dashboard | 5% | 100% | Phase F | 待各服务临时看板基本收口 |
+| live-trading | 0% | 100% | Phase H | 待 sim-trading 稳定运行 2~3 个月 |
 | **总体** | **~30%** | **100%** | **Phase A** | **基础稳定化** |
 
 ---
@@ -640,12 +654,12 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 🟡 P1 | TASK-0014-A2 | 2 | 模拟交易 | router.py + main.py (系统事件接线) |
 | 🟡 P1 | TASK-0009 | TBD | 模拟交易 | guards/risk相关 (风控规则引擎) |
 | 🟡 P1 | TASK-0019 | ~5 | 模拟交易 | main.py/email.py/ledger/service.py + tests |
-| 🟡 P1 | TASK-0008 | ~12 | 回测 | A+B+C+D四批分签 |
-| 🟡 P1 | TASK-0026 | TBD | 回测 | A+B+C三批分签 |
-| 🟡 P1 | TASK-0007-B | 5 | 回测 | 正式后端API并回 |
-| 🟡 P1 | TASK-0007-C | 2 | 回测 | 前端8004收口 |
+| ✅ P1 | TASK-0008 | ~12 | 回测 | A/B/C/D四批全锁回 [2026-04-10] |
+| ✅ P1 | TASK-0026 | TBD | 回测 | A/B/C三批全locked_back [2026-04-10] |
+| ✅ P1 | TASK-0007-B | 5 | 回测 | 正式后端API并回 locked [2026-04-10] |
+| ✅ P1 | TASK-0007-C | 2 | 回测 | 前端8004收口 locked [2026-04-10] |
 | 🟢 P2 | TASK-0022-B | 4 | 模拟交易 | main.py/router.py/intelligence/page.tsx + test |
-| 🟢 P2 | TASK-0005 | 1 | 回测 | docker-compose.yml |
+| ✅ P2 | TASK-0005 | 1 | 回测 | docker-compose.yml locked [2026-04-10] |
 | 🟢 P2 | TASK-0013 | TBD | 架构师 | 跨服务风控核心(需预审) |
 | 🟢 P2 | TASK-0036 | TBD | 架构师 | 灾备演练场景脚本(待Phase B) [修订 2026-04-09] |
 | 🟢 P2 | TASK-0037 | TBD | 决策 | PBO检验+CPCV+mlfinlab(决策端内置，待Phase C) [修订 2026-04-09] |
