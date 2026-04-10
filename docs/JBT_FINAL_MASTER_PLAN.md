@@ -82,9 +82,9 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | Docker/Mini | ✅ 已部署 | TASK-0017-A3，待开盘验证CTP |
 | 临时看板 | ✅ 基本可用 | `sim-trading_web/`，operations+intelligence 页面 |
 
-**已完成任务：** TASK-0002(契约), TASK-0009(治理闭环), TASK-0010(骨架闭环), TASK-0013(治理闭环), TASK-0014(A1~A4全锁回), TASK-0017-A3, TASK-0019(B1/B2锁回), TASK-0022(A/B全锁回), TASK-0023-A, TASK-0041(A/B/C locked), TASK-0042(自动重连+状态同步 locked) [修订 2026-04-11]
+**已完成任务：** TASK-0002(契约), TASK-0009(治理闭环), TASK-0010(骨架闭环), TASK-0013(治理闭环), TASK-0014(A1~A4全锁回), TASK-0017-A3, TASK-0019(B1/B2锁回), TASK-0022(A/B全锁回), TASK-0023-A, TASK-0041(A/B/C locked), TASK-0042(自动重连+状态同步 locked), TASK-0043(data_scheduler LaunchAgent守护 locked) [修订 2026-04-11]
 **Phase B 状态：✅ 全闭环** [修订 2026-04-10]
-**当前活跃：** TASK-0017(待开盘验证) + TASK-0039 剩余 DR3/DR4 修复子任务
+**当前活跃：** TASK-0017(待开盘验证) + TASK-0039 剩余 DR3 修复子任务
 **排队任务：** Phase C（决策端核心能力）
 
 > **[修订 2026-04-11] 当前 sim-trading 已完成光大期货 CTP 接通、前端下单/撤单 UI、system/state 脱敏、自动重连与状态同步；但仍未接通期货公式 / 策略公式执行链路。**
@@ -639,7 +639,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 ┌─ TASK-0013  统一风控核心设计      ← ✅ 治理闭环
 ├─ TASK-0012  legacy信号桥接        ← 跨 integrations (待Phase C)
 ├─ TASK-0011  legacy清退            ← 跨服务清退 (待Phase C/D)
-├─ TASK-0039 灾备演练设计+验收      ← ✅ DR1~DR4执行完成; ISSUE-DR1-001 已由 TASK-0042 修复,剩余2个P1 Issue [2026-04-11]
+├─ TASK-0039 灾备演练设计+验收      ← ✅ DR1/DR4 已修复; 仅剩 ISSUE-DR3-001 1个P1 Issue [2026-04-11]
 ├─ Phase H1  live-trading 契约      ← shared/contracts (延后)
 ├─ 所有新任务预审                   ← 持续
 └─ 公共项目提示词维护               ← 持续
@@ -654,7 +654,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 治理 | 100% | 100% | ✅ 完成 | 维护 |
 | sim-trading | 70% | 100% | Phase B ✅→C | CTP重连与状态同步已修复；剩余 DR3 restart policy / 开盘验证 |
 | decision | 90% | 100% | Phase C | C3信号真闭环 → C7 PBO(TASK-0040) |
-| data | 95% | 100% | Phase D ✅ | 维护态（D1~D4全闭环） |
+| data | 96% | 100% | Phase D ✅ | data_scheduler LaunchAgent守护已补齐；剩余容器守护统一收口 |
 | backtest | 95% | 100% | Phase E ✅ | 维护态（只修bug不加功能） |
 | dashboard | 5% | 100% | Phase F | 待各服务临时看板基本收口 |
 | live-trading | 0% | 100% | Phase H | 待 sim-trading 稳定运行 2~3 个月 |
@@ -672,7 +672,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | ✅ P1 | TASK-0027-A1A4 | 39 | 数据 | collectors/utils/models/scheduler/health/ops 39文件 locked [2026-04-10] | 补办lockback |
 | ✅ P1 | TASK-0027-A6 | ~6 | 数据 | 由 TASK-0028 B1-B6 覆盖闭环 [2026-04-09] | 不再单独签发 |
 | ✅ P0 | TASK-0027-A7 | 3 | 数据 | docker-compose.dev.yml + .env.example + Dockerfile locked [2026-04-10] | 补办P0-lockback |
-| 🟡 P1 | TASK-0039 | 0 | 架构师 | 灾备演练场景脚本 | ✅ DR1~DR4执行完成[2026-04-10]; ISSUE-DR1-001 已由 TASK-0042 修复, 剩余2个P1 Issue |
+| 🟡 P1 | TASK-0039 | 0 | 架构师 | 灾备演练场景脚本 | ✅ DR1~DR4执行完成[2026-04-10]; ISSUE-DR1-001 已由 TASK-0042 修复, ISSUE-DR4-001 已由 TASK-0043 修复, 仅剩1个P1 Issue |
 | 🟡 P1 | TASK-0040 | TBD | 决策 | PBO+CPCV+mlfinlab | A0建档完成[2026-04-10]; 待Phase C(C2)启动实施 |
 
 ### 已完成存档（2026-04-11 清理）
@@ -697,6 +697,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | ✅ | TASK-0029/0030 | 治理制度locked |
 | ✅ | TASK-0032/0033 | data_web locked |
 | ✅ | TASK-0034~0038 | data端U0全部locked |
+| ✅ | TASK-0041/0042/0043 | sim/data 运行态收口 locked |
 
 ---
 

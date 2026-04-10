@@ -25,8 +25,8 @@
 
 | 文件 | 操作 | Token | 状态 |
 |------|------|-------|------|
-| services/data/configs/launchagents/com.botquant.data_scheduler.plist | 新建 | 待签发 | 🔲 待签发 |
-| services/data/scripts/install_data_scheduler_launchagent.sh | 新建 | 待签发 | 🔲 待签发 |
+| services/data/configs/launchagents/com.botquant.data_scheduler.plist | 新建 | tok-e623ec44 | ✅ locked |
+| services/data/scripts/install_data_scheduler_launchagent.sh | 新建 | tok-e623ec44 | ✅ locked |
 
 ---
 
@@ -35,9 +35,10 @@
 | 时间 | 操作 | 批次 | 说明 |
 |------|------|------|------|
 | 2026-04-11 | 建档 | A0 | 创建 task/review/lock |
+| 2026-04-11 | 签发+lockback | A | tok-e623ec44 → locked; commit 1ab7e28; Mini kill -9 自动恢复验证通过 |
 
 ---
 
 【签名】Atlas
-【时间】2026-04-11 01:15
+【时间】2026-04-11 01:30
 【设备】MacBook

@@ -10,7 +10,7 @@
 | 执行 Agent | 数据 / Atlas |
 | 优先级 | P1 |
 | 来源 | TASK-0039 / ISSUE-DR4-001 |
-| 状态 | 建档完成，待实施 |
+| 状态 | ✅ A批完成并锁回 |
 
 ---
 
@@ -40,6 +40,15 @@
 
 ---
 
+## 执行结果
+
+1. 已新增 JBT 版 `com.botquant.data_scheduler.plist` 模板，保持与 `ops/restart-collector` 的现有 label 映射兼容。
+2. 已新增安装脚本，负责渲染 plist、清理裸进程、解除 disabled 状态并在 Mini 上完成 LaunchAgent 接管。
+3. Mini 运行态验证通过：`data_scheduler` 已切换为 LaunchAgent 守护，`kill -9` 后由 launchd 自动恢复，并最终收敛为单实例。
+4. 锁回提交：`1ab7e28`。
+
+---
+
 【签名】Atlas
-【时间】2026-04-11 01:15
+【时间】2026-04-11 01:30
 【设备】MacBook
