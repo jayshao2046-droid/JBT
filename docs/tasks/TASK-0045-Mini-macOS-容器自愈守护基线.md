@@ -10,7 +10,7 @@
 | 执行 Agent | 项目架构师 / Atlas |
 | 优先级 | P1 |
 | 来源 | TASK-0039 / ISSUE-DR3-001 |
-| 状态 | 建档完成，待预审执行 |
+| 状态 | ✅ 已完成，DR3 验证通过 |
 
 ---
 
@@ -35,14 +35,14 @@
 | docs/locks/TASK-0039-lock.md | 更新 | 将 ISSUE-DR3-001 挂接到 TASK-0045 |
 | docs/handoffs/TASK-0039-灾备演练执行手册.md | 更新 | DR3 修复任务回指 |
 
-### A1 批次（待预审冻结，P0/P1 混合）
+### A1 批次（宿主机 watchdog 2 文件，已完成）
 
-| 文件 | 操作 | 说明 |
-|------|------|------|
-| docker-compose.mac.override.yml | 更新 | Mini/macOS 平台差异补充口径 |
-| governance/launchagents/com.botquant.container_watchdog.plist | 新建 | Mini 用户级容器守护模板 |
-| governance/scripts/install_container_watchdog.sh | 新建 | 安装 / reload 容器守护脚本 |
-| docker-compose.dev.yml | 条件性更新 | 仅在架构终审确认必须时纳入，不默认解锁 |
+| 文件 | 操作 | Token | 状态 |
+|------|------|-------|------|
+| governance/launchagents/com.botquant.container_watchdog.plist | 新建 | tok-b2a51b7f | ✅ 已完成 |
+| governance/scripts/install_container_watchdog.sh | 新建 | tok-b2a51b7f | ✅ 已完成 |
+
+> A1 经项目架构师裁定，compose 文件移出首批；仅保留宿主机 watchdog 2 文件即可独立闭环 DR3。
 
 ---
 
@@ -65,6 +65,21 @@
 
 ---
 
+## 验证结果
+
+| 测试 | Kill 时间 | 恢复时间 | 耗时 | 结果 |
+|------|-----------|----------|------|------|
+| botquant-data (手动) | 03:37:09 | 03:37:55 | 46s | ✅ PASS |
+| botquant-data (自动) | 03:38:37 | 03:38:56 | 19s | ✅ PASS |
+| JBT-SIM-TRADING-WEB (自动) | 03:39:14 | 03:39:56 | 42s | ✅ PASS |
+
+- watchdog 日志完整记录每次 RECOVER
+- 60s 周期准时触发，cooldown 120s 生效
+- 未纳入 allowlist 的容器未被误拉起
+- TASK-0039 ISSUE-DR3-001 回写 PASS
+
+---
+
 【签名】Atlas
-【时间】2026-04-11
+【时间】2026-04-11 03:42
 【设备】MacBook

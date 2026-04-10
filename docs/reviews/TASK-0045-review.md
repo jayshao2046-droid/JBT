@@ -47,17 +47,33 @@ docs/locks/TASK-0039-lock.md
 docs/handoffs/TASK-0039-灾备演练执行手册.md
 ```
 
-### A1 批次（待签发）
+### A1 批次（已完成）
 
 ```
-docker-compose.mac.override.yml
 governance/launchagents/com.botquant.container_watchdog.plist
 governance/scripts/install_container_watchdog.sh
-docker-compose.dev.yml  # 仅条件性纳入
 ```
+
+> compose 文件经架构师裁定移出首批，仅宿主机 watchdog 2 文件即可独立闭环。
+
+---
+
+## 终审结果
+
+| 项目 | 结果 |
+|------|------|
+| plist 模板 XML 校验 | ✅ plutil lint 通过 |
+| install script bash 语法 | ✅ bash -n 通过 |
+| Mini 部署 | ✅ LaunchAgent 已加载，runs=4 |
+| botquant-data SIGKILL 自愈 | ✅ 19~46s 内恢复 |
+| JBT-SIM-TRADING-WEB SIGKILL 自愈 | ✅ 42s 内恢复 |
+| 非 allowlist 容器无误伤 | ✅ 确认 |
+| cooldown 防重启风暴 | ✅ 120s 锁生效 |
+
+终审结论：**✅ 通过**，TASK-0039 ISSUE-DR3-001 回写 PASS。
 
 ---
 
 【签名】Atlas（代项目架构师记录）
-【时间】2026-04-11
+【时间】2026-04-11 03:42
 【设备】MacBook
