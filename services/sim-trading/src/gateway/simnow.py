@@ -228,6 +228,9 @@ def _make_td_spi_class():
             else:
                 logger.info("[traderapi] login ok")
                 self._on_status("td_logged_in")
+                # 保存 FrontID/SessionID 用于撤单
+                self._api._front_id = getattr(p, "FrontID", 0)
+                self._api._session_id = getattr(p, "SessionID", 0)
                 req = _tdmod.CThostFtdcSettlementInfoConfirmField()
                 req.BrokerID = self._api._broker_id
                 req.InvestorID = self._api._user_id
@@ -250,6 +253,10 @@ def _make_td_spi_class():
                     product_class=getattr(p, "ProductClass", None),
                     delivery_year=getattr(p, "DeliveryYear", None),
                     delivery_month=getattr(p, "DeliveryMonth", None),
+                    price_tick=getattr(p, "PriceTick", None),
+                    max_order_volume=getattr(p, "MaxLimitOrderVolume", None),
+                    volume_multiple=getattr(p, "VolumeMultiple", None),
+                    exchange_id=getattr(p, "ExchangeID", None),
                 )
             if bIsLast:
                 self._api._subscribe_discovered_contracts()
@@ -301,8 +308,117 @@ def _make_td_spi_class():
         def OnRtnOrder(self, pOrder):
             if not pOrder:
                 return
-            logger.info("[traderapi] order update: %s status=%s ref=%s",
-                        pOrder.InstrumentID, getattr(pOrder, "OrderStatus", "?"), pOrder.OrderRef)
+            order_ref = pOrder.OrderRef.strip()
+            status_char = getattr(pOrder, "OrderStatus", "?")
+            status_msg = getattr(pOrder, "StatusMsg", "").strip()
+            order_info = {
+                "instrument_id": pOrder.InstrumentID,
+                "order_ref": order_ref,
+                "direction": getattr(pOrder, "Direction", ""),
+                "offset": getattr(pOrder, "CombOffsetFlag", "")[0:1],
+                "price": getattr(pOrder, "LimitPrice", 0),
+                "volume_total": getattr(pOrder, "VolumeTotalOriginal", 0),
+                "volume_traded": getattr(pOrder, "VolumeTraded", 0),
+                "volume_remaining": getattr(pOrder, "VolumeTotal", 0),
+                "status": status_char,
+                "status_msg": status_msg,
+                "order_sys_id": getattr(pOrder, "OrderSysID", "").strip(),
+                "exchange_id": getattr(pOrder, "ExchangeID", "").strip(),
+                "insert_time": getattr(pOrder, "InsertTime", ""),
+                "cancel_time": getattr(pOrder, "CancelTime", ""),
+                "front_id": getattr(pOrder, "FrontID", 0),
+                "session_id": getattr(pOrder, "SessionID", 0),
+            }
+            with self._api._lock:
+                self._api._orders[order_ref] = order_info
+            logger.info("[traderapi] order update: %s status=%s(%s) ref=%s traded=%d/%d",
+                        pOrder.InstrumentID, status_char, status_msg,
+                        order_ref, order_info["volume_traded"], order_info["volume_total"])
+
+        def OnRspOrderInsert(self, pInputOrder, pRspInfo, nRequestID, bIsLast):
+            """CTP 前置拒绝下单（资金不足、仓位不足等）"""
+            if pRspInfo and pRspInfo.ErrorID != 0:
+                err = {
+                    "source": "ctp_front",
+                    "error_id": pRspInfo.ErrorID,
+                    "error_msg": pRspInfo.ErrorMsg,
+                    "instrument_id": pInputOrder.InstrumentID if pInputOrder else "",
+                    "order_ref": pInputOrder.OrderRef.strip() if pInputOrder else "",
+                    "timestamp": __import__("datetime").datetime.now().isoformat(),
+                }
+                with self._api._lock:
+                    self._api._order_errors.append(err)
+                    if len(self._api._order_errors) > 200:
+                        self._api._order_errors = self._api._order_errors[-200:]
+                logger.error("[traderapi] order insert rejected: [%d] %s  instrument=%s",
+                             pRspInfo.ErrorID, pRspInfo.ErrorMsg,
+                             pInputOrder.InstrumentID if pInputOrder else "?")
+                try:
+                    from src.risk.guards import emit_alert
+                    emit_alert("P1", f"下单被拒 [{pRspInfo.ErrorID}] {pRspInfo.ErrorMsg}",
+                               {"event_code": "ORDER_REJECTED", "source": "ctp_front",
+                                "instrument": pInputOrder.InstrumentID if pInputOrder else ""})
+                except Exception:
+                    pass
+
+        def OnErrRtnOrderInsert(self, pInputOrder, pRspInfo):
+            """交易所拒绝下单"""
+            if pRspInfo and pRspInfo.ErrorID != 0:
+                err = {
+                    "source": "exchange",
+                    "error_id": pRspInfo.ErrorID,
+                    "error_msg": pRspInfo.ErrorMsg,
+                    "instrument_id": pInputOrder.InstrumentID if pInputOrder else "",
+                    "order_ref": pInputOrder.OrderRef.strip() if pInputOrder else "",
+                    "timestamp": __import__("datetime").datetime.now().isoformat(),
+                }
+                with self._api._lock:
+                    self._api._order_errors.append(err)
+                    if len(self._api._order_errors) > 200:
+                        self._api._order_errors = self._api._order_errors[-200:]
+                logger.error("[traderapi] exchange rejected order: [%d] %s  instrument=%s",
+                             pRspInfo.ErrorID, pRspInfo.ErrorMsg,
+                             pInputOrder.InstrumentID if pInputOrder else "?")
+                try:
+                    from src.risk.guards import emit_alert
+                    emit_alert("P1", f"交易所拒单 [{pRspInfo.ErrorID}] {pRspInfo.ErrorMsg}",
+                               {"event_code": "ORDER_EXCHANGE_REJECTED", "source": "exchange",
+                                "instrument": pInputOrder.InstrumentID if pInputOrder else ""})
+                except Exception:
+                    pass
+
+        def OnRspOrderAction(self, pInputOrderAction, pRspInfo, nRequestID, bIsLast):
+            """撤单被拒"""
+            if pRspInfo and pRspInfo.ErrorID != 0:
+                err = {
+                    "source": "ctp_cancel",
+                    "error_id": pRspInfo.ErrorID,
+                    "error_msg": pRspInfo.ErrorMsg,
+                    "instrument_id": pInputOrderAction.InstrumentID if pInputOrderAction else "",
+                    "order_ref": getattr(pInputOrderAction, "OrderRef", "").strip() if pInputOrderAction else "",
+                    "timestamp": __import__("datetime").datetime.now().isoformat(),
+                }
+                with self._api._lock:
+                    self._api._order_errors.append(err)
+                    if len(self._api._order_errors) > 200:
+                        self._api._order_errors = self._api._order_errors[-200:]
+                logger.error("[traderapi] cancel rejected: [%d] %s", pRspInfo.ErrorID, pRspInfo.ErrorMsg)
+
+        def OnErrRtnOrderAction(self, pOrderAction, pRspInfo):
+            """交易所拒绝撤单"""
+            if pRspInfo and pRspInfo.ErrorID != 0:
+                err = {
+                    "source": "exchange_cancel",
+                    "error_id": pRspInfo.ErrorID,
+                    "error_msg": pRspInfo.ErrorMsg,
+                    "instrument_id": pOrderAction.InstrumentID if pOrderAction else "",
+                    "timestamp": __import__("datetime").datetime.now().isoformat(),
+                }
+                with self._api._lock:
+                    self._api._order_errors.append(err)
+                    if len(self._api._order_errors) > 200:
+                        self._api._order_errors = self._api._order_errors[-200:]
+                logger.error("[traderapi] exchange cancel rejected: [%d] %s", pRspInfo.ErrorID, pRspInfo.ErrorMsg)
 
         def OnRspQryInvestorPosition(self, p, pRspInfo, nRequestID, bIsLast):
             if p and p.InstrumentID:
@@ -357,6 +473,15 @@ class SimNowGateway:
         self._last_td_disconnect_reason = None
         self._last_td_disconnect_time = None
         self._account: Dict = {}
+        # ── 合约规格缓存（OnRspQryInstrument 填充）──
+        # InstrumentID → {price_tick, max_order_volume, volume_multiple, exchange_id, product_id}
+        self._instrument_specs: Dict[str, Dict] = {}
+        # ── 订单管理 ──
+        self._orders: Dict[str, Dict] = {}        # OrderRef → order state
+        self._order_errors: List[Dict] = []        # 最近的订单错误（含交易所返回）
+        self._order_ref_counter: int = 0
+        self._front_id: int = 0
+        self._session_id: int = 0
         # product_id.upper() → list of (InstrumentID, expiry_int)
         # e.g. "RB" → [("rb2506", 2506), ("rb2507", 2507), ...]
         self._product_to_contracts: Dict[str, list] = {}
@@ -426,6 +551,10 @@ class SimNowGateway:
         product_class: Optional[str] = None,
         delivery_year: Optional[int] = None,
         delivery_month: Optional[int] = None,
+        price_tick: Optional[float] = None,
+        max_order_volume: Optional[int] = None,
+        volume_multiple: Optional[int] = None,
+        exchange_id: Optional[str] = None,
     ):
         """处理单条合约信息，只保留 futures，并支持郑商所 3 位月份编码。"""
         if product_class != _FUTURES_PRODUCT_CLASS:
@@ -438,6 +567,15 @@ class SimNowGateway:
             if any(existing_id == instrument_id for existing_id, _ in lst):
                 return
             lst.append((instrument_id, expiry))
+            # 存储合约规格
+            if price_tick is not None:
+                self._instrument_specs[instrument_id] = {
+                    "price_tick": float(price_tick),
+                    "max_order_volume": int(max_order_volume or 1000),
+                    "volume_multiple": int(volume_multiple or 1),
+                    "exchange_id": str(exchange_id or ""),
+                    "product_id": product_id,
+                }
 
     def _subscribe_discovered_contracts(self):
         """从 _product_to_contracts 中选出主力合约（近月）并订阅 MD。"""
@@ -592,6 +730,118 @@ class SimNowGateway:
         self._td_api.SubscribePrivateTopic(_tdmod.THOST_TERT_QUICK)
         self._td_api.Init()
         logger.info("[gateway] td Init → %s", self._td_front)
+
+    # ── 下单/撤单核心方法 ──
+
+    def _next_order_ref(self) -> str:
+        with self._lock:
+            self._order_ref_counter += 1
+            return str(self._order_ref_counter)
+
+    def get_instrument_spec(self, instrument_id: str) -> Optional[Dict]:
+        """查询合约规格（tick size, max volume 等）"""
+        with self._lock:
+            return self._instrument_specs.get(instrument_id)
+
+    def get_all_instrument_specs(self) -> Dict[str, Dict]:
+        with self._lock:
+            return dict(self._instrument_specs)
+
+    def get_orders(self) -> Dict[str, Dict]:
+        with self._lock:
+            return dict(self._orders)
+
+    def get_order_errors(self) -> List[Dict]:
+        with self._lock:
+            return list(self._order_errors)
+
+    def insert_order(self, instrument_id: str, direction: str, offset: str,
+                     price: float, volume: int) -> Dict:
+        """
+        发送限价单到 CTP。
+        direction: '0'=买, '1'=卖
+        offset: '0'=开仓, '1'=平仓, '3'=平今
+        返回 {"order_ref": str, "status": "submitted"} 或 raise
+        """
+        if self._td_api is None or self._td_status not in ("td_ready", "td_logged_in"):
+            raise RuntimeError("交易通道未就绪")
+
+        order_ref = self._next_order_ref()
+        req = _tdmod.CThostFtdcInputOrderField()
+        req.BrokerID = self._broker_id
+        req.InvestorID = self._user_id
+        req.InstrumentID = instrument_id
+        req.OrderRef = order_ref
+        req.UserID = self._user_id
+        req.OrderPriceType = _tdmod.THOST_FTDC_OPT_LimitPrice
+        req.Direction = direction
+        req.CombOffsetFlag = offset
+        req.CombHedgeFlag = "1"  # 投机
+        req.LimitPrice = price
+        req.VolumeTotalOriginal = volume
+        req.TimeCondition = _tdmod.THOST_FTDC_TC_GFD
+        req.VolumeCondition = _tdmod.THOST_FTDC_VC_AV
+        req.MinVolume = 1
+        req.ContingentCondition = _tdmod.THOST_FTDC_CC_Immediately
+        req.StopPrice = 0.0
+        req.ForceCloseReason = _tdmod.THOST_FTDC_FCC_NotForceClose
+        req.IsAutoSuspend = 0
+        req.IsSwapOrder = 0
+
+        # 初始订单记录
+        with self._lock:
+            self._orders[order_ref] = {
+                "instrument_id": instrument_id,
+                "order_ref": order_ref,
+                "direction": direction,
+                "offset": offset,
+                "price": price,
+                "volume_total": volume,
+                "volume_traded": 0,
+                "volume_remaining": volume,
+                "status": "submitting",
+                "status_msg": "提交中",
+                "order_sys_id": "",
+                "exchange_id": "",
+                "insert_time": "",
+                "cancel_time": "",
+                "front_id": self._front_id,
+                "session_id": self._session_id,
+            }
+
+        self._td_api.ReqOrderInsert(req, int(order_ref))
+        logger.info("[gateway] order insert: %s %s%s@%.2f vol=%d ref=%s",
+                    instrument_id, "买" if direction == "0" else "卖",
+                    {"0": "开", "1": "平", "3": "平今"}.get(offset, offset),
+                    price, volume, order_ref)
+        return {"order_ref": order_ref, "status": "submitted"}
+
+    def cancel_order(self, order_ref: str) -> Dict:
+        """撤单。根据 order_ref 查找订单信息后发送撤单请求。"""
+        if self._td_api is None or self._td_status not in ("td_ready", "td_logged_in"):
+            raise RuntimeError("交易通道未就绪")
+
+        with self._lock:
+            order = self._orders.get(order_ref)
+        if not order:
+            raise ValueError(f"订单 {order_ref} 不存在")
+
+        req = _tdmod.CThostFtdcInputOrderActionField()
+        req.BrokerID = self._broker_id
+        req.InvestorID = self._user_id
+        req.OrderRef = order_ref
+        req.FrontID = order.get("front_id", self._front_id)
+        req.SessionID = order.get("session_id", self._session_id)
+        req.ActionFlag = _tdmod.THOST_FTDC_AF_Delete
+        req.InstrumentID = order["instrument_id"]
+        if order.get("exchange_id"):
+            req.ExchangeID = order["exchange_id"]
+        if order.get("order_sys_id"):
+            req.OrderSysID = order["order_sys_id"]
+
+        self._td_api.ReqOrderAction(req, int(order_ref))
+        logger.info("[gateway] cancel order: ref=%s instrument=%s", order_ref, order["instrument_id"])
+        return {"order_ref": order_ref, "status": "cancel_submitted"}
 
     def disconnect(self):
         for attr in ("_md_api", "_td_api"):

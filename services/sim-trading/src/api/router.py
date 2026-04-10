@@ -130,6 +130,18 @@ class RiskPresetUpdateRequest(BaseModel):
     slippage_ticks: int = 1
 
 
+class OrderRequest(BaseModel):
+    instrument_id: str
+    direction: str   # "buy" / "sell"
+    offset: str      # "open" / "close" / "close_today"
+    price: float
+    volume: int
+
+
+class CancelOrderRequest(BaseModel):
+    order_ref: str
+
+
 class StrategyPublishRequest(BaseModel):
     strategy_id: str
     strategy_version: str
@@ -194,15 +206,137 @@ def get_status():
 
 @router.get("/positions")
 def get_positions():
-    return {"positions": [], "note": "not implemented yet"}
+    gw = _get_gateway()
+    if gw is None:
+        return {"positions": [], "note": "CTP 未连接"}
+    from src.ledger.service import get_ledger
+    return {"positions": get_ledger().get_positions()}
 
 @router.get("/orders")
 def get_orders():
-    return {"orders": [], "note": "not implemented yet"}
+    gw = _get_gateway()
+    if gw is None:
+        return {"orders": {}, "note": "CTP 未连接"}
+    return {"orders": gw.get_orders()}
 
 @router.post("/orders")
-def create_order():
-    return {"result": "not implemented yet"}
+def create_order(req: OrderRequest):
+    """
+    下单 API —— 含光大穿透式合规所需的全部前置校验：
+    1. 交易暂停检查（暂停交易功能）
+    2. CTP 连接检查
+    3. 合约代码校验（程序端拦截，不报入交易系统）
+    4. 最小变动价位校验（程序端拦截）
+    5. 单笔最大委托手数校验（程序端拦截）
+    6. 风控预设手数限制
+    通过后发送到 CTP，交易所错误通过回调异步返回。
+    """
+    import math
+
+    # ── 1. 暂停交易检查 ──
+    if not _system_state.get("trading_enabled", True):
+        reason = _system_state.get("paused_reason", "手动暂停")
+        return {"rejected": True, "source": "program",
+                "error": f"交易已暂停: {reason}", "code": "TRADING_PAUSED"}
+
+    # ── 2. CTP 连接检查 ──
+    gw = _get_gateway()
+    if gw is None or gw._td_status not in ("td_ready", "td_logged_in"):
+        return {"rejected": True, "source": "program",
+                "error": "交易通道未连接", "code": "TD_NOT_CONNECTED"}
+
+    instrument_id = req.instrument_id.strip()
+    direction_map = {"buy": "0", "sell": "1"}
+    offset_map = {"open": "0", "close": "1", "close_today": "3"}
+    direction = direction_map.get(req.direction)
+    offset = offset_map.get(req.offset)
+    if direction is None or offset is None:
+        return {"rejected": True, "source": "program",
+                "error": f"无效的方向/开平: direction={req.direction}, offset={req.offset}",
+                "code": "INVALID_DIRECTION_OFFSET"}
+
+    # ── 3. 合约代码校验 ──
+    spec = gw.get_instrument_spec(instrument_id)
+    if spec is None:
+        return {"rejected": True, "source": "program",
+                "error": f"合约代码不存在: {instrument_id}",
+                "code": "INVALID_INSTRUMENT"}
+
+    # ── 4. 最小变动价位校验 ──
+    price_tick = spec.get("price_tick", 0)
+    if price_tick > 0:
+        remainder = round(req.price % price_tick, 10)
+        if remainder > 1e-9 and abs(remainder - price_tick) > 1e-9:
+            return {"rejected": True, "source": "program",
+                    "error": f"价格 {req.price} 不符合最小变动价位 {price_tick}",
+                    "code": "INVALID_PRICE_TICK"}
+
+    # ── 5. 单笔最大委托手数校验（交易所限制）──
+    max_vol = spec.get("max_order_volume", 1000)
+    if req.volume > max_vol:
+        return {"rejected": True, "source": "program",
+                "error": f"委托手数 {req.volume} 超出交易所单笔限制 {max_vol}",
+                "code": "EXCEED_MAX_ORDER_VOLUME"}
+
+    if req.volume <= 0:
+        return {"rejected": True, "source": "program",
+                "error": "委托手数必须大于 0", "code": "INVALID_VOLUME"}
+
+    # ── 6. 风控预设手数限制 ──
+    product_id = spec.get("product_id", "").upper()
+    preset = _risk_presets.get(product_id, {})
+    if preset:
+        risk_max = preset.get("max_lots", 9999)
+        if req.volume > risk_max:
+            return {"rejected": True, "source": "risk_control",
+                    "error": f"委托手数 {req.volume} 超出风控单笔限制 {risk_max} ({product_id})",
+                    "code": "EXCEED_RISK_MAX_LOTS"}
+        if not preset.get("enabled", True):
+            return {"rejected": True, "source": "risk_control",
+                    "error": f"品种 {product_id} 未启用交易", "code": "PRODUCT_DISABLED"}
+
+    # ── 执行下单 ──
+    try:
+        result = gw.insert_order(instrument_id, direction, offset, req.price, req.volume)
+        return {"rejected": False, "source": "ctp", **result}
+    except Exception as exc:
+        return {"rejected": True, "source": "program",
+                "error": str(exc), "code": "ORDER_SUBMIT_ERROR"}
+
+
+@router.post("/orders/cancel")
+def cancel_order(req: CancelOrderRequest):
+    """撤单 API"""
+    gw = _get_gateway()
+    if gw is None:
+        raise HTTPException(status_code=503, detail="CTP 未连接")
+    try:
+        result = gw.cancel_order(req.order_ref)
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/orders/errors")
+def get_order_errors():
+    """获取最近的订单错误（含 CTP 前置和交易所返回的错误）"""
+    gw = _get_gateway()
+    if gw is None:
+        return {"errors": []}
+    return {"errors": gw.get_order_errors()}
+
+
+@router.get("/instruments")
+def get_instruments(product: str = ""):
+    """查询已缓存的合约规格（tick size、最大手数等）"""
+    gw = _get_gateway()
+    if gw is None:
+        return {"instruments": {}, "count": 0}
+    specs = gw.get_all_instrument_specs()
+    if product:
+        wanted = {p.strip().upper() for p in product.split(",")}
+        specs = {k: v for k, v in specs.items() if v.get("product_id", "").upper() in wanted}
+    return {"instruments": specs, "count": len(specs)}
 
 # ---------- 系统状态控制 ----------
 @router.get("/system/state")
