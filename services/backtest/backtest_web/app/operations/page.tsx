@@ -989,6 +989,13 @@ export default function BacktestDetailPage() {
                     ) : (
                       <p className="text-[11px] text-neutral-500">当前结果未生成正式报告文件。</p>
                     )}
+                    {(() => {
+                      const hash = (selectedBacktest as any)?.formal_report?.yaml_snapshot_hash
+                        ?? (selectedBacktest as any)?.formal_report?.job?.yaml_snapshot_hash
+                      return hash && typeof hash === 'string' && hash.length === 64 ? (
+                        <p className="text-[11px] text-neutral-500 font-mono break-all">yaml_hash: {hash.slice(0, 16)}…</p>
+                      ) : null
+                    })()}
                     {Array.isArray(executionProfile.evidence) && executionProfile.evidence.length > 0 && (
                       <div className="space-y-1">
                         <p className="text-[11px] text-neutral-500 tracking-wider">证据链 / Evidence</p>

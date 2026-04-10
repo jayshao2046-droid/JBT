@@ -148,6 +148,11 @@ export async function getResultTrades(taskId: string) {
   return r.json()
 }
 
+export async function getFormalReportV1(taskId: string) {
+  const r = await fetchWithRetry(`${BASE}/api/backtest/results/${encodeURIComponent(taskId)}/report`, { method: 'GET' })
+  return r.json()
+}
+
 export async function downloadBacktestReport(taskId: string, strategyName?: string) {
   const r = await fetchWithRetry(`${BASE}/api/backtest/results/${encodeURIComponent(taskId)}/report`, { method: 'GET' })
   const blob = await r.blob()
