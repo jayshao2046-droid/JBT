@@ -99,11 +99,11 @@
 ## 当前状态
 
 - 预审状态：已通过
-- Token 状态：补充批次 A1 / A2 / A3 = `locked`；补充批次 A4 = `pending_token`；当前扩展轮次不新增 `docker-compose.dev.yml` 的 P0 Token
-- 解锁时间：N/A
+- Token 状态：补充批次 A1 / A2 / A3 / A4 = `locked`
+- 解锁时间：A4 = 2026-04-10
 - 失效时间：N/A
-- 锁回时间：N/A
-- lockback 结果：尚未进入代码执行或远端运维阶段
+- 锁回时间：A4 = 2026-04-10
+- lockback 结果：A4 = `approved`（review-id `REVIEW-TASK-0017-A4`）
 
 ## 补充批次 A3 冻结信息（2026-04-07）
 
@@ -131,8 +131,18 @@
 5. 批次目标：去除骨架阶段假成功反馈，改为明确的未接入 / 待账户就绪 / 只读提示或禁用态。
 6. 范围排除：不改 `src/main.py` / `src/api/router.py`，不新增 API，不 reopen `docker-compose.dev.yml` 或任一 `.env.example`。
 7. 并行关系：可与 `TASK-0014-A3` / `TASK-0014-A4` 并行；`TASK-0022-B` 必须等待 A4 锁回后再启动。
-8. 当前 Token 状态：pending_token
+8. 当前 Token 状态：locked — `tok-685925e6-06fe-4bf8-b136-2a2ff6011488`，Jay.S 签发并校验通过，lockback approved [2026-04-10]
+
+## 补充批次 A4 执行留痕（2026-04-10）
+
+1. token_id：`tok-685925e6-06fe-4bf8-b136-2a2ff6011488`
+2. review_id：`REVIEW-TASK-0017-A4`
+3. 修改内容：8 处骨架阶段假成功反馈替换为「尚未接入 CTP 通道」/「待 CTP 账户就绪」提示
+   - operations/page.tsx：handlePlaceOrder（删除 setTimeout mock）、handleClosePosition、handleReversePosition、handleModifyStopLoss、handleClearAllPositions、持仓空态、订单空态（共 7 处）
+   - intelligence/page.tsx：handleSaveSimConfig（1 处）
+4. 终审：项目架构师 PASS
+5. lockback：approved → locked
 
 ## 结论
 
-**`TASK-0017` 当前状态更新为：补充批次 A1 / A2 / A3 已完成历史闭环并锁回；2026-04-09 新增补充批次 A4（`app/operations/page.tsx` + `app/intelligence/page.tsx`，P1）并进入 `pending_token`；本轮不 reopen `docker-compose.dev.yml`，其余仓内 Docker 路径、服务环境模板与远端 Mini 运维动作继续锁定。**
+**`TASK-0017` 当前状态：补充批次 A1 / A2 / A3 / A4 全部完成并锁回。TASK-0017 整体 locked 闭环 [2026-04-10]。本轮不 reopen `docker-compose.dev.yml`，其余仓内 Docker 路径、服务环境模板与远端 Mini 运维动作继续锁定。**

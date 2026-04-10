@@ -239,32 +239,25 @@ export default function SimNowTradingTerminal() {
       return
     }
 
-    // TODO: 连接到 trading_api:8003 WebSocket 发送订单
-    setIsLoading(true)
-    setTimeout(() => {
-      setIsLoading(false)
-      toast.success(`已下单：${orderParams.direction === "buy" ? "买入" : "卖出"} ${orderParams.contract} ${orderParams.quantity}手`)
-    }, 300)
+    // 待 CTP 账户就绪后接入 WebSocket 下单通道
+    toast.warning(`下单功能尚未接入 CTP 通道，当前仅为界面预览`)
+    return
   }
 
   const handleClosePosition = (positionId: number) => {
-    toast.info(`平仓指令已发送（ID: ${positionId}）·骨架阶段未连接`)
-    // TODO: 连接到 trading_api:8003 WebSocket
+    toast.warning(`平仓功能尚未接入 CTP 通道（ID: ${positionId}）`)
   }
 
   const handleReversePosition = (positionId: number) => {
-    toast.warning(`反手指令已发送（ID: ${positionId}）·骨架阶段未连接`)
-    // TODO: 连接到 trading_api:8003 WebSocket
+    toast.warning(`反手功能尚未接入 CTP 通道（ID: ${positionId}）`)
   }
 
   const handleModifyStopLoss = (positionId: number) => {
-    toast.info(`止损修改指令已发送（ID: ${positionId}）·骨架阶段未连接`)
-    // TODO: 连接到 trading_api:8003 WebSocket
+    toast.warning(`止损修改功能尚未接入 CTP 通道（ID: ${positionId}）`)
   }
 
   const handleClearAllPositions = () => {
-    toast.error("一键清仓指令已发送 · 骨架阶段未连接，实际未执行")
-    // TODO: 连接到 trading_api:8003 WebSocket
+    toast.warning("清仓功能尚未接入 CTP 通道，当前无法执行")
     setShowClearConfirm(false)
   }
 
@@ -678,7 +671,7 @@ export default function SimNowTradingTerminal() {
               </thead>
               <tbody>
                 {positions.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center text-neutral-500 py-8">骨架阶段 · 暂无持仓数据</td></tr>
+                  <tr><td colSpan={8} className="text-center text-neutral-500 py-8">暂无持仓数据（待 CTP 账户就绪）</td></tr>
                 ) : positions.map((position) => (
                   <tr
                     key={position.id}
@@ -767,7 +760,7 @@ export default function SimNowTradingTerminal() {
         <CardContent>
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {orderStream.length === 0 ? (
-              <div className="text-center text-neutral-500 py-6">骨架阶段 · 暂无订单记录</div>
+              <div className="text-center text-neutral-500 py-6">暂无订单记录（待 CTP 账户就绪）</div>
             ) : orderStream.map((order) => (
               <div
                 key={order.id}

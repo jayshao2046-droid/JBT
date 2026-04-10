@@ -227,53 +227,63 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | TASK-0007-D | backtest Dockerfile修复 | backtest | ✅ 锁回 |
 | TASK-0024 | 全平台部署审查 | 全局 | ✅ 完成 |
 
-### 3.2 当前活跃/待执行
+### 3.2 当前活跃/待执行 [修订 2026-04-11]
 
 | 任务编号 | 名称 | 服务 | Agent | 状态 | 优先级 |
 |---------|------|------|-------|------|--------|
-| TASK-0031 | data非夜盘热修 | data | 数据 | pending_token(6文件) | P1 紧急 |
-| TASK-0018-B | backtest 数据API | data | 数据 | active | P1 |
-| TASK-0018-C-SUP | 本地引擎补数据 | backtest | 回测 | active | P1 |
-| TASK-0017 | Mini开盘验证 | sim-trading | 模拟交易 | 待开盘 | P1 |
-| TASK-0014-A2 | 系统事件接线 | sim-trading | 模拟交易 | ✅ locked | P1 |
-| TASK-0019 | 收盘统计邮件 | sim-trading | 模拟交易 | ✅ B1/B2 locked | P1 |
+| TASK-0031 | data非夜盘热修 | data | 数据 | ✅ locked [2026-04-09] | P1 紧急 |
+| TASK-0018 | backtest 数据API全批次 | data+backtest | 数据+回测 | ✅ A~F全locked [2026-04-10] | P1 |
+| TASK-0017 | Mini开盘验证 | sim-trading | 模拟交易 | ✅ A1-A4全locked [2026-04-10] | P1 |
+| TASK-0014 | 风控通知链路 | sim-trading | 模拟交易 | ✅ A1-A4全locked | P1 |
+| TASK-0019 | 收盘统计邮件 | sim-trading | 模拟交易 | ✅ B1/B2 locked; B0待确认 | P1 |
 | TASK-0022-B | 只读日志查看 | sim-trading | 模拟交易 | ✅ locked [2026-04-10] | P2 |
 | TASK-0009 | 严格风控验收 | sim-trading | 模拟交易 | ✅ 治理闭环 [2026-04-10] | P1 |
 | TASK-0013 | 统一风控核心 | sim-trading+live | 项目架构师 | ✅ 治理闭环 [2026-04-10] | P1 |
 | TASK-0010 | 服务骨架完善 | sim-trading | 模拟交易 | ✅ 闭环 [2026-04-10] | P1 |
-| TASK-0025 | SimNow备用方案 | decision | 决策 | 预审 | P2 |
+| TASK-0021 | 决策端迁移 | decision | 决策 | ✅ A+H0~H7全locked [2026-04-10] | P1 |
+| TASK-0023-A | 发布接口对接 | sim-trading | 模拟交易 | ✅ locked | P1 |
 | TASK-0026 | 新增因子+别名 | backtest | 回测 | ✅ locked_back | P1 |
-| TASK-0008 | 泛化引擎+报告导出 | backtest | 回测 | ✅ locked | P1 |
-| TASK-0007-B | 正式后端并回 | backtest | 回测 | ✅ locked | P1 |
-| TASK-0007-C | 前端8004收口 | backtest | 回测 | ✅ locked | P1 |
-| TASK-0005 | 容器命名统一 | backtest | 回测 | ✅ locked | P2 |
-| TASK-0027 | data全量采集迁移 | data | 数据 | 预审 | P1 |
-| TASK-0015 | SimNow临时看板 | dashboard | 看板 | 预审 | P2 |
-| TASK-0020 | ECS云部署 | 运维 | 运维 | 阻塞 | P2 |
-| TASK-0011 | legacy清退 | sim-trading | 项目架构师 | 后置 | P2 |
-| TASK-0012 | legacy信号桥接 | integrations | 项目架构师 | 后置 | P1 |
-| TASK-0016 | 决策端正式接入 | decision | 决策 | 后置 | P1 |
-| TASK-0036 | 灾备演练 | 全局 | 项目架构师 | 待Phase B完成 | P1 |
-| TASK-0037 | PBO过拟合检验(决策端内置) | decision | 决策 | 待Phase C(C2) | P1 |
+| TASK-0008 | 泛化引擎+报告导出 | backtest | 回测 | ✅ A~D全locked | P1 |
+| TASK-0007 | 正式后端并回+前端收口 | backtest | 回测 | ✅ A~D全locked | P1 |
+| TASK-0005 | 容器命名统一 | backtest | 回测 | ✅ locked [2026-04-10] | P2 |
+| TASK-0027 | data全量采集迁移 | data | 数据 | ⚠️ A0+A5 locked; A1-A4/A6/A7代码已U0实施,待补办闭环 | P1 |
+| TASK-0028 | data通知系统全量 | data | 数据 | ✅ B1-B6全locked [2026-04-09] | P1 |
+| TASK-0029 | 极速维修V2制度 | 治理 | Atlas | ✅ locked | P1 |
+| TASK-0030 | 终极维护U0制度 | 治理 | Atlas | ✅ locked | P1 |
+| TASK-0032 | data_web临时看板导入 | data | 数据 | ✅ locked | P1 |
+| TASK-0033 | data_web正式化联调 | data | 数据 | ✅ locked | P1 |
+| TASK-0034 | data端U0审计 | data | Atlas | ✅ locked | P1 |
+| TASK-0035 | data端新闻卡片修复 | data | Atlas | ✅ locked (U0) | P1 |
+| TASK-0036 | ~~灾备演练~~ → 实际为U0外盘K线修复 | data | Atlas | ✅ locked (U0) [编号冲突] | P1 |
+| TASK-0037 | ~~PBO检验~~ → 实际为U0通知降噪 | data | Atlas | ✅ locked (U0) [编号冲突] | P1 |
+| TASK-0038 | data端国内K线降噪 | data | Atlas | ✅ locked (U0) | P1 |
+| TASK-0025 | SimNow备用方案 | decision | 决策 | 预审(待Phase C) | P2 |
+| TASK-0015 | SimNow临时看板 | dashboard | 看板 | 预审(待各端临时看板收口) | P2 |
+| TASK-0020 | ECS云部署 | 运维 | 运维 | 阻塞(DNS+SSH) | P2 |
+| TASK-0011 | legacy清退 | sim-trading | 项目架构师 | 后置(待Phase C/D) | P2 |
+| TASK-0012 | legacy信号桥接 | integrations | 项目架构师 | 后置(待Phase C-C3) | P1 |
+| TASK-0016 | 决策端正式接入 | decision | 决策 | 后置(待Phase C-C5) | P1 |
+| ~~TASK-0036~~ | 灾备演练(原定编号冲突) | 全局 | 项目架构师 | 待重编号→TASK-0039; Phase B已完成 | P1 |
+| ~~TASK-0037~~ | PBO过拟合检验(原定编号冲突) | decision | 决策 | 待重编号→TASK-0040; 待Phase C(C2) | P1 |
 
 ---
 
 ## 四、分阶段执行路线图
 
-### Phase A — 基础稳定化（当前最高优先级）
+### Phase A — 基础稳定化 ✅ [2026-04-10 全闭环]
 
 **目标：** 确保当前已部署的服务稳定运行，修复已知问题
 
-| 序号 | 任务 | Agent | 依赖 | 验收标准 |
-|------|------|-------|------|---------|
-| A1 | TASK-0031 data热修 | 数据 | Jay.S 签发6文件Token | A股停采不报错；health_check无误报；新闻推送恢复 |
-| A2 | TASK-0017 开盘验证 | 模拟交易 | 开盘窗口 | CTP行情tick收到；成交回报正常；蒲公英可访 |
-| A3 | TASK-0018-B data API实施 | 数据 | token已active | `services/data/src/main.py` 支持回测所需bars查询 |
-| A4 | TASK-0018-C-SUP 本地引擎补数据 | 回测 | A3完成+token已active | local_engine 通过 data API 获取真实K线执行回测 |
+| 序号 | 任务 | Agent | 依赖 | 验收标准 | 状态 |
+|------|------|-------|------|---------|------|
+| A1 | TASK-0031 data热修 | 数据 | Jay.S 签发6文件Token | A股停采不报错；health_check无误报；新闻推送恢复 | ✅ locked |
+| A2 | TASK-0017 开盘验证 | 模拟交易 | 开盘窗口 | CTP行情tick收到；成交回报正常；蒲公英可访 | ✅ A1-A4全locked [2026-04-10] |
+| A3 | TASK-0018-B data API实施 | 数据 | token已active | `services/data/src/main.py` 支持回测所需bars查询 | ✅ locked |
+| A4 | TASK-0018-C-SUP 本地引擎补数据 | 回测 | A3完成+token已active | local_engine 通过 data API 获取真实K线执行回测 | ✅ locked |
 
 **并行规则：** A1⊥A2⊥(A3→A4)，即数据热修、开盘验证、回测数据接入三条线可并行
 
-### Phase B — SimNow 生产闭环
+### Phase B — SimNow 生产闭环 ✅ [2026-04-10 全闭环]
 
 **目标：** 模拟交易达到"可日常运行+风控有效+通知畅通"的生产标准
 
@@ -299,9 +309,9 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | DR3 | Docker 容器崩溃（kill -9 主进程） | 各 Agent | restart: unless-stopped 策略生效；服务 ≤ 60s 内恢复响应 |
 | DR4 | 数据端采集中断+恢复 | 数据 | 恢复后自动补采缺失区间；health_check 不误报 |
 
-**任务编号：** TASK-0036
+**任务编号：** ~~TASK-0036~~ → **TASK-0039**（原 TASK-0036 编号已被 U0 外盘 K 线修复占用）[修订 2026-04-11]
 **时机：** Phase B 完成后、Phase C 开始前
-**前置条件：** Phase B 全部闭环
+**前置条件：** Phase B 全部闭环 ✅ 已满足 [2026-04-10]
 
 ### Phase C — 决策端核心能力
 
@@ -315,24 +325,26 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | C4 | TASK-0025 SimNow备用方案 | 决策 | C3完成 | SimNow异常时自动切换仅平仓模式 |
 | C5 | TASK-0012 legacy信号桥接 | 项目架构师 | C3完成 | J_BotQuant决策端信号可桥接到JBT sim-trading |
 | C6 | TASK-0016 决策端正式接入 | 决策 | C5测试闭环 | JBT原生决策链路取代legacy桥接 |
-| C7 | TASK-0037 PBO过拟合检验 | 决策 | C2完成（研发中心） | 决策端内置研究回测引擎支持CPCV多折验证；PBO Score输出到研究报告JSON；decision_web模型因子页显示PBO≤0.5绿/>0.5红。不依赖Air回测端。 [修订 2026-04-09] |
+| C7 | ~~TASK-0037~~ → TASK-0040 PBO过拟合检验 | 决策 | C2完成（研发中心） | 决策端内置研究回测引擎支持CPCV多折验证；PBO Score输出到研究报告JSON；decision_web模型因子页显示PBO≤0.5绿/>0.5红。不依赖Air回测端。 [修订 2026-04-11: 编号冲突修正] |
 
 **并行规则：** C1→(C2⊥C3)→C4，C5⊥C4后置，C7依赖C2（研发中心基础） [修订 2026-04-09]
 
-### Phase D — 数据端全量迁移
+### Phase D — 数据端全量迁移 [修订 2026-04-11: ~85% 完成]
 
 **目标：** Mini数据端从legacy cron完全迁移到JBT Docker体系。当前必须做 system 级迁移，因为真实 24h 运行链路仍在 legacy system 上；若不迁移，JBT data 仍无法成为正式运行承载面。 [修订 2026-04-10]
 
-| 序号 | 任务 | Agent | 依赖 | 验收标准 |
-|------|------|-------|------|---------|
-| D1 | TASK-0027 全量采集迁移 | 数据 | Phase A完成 | 21个采集器全部Docker化；cron全部替换为scheduler |
-| D2 | 通知统一 | 数据 | D1完成 | 飞书+邮件按JBT统一卡片标准 |
-| D3 | data_web 临时看板 | 数据 | D1完成 | 6页（总览/采集器/数据浏览/新闻/硬件/配置） |
-| D4 | 健康检查修正 | 数据 | D1完成 | stock/news判定不再误报 |
+| 序号 | 任务 | Agent | 依赖 | 验收标准 | 状态 |
+|------|------|-------|------|---------|------|
+| D1 | TASK-0027 全量采集迁移 | 数据 | Phase A完成 | 21个采集器全部Docker化；cron全部替换为scheduler | ⚠️ A0+A5 locked; A1-A4代码已U0实施; A6(通知)/A7(Docker)待补闭环 |
+| D2 | 通知统一(TASK-0028) | 数据 | D1完成 | 飞书+邮件按JBT统一卡片标准 | ✅ B1-B6全locked |
+| D3 | data_web 临时看板(TASK-0032+0033) | 数据 | D1完成 | 6页（总览/采集器/数据浏览/新闻/硬件/配置） | ✅ locked |
+| D4 | 健康检查修正(TASK-0031) | 数据 | D1完成 | stock/news判定不再误报 | ✅ locked |
+
+**剩余缺口：** TASK-0027 批次 A6（notify 正式闭环）和 A7（Docker 接入 P0 文件）需要补办正式 Token
 
 **并行规则：** D1→(D2⊥D3⊥D4)
 
-### Phase E — 回测系统稳定化（人工回测收口）
+### Phase E — 回测系统稳定化 ✅ [2026-04-10 全闭环]
 
 **目标：** 回测从"首轮验证完成"进入"多策略泛用+正式报告导出"。Phase E 完成后 Air 人工回测进入**维护态**——只修 bug，不加功能。PBO/CPCV 等研究级验证归决策端内置研究回测引擎（Phase C）。 [修订 2026-04-09]
 
@@ -621,91 +633,106 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **职责范围：**
 
 ```
-┌─ TASK-0013  统一风控核心设计      ← 跨 sim/live 服务
-├─ TASK-0012  legacy信号桥接        ← 跨 integrations
-├─ TASK-0011  legacy清退            ← 跨服务清退
-├─ TASK-0036 灾备演练设计+验收      ← Phase B完成后 [修订 2026-04-09]
-├─ Phase H1  live-trading 契约      ← shared/contracts
+┌─ TASK-0013  统一风控核心设计      ← ✅ 治理闭环
+├─ TASK-0012  legacy信号桥接        ← 跨 integrations (待Phase C)
+├─ TASK-0011  legacy清退            ← 跨服务清退 (待Phase C/D)
+├─ TASK-0039 灾备演练设计+验收      ← Phase B已完成,可启动 [修订 2026-04-11]
+├─ Phase H1  live-trading 契约      ← shared/contracts (延后)
 ├─ 所有新任务预审                   ← 持续
 └─ 公共项目提示词维护               ← 持续
 ```
 
 ---
 
-## 七、总进度仪表盘
+## 七、总进度仪表盘 [修订 2026-04-11]
 
 | 模块 | 完成 | 目标 | 当前Phase | 下一里程碑 |
 |------|------|------|----------|-----------|
 | 治理 | 100% | 100% | ✅ 完成 | 维护 |
-| sim-trading | 27% | 100% | Phase A→B | 开盘验证通过 + 期货公式接通 |
-| decision | 10% | 100% | Phase A→C | data API真实接入 |
-| data | 5% | 100% | Phase A→D | 热修完成+Docker化 |
-| backtest | 75% | 100% | Phase A→E | 本地引擎补真实数据 |
+| sim-trading | 55% | 100% | Phase B ✅→C | TASK-0017-A4闭环 → 灾备演练(TASK-0039) |
+| decision | 90% | 100% | Phase C | C3信号真闭环 → C7 PBO(TASK-0040) |
+| data | 85% | 100% | Phase D | TASK-0027 A6/A7补办闭环 → Docker正式接入 |
+| backtest | 95% | 100% | Phase E ✅ | 维护态（只修bug不加功能） |
 | dashboard | 5% | 100% | Phase F | 待各服务临时看板基本收口 |
 | live-trading | 0% | 100% | Phase H | 待 sim-trading 稳定运行 2~3 个月 |
-| **总体** | **~30%** | **100%** | **Phase A** | **基础稳定化** |
+| **总体** | **~65%** | **100%** | **Phase A~E 大部分闭环; B+ / C / D 收尾中** | **灾备演练(TASK-0039) + 决策链验证** |
 
 ---
 
-## 八、Token 签发待办清单（按紧急度排序）
+## 八、Token 签发待办清单 [修订 2026-04-11]
 
-以下为当前所有处于 `pending_token` 状态需 Jay.S 签发的批次：
+以下为当前真正需要 Jay.S 签发的批次（已完成项已移除）：
 
-| 优先级 | 任务 | 文件数 | Agent | 白名单概要 |
-|--------|------|--------|-------|-----------|
-| 🔴 P1紧急 | TASK-0031 | 6 | 数据 | data_scheduler/health_check/dispatcher/news_pusher + 2 tests |
-| 🟡 P1 | TASK-0014-A2 | 2 | 模拟交易 | router.py + main.py (系统事件接线) |
-| 🟡 P1 | TASK-0009 | TBD | 模拟交易 | guards/risk相关 (风控规则引擎) |
-| 🟡 P1 | TASK-0019 | ~5 | 模拟交易 | main.py/email.py/ledger/service.py + tests |
-| ✅ P1 | TASK-0008 | ~12 | 回测 | A/B/C/D四批全锁回 [2026-04-10] |
-| ✅ P1 | TASK-0026 | TBD | 回测 | A/B/C三批全locked_back [2026-04-10] |
-| ✅ P1 | TASK-0007-B | 5 | 回测 | 正式后端API并回 locked [2026-04-10] |
-| ✅ P1 | TASK-0007-C | 2 | 回测 | 前端8004收口 locked [2026-04-10] |
-| 🟢 P2 | TASK-0022-B | 4 | 模拟交易 | main.py/router.py/intelligence/page.tsx + test |
-| ✅ P2 | TASK-0005 | 1 | 回测 | docker-compose.yml locked [2026-04-10] |
-| ✅ P2 | TASK-0013 | N/A | 架构师 | 纯治理闭环(无代码Token) [2026-04-10] |
-| 🟢 P2 | TASK-0036 | TBD | 架构师 | 灾备演练场景脚本(待Phase B) [修订 2026-04-09] |
-| 🟢 P2 | TASK-0037 | TBD | 决策 | PBO检验+CPCV+mlfinlab(决策端内置，待Phase C) [修订 2026-04-09] |
+| 优先级 | 任务 | 文件数 | Agent | 白名单概要 | 说明 |
+|--------|------|--------|-------|-----------|------|
+| ✅ P1 | TASK-0017-A4 | 2 | 模拟交易 | operations/page.tsx + intelligence/page.tsx locked [2026-04-10] |  |
+| 🟡 P1 | TASK-0027-A6 | ~6 | 数据 | services/data/src/notify/** | 通知系统正式闭环(代码已U0实施,需补办正式Token) |
+| 🔴 P0 | TASK-0027-A7 | 3 | 数据 | docker-compose.dev.yml + .env.example + Dockerfile | Docker正式接入(P0保护区) |
+| 🟡 P1 | TASK-0039(新) | TBD | 架构师 | 灾备演练场景脚本 | 原TASK-0036编号冲突,需新建任务;Phase B已满足 |
+| 🟡 P1 | TASK-0040(新) | TBD | 决策 | PBO+CPCV+mlfinlab | 原TASK-0037编号冲突,需新建任务;待Phase C(C2) |
+
+### 已完成存档（2026-04-11 清理）
+
+| 状态 | 任务 | 说明 |
+|------|------|------|
+| ✅ | TASK-0031 | data热修 locked |
+| ✅ | TASK-0014 A1-A4 | 风控通知全批locked |
+| ✅ | TASK-0009 | 治理闭环 |
+| ✅ | TASK-0013 | 治理闭环 |
+| ✅ | TASK-0010 | 骨架闭环 |
+| ✅ | TASK-0019 B1/B2 | 报表locked |
+| ✅ | TASK-0022-B | 只读日志locked |
+| ✅ | TASK-0008 A~D | 泛化引擎全批locked |
+| ✅ | TASK-0026 A~C | 因子全批locked |
+| ✅ | TASK-0007 A~D | 后端并回全批locked |
+| ✅ | TASK-0005 | 容器命名locked |
+| ✅ | TASK-0018 A~F | 数据API全批locked |
+| ✅ | TASK-0028 B1~B6 | 通知系统全批locked |
+| ✅ | TASK-0021 A+H0~H7 | 决策迁移全批locked |
+| ✅ | TASK-0023-A | 发布接口locked |
+| ✅ | TASK-0029/0030 | 治理制度locked |
+| ✅ | TASK-0032/0033 | data_web locked |
+| ✅ | TASK-0034~0038 | data端U0全部locked |
 
 ---
 
-## 九、关键依赖链（冻结）
+## 九、关键依赖链 [修订 2026-04-11]
 
 ```
-TASK-0031(data热修) ─────────────────────────────────┐
-TASK-0017(开盘验证) ─────────────────────────────────┤
-TASK-0018-B/C-SUP(回测数据) ─────────────────────────┤
-                                                      ├── Phase A 完成
-TASK-0014-A2(事件接线) ──┐                            │
-TASK-0009(风控验收) ─────┤                            │
-TASK-0013(统一风控) ─────┤── Phase B 完成 ────────────┤
-TASK-0010(SimNow骨架) ──┤                            │
-TASK-0019(报表) ─────────┘                            │
+TASK-0031(data热修) ──────────────────── ✅ locked ──┐
+TASK-0017(开盘验证) ──────────── ⚠️ A4 pending ─────┤
+TASK-0018-B/C-SUP(回测数据) ──────────── ✅ locked ──┤
+                                                      ├── Phase A ~95%
+TASK-0014(事件接线) ─── ✅ ──┐                        │
+TASK-0009(风控验收) ─── ✅ ──┤                        │
+TASK-0013(统一风控) ─── ✅ ──┤── Phase B ✅ ──────────┤
+TASK-0010(SimNow骨架) ─ ✅ ──┤                        │
+TASK-0019(报表) ─────── ✅ ──┘                        │
                                                       │
-TASK-0036(灾备演练) ──────── Phase B+ 质量门禁 ──────┤  [修订 2026-04-09]
+TASK-0039(灾备演练,原0036) ──── Phase B+ 质量门禁 ───┤  [修订 2026-04-11]
                                                       │
-TASK-0021续(data接入) ──┐                             │
-TASK-0021续(研发中心) ──┤── Phase C 完成 ────────────┤
-TASK-0021续(信号闭环) ──┤                            │
-TASK-0037(PBO·决策内置) ┤  [修订 2026-04-09]         │
-TASK-0012(桥接) ────────┤                            │
-TASK-0016(正式接入) ────┘                            │
+TASK-0021续(data接入) ── ✅ ┐                         │
+TASK-0021续(研发中心) ── ✅ ┤── Phase C ~90% ────────┤
+TASK-0021续(信号闭环) ── ⚠️ ┤  (C3 待验证)           │
+TASK-0040(PBO,原0037) ─ 🔲 ┤  [修订 2026-04-11]      │
+TASK-0012(桥接) ──────── 🔲 ┤                        │
+TASK-0016(正式接入) ──── 🔲 ┘                        │
                                                       │
-TASK-0027(data迁移) ────┐                            │
-通知统一 ───────────────┤── Phase D 完成 ────────────┤
-data_web ───────────────┘                            │
+TASK-0027(data迁移) ─── ⚠️ ┐                        │
+通知统一(0028) ──────── ✅ ─┤── Phase D ~85% ────────┤
+data_web(0032+0033) ─── ✅ ─┘                        │
                                                       │
-TASK-0008(泛化引擎) ────┐                            │
-TASK-0026(新增因子) ────┤── Phase E 完成            │
-TASK-0007-B/C(并回) ────┘                            │
+TASK-0008(泛化引擎) ─── ✅ ─┐                        │
+TASK-0026(新增因子) ─── ✅ ─┤── Phase E ✅           │
+TASK-0007-B/C(并回) ─── ✅ ─┘                        │
                                                       │
-TASK-0015(临时看板) ────┐                            │
-聚合看板 ───────────────┤── Phase F 完成            │
-TASK-0020(ECS) ─────────┘                            │
+TASK-0015(临时看板) ─── 🔲 ─┐                        │
+聚合看板 ───────────── 🔲 ──┤── Phase F 未启动      │
+TASK-0020(ECS) ──────── 🔲 ─┘  (阻塞DNS+SSH)       │
                                                       │
-TASK-0011(legacy清退) ──── Phase G 完成              │
+TASK-0011(legacy清退) ── 🔲 ── Phase G 未启动        │
                                                       │
-live-trading 全线 ──────── Phase H 完成 ← 依赖B+C   │
+live-trading 全线 ───── 🔲 ── Phase H 延后 ← 依赖B+C  │
                                                       │
 战略规划(多策略/淘汰/沙箱+安全围栏/模型/预读) ←── 依赖C+D │
 ```

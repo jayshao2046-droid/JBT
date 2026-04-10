@@ -210,8 +210,8 @@ export default function RiskControlPage() {
   }, [logAutoRefresh, fetchLogs])
 
   const handleSaveSimConfig = () => {
-    // TODO: 连接到 trading_api:8003 WebSocket，下发配置
-    toast.success("配置已下发到交易引擎（骨架阶段占位）")
+    // 待 CTP 账户就绪后接入 WebSocket 配置下发通道
+    toast.warning("配置下发功能尚未接入 CTP 通道，当前仅为界面预览")
     handleRefresh()
   }
 
