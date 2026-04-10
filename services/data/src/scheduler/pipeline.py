@@ -219,7 +219,7 @@ def run_overseas_minute_yf_pipeline(
 
     result: dict[str, int] = {}
     try:
-        records = collector.collect(period="1d", interval="1m")
+        records = collector.collect(period="2d", interval="1m")
         from collections import defaultdict
         by_sym: dict[str, list] = defaultdict(list)
         for rec in records:

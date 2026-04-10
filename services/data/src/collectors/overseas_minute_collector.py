@@ -250,8 +250,8 @@ class OverseasMinuteCollector(BaseCollector):
 
             try:
                 ticker = yf.Ticker(yf_code)
-                df = ticker.history(period=period, interval=interval)
-                time.sleep(0.3)
+                df = ticker.history(period=period, interval=interval, auto_adjust=True)
+                time.sleep(0.5)
 
                 if df is None or df.empty:
                     self.logger.warning("yfinance 返回空: %s (%s), 将尝试备源", yf_code, cn_name)
@@ -283,7 +283,7 @@ class OverseasMinuteCollector(BaseCollector):
 
             except Exception as exc:
                 exc_str = str(exc).lower()
-                if "rate" in exc_str or "too many" in exc_str or "429" in exc_str:
+                if "rate" in exc_str or "too many" in exc_str or "429" in exc_str or "ratelimit" in exc_str:
                     if not rate_limited:
                         wait = _trigger_backoff("yfinance")
                         self.logger.warning("yfinance 限流, 退避 %ds: %s", wait, exc)
