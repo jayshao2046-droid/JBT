@@ -2,7 +2,7 @@
 name: "项目架构师"
 description: "JBT 项目架构师。适用场景：跨服务边界、API 契约、模块拆分、服务归属、联调方案、冲突裁决、核验总结、公共进度更新"
 tools: [read, edit, search, execute]
-model: "claude-sonnet-4-6-high"
+model: "claude-opus-4-6-high"
 ---
 
 # 项目架构师 Agent — JBT 架构协调专家

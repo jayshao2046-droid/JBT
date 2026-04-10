@@ -3,7 +3,7 @@
 【签名】Atlas
 【时间】2026-04-11
 【设备】MacBook
-【状态】JBT-only 管理已切换 / TASK-0043 已收口 / TASK-0045(DR3) A1已闭环 / TASK-0046(RooCode) A1已锁回
+【状态】JBT-only 管理已切换 / TASK-0043 已收口 / TASK-0045(DR3) A1已闭环 / TASK-0046(RooCode) A1+A2已锁回
 
 ## 本文件定位
 
@@ -29,7 +29,7 @@
 - 模拟交易维持 `TASK-0017` 待开盘验证状态；当前尚未接通期货公式 / 策略公式执行链路，不主动扩新范围。
 - `TASK-0041`、`TASK-0042`、`TASK-0043` 已连续收口并锁回；`TASK-0039` 当前仅剩 `ISSUE-DR3-001`（Docker restart policy）一个 P1 遗留问题。
 - 已完成 DR3 只读边界研判并完成 A0 建档：该问题属于 Mini 宿主机部署治理，不适合按单服务热修处理；当前已独立建档为 `TASK-0045 Mini macOS 容器自愈守护基线`。
-- RooCode 接入 JBT 业务流程已独立建档为 `TASK-0046`，A1 已完成终审并准备 lockback。白名单 5 项：`.roomodes`、`.roo/mcp.json`、`.roo/rules/01-jbt-governance.md`、`governance/roo_jbt_mcp_server.py`、`ATLAS_PROMPT.md`；token_id `tok-731e8346-50cc-4822-831d-8479fcdfe152`，review-id `REVIEW-TASK-0046-A1`，结果 `approved`。
+- RooCode 接入 JBT 业务流程已独立建档为 `TASK-0046`，A1+A2 均已终审通过并锁回。A1 白名单 5 项：`.roomodes`、`.roo/mcp.json`、`.roo/rules/01-jbt-governance.md`、`governance/roo_jbt_mcp_server.py`、`ATLAS_PROMPT.md`；A2 白名单 1 项：`.gitignore`（移除 `.roo/` 排除规则）。`.roo/` 已纳入版本控制。
 - 回测维持“阶段性结案 / 维护观察”。
 - live-trading 当前明确后置，待 sim-trading 在 Mini 上连续稳定运行 2~3 个月后再评估是否启动。
 - 决策若继续推进 legacy 迁移，必须先走专项 handoff 和治理判边。
@@ -38,7 +38,8 @@
 
 - 2026-04-11 01:30：已完成 `TASK-0043` lockback 与治理回写。Mini `data_scheduler` 已切换为 `LaunchAgent` 守护，`kill -9` 后可自动恢复，运行态收敛为单实例；当前灾备尾项仅剩 DR3 容器 restart policy。
 - 2026-04-11：已完成 `ISSUE-DR3-001` 只读边界研判并完成 A0 建档。结论：DR3 不是单服务问题，至少涉及 `docker-compose.mac.override.yml`，并可能条件性触及 `docker-compose.dev.yml`；已独立建档为 `TASK-0045 Mini macOS 容器自愈守护基线`。
-- 2026-04-11：RooCode 接入 JBT 业务流程已独立建档为 `TASK-0046`；A0 治理账本完成，A1 Token `tok-731e8346-50cc-4822-831d-8479fcdfe152` 已签发 validate 通过；Atlas 复核 + 项目架构师终审均通过（review-id `REVIEW-TASK-0046-A1`）；实施内容：`.roomodes`（3 模式：code/ask/debug）、`.roo/mcp.json`（jbt-governance MCP server）、`.roo/rules/01-jbt-governance.md`（治理规则）、`governance/roo_jbt_mcp_server.py`（MCP 桥接）；注意 `.roo/` 被 `.gitignore` 排除，仅 `.roomodes` 和 `governance/roo_jbt_mcp_server.py` 进入版本控制。
+- 2026-04-11：RooCode 接入 JBT 业务流程已独立建档为 `TASK-0046`；A0 治理账本完成，A1 Token `tok-731e8346-50cc-4822-831d-8479fcdfe152` 已签发 validate 通过；Atlas 复核 + 项目架构师终审均通过（review-id `REVIEW-TASK-0046-A1`）；实施内容：`.roomodes`（3 模式：code/ask/debug）、`.roo/mcp.json`（jbt-governance MCP server）、`.roo/rules/01-jbt-governance.md`（治理规则）、`governance/roo_jbt_mcp_server.py`（MCP 桥接）。
+- 2026-04-11：`TASK-0046` A2 已闭环：移除 `.gitignore` 中 `.roo/` 排除规则，`.roo/mcp.json` 和 `.roo/rules/**` 已纳入版本控制；Token `tok-1f28c19b-b4dd-461a-8f50-c01de9ecac64`，review-id `REVIEW-TASK-0046-A2`，终审通过并锁回。
 
 ## 接管要求
 

@@ -2,7 +2,7 @@
 name: "决策"
 description: "JBT 决策专家。适用场景：因子、信号、审批、策略编排、指令生成、调度规则"
 tools: [read, edit, search, execute]
-model: "claude-sonnet-4-6-high"
+model: "claude-opus-4-6-high"
 ---
 
 # 决策 Agent — JBT 决策专家
