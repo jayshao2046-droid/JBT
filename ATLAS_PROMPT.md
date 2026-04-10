@@ -1,9 +1,9 @@
 # JBT Atlas Prompt
 
 【签名】Atlas
-【时间】2026-04-11 01:35
+【时间】2026-04-11
 【设备】MacBook
-【状态】JBT-only 管理已切换 / TASK-0043 已收口
+【状态】JBT-only 管理已切换 / TASK-0043 已收口 / TASK-0045 A0完成
 
 ## 本文件定位
 
@@ -28,6 +28,7 @@
 - 统一聚合 dashboard 已完成规划冻结：正式归属 `services/dashboard/**`，但在 sim-trading / decision / data 三端临时看板未基本收口前，不进入正式实施。
 - 模拟交易维持 `TASK-0017` 待开盘验证状态；当前尚未接通期货公式 / 策略公式执行链路，不主动扩新范围。
 - `TASK-0041`、`TASK-0042`、`TASK-0043` 已连续收口并锁回；`TASK-0039` 当前仅剩 `ISSUE-DR3-001`（Docker restart policy）一个 P1 遗留问题。
+- 已完成 DR3 只读边界研判并完成 A0 建档：该问题属于 Mini 宿主机部署治理，不适合按单服务热修处理；当前已改号为 `TASK-0045`，避免与既有 RooCode `TASK-0044` 冲突。
 - 回测维持“阶段性结案 / 维护观察”。
 - live-trading 当前明确后置，待 sim-trading 在 Mini 上连续稳定运行 2~3 个月后再评估是否启动。
 - 决策若继续推进 legacy 迁移，必须先走专项 handoff 和治理判边。
@@ -35,6 +36,7 @@
 ## 最近动作
 
 - 2026-04-11 01:30：已完成 `TASK-0043` lockback 与治理回写。Mini `data_scheduler` 已切换为 `LaunchAgent` 守护，`kill -9` 后可自动恢复，运行态收敛为单实例；当前灾备尾项仅剩 DR3 容器 restart policy。
+- 2026-04-11：已完成 `ISSUE-DR3-001` 只读边界研判并完成 A0 建档。结论：DR3 不是单服务问题，至少涉及 `docker-compose.mac.override.yml`，并可能条件性触及 `docker-compose.dev.yml`；当前已改号为 `TASK-0045 Mini macOS 容器自愈守护基线`，以避开现有 RooCode `TASK-0044`。
 
 ## 接管要求
 
