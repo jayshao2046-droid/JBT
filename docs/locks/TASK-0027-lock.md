@@ -57,19 +57,19 @@
 | services/data/tests/test_main.py | 修改 | 🔒 locked (`tok-4f75a1c4`) | P1 |
 | services/data/tests/test_notify.py | 修改 | 🔒 locked (`tok-4f75a1c4`) | P1 |
 
-### A6 批次（通知系统重做）— 需 Jay.S 签单 + Token
+### A6 批次（通知系统重做）— ✅ 由 TASK-0028 覆盖
 
 | 文件 | 操作 | 状态 | 保护级别 |
 |------|------|------|----------|
-| services/data/src/notify/** | 新建 | 🔒 待解锁 | P0 |
+| services/data/src/notify/** | 新建 | ✅ 由 TASK-0028 B1-B6 覆盖闭环 | P0 |
 
-### A7 批次（Mini Docker 接入）— 需 Jay.S Token
+### A7 批次（Mini Docker 接入）— ✅ locked
 
 | 文件 | 操作 | 状态 | 保护级别 |
 |------|------|------|----------|
-| docker-compose.dev.yml | 修改 | 🔒 待解锁 | P0 |
-| services/data/.env.example | 修改 | 🔒 待解锁 | P0 |
-| services/data/Dockerfile | 新建/修改 | 🔒 待解锁 | P0 |
+| docker-compose.dev.yml | 修改 | ✅ locked (`tok-e0643bf3`) | P0 |
+| services/data/.env.example | 修改 | ✅ locked (`tok-e0643bf3`) | P0 |
+| services/data/Dockerfile | 新建/修改 | ✅ locked (`tok-e0643bf3`) | P0 |
 
 ---
 
@@ -83,12 +83,15 @@
 | 2026-04-10 | issue | A1-A4 | Jay.S 签发 `tok-c4aa180a`，39文件，3-day TTL，补办lockback |
 | 2026-04-10 | validate | A1-A4 | Token 校验通过，6文件抽样验证 |
 | 2026-04-10 | lockback | A1-A4 | 补办lockback approved，39文件全部locked |
+| 2026-04-10 | issue | A7 | Jay.S 签发 `tok-e0643bf3`，3个P0文件，3-day TTL，补办P0-lockback |
+| 2026-04-10 | validate | A7 | Token 校验通过，3文件全部验证 |
+| 2026-04-10 | lockback | A7 | 补办P0-lockback approved，3文件全部locked |
 
 ---
 
 ## 结论
 
-TASK-0027 批次 A0~A5 全部 locked 闭环。A6（通知）已由 TASK-0028 覆盖。A7（Docker P0文件）待后续处理。
+TASK-0027 整体闭环 [2026-04-10]。A0~A5 + A7 全部 locked，A6 由 TASK-0028 B1-B6 覆盖。数据端全量采集体系迁移完成。
 
 ---
 
