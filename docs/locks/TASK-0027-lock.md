@@ -22,31 +22,31 @@
 | docs/locks/TASK-0027-lock.md | 新建 | ✅ 已完成 | 项目架构师 |
 | docs/handoffs/TASK-0027-架构预审交接单.md | 新建 | ✅ 已完成 | 项目架构师 |
 
-### A1 批次（采集器 + 公共依赖）— 需 Jay.S Token
+### A1 批次（采集器 + 公共依赖）— ✅ locked
 
 | 文件 | 操作 | 状态 | 保护级别 |
 |------|------|------|----------|
-| services/data/src/collectors/** | 新建 | 🔒 待解锁 | P1 |
-| services/data/src/utils/** | 新建 | 🔒 待解锁 | P1 |
-| services/data/src/models/** | 新建 | 🔒 待解锁 | P1 |
+| services/data/src/collectors/** (21文件) | 新建 | ✅ locked (`tok-c4aa180a`) | P1 |
+| services/data/src/utils/** (6文件) | 新建 | ✅ locked (`tok-c4aa180a`) | P1 |
+| services/data/src/models/** (1文件) | 新建 | ✅ locked (`tok-c4aa180a`) | P1 |
 
-### A2 批次（调度器）— 需 Jay.S Token
-
-| 文件 | 操作 | 状态 | 保护级别 |
-|------|------|------|----------|
-| services/data/src/scheduler/** | 新建 | 🔒 待解锁 | P1 |
-
-### A3 批次（健康 + 心跳 + 重连）— 需 Jay.S Token
+### A2 批次（调度器）— ✅ locked
 
 | 文件 | 操作 | 状态 | 保护级别 |
 |------|------|------|----------|
-| services/data/src/health/** | 新建 | 🔒 待解锁 | P1 |
+| services/data/src/scheduler/** (3文件) | 新建 | ✅ locked (`tok-c4aa180a`) | P1 |
 
-### A4 批次（备份 + 清理 + NAS）— 需 Jay.S Token
+### A3 批次（健康 + 心跳 + 重连）— ✅ locked
 
 | 文件 | 操作 | 状态 | 保护级别 |
 |------|------|------|----------|
-| services/data/src/ops/** | 新建 | 🔒 待解锁 | P1 |
+| services/data/src/health/** (4文件) | 新建 | ✅ locked (`tok-c4aa180a`) | P1 |
+
+### A4 批次（备份 + 清理 + NAS）— ✅ locked
+
+| 文件 | 操作 | 状态 | 保护级别 |
+|------|------|------|----------|
+| services/data/src/ops/** (4文件) | 新建 | ✅ locked (`tok-c4aa180a`) | P1 |
 
 ### A5 批次（联调）— 已完成并锁回
 
@@ -80,9 +80,18 @@
 | 2026-04-08 | 建档 | A0 | 创建锁控记录，A0 文件全部完成 |
 | 2026-04-10 | issue | A5 | Jay.S 签发 `tok-4f75a1c4`，4 文件，3-day TTL |
 | 2026-04-10 | lockback | A5 | 124 passed 3 skipped，架构师终审通过，执行锁回 |
+| 2026-04-10 | issue | A1-A4 | Jay.S 签发 `tok-c4aa180a`，39文件，3-day TTL，补办lockback |
+| 2026-04-10 | validate | A1-A4 | Token 校验通过，6文件抽样验证 |
+| 2026-04-10 | lockback | A1-A4 | 补办lockback approved，39文件全部locked |
 
 ---
 
-【签名】项目架构师
-【时间】2026-04-08
+## 结论
+
+TASK-0027 批次 A0~A5 全部 locked 闭环。A6（通知）已由 TASK-0028 覆盖。A7（Docker P0文件）待后续处理。
+
+---
+
+【签名】Atlas
+【时间】2026-04-10
 【设备】MacBook

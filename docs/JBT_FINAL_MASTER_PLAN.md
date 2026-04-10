@@ -235,7 +235,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | TASK-0018 | backtest 数据API全批次 | data+backtest | 数据+回测 | ✅ A~F全locked [2026-04-10] | P1 |
 | TASK-0017 | Mini开盘验证 | sim-trading | 模拟交易 | ✅ A1-A4全locked [2026-04-10] | P1 |
 | TASK-0014 | 风控通知链路 | sim-trading | 模拟交易 | ✅ A1-A4全locked | P1 |
-| TASK-0019 | 收盘统计邮件 | sim-trading | 模拟交易 | ✅ B1/B2 locked; B0待确认 | P1 |
+| TASK-0019 | 收盘统计邮件 | sim-trading | 模拟交易 | ✅ 整体闭环 [2026-04-10] B0确认不需要 | P1 |
 | TASK-0022-B | 只读日志查看 | sim-trading | 模拟交易 | ✅ locked [2026-04-10] | P2 |
 | TASK-0009 | 严格风控验收 | sim-trading | 模拟交易 | ✅ 治理闭环 [2026-04-10] | P1 |
 | TASK-0013 | 统一风控核心 | sim-trading+live | 项目架构师 | ✅ 治理闭环 [2026-04-10] | P1 |
@@ -246,7 +246,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | TASK-0008 | 泛化引擎+报告导出 | backtest | 回测 | ✅ A~D全locked | P1 |
 | TASK-0007 | 正式后端并回+前端收口 | backtest | 回测 | ✅ A~D全locked | P1 |
 | TASK-0005 | 容器命名统一 | backtest | 回测 | ✅ locked [2026-04-10] | P2 |
-| TASK-0027 | data全量采集迁移 | data | 数据 | ⚠️ A0+A5 locked; A1-A4/A6/A7代码已U0实施,待补办闭环 | P1 |
+| TASK-0027 | data全量采集迁移 | data | 数据 | ✅ A0~A5 全locked [2026-04-10]; A6由TASK-0028覆盖; A7(P0)待后续 | P1 |
 | TASK-0028 | data通知系统全量 | data | 数据 | ✅ B1-B6全locked [2026-04-09] | P1 |
 | TASK-0029 | 极速维修V2制度 | 治理 | Atlas | ✅ locked | P1 |
 | TASK-0030 | 终极维护U0制度 | 治理 | Atlas | ✅ locked | P1 |
@@ -263,7 +263,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | TASK-0011 | legacy清退 | sim-trading | 项目架构师 | 后置(待Phase C/D) | P2 |
 | TASK-0012 | legacy信号桥接 | integrations | 项目架构师 | 后置(待Phase C-C3) | P1 |
 | TASK-0016 | 决策端正式接入 | decision | 决策 | 后置(待Phase C-C5) | P1 |
-| ~~TASK-0036~~ | 灾备演练(原定编号冲突) | 全局 | 项目架构师 | 待重编号→TASK-0039; Phase B已完成 | P1 |
+| ~~TASK-0036~~ | 灾备演练(原定编号冲突) | 全局 | 项目架构师 | ✅ 已重编号→TASK-0039; A0建档完成 [2026-04-10] | P1 |
 | ~~TASK-0037~~ | PBO过拟合检验(原定编号冲突) | decision | 决策 | 待重编号→TASK-0040; 待Phase C(C2) | P1 |
 
 ---
@@ -335,12 +335,12 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 | 序号 | 任务 | Agent | 依赖 | 验收标准 | 状态 |
 |------|------|-------|------|---------|------|
-| D1 | TASK-0027 全量采集迁移 | 数据 | Phase A完成 | 21个采集器全部Docker化；cron全部替换为scheduler | ⚠️ A0+A5 locked; A1-A4代码已U0实施; A6(通知)/A7(Docker)待补闭环 |
+| D1 | TASK-0027 全量采集迁移 | 数据 | Phase A完成 | 21个采集器全部Docker化；cron全部替换为scheduler | ✅ A0~A5 全locked; A6由TASK-0028覆盖; A7(P0)待后续 |
 | D2 | 通知统一(TASK-0028) | 数据 | D1完成 | 飞书+邮件按JBT统一卡片标准 | ✅ B1-B6全locked |
 | D3 | data_web 临时看板(TASK-0032+0033) | 数据 | D1完成 | 6页（总览/采集器/数据浏览/新闻/硬件/配置） | ✅ locked |
 | D4 | 健康检查修正(TASK-0031) | 数据 | D1完成 | stock/news判定不再误报 | ✅ locked |
 
-**剩余缺口：** TASK-0027 批次 A6（notify 正式闭环）和 A7（Docker 接入 P0 文件）需要补办正式 Token
+**剩余缺口：** TASK-0027 A6（notify）已由 TASK-0028 B1-B6 覆盖闭环。仅剩 A7（Docker P0 文件）待后续处理
 
 **并行规则：** D1→(D2⊥D3⊥D4)
 
@@ -649,9 +649,9 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 模块 | 完成 | 目标 | 当前Phase | 下一里程碑 |
 |------|------|------|----------|-----------|
 | 治理 | 100% | 100% | ✅ 完成 | 维护 |
-| sim-trading | 55% | 100% | Phase B ✅→C | TASK-0017-A4闭环 → 灾备演练(TASK-0039) |
+| sim-trading | 55% | 100% | Phase B ✅→C | 灾备演练(TASK-0039) |
 | decision | 90% | 100% | Phase C | C3信号真闭环 → C7 PBO(TASK-0040) |
-| data | 85% | 100% | Phase D | TASK-0027 A6/A7补办闭环 → Docker正式接入 |
+| data | 90% | 100% | Phase D | TASK-0027 A7(P0)补办 → Docker正式接入 |
 | backtest | 95% | 100% | Phase E ✅ | 维护态（只修bug不加功能） |
 | dashboard | 5% | 100% | Phase F | 待各服务临时看板基本收口 |
 | live-trading | 0% | 100% | Phase H | 待 sim-trading 稳定运行 2~3 个月 |
@@ -666,9 +666,10 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 优先级 | 任务 | 文件数 | Agent | 白名单概要 | 说明 |
 |--------|------|--------|-------|-----------|------|
 | ✅ P1 | TASK-0017-A4 | 2 | 模拟交易 | operations/page.tsx + intelligence/page.tsx locked [2026-04-10] |  |
-| 🟡 P1 | TASK-0027-A6 | ~6 | 数据 | services/data/src/notify/** | 通知系统正式闭环(代码已U0实施,需补办正式Token) |
+| ✅ P1 | TASK-0027-A1A4 | 39 | 数据 | collectors/utils/models/scheduler/health/ops 39文件 locked [2026-04-10] | 补办lockback |
+| ✅ P1 | TASK-0027-A6 | ~6 | 数据 | 由 TASK-0028 B1-B6 覆盖闭环 [2026-04-09] | 不再单独签发 |
 | 🔴 P0 | TASK-0027-A7 | 3 | 数据 | docker-compose.dev.yml + .env.example + Dockerfile | Docker正式接入(P0保护区) |
-| 🟡 P1 | TASK-0039(新) | TBD | 架构师 | 灾备演练场景脚本 | 原TASK-0036编号冲突,需新建任务;Phase B已满足 |
+| 🟡 P1 | TASK-0039 | TBD | 架构师 | 灾备演练场景脚本 | A0建档完成[2026-04-10]; 纯验收不涉代码,无需Token |
 | 🟡 P1 | TASK-0040(新) | TBD | 决策 | PBO+CPCV+mlfinlab | 原TASK-0037编号冲突,需新建任务;待Phase C(C2) |
 
 ### 已完成存档（2026-04-11 清理）

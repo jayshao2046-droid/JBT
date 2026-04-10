@@ -96,7 +96,7 @@
 ## 当前状态
 
 - 预审状态：已通过
-- Token 状态：B0 待确认是否需要；B1 = `locked`；B2 = `locked`
+- Token 状态：B0 不需要单独操作（.env.example 已包含报表相关占位）；B1 = `locked`；B2 = `locked`
 - 解锁时间：B1/B2 2026-04-10
 - 失效时间：N/A
 - 锁回时间：B1 2026-04-10；B2 2026-04-10
@@ -104,4 +104,4 @@
 
 ## 结论
 
-**`TASK-0019` B1（scheduler 邮件骨架，60 passed / 1 skipped）与 B2（报表充实，68 passed / 1 skipped）已于 2026-04-10 完成终审与锁回。B0（`.env.example` 模板占位）仍待 Jay.S 确认是否需要。**
+**`TASK-0019` 整体闭环 [2026-04-10]。** B1（scheduler 邮件骨架，60 passed / 1 skipped）与 B2（报表充实，68 passed / 1 skipped）已于 2026-04-10 完成终审与锁回。B0（`.env.example` 模板占位）确认不需要单独签发——现有 `.env.example` 已包含 `ALERT_EMAIL_TO`/SMTP 全套占位，报表时间窗 23:10 为代码合理默认值。
