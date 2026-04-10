@@ -22,11 +22,13 @@ _system_state: Dict[str, Any] = {
     "ctp_td_connected": False,
     "last_disconnect_reason": None,
     "last_disconnect_time": None,
-    "ctp_broker_id": os.getenv("SIMNOW_BROKER_ID", "9999"),
+    "ctp_broker_id": os.getenv("SIMNOW_BROKER_ID", "6000"),
     "ctp_user_id": os.getenv("SIMNOW_USER_ID", ""),
     "ctp_password": os.getenv("SIMNOW_PASSWORD", ""),
-    "ctp_md_front": os.getenv("SIMNOW_MD_FRONT", "tcp://180.168.146.187:10131"),
-    "ctp_td_front": os.getenv("SIMNOW_TRADE_FRONT", "tcp://180.168.146.187:10130"),
+    "ctp_md_front": os.getenv("SIMNOW_MD_FRONT", "tcp://124.74.248.10:41213"),
+    "ctp_td_front": os.getenv("SIMNOW_TRADE_FRONT", "tcp://124.74.248.10:41205"),
+    "ctp_app_id": os.getenv("CTP_APP_ID", "client_jbtsim_1.0.0"),
+    "ctp_auth_code": os.getenv("CTP_AUTH_CODE", "QN76PPIPR9EKM4QK"),
 }
 
 _LOCAL_VIRTUAL_PRINCIPAL = 500000.0
@@ -114,6 +116,8 @@ class CtpConfigRequest(BaseModel):
     password: str
     md_front: str
     td_front: str
+    app_id: str = "client_jbtsim_1.0.0"
+    auth_code: str = "QN76PPIPR9EKM4QK"
 
 class RiskPresetUpdateRequest(BaseModel):
     symbol: str
@@ -242,6 +246,8 @@ def get_ctp_config():
         "password": "***" if _system_state.get("ctp_password") else "",
         "md_front": _system_state.get("ctp_md_front", ""),
         "td_front": _system_state.get("ctp_td_front", ""),
+        "app_id": _system_state.get("ctp_app_id", ""),
+        "auth_code": "***" if _system_state.get("ctp_auth_code") else "",
     }
 
 @router.post("/ctp/config")
@@ -251,6 +257,8 @@ def save_ctp_config(req: CtpConfigRequest):
     _system_state["ctp_password"] = req.password
     _system_state["ctp_md_front"] = req.md_front
     _system_state["ctp_td_front"] = req.td_front
+    _system_state["ctp_app_id"] = req.app_id
+    _system_state["ctp_auth_code"] = req.auth_code
     return {"result": "ctp config saved"}
 
 @router.post("/ctp/connect")
@@ -262,11 +270,13 @@ def ctp_connect(silent: bool = False):
     if not _CTP_AVAILABLE:
         raise HTTPException(status_code=503, detail="openctp-ctp not installed")
 
-    broker_id = _system_state.get("ctp_broker_id") or os.getenv("SIMNOW_BROKER_ID", "9999")
+    broker_id = _system_state.get("ctp_broker_id") or os.getenv("SIMNOW_BROKER_ID", "6000")
     user_id   = _system_state.get("ctp_user_id")   or os.getenv("SIMNOW_USER_ID", "")
     password  = _system_state.get("ctp_password")   or os.getenv("SIMNOW_PASSWORD", "")
-    md_front  = _system_state.get("ctp_md_front")  or os.getenv("SIMNOW_MD_FRONT", "tcp://180.168.146.187:10131")
-    td_front  = _system_state.get("ctp_td_front")  or os.getenv("SIMNOW_TRADE_FRONT", "tcp://180.168.146.187:10130")
+    md_front  = _system_state.get("ctp_md_front")  or os.getenv("SIMNOW_MD_FRONT", "tcp://124.74.248.10:41213")
+    td_front  = _system_state.get("ctp_td_front")  or os.getenv("SIMNOW_TRADE_FRONT", "tcp://124.74.248.10:41205")
+    app_id    = _system_state.get("ctp_app_id")    or os.getenv("CTP_APP_ID", "client_jbtsim_1.0.0")
+    auth_code = _system_state.get("ctp_auth_code") or os.getenv("CTP_AUTH_CODE", "QN76PPIPR9EKM4QK")
 
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id not configured")
@@ -288,6 +298,8 @@ def ctp_connect(silent: bool = False):
         md_front=md_front,
         td_front=td_front,
         instruments=instruments,
+        app_id=app_id,
+        auth_code=auth_code,
     )
     _gateway.connect()
 

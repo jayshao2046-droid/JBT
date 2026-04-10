@@ -95,7 +95,10 @@ def _make_md_spi_class():
             req.BrokerID = self._api._broker_id
             req.UserID = self._api._user_id
             req.Password = self._api._password
-            self._api._md_api.ReqUserLogin(req, 0)
+            try:
+                self._api._md_api.ReqUserLogin(req, 0, 0, "")
+            except TypeError:
+                self._api._md_api.ReqUserLogin(req, 0)
 
         def OnFrontDisconnected(self, nReason):
             logger.warning("[mdapi] disconnected reason=%d", nReason)
@@ -179,8 +182,8 @@ def _make_td_spi_class():
             req = _tdmod.CThostFtdcReqAuthenticateField()
             req.BrokerID = self._api._broker_id
             req.UserID = self._api._user_id
-            req.AppID = "simnow_client_test"
-            req.AuthCode = "0000000000000000"
+            req.AppID = self._api._app_id
+            req.AuthCode = self._api._auth_code
             self._api._td_api.ReqAuthenticate(req, self._nxt())
 
         def OnFrontDisconnected(self, nReason):
@@ -207,7 +210,11 @@ def _make_td_spi_class():
             req.BrokerID = self._api._broker_id
             req.UserID = self._api._user_id
             req.Password = self._api._password
-            self._api._td_api.ReqUserLogin(req, self._nxt())
+            nxt = self._nxt()
+            try:
+                self._api._td_api.ReqUserLogin(req, nxt, 0, "")
+            except TypeError:
+                self._api._td_api.ReqUserLogin(req, nxt)
 
         def OnRspUserLogin(self, p, pRspInfo, nRequestID, bIsLast):
             if pRspInfo and pRspInfo.ErrorID != 0:
@@ -327,12 +334,15 @@ def _make_td_spi_class():
 
 class SimNowGateway:
     def __init__(self, broker_id, user_id, password, md_front, td_front,
-                 instruments=None):
+                 instruments=None, app_id="client_jbtsim_1.0.0",
+                 auth_code="QN76PPIPR9EKM4QK"):
         self._broker_id = broker_id
         self._user_id = user_id
         self._password = password
         self._md_front = md_front
         self._td_front = td_front
+        self._app_id = app_id
+        self._auth_code = auth_code
         self._instruments = instruments or []
         self._lock = threading.Lock()
         self._ticks: Dict[str, Dict] = {}

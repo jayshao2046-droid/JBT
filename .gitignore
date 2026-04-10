@@ -25,3 +25,11 @@ node_modules/
 .next/
 out/
 *.tsbuildinfo
+
+# Local IDE / tools
+.roo/
+
+# 参考文档（本地参考资料，不入仓）
+参考文件/
+**/参考文档/
+**/参考文件/
