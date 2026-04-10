@@ -62,7 +62,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ## 二、服务状态与归属矩阵
 
-### 2.1 模拟交易 sim-trading — 55% [修订 2026-04-10 Phase B全闭环]
+### 2.1 模拟交易 sim-trading — 70% [修订 2026-04-11 CTP连通+重连收口]
 
 **负责 Agent：模拟交易**
 **服务目录：`services/sim-trading/`**
@@ -72,7 +72,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 |------|------|------|
 | CTP/SimNow 网关 | ✅ 已部署 | `src/gateway/simnow.py`，Mini 容器运行中 |
 | API 路由 | ✅ 基本完成 | `src/api/router.py`，含 system_state/connect/disconnect/strategy/publish |
-| 期货公司接通 | ❌ 未完成 | 当前尚未完成期货公司 sim-trading 的执行链路，需等待 decision Phase C 真闭环 |
+| 期货公司接通 | ✅ 已完成 | 光大期货 CTP 已接通；MD/TD 基础链路可用，策略执行链仍待 decision Phase C 真闭环 |
 | 风控守卫 | 🔶 骨架 | `src/risk/guards.py`，emit_alert 已接线，但规则引擎待完善 |
 | 交易执行 | 🔶 骨架 | `src/execution/`，待调试 |
 | 账本 | 🔶 骨架 | `src/ledger/service.py`，待调试 |
@@ -82,12 +82,12 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | Docker/Mini | ✅ 已部署 | TASK-0017-A3，待开盘验证CTP |
 | 临时看板 | ✅ 基本可用 | `sim-trading_web/`，operations+intelligence 页面 |
 
-**已完成任务：** TASK-0002(契约), TASK-0009(治理闭环), TASK-0010(骨架闭环), TASK-0013(治理闭环), TASK-0014(A1~A4全锁回), TASK-0017-A3, TASK-0019(B1/B2锁回), TASK-0022(A/B全锁回), TASK-0023-A [修订 2026-04-10]
+**已完成任务：** TASK-0002(契约), TASK-0009(治理闭环), TASK-0010(骨架闭环), TASK-0013(治理闭环), TASK-0014(A1~A4全锁回), TASK-0017-A3, TASK-0019(B1/B2锁回), TASK-0022(A/B全锁回), TASK-0023-A, TASK-0041(A/B/C locked), TASK-0042(自动重连+状态同步 locked) [修订 2026-04-11]
 **Phase B 状态：✅ 全闭环** [修订 2026-04-10]
-**当前活跃：** TASK-0017(待开盘验证)
+**当前活跃：** TASK-0017(待开盘验证) + TASK-0039 剩余 DR3/DR4 修复子任务
 **排队任务：** Phase C（决策端核心能力）
 
-> **[修订 2026-04-10] 当前 sim-trading 只完成 SimNow 网关、发布接口、运行态基础与 Mini 部署，尚未接通期货公司 **
+> **[修订 2026-04-11] 当前 sim-trading 已完成光大期货 CTP 接通、前端下单/撤单 UI、system/state 脱敏、自动重连与状态同步；但仍未接通期货公式 / 策略公式执行链路。**
 
 ### 2.2 决策 decision — 90% [修订 2026-04-10 代码审计校正]
 
@@ -241,6 +241,8 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | TASK-0009 | 严格风控验收 | sim-trading | 模拟交易 | ✅ 治理闭环 [2026-04-10] | P1 |
 | TASK-0013 | 统一风控核心 | sim-trading+live | 项目架构师 | ✅ 治理闭环 [2026-04-10] | P1 |
 | TASK-0010 | 服务骨架完善 | sim-trading | 模拟交易 | ✅ 闭环 [2026-04-10] | P1 |
+| TASK-0041 | CTP前端下单与密码脱敏 | sim-trading | 模拟交易 | ✅ A/B/C全locked [2026-04-10] | P1/P0 |
+| TASK-0042 | CTP自动重连与状态同步 | sim-trading | 模拟交易 | ✅ locked [2026-04-11] | P1 |
 | TASK-0021 | 决策端迁移 | decision | 决策 | ✅ A+H0~H7全locked [2026-04-10] | P1 |
 | TASK-0023-A | 发布接口对接 | sim-trading | 模拟交易 | ✅ locked | P1 |
 | TASK-0026 | 新增因子+别名 | backtest | 回测 | ✅ locked_back | P1 |
@@ -637,7 +639,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 ┌─ TASK-0013  统一风控核心设计      ← ✅ 治理闭环
 ├─ TASK-0012  legacy信号桥接        ← 跨 integrations (待Phase C)
 ├─ TASK-0011  legacy清退            ← 跨服务清退 (待Phase C/D)
-├─ TASK-0039 灾备演练设计+验收      ← ✅ DR1~DR4执行完成,3个P1 Issue待修复 [2026-04-10]
+├─ TASK-0039 灾备演练设计+验收      ← ✅ DR1~DR4执行完成; ISSUE-DR1-001 已由 TASK-0042 修复,剩余2个P1 Issue [2026-04-11]
 ├─ Phase H1  live-trading 契约      ← shared/contracts (延后)
 ├─ 所有新任务预审                   ← 持续
 └─ 公共项目提示词维护               ← 持续
@@ -650,7 +652,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 模块 | 完成 | 目标 | 当前Phase | 下一里程碑 |
 |------|------|------|----------|-----------|
 | 治理 | 100% | 100% | ✅ 完成 | 维护 |
-| sim-trading | 65% | 100% | Phase B ✅→C | 灾备演练发现: restart policy失效+CTP无重连(ISSUE-DR3/DR1) |
+| sim-trading | 70% | 100% | Phase B ✅→C | CTP重连与状态同步已修复；剩余 DR3 restart policy / 开盘验证 |
 | decision | 90% | 100% | Phase C | C3信号真闭环 → C7 PBO(TASK-0040) |
 | data | 95% | 100% | Phase D ✅ | 维护态（D1~D4全闭环） |
 | backtest | 95% | 100% | Phase E ✅ | 维护态（只修bug不加功能） |
@@ -670,7 +672,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | ✅ P1 | TASK-0027-A1A4 | 39 | 数据 | collectors/utils/models/scheduler/health/ops 39文件 locked [2026-04-10] | 补办lockback |
 | ✅ P1 | TASK-0027-A6 | ~6 | 数据 | 由 TASK-0028 B1-B6 覆盖闭环 [2026-04-09] | 不再单独签发 |
 | ✅ P0 | TASK-0027-A7 | 3 | 数据 | docker-compose.dev.yml + .env.example + Dockerfile locked [2026-04-10] | 补办P0-lockback |
-| 🟡 P1 | TASK-0039 | 0 | 架构师 | 灾备演练场景脚本 | ✅ DR1~DR4执行完成[2026-04-10]; 发现3个P1 Issue待修复子任务 |
+| 🟡 P1 | TASK-0039 | 0 | 架构师 | 灾备演练场景脚本 | ✅ DR1~DR4执行完成[2026-04-10]; ISSUE-DR1-001 已由 TASK-0042 修复, 剩余2个P1 Issue |
 | 🟡 P1 | TASK-0040 | TBD | 决策 | PBO+CPCV+mlfinlab | A0建档完成[2026-04-10]; 待Phase C(C2)启动实施 |
 
 ### 已完成存档（2026-04-11 清理）

@@ -10,7 +10,7 @@
 | 执行 Agent | 模拟交易 / Atlas |
 | 优先级 | P1 |
 | 来源 | TASK-0039 / ISSUE-DR1-001 |
-| 状态 | 建档完成，待实施 |
+| 状态 | ✅ A批完成并锁回 |
 
 ---
 
@@ -44,6 +44,15 @@
 
 ---
 
+## 执行结果
+
+1. `simnow.py` 已新增按通道的后台重连调度，包含去重与基础退避；手动 `disconnect()` 会阻断自动拉起。
+2. `router.py` 已新增 `_sync_gateway_state()`，`/api/v1/system/state` 与 `/api/v1/ctp/status` 均在返回前同步 gateway 实时状态。
+3. 本地回归：`pytest services/sim-trading/tests/test_console_runtime_api.py -q` → `8 passed`。
+4. 锁回提交：`ca061a1`。
+
+---
+
 【签名】Atlas
-【时间】2026-04-11 00:10
+【时间】2026-04-11 00:25
 【设备】MacBook

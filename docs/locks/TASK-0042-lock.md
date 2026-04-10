@@ -25,9 +25,9 @@
 
 | 文件 | 操作 | Token | 状态 |
 |------|------|-------|------|
-| services/sim-trading/src/gateway/simnow.py | 修改 | 待签发 | 🔲 待签发 |
-| services/sim-trading/src/api/router.py | 修改 | 待签发 | 🔲 待签发 |
-| services/sim-trading/tests/test_console_runtime_api.py | 修改 | 待签发 | 🔲 待签发 |
+| services/sim-trading/src/gateway/simnow.py | 修改 | tok-e511190f | ✅ locked |
+| services/sim-trading/src/api/router.py | 修改 | tok-e511190f | ✅ locked |
+| services/sim-trading/tests/test_console_runtime_api.py | 修改 | tok-e511190f | ✅ locked |
 
 ---
 
@@ -36,9 +36,10 @@
 | 时间 | 操作 | 批次 | 说明 |
 |------|------|------|------|
 | 2026-04-11 | 建档 | A0 | 创建 task/review/lock |
+| 2026-04-11 | 签发+lockback | A | tok-e511190f → locked; commit ca061a1; pytest 8 passed |
 
 ---
 
 【签名】Atlas
-【时间】2026-04-11 00:10
+【时间】2026-04-11 00:25
 【设备】MacBook
