@@ -3,17 +3,17 @@
 ## Lock 信息
 
 - 任务 ID：TASK-0008
-- 阶段：预审建档已完成，待 Jay.S 按批次签发 P0 / P1 Token
+- 阶段：✅ A~D 四批全部实施完成并锁回 [2026-04-10 收口]
 - 执行口径：
   - Atlas：本轮当前会话直修 / 主导实现
   - 项目架构师：预审、边界冻结、公共状态同步与后续终审留痕
   - 回测 Agent：补写私有 prompt、handoff 与服务侧实施记录
 - Token 摘要：
   - P-LOG 协同账本区文件：不需要文件级 Token
-  - `shared/contracts/backtest/api.md`：待 Jay.S 为 Atlas 按批次 A 签发单文件 P0 Token
-  - 批次 B 5 文件正式引擎核心：待 Jay.S 为 Atlas 签发 P1 Token
-  - 批次 C 5 文件正式结果 / API / 报告导出并回：待 Jay.S 为 Atlas 签发 P1 Token
-  - 批次 D 4 文件前端导入 / 结果 / 正式报告导出链路：待 Jay.S 为 Atlas 签发 P1 Token
+  - 批次 A `shared/contracts/backtest/api.md`：✅ locked (tok-6739689c)
+  - 批次 B 5 文件正式引擎核心：✅ locked (tok-7bb948e5)
+  - 批次 C 5 文件正式结果 / API / 报告导出并回：✅ locked (tok-33baea65)
+  - 批次 D 4 文件前端导出链路：✅ locked (tok-5ec15b54)
 
 ## 治理文件白名单（本轮已使用）
 
@@ -83,15 +83,31 @@
 ## 当前状态
 
 - 预审状态：已通过
-- 批次 A Token 状态：待签发
-- 批次 B Token 状态：待签发
-- 批次 C Token 状态：待签发
-- 批次 D Token 状态：待签发
-- 解锁时间：N/A
-- 失效时间：N/A
-- 锁回时间：N/A
-- lockback 结果：尚未进入业务写入阶段
+- 批次 A Token 状态：✅ locked (tok-6739689c)
+- 批次 B Token 状态：✅ locked (tok-7bb948e5)
+- 批次 C Token 状态：✅ locked (tok-33baea65)
+- 批次 D Token 状态：✅ locked (tok-5ec15b54)
+- 解锁时间：3 天执行窗口内
+- 失效时间：已锁回
+- 锁回时间：2026-04-10
+- lockback 结果：A~D 四批全部锁回
+
+## 操作日志
+
+| 时间 | 操作 | 备注 |
+|------|------|------|
+| 2026-04-08 | 预审建档完成 | 白名单冻结 |
+| 2026-04-09 | 3 天执行窗口启动 | Jay.S 确认 |
+| 2026-04-10 | A~D 四批 Token 签发+实施+lockback | 全部 locked |
+| 2026-04-10 | Air 代码同步 + 容器重启 | rsync + docker restart |
+| 2026-04-10 | 远端验证通过 | 8103 API + 3001 Web + MD5 一致 |
 
 ## 结论
 
-**TASK-0008 已完成预审建档与白名单冻结；当前等待 Jay.S 按批次为 Atlas 签发 A / B / C / D 的 P0 / P1 Token。P-LOG 区无需文件级 Token，业务白名单外文件继续锁定。**
+**TASK-0008 A~D 四批全部实施完成并锁回。Air 端代码已同步并通过验证。Phase E 全闭环，回测进入维护态。**
+
+---
+
+【签名】Atlas
+【时间】2026-04-10
+【设备】MacBook
