@@ -33,6 +33,11 @@ except ImportError:
 
 BacktestRunStatus = Union[str, Any]
 
+# §6.3.5: API strategy_id="generic" maps to formal template ID
+_STRATEGY_ID_ALIASES: Dict[str, str] = {
+    "generic": "generic_formal_strategy_v1",
+}
+
 
 class BacktestExecutionError(RuntimeError):
     pass
@@ -260,8 +265,14 @@ class OnlineBacktestRunner:
         job_input: Union[BacktestJobInput, Mapping[str, Any]],
     ) -> BacktestJobInput:
         if isinstance(job_input, BacktestJobInput):
-            return job_input
-        return BacktestJobInput.from_mapping(job_input)
+            job = job_input
+        else:
+            job = BacktestJobInput.from_mapping(job_input)
+        # §6.3.5: resolve short aliases like "generic"
+        resolved = _STRATEGY_ID_ALIASES.get(job.strategy_template_id)
+        if resolved is not None:
+            job = replace(job, strategy_template_id=resolved)
+        return job
 
     def _build_snapshot(self, job: BacktestJobInput) -> BacktestJobSnapshot:
         return BacktestJobSnapshot(

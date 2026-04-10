@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -316,6 +317,7 @@ class StrategyDefinition:
     symbols: List[str] = field(default_factory=list)
     timeframe_minutes: Optional[int] = None
     raw_payload: Dict[str, Any] = field(default_factory=dict)
+    yaml_snapshot_hash: Optional[str] = None
 
     @classmethod
     def load(
@@ -324,7 +326,9 @@ class StrategyDefinition:
         *,
         expected_template_id: Optional[str] = None,
     ) -> "StrategyDefinition":
-        raw_payload = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+        raw_bytes = yaml_path.read_bytes()
+        raw_payload = yaml.safe_load(raw_bytes.decode("utf-8")) or {}
+        snapshot_hash = hashlib.sha256(raw_bytes).hexdigest()
         if not isinstance(raw_payload, Mapping):
             raise StrategyConfigError("strategy YAML root must be a mapping")
 
@@ -515,6 +519,7 @@ class StrategyDefinition:
             symbols=symbols,
             timeframe_minutes=timeframe_minutes,
             raw_payload=payload,
+            yaml_snapshot_hash=snapshot_hash,
         )
 
 

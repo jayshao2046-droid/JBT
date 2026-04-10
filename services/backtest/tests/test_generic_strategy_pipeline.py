@@ -16,6 +16,7 @@ from services.backtest.src.backtest.generic_strategy import _infer_legacy_indica
 from services.backtest.src.backtest.runner import BacktestJobInput, OnlineBacktestRunner
 from services.backtest.src.backtest.strategy_base import (
     GENERIC_FORMAL_TEMPLATE_ID,
+    StrategyConfigError,
     StrategyDefinition,
     strategy_registry,
 )
@@ -442,6 +443,84 @@ def test_generic_runner_finishes_when_final_account_snapshot_hits_backtest_finis
     assert report.failure_reason is None
     assert any(note == "final_snapshot=backtest_finished" for note in report.notes)
     assert any(note == "final_finish=backtest_finished" for note in report.notes)
+
+
+def test_yaml_snapshot_hash_is_populated_on_load(tmp_path):
+    """§6.3.3: StrategyDefinition.load() must produce a SHA-256 hash of the raw YAML bytes."""
+    import hashlib
+
+    yaml_path = tmp_path / "generic_strategy.yaml"
+    yaml_path.write_text(GENERIC_YAML, encoding="utf-8")
+
+    definition = StrategyDefinition.load(yaml_path)
+
+    assert definition.yaml_snapshot_hash is not None
+    expected_hash = hashlib.sha256(yaml_path.read_bytes()).hexdigest()
+    assert definition.yaml_snapshot_hash == expected_hash
+
+
+def test_generic_alias_resolves_in_runner(tmp_path, monkeypatch):
+    """§6.3.5: strategy_id='generic' must resolve to GENERIC_FORMAL_TEMPLATE_ID."""
+    yaml_path = tmp_path / "generic_strategy.yaml"
+    yaml_path.write_text(GENERIC_YAML, encoding="utf-8")
+
+    monkeypatch.setenv("TQSDK_STRATEGY_YAML_DIR", str(tmp_path))
+    get_settings.cache_clear()
+
+    try:
+        runner = OnlineBacktestRunner(session_manager=DummySessionManager(_build_sample_bars(count=320)))
+        report = runner.run_job_sync(
+            BacktestJobInput(
+                job_id="generic-alias-test",
+                strategy_template_id="generic",
+                strategy_yaml_filename=yaml_path.name,
+                symbol="p2509",
+                start_date=date(2025, 4, 1),
+                end_date=date(2026, 4, 1),
+                initial_capital=500000.0,
+            )
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert report.status == "completed"
+    assert report.strategy_template_id == GENERIC_FORMAL_TEMPLATE_ID
+
+
+def test_unregistered_factor_raises_config_error(tmp_path):
+    """§6.3.4: Referencing an unregistered factor must raise StrategyConfigError (→ HTTP 422)."""
+    yaml_content = dedent(
+        """
+        name: "UnregisteredFactorTest"
+        factors:
+          - factor_name: "NONEXISTENT_FACTOR_XYZ"
+            weight: 1.0
+            params:
+              period: 14
+        signal:
+          long_condition: "true"
+          short_condition: false
+        timeframe_minutes: 5
+        symbols:
+          - "DCE.p2605"
+        risk:
+          max_drawdown: 0.10
+        """
+    ).strip()
+
+    yaml_path = tmp_path / "bad_factor_strategy.yaml"
+    yaml_path.write_text(yaml_content, encoding="utf-8")
+
+    definition = StrategyDefinition.load(yaml_path)
+    assert definition.factors[0].factor_name == "NONEXISTENT_FACTOR_XYZ"
+
+    import pytest
+    with pytest.raises(StrategyConfigError):
+        factor_registry.calculate(
+            "NONEXISTENT_FACTOR_XYZ",
+            _build_sample_bars(count=60),
+            {"period": 14},
+        )
 
 
 class DummyApi:
