@@ -92,12 +92,21 @@ def get_sla_tracker() -> Any:
 
 
 _dispatcher = None
-# 24h 连续采集器不发启动/完成通知
-_SILENT_COLLECTORS = {"新闻API", "RSS聚合", "飞书新闻推送", "情绪指数"}
+# 24h 连续采集器不发启动/完成通知；外盘分钟K线由自身 session 逻辑管理，不走 _safe_run 通知
+_SILENT_COLLECTORS = {"新闻API", "RSS聚合", "飞书新闻推送", "情绪指数", "外盘分钟K线(yfinance)"}
 _calendar = GlobalTradingCalendar()
 _last_snapshot: MarketSnapshot | None = None
 STOCK_MINUTE_ENABLED = False
 NEWS_STORAGE_SYNC_LIMIT_PER_SOURCE = 5000
+
+# ── 外盘分钟K线 session 跟踪（跨调度轮次持久化）─────────────────
+_overseas_minute_session: dict[str, Any] = {
+    "runs": 0,           # 本 session 总轮次
+    "zero_runs": 0,      # 累计 0产出轮次
+    "total_bars": 0,     # 累计 bar 数
+    "consecutive_zeros": 0,  # 连续 0产出计数
+    "alerted": False,    # 是否已发过连续0告警（防重复）
+}
 
 
 def _get_dispatcher() -> Any:
@@ -589,11 +598,124 @@ def job_overseas_kline_lme(config: dict[str, Any]) -> None:
 
 
 def job_overseas_minute_yf(config: dict[str, Any]) -> None:
-    """外盘分钟K线 (yfinance) — 每5分钟, 仅外盘交易时段。"""
+    """外盘分钟K线 (yfinance) — 每5分钟, 仅外盘交易时段。
+
+    通知策略:
+    - 盘中每轮静默（不发启动/完成通知）
+    - 连续 3 轮 0产出 → 发一次 P2 告警
+    - 有数据后自动重置连续计数
+    - 收盘由 job_overseas_minute_close_summary 发完整度摘要
+    """
     if not _is_overseas_trading_hours():
         return
+
     from services.data.src.scheduler.pipeline import run_overseas_minute_yf_pipeline
-    _safe_run("外盘分钟K线(yfinance)", run_overseas_minute_yf_pipeline, config=config)
+    import time as _time
+
+    t0 = _time.time()
+    try:
+        result = run_overseas_minute_yf_pipeline(config=config)
+        bars = sum(result.values()) if isinstance(result, dict) else int(result or 0)
+        elapsed = round(_time.time() - t0, 1)
+    except Exception:
+        bars, elapsed = 0, round(_time.time() - t0, 1)
+        logger.error("外盘分钟K线 pipeline 异常:\n%s", traceback.format_exc())
+
+    # ── session 状态更新 ──────────────────────────────────────
+    _overseas_minute_session["runs"] += 1
+    _overseas_minute_session["total_bars"] += bars
+    if bars == 0:
+        _overseas_minute_session["zero_runs"] += 1
+        _overseas_minute_session["consecutive_zeros"] += 1
+    else:
+        _overseas_minute_session["consecutive_zeros"] = 0
+        _overseas_minute_session["alerted"] = False
+
+    consecutive = _overseas_minute_session["consecutive_zeros"]
+    logger.info(
+        "外盘分钟K线: bars=%d elapsed=%ss consecutive_zeros=%d",
+        bars, elapsed, consecutive,
+    )
+
+    # ── 连续 3 轮 0产出 → 单次 P2 告警 ──────────────────────
+    ZERO_ALERT_THRESHOLD = 3
+    if consecutive >= ZERO_ALERT_THRESHOLD and not _overseas_minute_session["alerted"]:
+        d = _get_dispatcher()
+        if d:
+            try:
+                from services.data.src.notify.dispatcher import DataEvent, NotifyType
+                d.dispatch(DataEvent(
+                    event_code="overseas_minute_consecutive_zero",
+                    title=f"外盘分钟K线连续 {consecutive} 轮 0产出",
+                    notify_type=NotifyType.P2,
+                    body_md=(
+                        f"🟡 外盘分钟K线(yfinance) 已连续 **{consecutive}** 轮 0产出，"
+                        f"可能存在限流或代理问题。\n"
+                        f"本 session 累计: {_overseas_minute_session['runs']} 轮 / "
+                        f"{_overseas_minute_session['total_bars']:,} bars"
+                    ),
+                    body_rows=[
+                        ("连续0产出", str(consecutive)),
+                        ("session总轮次", str(_overseas_minute_session["runs"])),
+                        ("累计bars", str(_overseas_minute_session["total_bars"])),
+                        ("耗时(本轮)", f"{elapsed}s"),
+                    ],
+                    source_name="overseas_minute_yf",
+                    channels={"feishu"},
+                ))
+                _overseas_minute_session["alerted"] = True
+            except Exception:
+                pass
+
+
+def job_overseas_minute_close_summary(config: dict[str, Any]) -> None:
+    """外盘分钟K线收盘摘要 — 05:05 北京时间触发。
+
+    汇报本 session 采集完整度，并重置 session 状态。
+    """
+    s = _overseas_minute_session
+    runs = s["runs"]
+    if runs == 0:
+        # 当天未运行，跳过摘要
+        return
+
+    zero_runs = s["zero_runs"]
+    total_bars = s["total_bars"]
+    success_runs = runs - zero_runs
+    completeness = round(success_runs / runs * 100, 1) if runs else 0
+    status_icon = "🟢" if completeness >= 80 else ("🟡" if completeness >= 50 else "🔴")
+
+    d = _get_dispatcher()
+    if d:
+        try:
+            from services.data.src.notify.dispatcher import DataEvent, NotifyType
+            d.dispatch(DataEvent(
+                event_code="overseas_minute_session_close",
+                title=f"{status_icon} 外盘分钟K线收盘摘要 完整度 {completeness}%",
+                notify_type=NotifyType.NOTIFY,
+                body_md=(
+                    f"{status_icon} **外盘分钟K线** 本 session 已结束\n"
+                    f"完整度: **{completeness}%** ({success_runs}/{runs} 轮有数据)\n"
+                    f"累计采集: **{total_bars:,} bars** | 0产出轮次: {zero_runs}"
+                ),
+                body_rows=[
+                    ("完整度", f"{completeness}%"),
+                    ("有数据轮次", f"{success_runs}/{runs}"),
+                    ("累计bars", f"{total_bars:,}"),
+                    ("0产出轮次", str(zero_runs)),
+                ],
+                source_name="overseas_minute_yf",
+                channels={"feishu"},
+            ))
+        except Exception:
+            pass
+
+    # 重置 session 状态
+    _overseas_minute_session.update({
+        "runs": 0, "zero_runs": 0, "total_bars": 0,
+        "consecutive_zeros": 0, "alerted": False,
+    })
+    logger.info("外盘分钟K线 session 已重置")
 
 
 def job_stock_minute(config: dict[str, Any]) -> None:
@@ -1094,6 +1216,11 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
     scheduler.add_job(
         job_overseas_minute_yf, IntervalTrigger(minutes=5),
         args=[config], id="overseas_minute_yf", name="外盘分钟K线(yfinance)",
+    )
+    # 外盘收盘摘要: 05:05 北京时间发送 session 完整度汇报并重置状态
+    scheduler.add_job(
+        job_overseas_minute_close_summary, CronTrigger(hour=5, minute=5),
+        args=[config], id="overseas_minute_close_summary", name="外盘分钟K线收盘摘要",
     )
     if STOCK_MINUTE_ENABLED:
         scheduler.add_job(
