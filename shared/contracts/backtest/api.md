@@ -212,6 +212,91 @@
    - `summary` 与导出文件中的同名关键指标必须一致，不得出现 UI 与导出值不一致。
 4. 当某引擎暂不产生某类扩展指标时，可在扩展区补充，但不得删除统一主字段。
 
+## 6.3 通用正式引擎模板契约冻结（TASK-0008 批次 A）
+
+### 6.3.1 模板架构
+
+1. backtest 服务采用"一个通用正式引擎模板 + 多策略 YAML 严格填充"架构。
+2. 后续新增策略默认只新增 YAML 配置文件，不新增 FC-224 之外的单独策略模板类。
+3. 只有在出现全新因子类型、全新信号语义或全新执行语义时，才允许扩展代码模板；单纯新增策略不得以"新增模板类"为默认实现路径。
+4. 通用正式引擎模板（`generic_strategy`）必须能够解析并严格执行任意符合本契约 YAML 结构的策略配置。
+5. 既有 FC-224 策略模板作为 legacy 专用实现保留，但后续新策略必须走通用模板路径。
+
+### 6.3.2 策略 YAML 五大参数类结构冻结
+
+策略 YAML 必须按以下五大参数类组织，字段名为最小必填集，扩展字段可选但不得删除必填项：
+
+```yaml
+# ========== 资金参数 ==========
+capital:
+  initial_capital: 1000000.0        # float, 必填, 初始资金
+  position_fraction: 0.3            # float, 必填, 仓位占比 (0,1]
+  position_adjustment: 1.0          # float, 可选, 仓位调整系数, 默认 1.0
+
+# ========== 策略参数 ==========
+strategy:
+  template: "generic"               # str, 必填, 模板标识, "generic" 或具名模板
+  name: "my_strategy_v1"            # str, 必填, 策略名称
+  version: "1.0"                    # str, 可选, 策略版本
+  symbols:                          # list[str], 必填, 交易标的
+    - "CZCE.CF605"
+  timeframe: "5m"                   # str, 必填, K线周期
+  start_date: "2024-04-03"          # str, 必填, 回测起始日 (YYYY-MM-DD)
+  end_date: "2026-04-03"            # str, 必填, 回测结束日 (YYYY-MM-DD)
+
+# ========== 因子参数 ==========
+factors:
+  - name: "MACD"                    # str, 必填, 因子名称（需在因子注册表中已注册）
+    params:                         # dict, 必填, 因子计算参数
+      fast_period: 12
+      slow_period: 26
+      signal_period: 9
+  - name: "RSI"
+    params:
+      period: 14
+
+# ========== 信号参数 ==========
+signals:
+  market_filter: "MACD_histogram > 0"   # str, 必填, 市场过滤条件表达式
+  entry_signal: "RSI < 30"              # str, 必填, 入场信号表达式
+  exit_signal: "RSI > 70"               # str, 必填, 出场信号表达式
+  confirm_bars: 1                       # int, 可选, 信号确认K线数, 默认 1
+
+# ========== 风控参数 ==========
+risk:
+  slippage_per_unit: 1.0            # float, 必填, 每手滑点
+  commission_per_lot: 3.5           # float, 必填, 每手手续费(双边)
+  stop_loss: 0.02                   # float, 可选, 止损比例 (0,1)
+  take_profit: 0.05                 # float, 可选, 止盈比例 (0,1)
+  trailing_stop: null               # float|null, 可选, 移动止损比例
+  max_drawdown: 0.10                # float, 可选, 最大回撤限制
+  daily_loss_limit: 0.03            # float, 可选, 日亏损限制
+  force_close_day: "14:55"          # str, 可选, 日盘强平时点 (HH:MM)
+  force_close_night: "22:55"        # str, 可选, 夜盘强平时点 (HH:MM)
+  no_overnight: false               # bool, 可选, 是否禁止隔夜持仓
+```
+
+### 6.3.3 YAML 执行保真性约束
+
+1. 用户导入的策略 YAML 中任何数字、字符串、合约符号、条件表达式，不得被前端或后端静默改写。
+2. 若参数值不合法或无法执行，服务端必须返回显式错误（HTTP 422 + 具体字段说明），不得隐式修正后继续执行。
+3. 正式引擎与正式报告导出必须保证 **YAML 原值 → 执行结果 → 报告字段** 三段可追溯。
+4. 正式报告中 `job` 部分必须回写实际使用的策略 YAML 原始参数引用或快照哈希，确保事后可审计。
+
+### 6.3.4 因子注册表契约
+
+1. 通用正式引擎模板只执行因子注册表中已注册的因子。
+2. YAML 中引用未注册因子名时，必须返回 HTTP 422 错误，不得默认跳过或使用空值替代。
+3. 当前已注册因子最小集合：`MACD`、`RSI`、`VolumeRatio`、`ATR`、`ADX`。
+4. 新增因子必须通过独立任务（如 TASK-0026）注册到因子表后方可在 YAML 中引用。
+
+### 6.3.5 与现有端点的关系
+
+1. `POST /api/v1/jobs` 请求体中 `strategy_id` 在通用模板下指向 `"generic"`，`strategy_yaml_filename` 指向已上传的 YAML 文件名。
+2. `GET /api/v1/results/{job_id}/report` 返回的 `formal_report_v1` 结构不因模板类型变化而变化；通用模板与 FC-224 共用同一报告 schema（§6.2.3）。
+3. 兼容层 `POST /api/backtest/run` 同样透传 `engine_type` 与 YAML 参数，语义对齐正式层。
+4. `GET /api/v1/results/{job_id}/report/csv` CSV 导出端点（TASK-0018-F 已实现）对通用模板同样适用。
+
 ## 7. 正式 /api/v1 端点详情
 
 ### GET /api/v1/health
