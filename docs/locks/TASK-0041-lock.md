@@ -38,8 +38,8 @@
 
 | 文件 | 操作 | Token | 状态 |
 |------|------|-------|------|
-| services/sim-trading/src/gateway/simnow.py | 修改 | 待签发 | 🔲 待签发 |
-| services/sim-trading/tests/test_console_runtime_api.py | 修改 | 待签发 | 🔲 待签发 |
+| services/sim-trading/src/gateway/simnow.py | 修改 | tok-dc69eb54 | ✅ locked |
+| services/sim-trading/tests/test_console_runtime_api.py | 修改 | tok-dc69eb54 | ✅ locked |
 
 **C 批改进内容：**
 1. `_select_tradeable_contract()` — 优先跳过当月/交割合约，选下一个可交易合约
@@ -57,9 +57,10 @@
 | 2026-04-10 | 签发+lockback | A | tok-2ce2cd05 → locked; commit 16ac25b |
 | 2026-04-10 | 签发+lockback | B | tok-e83586d9 → locked; commit 2e1d147; P0安全修复 |
 | 2026-04-10 | 建档 | C | 追加 C 批网关改进白名单 |
+| 2026-04-10 | 签发+lockback | C | tok-dc69eb54 → locked; commit 4b92b94; 5 tests passed |
 
 ---
 
 【签名】Atlas
-【时间】2026-04-10 20:30
+【时间】2026-04-10 21:15
 【设备】MacBook
