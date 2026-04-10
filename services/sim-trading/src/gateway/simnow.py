@@ -73,6 +73,26 @@ def _resolve_futures_expiry(
     return _expand_czce_delivery_year(year_digit) * 100 + month
 
 
+def _select_tradeable_contract(
+    contracts: List[tuple[str, int]],
+    current_yymm: int,
+) -> Optional[tuple[str, int]]:
+    """优先跳过当前月，避免把近月/交割合约误当作主力交易合约。"""
+    if not contracts:
+        return None
+
+    ordered = sorted(contracts, key=lambda item: item[1])
+    next_month = [item for item in ordered if item[1] > current_yymm]
+    if next_month:
+        return next_month[0]
+
+    same_or_future = [item for item in ordered if item[1] >= current_yymm]
+    if same_or_future:
+        return same_or_future[0]
+
+    return ordered[-1]
+
+
 def _make_md_spi_class():
     base = _mdmod.CThostFtdcMdSpi
 
@@ -331,6 +351,20 @@ def _make_td_spi_class():
             }
             with self._api._lock:
                 self._api._orders[order_ref] = order_info
+                if status_char == "5" and "拒绝" in status_msg:
+                    err = {
+                        "source": "exchange_status",
+                        "error_id": None,
+                        "error_msg": status_msg,
+                        "instrument_id": pOrder.InstrumentID,
+                        "order_ref": order_ref,
+                        "timestamp": __import__("datetime").datetime.now().isoformat(),
+                    }
+                    latest = self._api._order_errors[-1] if self._api._order_errors else None
+                    if latest != err:
+                        self._api._order_errors.append(err)
+                        if len(self._api._order_errors) > 200:
+                            self._api._order_errors = self._api._order_errors[-200:]
             logger.info("[traderapi] order update: %s status=%s(%s) ref=%s traded=%d/%d",
                         pOrder.InstrumentID, status_char, status_msg,
                         order_ref, order_info["volume_traded"], order_info["volume_total"])
@@ -578,7 +612,7 @@ class SimNowGateway:
                 }
 
     def _subscribe_discovered_contracts(self):
-        """从 _product_to_contracts 中选出主力合约（近月）并订阅 MD。"""
+        """从 _product_to_contracts 中选出可交易合约并订阅 MD。"""
         import datetime
         now = datetime.datetime.now()
         # 当前年月：YYMM格式
@@ -586,16 +620,11 @@ class SimNowGateway:
 
         with self._lock:
             for product_id, contracts in self._product_to_contracts.items():
-                # 过滤掉已过期的合约，选最近到期的
-                future_contracts = [(iid, exp) for iid, exp in contracts if exp >= cur_yymm]
-                if not future_contracts:
-                    future_contracts = contracts  # 都过期就取最新
-                if not future_contracts:
+                preferred = _select_tradeable_contract(contracts, cur_yymm)
+                if preferred is None:
                     continue
-                # 选到期最近的合约
-                near = min(future_contracts, key=lambda x: x[1])
-                self._product_to_contract[product_id] = near[0]
-                self._contract_to_product[near[0]] = product_id
+                self._product_to_contract[product_id] = preferred[0]
+                self._contract_to_product[preferred[0]] = product_id
 
         # 用实际 instruments 过滤出需要的品种
         subscribed_products = set(p.upper() for p in self._instruments)
@@ -612,7 +641,7 @@ class SimNowGateway:
         if to_subscribe and self._md_api is not None and self._md_status == "md_logged_in":
             instrs = [s.encode() for s in to_subscribe]
             self._md_api.SubscribeMarketData(instrs, len(instrs))
-            logger.info("[gateway] subscribed %d near-month contracts: %s",
+            logger.info("[gateway] subscribed %d tradeable contracts: %s",
                         len(to_subscribe), to_subscribe[:5])
         else:
             logger.info("[gateway] will subscribe %d contracts when MD ready", len(to_subscribe))
@@ -642,6 +671,9 @@ class SimNowGateway:
             self._td_api.ReqQryTradingAccount(req, 0)
         except Exception as exc:
             logger.warning("[gateway] _query_account failed: %s", exc)
+
+    def query_account(self):
+        self._query_account()
 
     def _on_position(self, data: dict):
         with self._lock:
