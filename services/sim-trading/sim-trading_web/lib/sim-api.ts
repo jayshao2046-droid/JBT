@@ -37,11 +37,54 @@ export interface Order {
   quantity?: number
   status?: string
   reason?: string | null
+  order_ref?: string
 }
 
 export interface OrdersResponse {
   orders: Order[]
   note?: string
+}
+
+// --- 下单/撤单/错误/合约 ---
+export interface OrderRequest {
+  instrument_id: string
+  direction: "buy" | "sell"
+  offset: "open" | "close" | "close_today"
+  price: number
+  volume: number
+}
+
+export interface OrderResult {
+  rejected: boolean
+  source: string
+  error?: string
+  code?: string
+  order_ref?: string
+  front_id?: number
+  session_id?: number
+}
+
+export interface OrderError {
+  timestamp?: string
+  order_ref?: string
+  error_id?: number
+  error_msg?: string
+  instrument_id?: string
+  direction?: string
+  offset?: string
+  price?: number
+  volume?: number
+}
+
+export interface InstrumentSpec {
+  instrument_id?: string
+  product_id?: string
+  exchange_id?: string
+  price_tick?: number
+  volume_multiple?: number
+  max_order_volume?: number
+  long_margin_ratio?: number
+  short_margin_ratio?: number
 }
 
 const BASE = "/api/sim"
@@ -106,4 +149,14 @@ export const simApi = {
   riskPresets: () => get<{presets: Record<string, RiskPreset>}>("/api/v1/risk-presets"),
   updateRiskPreset: (data: {symbol:string} & RiskPreset) =>
     post<{result:string}>("/api/v1/risk-presets", data),
+  // 报单/撤单
+  createOrder: (req: OrderRequest) => post<OrderResult>("/api/v1/orders", req),
+  cancelOrder: (orderRef: string) => post<{result:string}>("/api/v1/orders/cancel", { order_ref: orderRef }),
+  // 订单错误
+  orderErrors: () => get<{errors: OrderError[]}>("/api/v1/orders/errors"),
+  // 合约规格
+  instruments: (product?: string) =>
+    get<{instruments: Record<string, InstrumentSpec>; count: number}>(
+      `/api/v1/instruments${product ? `?product=${product}` : ""}`
+    ),
 }

@@ -21,7 +21,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
-import { simApi } from "@/lib/sim-api"
+import { simApi, type OrderError } from "@/lib/sim-api"
 import { toast } from "sonner"
 import { ALL_CONTRACTS } from "@/lib/contracts"
 
@@ -116,6 +116,9 @@ export default function SimNowTradingTerminal() {
   // 订单/成交流
   const [orderStream, setOrderStream] = useState<any[]>([])
 
+  // 订单错误日志
+  const [orderErrors, setOrderErrors] = useState<OrderError[]>([])
+
   // 后端状态
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null)
 
@@ -158,16 +161,18 @@ export default function SimNowTradingTerminal() {
   // 轮询函数
   const poll = useCallback(async () => {
     try {
-      const [h, pos, ord, acct, ticksRes] = await Promise.all([
+      const [h, pos, ord, acct, ticksRes, errRes] = await Promise.all([
         simApi.health(),
         simApi.positions(),
         simApi.orders(),
         fetch("/api/sim/api/v1/account").then(r => r.ok ? r.json() : null).catch(() => null),
         fetch("/api/sim/api/v1/ticks").then(r => r.ok ? r.json() : null).catch(() => null),
+        simApi.orderErrors().catch(() => ({ errors: [] })),
       ])
       setBackendOnline(h.status === "ok")
       setPositions((pos as any).positions ?? [])
       setOrderStream((ord as any).orders ?? [])
+      setOrderErrors(errRes?.errors ?? [])
       if (acct !== null) setAccountState(acct)
       if (ticksRes?.ticks) {
         const tickMap = ticksRes.ticks as Record<string, any>
@@ -221,7 +226,7 @@ export default function SimNowTradingTerminal() {
     return () => clearTimeout(timer)
   }, [poll, isTradingHours])
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     setOrderError("")
     
     if (pauseTrading) {
@@ -239,26 +244,148 @@ export default function SimNowTradingTerminal() {
       return
     }
 
-    // 待 CTP 账户就绪后接入 WebSocket 下单通道
-    toast.warning(`下单功能尚未接入 CTP 通道，当前仅为界面预览`)
-    return
+    setIsLoading(true)
+    try {
+      const price = orderParams.priceType === "market"
+        ? (orderParams.direction === "buy"
+            ? (orderBook?.ask1 ?? 0)
+            : (orderBook?.bid1 ?? 0))
+        : orderParams.limitPrice
+
+      if (!price || price <= 0) {
+        setOrderError("市价下单需要盘口数据，请确认 CTP 行情已连接")
+        return
+      }
+
+      const result = await simApi.createOrder({
+        instrument_id: orderParams.contract,
+        direction: orderParams.direction as "buy" | "sell",
+        offset: orderParams.openClose as "open" | "close" | "close_today",
+        price,
+        volume: orderParams.quantity,
+      })
+
+      if (result.rejected) {
+        setOrderError(`[${result.source}] ${result.error}`)
+        toast.error(`下单被拒: ${result.error}`)
+      } else {
+        toast.success(`报单已提交: ${orderParams.contract} ${orderParams.direction === "buy" ? "买" : "卖"}${orderParams.openClose === "open" ? "开" : "平"} ${orderParams.quantity}手 @${price}`)
+      }
+    } catch (e: any) {
+      setOrderError(e?.message ?? "下单请求失败")
+      toast.error("下单请求失败")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleClosePosition = (positionId: number) => {
-    toast.warning(`平仓功能尚未接入 CTP 通道（ID: ${positionId}）`)
+  const handleClosePosition = async (positionId: number) => {
+    const pos = positions.find((p: any) => p.id === positionId)
+    if (!pos) return
+    try {
+      const closeDir = pos.direction === "buy" ? "sell" : "buy"
+      const price = closeDir === "buy"
+        ? (orderBook?.ask1 ?? pos.currentPrice ?? 0)
+        : (orderBook?.bid1 ?? pos.currentPrice ?? 0)
+      const result = await simApi.createOrder({
+        instrument_id: pos.contract,
+        direction: closeDir as "buy" | "sell",
+        offset: "close",
+        price,
+        volume: pos.quantity ?? 1,
+      })
+      if (result.rejected) {
+        toast.error(`平仓被拒: ${result.error}`)
+      } else {
+        toast.success(`平仓已提交: ${pos.contract}`)
+      }
+    } catch {
+      toast.error("平仓请求失败")
+    }
   }
 
-  const handleReversePosition = (positionId: number) => {
-    toast.warning(`反手功能尚未接入 CTP 通道（ID: ${positionId}）`)
+  const handleCancelOrder = async (orderRef: string) => {
+    try {
+      await simApi.cancelOrder(orderRef)
+      toast.success(`撤单已提交: ${orderRef}`)
+    } catch {
+      toast.error("撤单请求失败")
+    }
   }
 
-  const handleModifyStopLoss = (positionId: number) => {
-    toast.warning(`止损修改功能尚未接入 CTP 通道（ID: ${positionId}）`)
+  const handleReversePosition = async (positionId: number) => {
+    const pos = positions.find((p: any) => p.id === positionId)
+    if (!pos) return
+    try {
+      // 先平旧仓
+      const closeDir = pos.direction === "buy" ? "sell" : "buy"
+      const price = closeDir === "buy"
+        ? (orderBook?.ask1 ?? pos.currentPrice ?? 0)
+        : (orderBook?.bid1 ?? pos.currentPrice ?? 0)
+      const closeResult = await simApi.createOrder({
+        instrument_id: pos.contract,
+        direction: closeDir as "buy" | "sell",
+        offset: "close",
+        price,
+        volume: pos.quantity ?? 1,
+      })
+      if (closeResult.rejected) {
+        toast.error(`反手平仓被拒: ${closeResult.error}`)
+        return
+      }
+      // 再开反向仓
+      const openPrice = pos.direction === "buy"
+        ? (orderBook?.bid1 ?? pos.currentPrice ?? 0)
+        : (orderBook?.ask1 ?? pos.currentPrice ?? 0)
+      const openResult = await simApi.createOrder({
+        instrument_id: pos.contract,
+        direction: pos.direction === "buy" ? "sell" : "buy",
+        offset: "open",
+        price: openPrice,
+        volume: pos.quantity ?? 1,
+      })
+      if (openResult.rejected) {
+        toast.error(`反手开仓被拒: ${openResult.error}`)
+      } else {
+        toast.success(`反手已提交: ${pos.contract}`)
+      }
+    } catch {
+      toast.error("反手请求失败")
+    }
   }
 
-  const handleClearAllPositions = () => {
-    toast.warning("清仓功能尚未接入 CTP 通道，当前无法执行")
+  const handleModifyStopLoss = (_positionId: number) => {
+    toast.warning("止损修改功能开发中")
+  }
+
+  const handleClearAllPositions = async () => {
     setShowClearConfirm(false)
+    let successCount = 0
+    let failCount = 0
+    for (const pos of positions) {
+      try {
+        const closeDir = pos.direction === "buy" ? "sell" : "buy"
+        const price = closeDir === "buy"
+          ? (orderBook?.ask1 ?? pos.currentPrice ?? 0)
+          : (orderBook?.bid1 ?? pos.currentPrice ?? 0)
+        const result = await simApi.createOrder({
+          instrument_id: pos.contract,
+          direction: closeDir as "buy" | "sell",
+          offset: "close",
+          price,
+          volume: pos.quantity ?? 1,
+        })
+        if (result.rejected) failCount++
+        else successCount++
+      } catch {
+        failCount++
+      }
+    }
+    if (failCount > 0) {
+      toast.error(`清仓: ${successCount} 笔成功, ${failCount} 笔失败`)
+    } else {
+      toast.success(`清仓: ${successCount} 笔已提交`)
+    }
   }
 
   return (
@@ -799,6 +926,48 @@ export default function SimNowTradingTerminal() {
                 >
                   {order.status}
                 </Badge>
+                {order.order_ref && order.status !== "已成交" && order.status !== "已撤单" && order.status !== "废单" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="ml-2 bg-neutral-800 text-orange-400 hover:bg-neutral-700 hover:text-orange-300 text-xs h-6 px-2"
+                    onClick={() => handleCancelOrder(order.order_ref!)}
+                  >
+                    <X className="w-3 h-3 mr-1" />撤
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 订单错误日志 */}
+      <Card className="bg-neutral-900 border-neutral-700">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-neutral-300">
+            订单错误日志 ({orderErrors.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {orderErrors.length === 0 ? (
+              <div className="text-center text-neutral-500 py-6">暂无订单错误</div>
+            ) : orderErrors.map((err, idx) => (
+              <div
+                key={idx}
+                className="bg-red-900/20 border border-red-600/50 rounded p-2 text-xs"
+              >
+                <div className="flex gap-2 flex-wrap">
+                  <span className="text-neutral-400">{err.timestamp}</span>
+                  <span className="font-mono text-white">{err.instrument_id}</span>
+                  <span className="text-orange-400">{err.direction}/{err.offset}</span>
+                  <span className="text-neutral-300">{err.volume}手 @{err.price}</span>
+                  <span className="text-neutral-500">ref:{err.order_ref}</span>
+                </div>
+                <div className="text-red-400 mt-1">
+                  [{err.error_id}] {err.error_msg}
+                </div>
               </div>
             ))}
           </div>

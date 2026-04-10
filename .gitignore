@@ -29,6 +29,9 @@ out/
 # Local IDE / tools
 .roo/
 
+# CTP binary response files
+*.con
+
 # 参考文档（本地参考资料，不入仓）
 参考文件/
 **/参考文档/
