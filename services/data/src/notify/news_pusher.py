@@ -28,15 +28,14 @@ CN_TZ = timezone(timedelta(hours=8))
 
 # ── 黑天鹅关键词（即时推送触发）──────────────────────────
 BLACK_SWAN_KEYWORDS_ZH = [
-    "战争", "军事冲突", "武装冲突", "空袭", "导弹",
-    "地震", "台风", "海啸", "洪水", "火山",
-    "疫情", "紧急卫生事件", "大流行",
+    "战争爆发", "军事冲突", "武装冲突", "空袭", "导弹袭击",
+    "地震", "海啸", "火山爆发",
+    "疫情爆发", "紧急卫生事件", "大流行",
     "央行紧急", "紧急会议",
-    "制裁", "禁运", "贸易战",
-    "核", "恐袭", "恐怖袭击",
+    "全面制裁", "全面禁运",
+    "核试验", "核武", "恐袭", "恐怖袭击",
     "金融危机", "系统崩溃", "熔断",
-    "暴跌", "暴涨", "崩盘",
-    "总统", "主席", "总理",
+    "暴跌超", "崩盘",
     "黑天鹅",
 ]
 
@@ -368,7 +367,7 @@ class NewsPusher:
         for item in breaking_items:
             event = DataEvent(
                 event_code="news_breaking",
-                notify_type=NotifyType.P0,
+                notify_type=NotifyType.NEWS,
                 title=item.get("title", "突发重大新闻"),
                 body_md=self._build_breaking_body(item),
                 body_rows=[
@@ -377,7 +376,7 @@ class NewsPusher:
                 ],
                 source_name=str(item.get("uid") or item.get("source") or "news_breaking"),
                 channels={"feishu"},
-                bypass_quiet_hours=True,
+                bypass_quiet_hours=False,
             )
             if dispatcher.dispatch(event):
                 sent_items.append(item)
@@ -385,20 +384,21 @@ class NewsPusher:
         return {"breaking_pushed": self._mark_as_dispatched(sent_items)}
 
     @staticmethod
-    def _build_batch_body(items: list[dict[str, Any]]) -> str:
+    def _build_batch_body(items: list[dict[str, Any]], *, max_show: int = 50) -> str:
         lines = []
-        for item in items[:20]:
+        for item in items[:max_show]:
             source_cn = item.get("source_cn") or item.get("source") or ""
             source_tag = f" ({source_cn})" if source_cn else ""
-            title = str(item.get("title") or "")[:180]
+            title = str(item.get("title") or "")[:240]
             prefix = "🚨" if item.get("breaking") else "•"
-            if item.get("url"):
-                lines.append(f"{prefix} [{title}]({item['url']}){source_tag}")
+            url = item.get("url") or ""
+            if url:
+                lines.append(f"{prefix} [{title}]({url}){source_tag}")
             else:
                 lines.append(f"{prefix} {title}{source_tag}")
-        hidden = len(items) - min(len(items), 20)
+        hidden = len(items) - min(len(items), max_show)
         if hidden > 0:
-            lines.append(f"… 其余 {hidden} 条已合并在本批次中")
+            lines.append(f"... 其余 {hidden} 条已合并在本批次中")
         return "\n".join(lines)
 
     def _build_batch_event(self, items: list[dict[str, Any]]) -> Any:
@@ -414,6 +414,12 @@ class NewsPusher:
         if breaking_count:
             title += f"（含突发 {breaking_count} 条）"
 
+        stats_line = (
+            f"去重缓存: {len(self._dispatched_uids):,} | "
+            f"本卡: {len(items)} 条 | "
+            f"累计采集: {self._total_collected:,}"
+        )
+
         return DataEvent(
             event_code="news_batch_summary",
             notify_type=NotifyType.NEWS,
@@ -424,6 +430,7 @@ class NewsPusher:
                 ("行业相关", str(market_count)),
                 ("突发新闻", str(breaking_count)),
             ],
+            trace_md=stats_line,
             trace_rows=[
                 ("累计采集", str(self._total_collected)),
                 ("累计清洗", str(self._total_cleaned)),
