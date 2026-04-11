@@ -1,13 +1,29 @@
 import os
+import secrets as _secrets
 import uuid
 from collections import deque
 from datetime import datetime
+from threading import Lock as _ThreadLock
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/api/v1", tags=["sim-trading"])
+# ---------- API Key 认证 ----------
+# 配置方式：运行 .env 中添加 SIM_API_KEY=<随机强密钥>
+# 未设置时跳过认证（仅限内网隔离部署使用）
+_API_KEY: str = os.getenv("SIM_API_KEY", "")
+
+
+def verify_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
+    """API Key 认证中间件。设置 SIM_API_KEY 环境变量后强制校验。"""
+    if not _API_KEY:
+        return  # 未配置则跳过（内网模式）
+    if not x_api_key or not _secrets.compare_digest(x_api_key, _API_KEY):
+        raise HTTPException(status_code=401, detail="Unauthorized: invalid or missing X-Api-Key header")
+
+
+router = APIRouter(prefix="/api/v1", tags=["sim-trading"], dependencies=[Depends(verify_api_key)])
 
 # ---------- SimNow Gateway 单例 ----------
 _gateway = None   # type: Any   # SimNowGateway | None
