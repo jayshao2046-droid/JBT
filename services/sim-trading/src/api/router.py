@@ -235,7 +235,7 @@ def _sync_gateway_state() -> Optional[Dict[str, Any]]:
 def get_status():
     return {
         "status": "sim-trading running",
-        "stage": "skeleton",
+        "stage": "1.0.0",
         "trading_enabled": _system_state["trading_enabled"],
         "active_preset": _system_state["active_preset"],
     }
