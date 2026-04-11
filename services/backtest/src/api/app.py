@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 if __package__:
     from ..core.settings import get_settings
+    from .routes.approval import approval_router
     from .routes.backtest import router as backtest_router
     from .routes.health import router as health_router
     from .routes.jobs import router as jobs_router
@@ -13,6 +14,7 @@ if __package__:
     from .routes.support import ensure_compat_state
     from .routes.support import router as support_router
 else:
+    from api.routes.approval import approval_router
     from api.routes.backtest import router as backtest_router
     from api.routes.health import router as health_router
     from api.routes.jobs import router as jobs_router
@@ -46,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(strategy_router)
     app.include_router(support_router)
     app.include_router(queue_router)
+    app.include_router(approval_router)
     return app
 
 
