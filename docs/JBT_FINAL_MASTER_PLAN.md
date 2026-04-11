@@ -132,9 +132,9 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 最小 bars API | ✅ 已完成 | `src/main.py`（health/version/symbols/bars） |
 | 期货供数 | ✅ 已完成 | continuous/exact symbol + bars API 已投产 |
 | 股票日线采集 | ✅ 已有能力 | `tushare_full_collector` / `akshare_backup` 已具备全 A 股日线采集能力 |
-| 股票分钟K采集器 | ✅ 已有骨架 | `stock_minute_collector.py` 已存在，但尚未切到 watchlist 动态模式 |
+| 股票分钟K采集器 | ✅ 已完成 | `stock_minute_collector.py` 已支持 watchlist 动态模式 (TASK-0054) [2026-04-12] |
 | 股票 bars API 路由 | 🔶 规格完成/待架构预审 | `C0-1`，TASK-0050 架构预审中；规格产出于 Batch-2 [修订 2026-04-11] |
-| 动态 watchlist 采集 | 🔶 规格完成/待架构预审 | `CB5`，TASK-0054 架构预审中；规格产出于 Batch-3（watchlist 端点路径待架构确认）[修订 2026-04-11] |
+| 动态 watchlist 采集 | ✅ 已完成 | `CB5` TASK-0054 watchlist_client + pipeline + strategy.py watchlist 端点投产 [2026-04-12] |
 | 采集器 | ✅ 已部署(legacy) | `src/collectors/`（21个采集器文件），Mini 通过 cron 运行 |
 | 调度器 | ✅ 已部署(legacy) | `src/scheduler/data_scheduler.py`，Mini 以 --daemon / LaunchAgent 运行 |
 | 健康检查 | 🔶 有误报 | `src/health/health_check.py`，stock/news 判定有误报 |
@@ -385,7 +385,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | CB4 | 股票池管理器 | 决策 | 无 | 白天/晚间轮换后池内常驻 30 只股票，保留淘汰理由 |
 | CB5 | 动态 watchlist 分钟K采集 | 数据 | 决策 | data 端按 20 只 watchlist 动态采集分钟 K，替代全量轮询 |
 
-> **[修订 2026-04-11] CB5**：🔶 规格完成 (Batch-3) → TASK-0054 架构预审待用户批准（watchlist 端点路径需架构师确认）
+> **[修订 2026-04-12] CB5**：✅ 已完成 → TASK-0054 watchlist_client + stock_minute_collector 动态模式 + strategy.py watchlist 端点 [2026-04-12]
 
 > **[修订 2026-04-11] CB2'**：✅ 规格完成 (Batch-4 → QWEN_SPEC_CB2P，Atlas 补漏后 91/100，2026-04-11) → TASK-0057 待用户批准（设计约束：不得建立独立 StockSandbox 类，必须通过 asset_type 扩展 sandbox_engine.py）
 

@@ -364,3 +364,24 @@ def dashboard_strategies() -> list[dict]:
         }
         for pkg in sorted(strategies, key=lambda s: s.updated_at, reverse=True)
     ]
+
+
+@router.get("/watchlist")
+def get_watchlist() -> list[str]:
+    """返回当前活跃策略的去重股票代码列表（供数据端 watchlist 采集使用）。
+
+    TASK-0054-E CB5: 方案 A — watchlist 编入同批 Token。
+    """
+    repo = get_repository()
+    symbols: set[str] = set()
+    for pkg in repo.list_all():
+        if pkg.lifecycle_status in (
+            LifecycleStatus.backtest_confirmed,
+            LifecycleStatus.pending_execution,
+            LifecycleStatus.in_production,
+        ):
+            for target in pkg.allowed_targets:
+                stripped = target.strip()
+                if stripped:
+                    symbols.add(stripped)
+    return sorted(symbols)

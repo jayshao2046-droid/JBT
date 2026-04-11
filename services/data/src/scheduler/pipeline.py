@@ -9,6 +9,7 @@ from typing import Any
 from services.data.src.collectors.akshare_backup import AkshareBackupCollector
 from services.data.src.collectors.base import BaseCollector
 from services.data.src.collectors.cftc_collector import CftcCollector
+from services.data.src.collectors.watchlist_client import WatchlistClient
 from services.data.src.collectors.forex_collector import ForexCollector
 from services.data.src.collectors.macro_collector import MacroCollector
 from services.data.src.collectors.news_api_collector import NewsAPICollector
@@ -599,3 +600,52 @@ def run_options_pipeline(
         records = []
     written = _save_records(storage=resolved_storage, data_type="options", symbol=symbol, records=records)
     return {symbol: written}
+
+
+def run_watchlist_minute_pipeline(
+    *,
+    config: dict[str, Any] | None = None,
+    storage: HDF5Storage | None = None,
+    decision_url: str | None = None,
+) -> dict[str, int]:
+    """CB5: 从决策服务 watchlist API 动态获取股票列表，采集分钟 K 线。"""
+    from collections import defaultdict
+
+    from services.data.src.collectors.stock_minute_collector import StockMinuteCollector
+
+    resolved_config = config or get_config()
+    resolved_storage = storage or _build_storage(resolved_config)
+
+    url = decision_url or os.environ.get("DECISION_SERVICE_URL", "http://localhost:8104")
+    wl_client = WatchlistClient(decision_service_url=url)
+
+    watchlist = wl_client.fetch_watchlist()
+    if not watchlist:
+        _logger.warning("watchlist 为空，跳过 watchlist minute pipeline")
+        return {}
+
+    _logger.info("watchlist minute pipeline: %d 只股票", len(watchlist))
+
+    collector = StockMinuteCollector(
+        config=resolved_config,
+        storage=resolved_storage,
+        watchlist_client=wl_client,
+    )
+
+    records = collector.collect(symbols=watchlist, period="1")
+
+    by_sym: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for rec in records:
+        sym = rec.get("symbol_or_indicator") or rec.get("symbol") or "unknown"
+        by_sym[sym].append(rec)
+
+    result: dict[str, int] = {}
+    for sym, recs in by_sym.items():
+        written = _save_records(
+            storage=resolved_storage,
+            data_type="stock_minute",
+            symbol=sym,
+            records=recs,
+        )
+        result[sym] = written
+    return result

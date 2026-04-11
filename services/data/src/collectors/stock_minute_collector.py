@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Any
 
 from services.data.src.collectors.base import BaseCollector
+from services.data.src.collectors.watchlist_client import WatchlistClient
 
 
 class StockMinuteCollector(BaseCollector):
@@ -32,6 +33,7 @@ class StockMinuteCollector(BaseCollector):
         batch_size: int = 100,
         batch_sleep: float = 30.0,
         per_stock_sleep: float = 0.5,
+        watchlist_client: WatchlistClient | None = None,
         **kwargs: Any,
     ) -> None:
         kwargs.pop('name', None)
@@ -41,6 +43,7 @@ class StockMinuteCollector(BaseCollector):
         self.batch_size = batch_size
         self.batch_sleep = batch_sleep
         self.per_stock_sleep = per_stock_sleep
+        self.watchlist_client = watchlist_client
 
     def collect(
         self,
@@ -53,10 +56,37 @@ class StockMinuteCollector(BaseCollector):
     ) -> list[dict[str, Any]]:
         """采集指定股票列表的分钟 K 线数据。"""
         symbol_list = symbols or self.symbols
+        # 若静态列表为空，尝试从 watchlist_client 动态获取
+        if not symbol_list and self.watchlist_client is not None:
+            self.logger.info("静态列表为空，尝试从 watchlist_client 获取动态列表")
+            symbol_list = self.watchlist_client.fetch_watchlist()
         cur_period = period or self.period
         return self._fetch_batch(
             symbol_list=symbol_list,
             period=cur_period,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+    def collect_from_watchlist(
+        self,
+        *,
+        period: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """先从 watchlist_client 拉取动态列表，再采集分钟 K 线。"""
+        if self.watchlist_client is None:
+            self.logger.warning("collect_from_watchlist 被调用但 watchlist_client 未设置")
+            return []
+        symbol_list = self.watchlist_client.fetch_watchlist()
+        if not symbol_list:
+            self.logger.warning("watchlist 为空，跳过采集")
+            return []
+        self.logger.info("从 watchlist 获取到 %d 只股票", len(symbol_list))
+        return self.collect(
+            symbols=symbol_list,
+            period=period,
             start_date=start_date,
             end_date=end_date,
         )
