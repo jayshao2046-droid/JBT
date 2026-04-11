@@ -166,7 +166,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 结果构建 | ✅ 已完成 | `src/backtest/result_builder.py` |
 | 引擎选择器 | ✅ 已完成 | 前端+后端双路径 |
 | 手动期货回测 | ✅ 基线完成 | Air 现网可用，继续承担人工最终复核 |
-| 手动股票回测 | ❌ 待实施 | `CG3`，接收 stock 策略后执行人工回测与审核 |
+| 手动股票回测 | ✅ 已完成 | `CG3` TASK-0058 stock_runner + stock_approval T+1/涨跌停投产 [2026-04-12] |
 | 策略导入审核 | ✅ 已完成 | `CG1` TASK-0052 strategy_queue + `CG2` TASK-0055 manual_runner + approval 投产 [2026-04-12] |
 | 审核看板 | ❌ 待实施 | `backtest_web` 增加 manual review / stock review 页面 |
 | 看板两页 | ✅ 基线完成 | agent-network + operations，后续扩容为人工审核入口 |

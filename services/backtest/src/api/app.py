@@ -10,6 +10,7 @@ if __package__:
     from .routes.health import router as health_router
     from .routes.jobs import router as jobs_router
     from .routes.queue import router as queue_router
+    from .routes.stock_approval import stock_approval_router
     from .routes.strategy import router as strategy_router
     from .routes.support import ensure_compat_state
     from .routes.support import router as support_router
@@ -19,6 +20,7 @@ else:
     from api.routes.health import router as health_router
     from api.routes.jobs import router as jobs_router
     from api.routes.queue import router as queue_router
+    from api.routes.stock_approval import stock_approval_router
     from api.routes.strategy import router as strategy_router
     from api.routes.support import ensure_compat_state
     from api.routes.support import router as support_router
@@ -49,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(support_router)
     app.include_router(queue_router)
     app.include_router(approval_router)
+    app.include_router(stock_approval_router)
     return app
 
 
