@@ -92,25 +92,56 @@ def emit_alert(level: str, message: str, context: dict = None) -> Optional[Syste
 
 
 class RiskGuards:
-    """风控守卫骨架。三类核心钩子占位，真实逻辑待 TASK-0013 统一补充。"""
+    """风控守卫 — 三类核心钩子：只减仓、灾难止损、告警通道。"""
 
     def check_reduce_only(self, order: dict, current_positions: list) -> bool:
         """
         只减仓模式检查。
         当账户处于 reduce_only 状态时，禁止新开仓。
         返回 True 表示该订单允许通过（减仓方向），False 表示拒绝（开仓方向）。
-        # TODO: 实现 reduce_only 状态检测与方向判断
+
+        CTP offset 映射：'0'=开仓, '1'=平仓, '3'=平今
         """
-        raise NotImplementedError("reduce_only hook not yet implemented")
+        offset = str(order.get("offset", "")).strip()
+
+        # 开仓指令 → 拒绝
+        if offset == "0":
+            instrument = order.get("instrument_id", "")
+            self.emit_alert("P1", f"只减仓模式：拒绝开仓指令 {instrument}", {
+                "event_code": "RISK_REDUCE_ONLY_REJECT",
+                "symbol": instrument,
+                "source": "risk_guard",
+            })
+            return False
+
+        # 平仓 / 平今 → 允许
+        return True
 
     def check_disaster_stop(self, account_summary: dict) -> bool:
         """
         灾难止损检查。
         当净值回撤超过 RISK_NAV_DRAWDOWN_HALT 阈值时，触发全停。
         返回 True 表示系统可继续运行，False 表示触发熔断全停。
-        # TODO: 实现净值回撤计算与熔断判定
         """
-        raise NotImplementedError("disaster_stop hook not yet implemented")
+        threshold = float(os.getenv("RISK_NAV_DRAWDOWN_HALT", "0.10"))
+
+        balance = account_summary.get("balance", 0) or 0
+        pre_balance = account_summary.get("pre_balance", 0) or 0
+
+        if pre_balance <= 0:
+            return True
+
+        drawdown = (pre_balance - balance) / pre_balance
+
+        if drawdown >= threshold:
+            self.emit_alert("P0", f"灾难止损触发：回撤 {drawdown:.2%} ≥ 阈值 {threshold:.2%}", {
+                "event_code": "RISK_DISASTER_STOP",
+                "symbol": "",
+                "source": "risk_guard",
+            })
+            return False
+
+        return True
 
     def emit_alert(self, level: str, message: str, context: dict = None) -> None:
         """
