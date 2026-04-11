@@ -54,9 +54,9 @@
 - 范围：仅 `docs/tasks/**`、`docs/reviews/**`、`docs/locks/**`、`docs/handoffs/**`
 - 说明：本批只负责完成独立编号留痕，不进入 `.github/agents/**` 实施。
 
-### A1：agent model 统一升级第一批（待 Token）
+### A1：agent model 统一升级第一批（已完成）
 
-- 状态：`pending_token`
+- 状态：`completed`
 - 保护口径：P0
 - 冻结白名单：
   1. `.github/agents/architect.agent.md`
@@ -65,9 +65,9 @@
   4. `.github/agents/data.agent.md`
   5. `.github/agents/decision.agent.md`
 
-### A2：agent model 统一升级第二批（待 Token）
+### A2：agent model 统一升级第二批（已完成）
 
-- 状态：`pending_token`
+- 状态：`completed`
 - 保护口径：P0
 - 冻结白名单：
   1. `.github/agents/live-trading.agent.md`
@@ -117,5 +117,7 @@
 ## 九、预审结论
 
 1. `TASK-0047` 正式成立。
-2. 当前仅完成 A0 治理建档；A1 与 A2 状态均冻结为 `pending_token`。
+2. A0 治理建档完成；A1（5 文件）、A2（2 文件）均已终审通过并锁回。
+3. `.github/agents/**` 下 `claude-sonnet-4-6-high` 为 0 命中，`claude-opus-4-6-high` 为 7 命中。
+4. TASK-0047 全任务闭环。
 3. 按 `TASK-0047` 标准流程，当前尚未对 `.github/agents/**` 实施受控写入；但目标 7 文件已存在未纳管工作树差异，实施前必须先由 Jay.S / Atlas 裁定其处置方式。

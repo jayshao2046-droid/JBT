@@ -32,12 +32,12 @@
 | .github/agents/data.agent.md | 更新（仅第 5 行 `model`） | tok-740d9433-5de1-4db3-be45-9058b0112ae9 | ✅ 终审通过 |
 | .github/agents/decision.agent.md | 更新（仅第 5 行 `model`） | tok-740d9433-5de1-4db3-be45-9058b0112ae9 | ✅ 终审通过 |
 
-### A2 批次（待签发）
+### A2 批次（已终审通过）
 
 | 文件 | 操作 | Token | 状态 |
 |------|------|-------|------|
-| .github/agents/live-trading.agent.md | 更新（仅第 5 行 `model`） | 待 Jay.S 为 Atlas 签发 | 🔲 待签发 |
-| .github/agents/sim-trading.agent.md | 更新（仅第 5 行 `model`） | 待 Jay.S 为 Atlas 签发 | 🔲 待签发 |
+| .github/agents/live-trading.agent.md | 更新（仅第 5 行 `model`） | tok-d41da82b-f3ca-4f8d-87f6-fa668965ddb6 | ✅ 终审通过 |
+| .github/agents/sim-trading.agent.md | 更新（仅第 5 行 `model`） | tok-d41da82b-f3ca-4f8d-87f6-fa668965ddb6 | ✅ 终审通过 |
 
 ---
 
@@ -52,6 +52,10 @@
 | 2026-04-11 | Token 签发 | A1 | tok-740d9433-5de1-4db3-be45-9058b0112ae9，TTL 60 分钟，validate 通过 |
 | 2026-04-11 | 实施认定 | A1 | 工作树差异吸收为受控实施；5 文件均确认 model=claude-opus-4-6-high，无白名单外改动 |
 | 2026-04-11 | 终审通过 | A1 | review-id REVIEW-TASK-0047-A1，项目架构师审核通过 |
+| 2026-04-11 | lockback | A1 | 终审通过，lockback 完成，commit 8ea1f4a |
+| 2026-04-11 | Token 签发 | A2 | tok-d41da82b-f3ca-4f8d-87f6-fa668965ddb6，TTL 60 分钟，validate 通过 |
+| 2026-04-11 | 实施认定 | A2 | 工作树差异吸收为受控实施；2 文件均确认 model=claude-opus-4-6-high，无白名单外改动 |
+| 2026-04-11 | 终审通过 | A2 | review-id REVIEW-TASK-0047-A2，项目架构师审核通过 |
 
 ---
 
