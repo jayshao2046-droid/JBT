@@ -1,4 +1,6 @@
 import os
+import uuid
+from collections import deque
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -151,6 +153,27 @@ class StrategyPublishRequest(BaseModel):
     lifecycle_status: str
     published_at: datetime
     live_visibility_mode: str
+
+
+# ---------- 信号接收模型与队列 ----------
+_VALID_DIRECTIONS = {"buy", "sell", "long", "short"}
+
+class SignalReceiveRequest(BaseModel):
+    signal_id: str
+    strategy_id: str
+    symbol: str
+    direction: str
+    quantity: float
+    price: Optional[float] = None
+    order_type: str = "market"
+    timestamp: Optional[str] = None
+    valid_until: Optional[str] = None
+    account_id: Optional[str] = None
+    risk_level: str = "normal"
+    meta_data: Optional[dict] = None
+
+_signal_queue: deque = deque(maxlen=10000)
+_received_signal_ids: set = set()
 
 
 def _build_local_virtual_account() -> Dict[str, Any]:
@@ -572,6 +595,69 @@ def get_account():
         "connected": True,
         "local_virtual": _build_local_virtual_account(),
         "ctp_snapshot": _build_ctp_snapshot(True, acct),
+    }
+
+
+# ---------- 信号接收端点 ----------
+@router.post("/signals/receive")
+def receive_signal(req: SignalReceiveRequest):
+    """
+    接收来自决策服务的交易信号。
+    验证参数 → 幂等检查 → 生成 execution_id → 暂存队列 → 返回确认。
+    """
+    errors = []
+    if not req.signal_id or not req.signal_id.strip():
+        errors.append("signal_id is required")
+    if not req.strategy_id or not req.strategy_id.strip():
+        errors.append("strategy_id is required")
+    if not req.symbol or not req.symbol.strip():
+        errors.append("symbol is required")
+    if req.quantity <= 0:
+        errors.append("quantity must be > 0")
+    if req.direction not in _VALID_DIRECTIONS:
+        errors.append(f"direction must be one of {sorted(_VALID_DIRECTIONS)}")
+
+    if errors:
+        return {
+            "status": "rejected",
+            "signal_id": req.signal_id,
+            "execution_id": None,
+            "message": "; ".join(errors),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
+
+    # 幂等：重复 signal_id 直接返回 received 但不再入队
+    if req.signal_id in _received_signal_ids:
+        return {
+            "status": "received",
+            "signal_id": req.signal_id,
+            "execution_id": None,
+            "message": "duplicate signal_id, already received",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
+
+    execution_id = f"exec-{uuid.uuid4().hex[:12]}"
+    entry = {
+        "signal_id": req.signal_id,
+        "strategy_id": req.strategy_id,
+        "symbol": req.symbol,
+        "direction": req.direction,
+        "quantity": req.quantity,
+        "price": req.price,
+        "order_type": req.order_type,
+        "risk_level": req.risk_level,
+        "execution_id": execution_id,
+        "received_at": datetime.utcnow().isoformat() + "Z",
+    }
+    _signal_queue.append(entry)
+    _received_signal_ids.add(req.signal_id)
+
+    return {
+        "status": "received",
+        "signal_id": req.signal_id,
+        "execution_id": execution_id,
+        "message": "signal accepted",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
     }
 
 

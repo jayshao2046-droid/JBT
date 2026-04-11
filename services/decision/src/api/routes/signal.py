@@ -4,7 +4,7 @@ from collections import Counter
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
 from ...model.router import route
@@ -284,3 +284,47 @@ def dashboard_notifications() -> list[dict]:
 def dashboard_reports() -> list[dict]:
     """最近日报摘要（只读聚合，供临时看板使用）。"""
     return get_daily_reporter().dashboard_reports()
+
+
+# ---------------------------------------------------------------------------
+# CA6 信号分发端点 (TASK-0059-D)
+# 延迟 import shared.contracts 与 signal_dispatcher 以兼容服务内 PYTHONPATH
+# ---------------------------------------------------------------------------
+
+_signal_dispatcher = None
+
+
+def _get_signal_dispatcher():
+    global _signal_dispatcher
+    if _signal_dispatcher is None:
+        from ...core.signal_dispatcher import SignalDispatcher
+        from ...core.settings import get_settings
+
+        settings = get_settings()
+        sim_url = getattr(settings, "sim_trading_url", "http://localhost:8101")
+        _signal_dispatcher = SignalDispatcher(sim_trading_url=sim_url)
+    return _signal_dispatcher
+
+
+@router.post("/dispatch", status_code=status.HTTP_200_OK)
+async def dispatch_signal(request: Request):
+    """将决策信号分发到 sim-trading 服务。"""
+    from shared.contracts.decision.signal_dispatch import SignalDispatchRequest
+
+    body = await request.json()
+    parsed = SignalDispatchRequest(**body)
+    dispatcher = _get_signal_dispatcher()
+    return await dispatcher.dispatch(parsed)
+
+
+@router.get("/status/{signal_id}")
+def get_signal_status(signal_id: str):
+    """查询信号分发状态。"""
+    dispatcher = _get_signal_dispatcher()
+    result = dispatcher.get_status(signal_id)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Signal {signal_id} not found",
+        )
+    return result

@@ -45,6 +45,10 @@ DATE_ONLY_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2}|\d{8})$")
 CONTINUOUS_DIR_PATTERN = re.compile(r"(?i)^KQ_m_([A-Za-z]+)_([A-Za-z]+)$")
 CONTINUOUS_ALIAS_PATTERN = re.compile(r"(?i)^KQ\.m@([A-Za-z]+)\.([A-Za-z]+)$")
 EXACT_SYMBOL_PATTERN = re.compile(r"(?i)^([A-Za-z]+)[._]([A-Za-z]+?)(\d+)?$")
+STOCK_PURE_DIGITS_PATTERN = re.compile(r"^\d{6}$")
+STOCK_PREFIX_PATTERN = re.compile(r"(?i)^(SH|SZ)(\d{6})$")
+STOCK_SUFFIX_PATTERN = re.compile(r"(?i)^(\d{6})\.(SH|SZ)$")
+STOCK_MINUTE_SUBDIR = "stock_minute"
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_FILE = SERVICE_ROOT / "configs" / "settings.yaml"
 SCHEDULE_FILE = SERVICE_ROOT / "configs" / "collection_schedules.yaml"
@@ -245,6 +249,40 @@ def get_bars(
     }
 
 
+@app.get("/api/v1/stocks/bars")
+def get_stock_bars(
+    symbol: str = Query(..., min_length=1),
+    start: str = Query(..., min_length=1),
+    end: str = Query(..., min_length=1),
+    timeframe_minutes: int = Query(1, ge=1),
+) -> dict[str, Any]:
+    parsed_start = _parse_requested_time(start, field_name="start", is_end=False)
+    parsed_end = _parse_requested_time(end, field_name="end", is_end=True)
+    if parsed_end.timestamp < parsed_start.timestamp:
+        raise HTTPException(status_code=422, detail="end must be greater than or equal to start")
+
+    stock_code = _parse_stock_symbol(symbol)
+    frame = _load_stock_frame(stock_code)
+
+    filtered = frame.loc[
+        (frame["datetime"] >= parsed_start.timestamp)
+        & (frame["datetime"] <= parsed_end.timestamp)
+    ].copy()
+
+    if timeframe_minutes > 1 and not filtered.empty:
+        filtered = _resample_bars(filtered, timeframe_minutes)
+
+    bars = _serialize_bars(filtered)
+    return {
+        "requested_symbol": symbol,
+        "resolved_symbol": stock_code,
+        "source_kind": "stock_minute",
+        "timeframe_minutes": timeframe_minutes,
+        "count": len(bars),
+        "bars": bars,
+    }
+
+
 def _storage_root() -> Path:
     raw_root = os.getenv("DATA_STORAGE_ROOT", str(DEFAULT_STORAGE_ROOT))
     return Path(raw_root).expanduser()
@@ -252,6 +290,51 @@ def _storage_root() -> Path:
 
 def _minute_root() -> Path:
     return _storage_root() / MINUTE_DATA_SUBDIR
+
+
+def _stock_minute_root() -> Path:
+    return _storage_root() / STOCK_MINUTE_SUBDIR
+
+
+def _parse_stock_symbol(raw_symbol: str) -> str:
+    """Parse stock symbol to a 6-digit code. Supports pure digits, SH/SZ prefix, and .SH/.SZ suffix."""
+    symbol = raw_symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=422, detail="symbol is required")
+
+    if STOCK_PURE_DIGITS_PATTERN.fullmatch(symbol):
+        return symbol
+
+    prefix_match = STOCK_PREFIX_PATTERN.fullmatch(symbol)
+    if prefix_match:
+        return prefix_match.group(2)
+
+    suffix_match = STOCK_SUFFIX_PATTERN.fullmatch(symbol)
+    if suffix_match:
+        return suffix_match.group(1)
+
+    raise HTTPException(status_code=422, detail=f"unsupported stock symbol format: {raw_symbol}")
+
+
+def _load_stock_frame(stock_code: str) -> pd.DataFrame:
+    stock_dir = _stock_minute_root() / stock_code
+    if not stock_dir.is_dir():
+        raise HTTPException(
+            status_code=404,
+            detail=f"no stock minute data found for {stock_code}",
+        )
+    try:
+        return _load_symbol_frame(stock_dir)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=f"no parquet data found for stock {stock_code}",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"failed to load stock data for {stock_code}: {exc}",
+        ) from exc
 
 
 def _list_available_symbols() -> list[str]:

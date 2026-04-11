@@ -8,6 +8,7 @@ if __package__:
     from .routes.backtest import router as backtest_router
     from .routes.health import router as health_router
     from .routes.jobs import router as jobs_router
+    from .routes.queue import router as queue_router
     from .routes.strategy import router as strategy_router
     from .routes.support import ensure_compat_state
     from .routes.support import router as support_router
@@ -15,6 +16,7 @@ else:
     from api.routes.backtest import router as backtest_router
     from api.routes.health import router as health_router
     from api.routes.jobs import router as jobs_router
+    from api.routes.queue import router as queue_router
     from api.routes.strategy import router as strategy_router
     from api.routes.support import ensure_compat_state
     from api.routes.support import router as support_router
@@ -43,6 +45,7 @@ def create_app() -> FastAPI:
     app.include_router(backtest_router)
     app.include_router(strategy_router)
     app.include_router(support_router)
+    app.include_router(queue_router)
     return app
 
 

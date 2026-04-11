@@ -5,6 +5,8 @@ from .routes.strategy import router as strategy_router
 from .routes.signal import router as signal_router
 from .routes.approval import router as approval_router
 from .routes.model import router as model_router
+from .routes.strategy_import import router as strategy_import_router
+from .routes.sandbox import router as sandbox_router
 
 
 def create_app() -> FastAPI:
@@ -19,6 +21,8 @@ def create_app() -> FastAPI:
     app.include_router(signal_router)
     app.include_router(approval_router)
     app.include_router(model_router)
+    app.include_router(strategy_import_router)
+    app.include_router(sandbox_router)
 
     return app
 
