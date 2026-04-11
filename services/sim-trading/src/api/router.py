@@ -28,6 +28,11 @@ router = APIRouter(prefix="/api/v1", tags=["sim-trading"], dependencies=[Depends
 # ---------- SimNow Gateway 单例 ----------
 _gateway = None   # type: Any   # SimNowGateway | None
 
+# ---------- ExecutionService 单例（激活后委托 Gateway 执行下单）----------
+from src.execution.service import ExecutionService as _ExecutionService
+_execution_service = _ExecutionService()   # 模块加载时创建，CTP 连接后通过 bind_gateway 绑定
+
+
 def _get_gateway():
     return _gateway
 
@@ -369,9 +374,9 @@ def create_order(req: OrderRequest):
             return {"rejected": True, "source": "risk_control",
                     "error": f"品种 {product_id} 未启用交易", "code": "PRODUCT_DISABLED"}
 
-    # ── 执行下单 ──
+    # ── 执行下单（通过 ExecutionService 委托 Gateway）──
     try:
-        result = gw.insert_order(instrument_id, direction, offset, req.price, req.volume)
+        result = _execution_service.submit_order(instrument_id, direction, offset, req.price, req.volume)
         return {"rejected": False, "source": "ctp", **result}
     except Exception as exc:
         return {"rejected": True, "source": "program",
@@ -516,6 +521,8 @@ def ctp_connect(silent: bool = False):
         auth_code=auth_code,
     )
     _gateway.connect()
+    # 绑定 ExecutionService，使其可通过独立模块提交订单
+    _execution_service.bind_gateway(_gateway)
 
     # 等待最多 10 秒确认连接
     import time
