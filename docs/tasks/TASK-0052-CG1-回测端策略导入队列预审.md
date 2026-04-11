@@ -14,7 +14,7 @@
 | 主责服务 | `services/backtest/` |
 | 协同服务 | `services/decision/`（策略源） |
 | 优先级 | P1 |
-| 状态 | ⏳ 等待架构师预审 |
+| 状态 | 🔓 Token 已签发（tok-5d4f2cca） |
 
 ## 任务背景
 

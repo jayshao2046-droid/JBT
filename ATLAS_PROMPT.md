@@ -57,7 +57,7 @@
 - 2026-04-11：TASK-0056~0059 全部 Token 签发完毕（6 枚）：tok-b73294b3(0056/决策/4文件)、tok-00da5e7e(0057/决策/2文件)、tok-b09df21e(0058/回测/4文件)、tok-3185c6c9(0059-D/决策/3文件)、tok-c5b83bfe(0059-S/模拟交易/2文件)、tok-9e1369d9(0059-C/决策/1文件·P0)。锁控记录已写入 docs/locks/。4 个任务单状态已更新为"Token 已签发"。
 
 - 2026-04-12：TASK-0050~0055 联合架构预审完成（review-id: REVIEW-TASK-0050-0055-PRE）。所有 6 项均预审通过。关键裁定：TASK-0050 白名单调整为 2 项（不新建 api/ 目录，直接改 main.py）/ TASK-0051 StrategyModel 在 publish/ / TASK-0052 内存队列 / TASK-0053 股票代码需 .SZ/.SH 后缀 / TASK-0054 方案A watchlist 同批 / TASK-0055 修改 app.py 非 main.py。Lane-A（0050/0051/0052）无依赖可并行；Lane-B（0053/0054/0055）待 Lane-A 完成后签发。
-- 2026-04-12：TASK-0050 Token tok-b7358d64 已签发（数据 Agent，2 文件）。TASK-0051/0052 待 Jay.S 终端密码签发。Batch-5 已激活派发。
+- 2026-04-12：Lane-A 三枚 Token 全部签发完毕：tok-b7358d64(TASK-0050/数据/2文件)、tok-2e393387(TASK-0051/决策/5文件)、tok-5d4f2cca(TASK-0052/回测/4文件)。Batch-5 已激活派发。Lane-B（0053/0054/0055）待 Lane-A 实施完成后签发。
 
 ## 接管要求
 
