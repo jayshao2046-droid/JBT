@@ -3,7 +3,7 @@
 【签名】Atlas
 【时间】2026-04-11
 【设备】MacBook
-【状态】JBT-only 管理已切换 / TASK-0046(RooCode) 全闭环 / TASK-0047(agent-model升级) 全闭环 / 决策开发前置清理完成
+【状态】JBT-only 管理已切换 / TASK-0046(RooCode) 全闭环 / TASK-0047(agent-model升级) 全闭环 / TASK-0048(Phase C扩展总计划) 全闭环 / TASK-0049(安全治理横线) A0/A1完成+A2 Atlas侧同步完成
 
 ## 本文件定位
 
@@ -33,6 +33,9 @@
 - `TASK-0047` 仓库级 agent model 统一升级已完成：7 个 `.github/agents/*.agent.md` 的 `model` 已从 `claude-sonnet-4-6-high` 统一升级为 `claude-opus-4-6-high`。A1（5 文件）Token tok-740d9433 + A2（2 文件）Token tok-d41da82b 均已终审通过并锁回。TASK-0047 全任务闭环。
 - `TASK-0039` 锁控记录中 `ISSUE-DR3-001` 的过期引用（TASK-0044→TASK-0045）已修正。
 - 回测维持“阶段性结案 / 维护观察”。
+- `TASK-0048` 已完成 A0 建档、A1 总计划修订与 A2 prompt 同步。Phase C 现已冻结为：decision 双沙箱（期货/股票）自动研究主路径、backtest 人工二次回测关卡、股票荐股循环、飞书口头策略、邮件/看板 YAML 导入、decision 本地 Sim 容灾、共享因子双地同步。后续必须按服务拆批，不得把总计划修订误当成已获准代码实施。
+- `TASK-0049` 已完成 A0 建档与 A1 最小 Token 签发 / validate。当前总计划已正式纳入 `SG1`~`SG5` 安全治理横线，顺序固定为“策略端只读安全检查 → 策略端复核 → 全域只读安全检查 → 全域安全复核 → 统一修复预审与实施”；当前阶段不做即时修复。
+- 当前第一优先级已切换为策略端只读安全检查与复核冻结。策略端边界固定为 `decision + backtest`，首批主落点先以 `backtest` 已确认的 `F-001` 为主，`decision` 作为补充复核范围；data 侧 `F-002/F-003` 留待 SG3 再统一进入只读可达性复核。
 - live-trading 当前明确后置，待 sim-trading 在 Mini 上连续稳定运行 2~3 个月后再评估是否启动。
 - 决策若继续推进 legacy 迁移，必须先走专项 handoff 和治理判边。
 
@@ -45,7 +48,16 @@
 - 2026-04-11：`TASK-0039` 锁控记录过期引用修正（3 处 TASK-0044→TASK-0045），含在 commit f3ee429。
 - 2026-04-11：`TASK-0047` A1 签发 tok-740d9433（5 文件），实施认定 + 终审 REVIEW-TASK-0047-A1 通过，lockback 完成，commit 8ea1f4a。
 - 2026-04-11：`TASK-0047` A2 签发 tok-d41da82b（2 文件），实施认定 + 终审 REVIEW-TASK-0047-A2 通过，lockback 完成，commit 039e720。TASK-0047 全任务闭环。
+- 2026-04-11：已完成 `TASK-0048` A0 建档、A1 总计划修订与 A2 prompt 同步。`docs/JBT_FINAL_MASTER_PLAN.md` 已正式纳入 Phase C 双沙箱、人工二次回测、股票荐股循环、口头策略、邮件 YAML、Sim 容灾与共享因子双地同步口径；下一步需按服务拆成决策 / 数据 / 回测 / 模拟交易独立任务，并为共享因子库单独建 P0 任务。
+- 2026-04-11：已完成 `TASK-0049` A0 建档与 A1 最小 Token `tok-da51ff91-10d9-47f1-95ef-1d369f39fb1f` 签发 / validate，并完成 `docs/JBT_FINAL_MASTER_PLAN.md` 与本文件同步。当前正式口径为：先完成 `SG1` 策略端只读安全检查，再完成 `SG2` 策略端复核，随后进入 `SG3/SG4` 全域安全检查与复核，最后才允许 `SG5` 统一修复预审与实施。
+- 2026-04-11：已完成 `TASK-0049` 的 Atlas 侧 A2 prompt 同步。`docs/prompts/总项目经理调度提示词.md` 与 `docs/prompts/agents/总项目经理提示词.md` 已对齐 SG 口径；`docs/prompts/公共项目提示词.md` 与 `docs/prompts/agents/项目架构师提示词.md` 继续待项目架构师补齐。
 - 决策开发前置清理完成：TASK-0046 / TASK-0047 / TASK-0039引用修复 全部闭环，工作区干净，可进入决策端迁移。
+- Phase C Qwen 协作流水线已建立（docs/handoffs/qwen-audit-collab/）：Batch-1/2/3 完成并通过审核；Batch-4（CA2'/CB2'/CG3/CA6）Qwen 重做后 Atlas 补漏 8 处（§2 anchor 修正），最终评定 91/100，2026-04-11 全批通过。Batch-5（CA3/CA4/CB3/CF2）已预建派发单，激活条件：TASK-0056(CA2') + TASK-0057(CB2') + TASK-0051(C0-3) 完成。TASK-0056~0059 预建任务单已建档。
+- 2026-04-11：TASK-0056~0059 联合架构预审完成（review-id: REVIEW-TASK-0056-0059-PRE）。所有 4 项均预审通过。关键裁定：CA2' 用 FactorLoader 取数 / SandboxResult 不入 contracts / CG3 补入 stock_runner.py / CA6 需额外 contracts Token（signal_dispatch.py）/ 信号幂等用内存缓存 / 重试用 tenacity。白名单冻结完毕，待 Jay.S 确认后签发 Token。
+- 2026-04-11：TASK-0056~0059 全部 Token 签发完毕（6 枚）：tok-b73294b3(0056/决策/4文件)、tok-00da5e7e(0057/决策/2文件)、tok-b09df21e(0058/回测/4文件)、tok-3185c6c9(0059-D/决策/3文件)、tok-c5b83bfe(0059-S/模拟交易/2文件)、tok-9e1369d9(0059-C/决策/1文件·P0)。锁控记录已写入 docs/locks/。4 个任务单状态已更新为"Token 已签发"。
+
+- 2026-04-12：TASK-0050~0055 联合架构预审完成（review-id: REVIEW-TASK-0050-0055-PRE）。所有 6 项均预审通过。关键裁定：TASK-0050 白名单调整为 2 项（不新建 api/ 目录，直接改 main.py）/ TASK-0051 StrategyModel 在 publish/ / TASK-0052 内存队列 / TASK-0053 股票代码需 .SZ/.SH 后缀 / TASK-0054 方案A watchlist 同批 / TASK-0055 修改 app.py 非 main.py。Lane-A（0050/0051/0052）无依赖可并行；Lane-B（0053/0054/0055）待 Lane-A 完成后签发。
+- 2026-04-12：TASK-0050 Token tok-b7358d64 已签发（数据 Agent，2 文件）。TASK-0051/0052 待 Jay.S 终端密码签发。Batch-5 已激活派发。
 
 ## 接管要求
 

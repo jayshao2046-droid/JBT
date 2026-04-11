@@ -78,6 +78,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 账本 | 🔶 骨架 | `src/ledger/service.py`，待调试 |
 | 通知 | 🔶 部分 | A1 dispatcher/guards 已锁回；A2 系统事件接线待执行 |
 | 发布接口 | ✅ 已锁回 | TASK-0023-A，`POST /api/v1/strategy/publish` |
+| 容灾交接接口 | ❌ 待实施 | `CS1-S`，接收 decision 本地 Sim / future live failover 的任务交接与账本同步 |
 | 运行态收口 | 🔶 A批完成 | TASK-0022-A locked；B批日志查看 pending |
 | Docker/Mini | ✅ 已部署 | TASK-0017-A3，待开盘验证CTP |
 | 临时看板 | ✅ 基本可用 | `sim-trading_web/`，operations+intelligence 页面 |
@@ -85,11 +86,11 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **已完成任务：** TASK-0002(契约), TASK-0009(治理闭环), TASK-0010(骨架闭环), TASK-0013(治理闭环), TASK-0014(A1~A4全锁回), TASK-0017-A3, TASK-0019(B1/B2锁回), TASK-0022(A/B全锁回), TASK-0023-A, TASK-0041(A/B/C locked), TASK-0042(自动重连+状态同步 locked), TASK-0043(data_scheduler LaunchAgent守护 locked) [修订 2026-04-11]
 **Phase B 状态：✅ 全闭环** [修订 2026-04-10]
 **当前活跃：** TASK-0017(待开盘验证) + TASK-0039 剩余 DR3 修复子任务
-**排队任务：** Phase C（决策端核心能力）
+**排队任务：** Phase C `CA6/CS1-S` 执行协同 + Phase H 前置容灾复用
 
 > **[修订 2026-04-11] 当前 sim-trading 已完成光大期货 CTP 接通、前端下单/撤单 UI、system/state 脱敏、自动重连与状态同步；但仍未接通期货公式 / 策略公式执行链路。**
 
-### 2.2 决策 decision — 90% [修订 2026-04-10 代码审计校正]
+### 2.2 决策 decision — 55% [修订 2026-04-11 Phase C 扩容重算]
 
 **负责 Agent：决策**
 **服务目录：`services/decision/`**
@@ -98,23 +99,30 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 模块 | 状态 | 说明 |
 |------|------|------|
 | API 骨架 | ✅ 已完成 | `src/api/routes/`（strategy/signal/model） |
-| 策略仓库 | ✅ 已完成 | `src/strategy/repository.py`，8态生命周期完整 |
+| 策略仓库 | ✅ 已完成 | `src/strategy/repository.py`，8态生命周期完整；后续补 `manual_backtest_confirmed` 审核门槛 |
 | 策略发布 | ✅ 已完成 | `src/publish/`（gate+sim_adapter+executor），H4闭环 |
-| 研究中心 | ✅ 已完成 | `src/research/`（factor_loader真实data API接入/trainer/optuna/shap/onnx） |
+| 研究中心骨架 | ✅ 已完成 | `src/research/`（factor_loader/trainer/optuna/shap/onnx）已投产为 Phase C 基线 |
+| 期货沙箱回测 | ❌ 待实施 | `CA2'`，decision 内部自动期货回测主路径 |
+| 股票沙箱回测 | ❌ 待实施 | `CB2'`，decision 内部自动股票日线回测主路径 |
+| 策略调优引擎 | 🔶 待重构 | 现有 `optuna_search.py` 仅覆盖 ML 超参；需新增交易参数与真实 Sharpe 目标 |
+| 导入通道 | 🔶 待扩容 | 看板 YAML、标准格式邮件 YAML、飞书口头策略三通道待统一 |
+| 股票研究中心 | ❌ 待实施 | `CB1~CB9`，30 只股票池、盘中跟踪、盘后评估与晚间轮换 |
+| 本地 Sim 容灾 | ❌ 待实施 | `CS1`，平时 standby，断联时由 decision 本地 Sim 接管 |
+| 因子同步 | 🔶 规划中 | `CK1~CK3`，研究中心与回测端双地一致；研究中心自研因子必须同步 |
 | 模型路由 | 🔶 资格验证 | `src/model/router.py`，版本对齐+因子HASH校验，无实际推理加载（P2） |
 | 门控 | ✅ 已完成 | `src/gating/`（backtest_gate/research_gate） |
 | 持久化 | ✅ 已完成 | `src/persistence/`（FileStateStore） |
 | 通知 | ✅ 已完成 | `src/notifier/`（飞书+邮件双通道投产，6级通知，JBT统一颜色） |
-| 报告 | ✅ 已完成 | `src/reporting/`（daily+research_summary投产） |
-| 临时看板 | ✅ 已完成 | `decision_web/` 7页面全部接真实数据（H6/H7完成去mock） |
+| 报告 | ✅ 基线完成 | `src/reporting/`（daily+research_summary投产）；后续补回测/荐股/盘后评估报告 |
+| 临时看板 | ✅ 基线完成 | `decision_web/` 7 页面真数据已闭环；后续扩容 research/stock 页面 |
 | Dockerfile | ✅ 已修复 | TASK-0021-H0 |
-| 测试 | ✅ 98用例 | `tests/` 全通过 |
+| 测试 | ✅ 98用例 | `tests/` 当前为扩容前基线 |
 
 **已完成任务：** TASK-0021(A契约+H0~H7全批次锁回), TASK-0024(部署审查) [修订 2026-04-10]
-**剩余缺口（P2/P3）：** 模型路由无推理加载、Sharpe真实计算、ONNX存储路径、models-factors页数据绑定
-**排队任务：** TASK-0025(SimNow备用方案) → TASK-0016(正式接入)
+**剩余缺口（Phase C 扩容）：** 期货/股票双沙箱、人工二次回测衔接、股票荐股循环、口头策略解析、邮件 YAML 导入、本地 Sim 容灾、因子双地同步
+**排队任务：** `C0-3` 策略导入解析器规格已完成 ← TASK-0051 待架构预审；`C0-2` FactorLoader 规格已完成 ← TASK-0053 待架构预审 [修订 2026-04-11]
 
-### 2.3 数据 data — 5%
+### 2.3 数据 data — 88% [修订 2026-04-11 新增股票供数协同]
 
 **负责 Agent：数据**
 **服务目录：`services/data/`**
@@ -122,22 +130,27 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 模块 | 状态 | 说明 |
 |------|------|------|
 | 最小 bars API | ✅ 已完成 | `src/main.py`（health/version/symbols/bars） |
+| 期货供数 | ✅ 已完成 | continuous/exact symbol + bars API 已投产 |
+| 股票日线采集 | ✅ 已有能力 | `tushare_full_collector` / `akshare_backup` 已具备全 A 股日线采集能力 |
+| 股票分钟K采集器 | ✅ 已有骨架 | `stock_minute_collector.py` 已存在，但尚未切到 watchlist 动态模式 |
+| 股票 bars API 路由 | 🔶 规格完成/待架构预审 | `C0-1`，TASK-0050 架构预审中；规格产出于 Batch-2 [修订 2026-04-11] |
+| 动态 watchlist 采集 | 🔶 规格完成/待架构预审 | `CB5`，TASK-0054 架构预审中；规格产出于 Batch-3（watchlist 端点路径待架构确认）[修订 2026-04-11] |
 | 采集器 | ✅ 已部署(legacy) | `src/collectors/`（21个采集器文件），Mini 通过 cron 运行 |
-| 调度器 | ✅ 已部署(legacy) | `src/scheduler/data_scheduler.py`，Mini 以 --daemon 运行 |
+| 调度器 | ✅ 已部署(legacy) | `src/scheduler/data_scheduler.py`，Mini 以 --daemon / LaunchAgent 运行 |
 | 健康检查 | 🔶 有误报 | `src/health/health_check.py`，stock/news 判定有误报 |
-| 通知 | 🔶 部分修复 | TASK-0028-B6 已修复通知体验，飞书/邮件恢复 |
-| 新闻推送 | 🔶 部分修复 | `src/notify/news_pusher.py`，批量推送已恢复 |
-| data_web | 🔶 部分 | 临时原型已导入，6页正式化与独立前端容器未完成 |
-| Docker化 | 🔶 部分 | Mini 容器运行中(JBT-DATA-8105)，但调度仍为 legacy cron |
+| 通知 | ✅ 基线完成 | TASK-0028-B6 已修复通知体验；后续补 watchlist / factor-missing 协同通知 |
+| 新闻推送 | ✅ 已恢复 | `src/notify/news_pusher.py` 批量推送链路可用 |
+| data_web | ✅ 基线完成 | 6 页临时看板已锁回，继续保持只读配套 |
+| Docker化 | ✅ 基线完成 | Mini 容器运行中(JBT-DATA-8105)，system 迁移主线已闭环 |
 | 存储 | ✅ 已完成 | `src/data/storage.py`，Mini `~/jbt-data/` 目录体系 |
 
-**已完成任务：** TASK-0018-B(bars API token active), TASK-0028-B6(通知修复locked)
-**当前活跃：** TASK-0031(非夜盘热修 pending_token)
-**排队任务：** TASK-0031 → TASK-0027(全量迁移) → data_web独立任务
+**已完成任务：** TASK-0018(A~F全锁回), TASK-0027(A0~A7全锁回), TASK-0028(B1~B6全锁回), TASK-0031(锁回), TASK-0032/0033(锁回)
+**当前活跃：** 无独立代码批次；等待 Phase C 供数协同拆批
+**排队任务：** `C0-1` 股票 bars API（规格完成 ← TASK-0050 待架构预审）→ `CB5` 动态 watchlist（规格完成 ← TASK-0054 待架构预审）→ 数据预读投喂决策端 [修订 2026-04-11]
 
-> **[修订 2026-04-10] data 端仍要做“system 级迁移”的原因是：当前 Mini 现网真实 24h 采集、调度、健康检查和通知仍大量依赖 legacy collectors / scripts / crontab；JBT data 目前只承接最小供数 API、部分通知修复与 data_web 前端原型。若不完成 system 级迁移，JBT data 仍只是供数 API 壳层，无法满足无中断、可观测、可回滚的正式运行要求。**
+> **[修订 2026-04-11] data 端当前新增的 Phase C 职责不是重启 system 级迁移，而是在既有供数基线之上补足股票 bars 路由与动态 watchlist 分钟 K 采集。`stock_minute_collector` 与股票日线采集器已存在，当前主要缺口在路由层与调度模式切换。**
 
-### 2.4 回测 backtest — 95% [修订 2026-04-10 Phase E 全闭环，进入维护态]
+### 2.4 回测 backtest — 80% [修订 2026-04-11 追加人工二次回测与股票手动回测]
 
 **负责 Agent：回测**
 **服务目录：`services/backtest/`**
@@ -148,22 +161,26 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 在线引擎 | ✅ 已完成 | TqApi+TqSim+TqBacktest+TqAuth |
 | 本地引擎 | ✅ 已完成 | `src/backtest/local_engine.py`，双引擎路由 |
 | 风控引擎 | ✅ 已完成 | `src/backtest/risk_engine.py`，max_drawdown+daily_loss 双规则 |
-| 因子注册 | ✅ 已完成 | `src/backtest/factor_registry.py`（MACD/RSI/VolumeRatio/ATR/ADX） |
+| 因子注册 | ✅ 基线完成 | `src/backtest/factor_registry.py` 当前已覆盖基础技术因子；后续接入共享因子双地同步 |
 | FC-224策略 | ✅ 已完成 | `src/backtest/fc_224_strategy.py`，total_trades=242 |
 | 结果构建 | ✅ 已完成 | `src/backtest/result_builder.py` |
 | 引擎选择器 | ✅ 已完成 | 前端+后端双路径 |
-| 看板两页 | ✅ 已完成 | agent-network + operations |
+| 手动期货回测 | ✅ 基线完成 | Air 现网可用，继续承担人工最终复核 |
+| 手动股票回测 | ❌ 待实施 | `CG3`，接收 stock 策略后执行人工回测与审核 |
+| 策略导入审核 | 🔶 规格完成/待架构预审 | `CG1/CG2`，TASK-0052/0055 架构预审中；规格产出于 Batch-2/3 [修订 2026-04-11] |
+| 审核看板 | ❌ 待实施 | `backtest_web` 增加 manual review / stock review 页面 |
+| 看板两页 | ✅ 基线完成 | agent-network + operations，后续扩容为人工审核入口 |
 | 泛化引擎 | ✅ 已完成 | TASK-0008 A/B/C/D 四批全锁回 [修订 2026-04-10] |
 | 新增因子 | ✅ 已完成 | TASK-0026 A/B/C 三批全 locked_back [修订 2026-04-10] |
 | 8004并回 | ✅ 已完成 | TASK-0007 A/B/C/D 全锁回 [修订 2026-04-10] |
 | 容器命名 | ✅ 已完成 | TASK-0005 JBT-BACKTEST-8103/3001 [修订 2026-04-10] |
 
 **已完成任务：** TASK-0003(全锁回), TASK-0004(锁回), TASK-0005(锁回), TASK-0007(A/B/C/D全锁回), TASK-0008(A/B/C/D全锁回), TASK-0018(A/C/D/E锁回), TASK-0026(A/B/C全锁回) [修订 2026-04-10]
-**Phase E 状态：全部闭环，回测进入维护态** [修订 2026-04-10]
+**Phase E 状态：基础能力闭环；因 Phase C 追加“人工二次回测 + 股票手动回测”，回测重新进入扩容态** [修订 2026-04-11]
 **Air 同步状态：** ✅ rsync 同步 + 容器重启 + 远端验证通过 [2026-04-10]
-**排队任务：** 无新排队
+**排队任务：** `CG1` 策略导入队列（规格完成 ← TASK-0052 待架构预审）→ `CG2` 人工审核确认（规格完成 ← TASK-0055 待架构预审）→ `CG3` 股票手动回测与看板扩容 [修订 2026-04-11]
 
-> **[修订 2026-04-09] 双回测分离原则：** Air 人工回测在 Phase E 完成后进入维护态（只修 bug、不加功能）。PBO/CPCV 等研究级能力归决策端内置研究回测引擎（Phase C / Section 5.4 沙箱），两端引擎代码不共享、职责不交叉。
+> **[修订 2026-04-11] 双回测分离原则：** decision 内部自动研究回测固定拆为“期货沙箱 / 股票沙箱”两条主路径，数据完全隔离、只共享因子；Air/backtest 继续承担人工手动回测与最终二次审核，不接管研究中心自动回测流程。
 
 ### 2.5 看板 dashboard — 5%
 
@@ -201,7 +218,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ---
 
-## 三、全量任务登记表（TASK-0001 ~ TASK-0031）
+## 三、全量任务登记表（TASK-0001 ~ TASK-0049）
 
 ### 3.1 已完成/已锁回
 
@@ -244,6 +261,8 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | TASK-0041 | CTP前端下单与密码脱敏 | sim-trading | 模拟交易 | ✅ A/B/C全locked [2026-04-10] | P1/P0 |
 | TASK-0042 | CTP自动重连与状态同步 | sim-trading | 模拟交易 | ✅ locked [2026-04-11] | P1 |
 | TASK-0021 | 决策端迁移 | decision | 决策 | ✅ A+H0~H7全locked [2026-04-10] | P1 |
+| TASK-0048 | Phase C扩展与总计划修订 | 治理 | Atlas | A0/A1已完成；A2 prompt同步已完成 [2026-04-11] | P1 |
+| TASK-0049 | 全项目安全检查纳入总计划与统一修复预审 | 治理 | Atlas | A0已完成；A1总计划/Atlas状态已同步；当前冻结 SG1→SG5，先检查后修复 [2026-04-11] | P1 |
 | TASK-0023-A | 发布接口对接 | sim-trading | 模拟交易 | ✅ locked | P1 |
 | TASK-0026 | 新增因子+别名 | backtest | 回测 | ✅ locked_back | P1 |
 | TASK-0008 | 泛化引擎+报告导出 | backtest | 回测 | ✅ A~D全locked | P1 |
@@ -318,19 +337,105 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ### Phase C — 决策端核心能力
 
-**目标：** 决策端具备"策略研发→内部回测→审批→发布→模拟交易"完整链路
+**目标：** 决策端与数据端、回测端、模拟交易端形成“策略导入 → 双沙箱研究/回测 → 调优 → 回测端人工二次回测 → 审批 → 进入策略池 → 执行/荐股”的完整链路。
 
-| 序号 | 任务 | Agent | 依赖 | 验收标准 |
-|------|------|-------|------|---------|
-| C1 | TASK-0021续批 真实data接入 | 决策 | Phase A完成 | FactorLoader通过data API获取真实K线 |
-| C2 | TASK-0021续批 研发中心UI | 决策 | C1完成 | research-center 页面可发起研究任务 |
-| C3 | TASK-0021续批 信号真闭环 | 决策 | C1完成 | 因子信号生成→审批→publish→sim-trading 全链路 |
-| C4 | TASK-0025 SimNow备用方案 | 决策 | C3完成 | SimNow异常时自动切换仅平仓模式 |
-| C5 | TASK-0012 legacy信号桥接 | 项目架构师 | C3完成 | J_BotQuant决策端信号可桥接到JBT sim-trading |
-| C6 | TASK-0016 决策端正式接入 | 决策 | C5测试闭环 | JBT原生决策链路取代legacy桥接 |
-| C7 | ~~TASK-0037~~ → TASK-0040 PBO过拟合检验 | 决策 | C2完成（研发中心） | 决策端内置研究回测引擎支持CPCV多折验证；PBO Score输出到研究报告JSON；decision_web模型因子页显示PBO≤0.5绿/>0.5红。不依赖Air回测端。 [修订 2026-04-11: 编号冲突修正] |
+**Phase C 硬约束：**
 
-**并行规则：** C1→(C2⊥C3)→C4，C5⊥C4后置，C7依赖C2（研发中心基础） [修订 2026-04-09]
+1. 期货自动回测只在 decision 内部期货沙箱执行；股票自动回测只在 decision 内部股票沙箱执行；两者数据不互通，只共享因子定义。
+2. 所有策略调优完成后，必须导出到 backtest 端进行人工二次手动回测与审核确认；未经人工确认，不得进入各自策略池。
+3. 飞书不接收 YAML 策略导入，只接收口头策略需求；正式 YAML 仅允许看板上传或标准格式邮件导入。
+4. 研究中心若自研因子，必须与 backtest 端双地同步；研究中心与回测端的因子实现和版本必须保持一致。
+
+#### C0 共享前置
+
+| 编号 | 任务 | 主责 | 协同 | 验收标准 |
+|------|------|------|------|---------|
+| C0-1 | 股票 bars API 路由扩展 | 数据 | 决策 | `services/data/src/main.py` 支持股票代码解析与 `stock_daily/stock_minute` 供数 |
+| C0-2 | FactorLoader 股票代码支持 | 决策 | 数据 | `factor_loader.py` 可通过 data API 拉取股票日线/分钟K |
+| C0-3 | 策略导入解析器 | 决策 | 无 | 统一支持看板 YAML / 邮件 YAML / 内部生成策略的入库与校验 |
+
+> **[修订 2026-04-11] Phase C C0 规格完成情况（截至 Batch-3）：**
+> - **C0-1**：🔶 规格完成 (Batch-2) → TASK-0050 架构预审待用户批准
+> - **C0-2**：🔶 规格完成 (Batch-3) → TASK-0053 架构预审待用户批准（依赖 C0-1 先完成）
+> - **C0-3**：🔶 规格完成 (Batch-2) → TASK-0051 架构预审待用户批准
+
+#### CA 期货研究链路
+
+| 编号 | 任务 | 主责 | 协同 | 验收标准 |
+|------|------|------|------|---------|
+| CA1 | 看板导入与研究入口 | 决策 | 无 | `research-center` 可导入期货策略并登记到策略仓库 |
+| CA2' | 期货沙箱回测引擎 | 决策 | 数据 | decision 内部完成期货逐 bar 回测与绩效统计，不依赖 backtest API |
+| CA3 | 回测报告展示与导出 | 决策 | 无 | 研究中心页面可展示并导出期货回测报告 |
+| CA4 | 交易参数调优引擎 | 决策 | 无 | 基于真实 Sharpe / 回撤等指标调优期货交易参数 |
+| CA5 | 期货研究中心全流程 UI | 决策 | 无 | 页面闭环覆盖导入、回测、调优、报告、提交人工复核 |
+| CA6 | 信号真闭环 → sim-trading | 决策 | 模拟交易 | 通过人工二次回测确认后，策略可进入 sim-trading 执行 |
+| CA7 | ~~TASK-0037~~ → TASK-0040 PBO过拟合检验 | 决策 | 无 | 研究报告输出 PBO/CPCV，作为自动研发门禁的一部分 |
+
+> **[修订 2026-04-11] CA 规格完成情况（截至 Batch-4）：**
+> - **CA2'**：✅ 规格完成 (Batch-4 → QWEN_SPEC_CA2P，Atlas 补漏后 91/100，2026-04-11) → TASK-0056 待用户批准
+> - **CA6**：✅ 规格完成 (Batch-4 → QWEN_SPEC_CA6，Atlas 补漏后 91/100，2026-04-11) → TASK-0059 待用户批准
+
+#### CB 股票研究链路
+
+| 编号 | 任务 | 主责 | 协同 | 验收标准 |
+|------|------|------|------|---------|
+| CB1 | 股票策略模板（短/中/长期） | 决策 | 无 | 形成面向日线的 short/mid/long 三类模板 |
+| CB2' | 股票沙箱回测引擎 | 决策 | 数据 | decision 内部完成股票日线回测，不依赖 backtest 自动引擎 |
+| CB3 | 全 A 股选股引擎 + benchmark | 决策 | 数据 | 先完成全量跑分 benchmark，再冻结每日固定选股时间 |
+| CB4 | 股票池管理器 | 决策 | 无 | 白天/晚间轮换后池内常驻 30 只股票，保留淘汰理由 |
+| CB5 | 动态 watchlist 分钟K采集 | 数据 | 决策 | data 端按 20 只 watchlist 动态采集分钟 K，替代全量轮询 |
+
+> **[修订 2026-04-11] CB5**：🔶 规格完成 (Batch-3) → TASK-0054 架构预审待用户批准（watchlist 端点路径需架构师确认）
+
+> **[修订 2026-04-11] CB2'**：✅ 规格完成 (Batch-4 → QWEN_SPEC_CB2P，Atlas 补漏后 91/100，2026-04-11) → TASK-0057 待用户批准（设计约束：不得建立独立 StockSandbox 类，必须通过 asset_type 扩展 sandbox_engine.py）
+
+| CB6 | 盘中跟踪与飞书入离场提醒 | 决策 | 数据 | 盘中基于分钟 K 给出入场/离场提醒 |
+| CB7 | 盘后评估与未来预判 | 决策 | 无 | 对 30 只股票输出走势评估、目标价位、止盈止损与预判 |
+| CB8 | 晚间再选 + 淘汰 + 报告 | 决策 | 无 | 每晚新增 20、淘汰 10、保留 10，并输出完整报告 |
+| CB9 | 股票研究中心页面 | 决策 | 无 | 看板显示股票池、入离场时间线、选股排行与盘后评估 |
+
+#### CG 人工二次回测关卡
+
+| 编号 | 任务 | 主责 | 协同 | 验收标准 |
+|------|------|------|------|---------|
+| CG1 | 回测端策略导入队列 | 回测 | 决策 | backtest 端可导入“原始策略 / 研究中心优化后策略” |
+| CG2 | 人工手动回测 + 审核确认 | 回测 | 决策 | 人工点选回测、审阅结果、确认是否启用，回写 decision 状态 |
+| CG3 | 回测端股票手动回测与看板调整 | 回测 | 数据 | 回测端新增股票回测与对应看板页面 |
+> **[修订 2026-04-11] CG 规格完成情况：**
+> - **CG1**：🔶 规格完成 (Batch-2) → TASK-0052 架构预审待用户批准
+> - **CG2**：🔶 规格完成 (Batch-3) → TASK-0055 架构预审待用户批准（依赖 CG1 先完成）
+> - **CG3**：✅ 规格完成 (Batch-4 → QWEN_SPEC_CG3，Atlas 补漏后 91/100，2026-04-11) → TASK-0058 待用户批准
+
+#### CF 导入通道
+
+| 编号 | 任务 | 主责 | 协同 | 验收标准 |
+|------|------|------|------|---------|
+| CF1' | 飞书口头策略通道 | 决策 | 无 | 用户可用自然语言提出策略想法，研究中心自动生成策略并反馈结果 |
+| CF2 | 邮件 + 看板 YAML 导入 | 决策 | 无 | YAML 仅允许标准格式邮件或看板上传；导入成功/失败通过飞书通知 |
+
+#### CS 容灾与断联接管
+
+| 编号 | 任务 | 主责 | 协同 | 验收标准 |
+|------|------|------|------|---------|
+| CS1 | decision 本地 Sim 容灾引擎 | 决策 | 模拟交易/实盘交易 | 平时 standby；一旦与正式交易端断联，即可本地接管任务与临时账本 |
+| CS1-S | 交易端交接接口 | 模拟交易 | 决策/实盘交易 | 正式交易端恢复后可接收订单/持仓/账本差异并完成任务回切 |
+
+#### CK 因子体系
+
+| 编号 | 任务 | 主责 | 协同 | 验收标准 |
+|------|------|------|------|---------|
+| CK1 | 共享因子库覆盖率扩充 | 决策+回测 | 项目架构师 | 共享因子覆盖率达到 90%+，大多数导入策略无需单独补因子 |
+| CK2 | 因子双地同步与版本校验 | 项目架构师 | 决策+回测 | 研究中心与回测端因子实现、版本、hash 保持一致 |
+| CK3 | 因子缺失/新增通知 | 决策+回测 | 无 | 导入缺失因子或研究中心新增因子时，双端都能通知并留痕 |
+
+**股票链路日程冻结：**
+
+1. 每日 09:00 输出前一晚选股报告，说明去除的 10 只、原因以及新增 20 只的选股逻辑。
+2. 09:30-15:00 盘中基于分钟 K 做入离场提醒。
+3. 15:30 后进行 30 只股票盘后评估、目标价位与未来走势预判。
+4. 晚间再跑一轮选股，完成 20 只新增、10 只淘汰、30 只常驻池的闭环。
+
+**并行规则：** `C0-1 ⊥ C0-3 -> C0-2`；`CA2' ⊥ CB2'`；`CA/CB` 的自动研究结果统一汇入 `CG1/CG2/CG3` 人工二次回测关卡；`CK1 -> CK2 -> CK3` 贯穿决策与回测两端；`CS1/CS1-S` 与双沙箱可并行推进。 [修订 2026-04-11]
 
 ### Phase D — 数据端全量迁移 [修订 2026-04-11: ~85% 完成]
 
@@ -399,71 +504,111 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 > **[修订 2026-04-09] 实盘安全硬约束：** 任何策略从模拟交易转实盘，必须经过人工飞书确认按钮 Approve。AI 自动研发的策略额外要求：代码经 flake8+bandit 扫描通过 + 沙箱容器资源限制验证通过 + **决策端内置研究回测引擎** PBO Score ≤ 0.5（非 Air 人工回测）。三项缺一不可。
 
+### 安全治理横线 SG — 全项目安全检查与统一修复预审 [修订 2026-04-11]
+
+**说明：** SG 不是新的功能 Phase，也不改写 Phase A~H 的功能顺序；它是覆盖当前主线的横向治理约束，用于冻结“先安全检查、再统一修复”的执行口径。
+
+**SG 硬约束：**
+
+1. 当前阶段只允许只读安全检查、复核与修复预审，不进入任何即时代码修复。
+2. 本轮“策略端”固定为 `decision + backtest`；首批主落点先以 `backtest` 已确认的 `F-001` 为主，`decision` 作为补充复核范围。
+3. data 侧 `F-002`、`F-003` 以及其余范围当前只允许做可达性与影响面复核，不得误写成已批准实施。
+4. 任一真正代码修复，仍必须在 SG4 完成后独立建档、冻结白名单、签发 Token，并重新进入标准实施流程。
+
+| 编号 | 任务 | 主责 | 协同 | 验收标准 |
+|------|------|------|------|---------|
+| SG1 | 策略端只读安全检查 | Atlas | 决策+回测 | 完成 `decision + backtest` 只读安全检查；首批以 `backtest` 的 `F-001` 证据链为主 |
+| SG2 | 策略端复核冻结 | 项目架构师 | Atlas | 输出策略端冻结结论，明确“不即时修复”，形成后续统一修复前置 |
+| SG3 | 全域只读安全检查 | Atlas | 数据+模拟交易+看板+实盘交易+项目架构师 | 完成 data 侧 `F-002/F-003` 可达性复核，并覆盖其余服务/依赖/部署治理只读排查 |
+| SG4 | 全域安全复核冻结 | 项目架构师 | Atlas | 汇总全域问题清单、修复优先级、保护区影响与拆批建议 |
+| SG5 | 统一修复预审与实施拆批 | 项目架构师 | Atlas | 仅在 SG4 完成并经 Jay.S 确认后，逐批建立正式修复任务、白名单与 Token |
+
 ---
 
 ## 五、战略能力规划（Jay.S 七大构想）
 
-以下为 Jay.S 提出的七项战略构想，对应到已有服务和未来能力扩展：
+以下为 Jay.S 提出的七项战略构想，对应到已冻结的服务边界与未来扩展路径：
 
 ### 5.1 多策略按品种按时间桶并行
 
-- **归属服务：** decision + backtest
-- **前置条件：** TASK-0008(泛化引擎) + TASK-0021续批(策略仓库)
-- **实施路径：** 决策端策略仓库管理多FC → 按品种+时间桶(5m/15m/30m/60m)分桶执行 → 每个桶独立进程 → 结果汇总
-- **legacy资产可复用：** `J_BotQuant/scripts/unified_strategy_runner.py`（StrategyWorker线程模型）、`factor_live_trader.py`（--symbols/--group 品种分组）
-- **实施阶段：** Phase C + Phase E
+- **归属服务：** decision 主导，backtest 承接人工最终复核
+- **前置条件：** `C0` 前置完成 + `CA2'`/`CB2'` 双沙箱就绪 + `CG1/CG2` 人工二次回测关卡就绪
+- **实施路径：**
+  1. 期货侧：在 decision 期货沙箱内按品种 + 时间桶（5m/15m/30m/60m）并行执行研究与调优。
+  2. 股票侧：在 decision 股票沙箱内按短/中/长期三类日线模板并行研究与选股。
+  3. 所有优化后策略统一导出到 backtest 端进行人工手动回测与审核确认。
+- **legacy资产可复用：** `J_BotQuant/scripts/unified_strategy_runner.py`、`factor_live_trader.py`
+- **实施阶段：** Phase C + CG
 
 ### 5.2 完整策略自动淘汰制度
 
-- **归属服务：** decision
-- **前置条件：** TASK-0021续批(策略生命周期完善)
-- **实施路径：** 定时评估运行中策略绩效 → 触发淘汰规则(连亏/PnL/Sharpe/胜率) → 淘汰策略回退到"研发中心"重新优化 → 飞书通知
-- **legacy资产可复用：** `J_BotQuant/scripts/strategy_retirement_check.py`（4规则+feishu报警+YAML移到retired/）
-- **实施阶段：** Phase C（独立任务，建议 TASK-0032+）
+- **归属服务：** decision + backtest（人工复核）
+- **前置条件：** 策略仓库、双沙箱、人工二次回测关卡完成
+- **实施路径：**
+  1. 期货/股票策略在运行中持续按连亏、PnL、Sharpe、胜率等规则评估。
+  2. 股票池每日晚间执行“新增 20 / 淘汰 10 / 常驻 30”轮换，淘汰理由进入报告。
+  3. 被淘汰策略回退到研究中心重新优化，再次进入人工复核。
+- **legacy资产可复用：** `J_BotQuant/scripts/strategy_retirement_check.py`
+- **实施阶段：** Phase C 后续独立任务
 
 ### 5.3 研发中心开发
 
 - **归属服务：** decision
-- **前置条件：** Phase C(C1+C2)
-- **实施路径：** research 模块完善 → optuna参数搜索 → shap因子解释 → onnx模型导出 → decision_web research-center 页面
-- **现有资产：** `src/research/`（factor_loader/trainer/optuna_search/shap_audit/onnx_export）已有骨架
+- **前置条件：** `C0` 共享前置 + `CA` / `CB` 研究链路启动
+- **实施路径：**
+  1. 看板导入 YAML、标准格式邮件导入 YAML、飞书口头策略三通道统一进入策略导入解析器。
+  2. research-center 页面覆盖导入、回测、调优、报告、提交人工复核的全流程。
+  3. 研究中心允许通过 SHAP 发现组合因子、口头策略衍生因子、手动定义因子三种方式自研因子。
+  4. 研究中心自研因子必须同步到回测端并通过版本/hash 校验后才能正式使用。
+- **现有资产：** `src/research/` 现有骨架 + `decision_web` 真数据基线
 - **实施阶段：** Phase C
 
-### 5.4 决策端封闭沙箱
+### 5.4 决策端封闭双沙箱
 
 - **归属服务：** decision
-- **前置条件：** 研发中心基础完成
-- **实施路径：** decision内部 sandbox 环境 → 策略在沙箱内训练/回测 → 不依赖外部backtest服务 → 数据通过data API获取不出沙箱 → 结果审批后才可发布
-- **内置研究回测引擎：** [修订 2026-04-09] 沙箱内包含独立的研究回测引擎（非 Air 人工回测引擎的复制品）。该引擎面向 CPCV（组合净化交叉验证）统计验证，核心职责是判断"策略绩效是否为过拟合噪声"，而非"策略历史盈亏多少"。依赖 mlfinlab 的 `combinatorial_purged_cross_val` + `probability_of_backtest_overfitting`。输出物为 PBO Score + CPCV 报告，供研究中心 UI 展示和策略发布门禁检查。
-- **与 Air 人工回测的分界：** Air 回测（backtest:8103）负责研究员手动发起的逐 bar 成交仿真，关注"策略在历史上赚了多少"；决策端研究回测关注"策略的绩效是否统计可靠"。两端引擎代码不共享，职责不交叉。
-- **关键约束：** 策略进、策略出，数据不出沙箱边界
-- **安全围栏（硬性验收条件）：** [修订 2026-04-09]
-  1. **代码静态扫描**：AI 生成的代码必须经过 flake8 + bandit（安全扫描）才能进入沙箱执行，扫描不通过则拒绝入箱
-  2. **资源硬限制**：沙箱容器必须在 docker-compose 中限制 CPU（≤2核）/ Memory（≤4GB）/ Network（禁止外网出站），防止死循环或网络风暴
-  3. **人工最终审批**：即使 AI 全自动研发，策略从沙箱发布到模拟交易/实盘前必须经过人工 Approve（飞书确认按钮），无人工确认不得进入 `pending_execution` 状态
-- **实施阶段：** Phase C 后续（独立任务，建议 TASK-0033+）
+- **前置条件：** 研发中心基础 + `CK1/CK2/CK3` 因子体系就绪
+- **实施路径：**
+  1. 在 decision 内部建立 `futures_sandbox` 与 `stock_sandbox` 两条自动研究主路径。
+  2. 两个沙箱数据完全隔离，只共享 `shared/python-common` 中的因子定义与版本元数据。
+  3. 期货沙箱负责自动期货回测、调优、PBO/CPCV 验证；股票沙箱负责日线回测、选股、盘中跟踪与盘后评估。
+  4. 沙箱结果不得直接发布到交易端，必须先导出到 backtest 端做人为手动回测与审核确认。
+- **自研因子同步规则：** 新因子创建后，必须完成“注册到共享因子库 → 双端同步 → bit-exact 校验 → 回测端可用”的流水线。
+- **安全围栏（硬性验收条件）：**
+  1. AI 生成代码或因子必须经过 `flake8 + bandit` 静态扫描。
+  2. 沙箱容器必须限制 CPU（≤2核）/ Memory（≤4GB）/ Network（默认禁止外网出站）。
+  3. 所有策略必须经过人工二次回测与 Approve，方可进入策略池。
+- **实施阶段：** Phase C 主线
 
 ### 5.5 飞书/看板控制面
 
-- **归属服务：** dashboard + decision
-- **前置条件：** Phase F
-- **实施路径：** dashboard聚合各服务 → 飞书机器人接收控制指令 → 策略启停/风控参数调整/定时任务管理 → 看板展示
-- **实施阶段：** Phase F
+- **归属服务：** decision + dashboard + backtest
+- **前置条件：** Phase C 研究链路可用；聚合 dashboard 仍后置到 Phase F
+- **实施路径：**
+  1. 飞书负责接收口头策略需求、盘中入离场提醒、09:00 选股摘要、导入成功/失败通知。
+  2. 邮件负责承载完整 YAML 导入、详细回测报告、盘后评估与股票池轮换长报告。
+  3. 各服务临时看板优先在 decision_web / backtest_web 内落地扩容页面；聚合 dashboard 最后统一收口。
+- **实施阶段：** Phase C + Phase F
 
 ### 5.6 本地模型集成（DeepSeek14b + Qwen7b coder）
 
 - **归属服务：** decision（model router）
-- **前置条件：** Phase C(研发中心)
-- **实施路径：** DeepSeek14b 负责市场解读/策略评分/自然语言到策略转译 → Qwen7b coder 负责模板填充/规则改写/参数生成 → model_router 路由到对应模型
+- **前置条件：** 研究中心与口头策略通道完成基础接线
+- **实施路径：**
+  1. DeepSeek14b 负责把飞书口头策略转译为结构化策略意图、选股逻辑和因子建议。
+  2. Qwen7b coder 负责把结构化策略意图转换成 YAML / 规则模板 / 参数空间。
+  3. 研究中心再把模型生成结果送入双沙箱回测、调优和人工复核链路。
 - **现有资产：** `src/model/router.py` 骨架已存在
-- **实施阶段：** Phase C 后续（独立任务，建议 TASK-0034+）
+- **实施阶段：** Phase C 后续
 
 ### 5.7 数据端预读投喂决策端
 
 - **归属服务：** data → decision
-- **前置条件：** Phase D(数据全量迁移) + DeepSeek14b 已接入
-- **实施路径：** data服务在非交易时段用DeepSeek14b预读K线/新闻/宏观 → 生成摘要JSON → decision在开盘前拉取摘要 → L1/L2快速预判，减少盘中计算延迟
-- **实施阶段：** Phase D 后续（独立任务，建议 TASK-0035+）
+- **前置条件：** `C0-1` 股票 bars 路由扩展 + `CB5` 动态 watchlist 分钟 K 已落地
+- **实施路径：**
+  1. data 在非交易时段预读 K 线、新闻、宏观与股票池 watchlist 数据。
+  2. decision 在开盘前拉取预读摘要，缩短盘中计算链路。
+  3. 股票研究中心每天 09:00 输出前夜报告，盘中依赖动态 watchlist 分钟 K 继续跟踪。
+- **实施阶段：** Phase C 后续 + Phase D 协同
 
 ---
 
@@ -471,7 +616,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ### 6.1 模拟交易 Agent
 
-**当前状态：** 3项已锁回，1项待开盘验证
+**当前状态：** Phase B 基线闭环；当前等待开盘验证，并新增容灾交接协同待拆批
 **开工前必读：**
 1. `WORKFLOW.md`
 2. `docs/prompts/公共项目提示词.md`
@@ -482,12 +627,10 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **任务队列（按优先级）：**
 
 ```
-┌─ TASK-0017  待开盘验证CTP        ← 等开盘窗口
-├─ TASK-0014-A2  系统事件接线      ← 等Jay.S Token
-├─ TASK-0009  严格风控验收          ← 等Jay.S Token
-├─ TASK-0010  服务骨架完善          ← 依赖TASK-0013
-├─ TASK-0019  收盘统计邮件          ← 等Jay.S确认时间窗
-└─ TASK-0022-B  只读日志查看        ← 等Jay.S Token
+┌─ TASK-0017  待开盘验证CTP               ← 等开盘窗口
+├─ CA6  决策端信号真闭环执行适配          ← 依赖 decision 人工二次回测关卡
+├─ CS1-S  本地Sim容灾交接API             ← 待 TASK-0048 后续拆批
+└─ Phase H 前保持观察，不主动扩新范围
 ```
 
 **交接要点：**
@@ -496,10 +639,12 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 - 所有 API 调用只通过 Mini 蒲公英，不通过 ECS
 - MD 24h 保活，TD 仅交易时段
 - 风控规则必须从 guards.py emit_alert 走 dispatcher → feishu/email
+- 正式执行面仍固定为 sim-trading；decision 本地 Sim 只作为断联容灾备用面，不得常态替代 sim-trading
+- 正式交易端恢复后，sim-trading 必须接收 decision 推送的订单/持仓/账本差异并完成回切
 
 ### 6.2 决策 Agent
 
-**当前状态：** H0~H4全锁回，契约9份完成
+**当前状态：** 基线迁移闭环，Phase C 扩容待启动
 **开工前必读：**
 1. `WORKFLOW.md`
 2. `docs/prompts/公共项目提示词.md`
@@ -510,27 +655,27 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **任务队列（按优先级）：**
 
 ```
-┌─ TASK-0021续批 真实data接入      ← 依赖Phase A
-├─ TASK-0021续批 研发中心UI        ← 依赖data接入
-├─ TASK-0021续批 信号真闭环        ← 依赖data接入
-├─ TASK-0025  SimNow备用方案        ← 依赖信号闭环
-├─ TASK-0016  正式接入              ← 依赖C5测试闭环
-├─ 策略淘汰制度（新任务）          ← 依赖策略仓库
-├─ TASK-0037 PBO过拟合检验          ← 依赖C2(研发中心) [修订 2026-04-09]
-├─ 封闭沙箱（新任务）              ← 依赖研发中心（含内置研究回测引擎）
-└─ 本地模型集成（新任务）          ← 依赖沙箱
+┌─ C0-2  FactorLoader股票支持              ← 依赖 C0-1
+├─ C0-3  策略导入解析器                    ← 看板/邮件/内部生成统一入口
+├─ CA1~CA5  期货研究中心主链              ← 导入/沙箱回测/报告/调优/UI
+├─ CB1~CB9  股票研究中心主链              ← 模板/沙箱/选股/股票池/盘中/盘后
+├─ CF1' / CF2  飞书口头策略 + 邮件YAML导入 ← 与 research-center 共线
+├─ CS1  本地Sim容灾                         ← 与 sim/live failover 协同
+├─ CK1 / CK3  因子覆盖率与缺失通知         ← 与 backtest 协同
+├─ TASK-0040  PBO过拟合检验                ← 依赖期货研究中心基础
+└─ TASK-0016  正式接入                      ← 依赖人工二次回测关卡稳定
 ```
 
 **交接要点：**
-- 决策端不连回测端；内部回测通过 data API 获取 K 线，在 decision 内自行计算
-- 策略仓库 8 态生命周期：imported → draft → backtesting → backtest_confirmed → pending_execution → sim_running → live_running → retired
-- PublishGate 只放行 `backtest_confirmed → pending_execution` 和 `pending_execution retry`
-- SimTradingAdapter POST 到 `http://{SIM_TRADING_SERVICE_URL}/api/v1/strategy/publish`
-- research 模块已有 optuna/shap/onnx 骨架，待接入真实数据
+- 自动研究主路径固定在 decision 双沙箱内部完成；backtest 端只承担人工二次回测与审核确认
+- 策略调优完成后必须先进入 backtest 人工复核，再允许进入 `pending_execution`
+- 飞书只接收口头策略需求；正式 YAML 仅允许邮件标准格式或看板导入
+- 研究中心若自研因子，必须同步到 backtest 端并通过版本/hash 校验后方可正式使用
+- SimTradingAdapter 继续 POST 到 `http://{SIM_TRADING_SERVICE_URL}/api/v1/strategy/publish`；但断联场景下先切到 decision 本地 Sim 备用面
 
 ### 6.3 数据 Agent
 
-**当前状态：** Mini bars API运行中，通知B6修复完成
+**当前状态：** system 级迁移基线已闭环，新增股票供数协同待启动
 **开工前必读：**
 1. `WORKFLOW.md`
 2. `docs/prompts/公共项目提示词.md`
@@ -541,26 +686,25 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **任务队列（按优先级）：**
 
 ```
-┌─ TASK-0031  非夜盘热修            ← 等Jay.S 6文件Token
-├─ TASK-0018-B  bars API实施        ← token已active
-├─ TASK-0027  全量Docker化迁移      ← 预审阶段
-├─ 通知统一（新任务）               ← 依赖D1
-├─ data_web 临时看板（新任务）      ← 依赖D1
-├─ 健康检查修正（新任务）           ← 依赖D1
-└─ 数据预读投喂（新任务）           ← 依赖本地模型
+┌─ C0-1  股票 bars API 路由扩展          ← Phase C 共享前置
+├─ CB5  动态 watchlist 分钟K采集         ← 依赖股票研究中心选股结果
+├─ stock_minute 调度模式切换             ← 从全量轮询切换到 watchlist 模式
+├─ 数据预读投喂（后续独立任务）          ← 依赖本地模型与股票池稳定
+└─ 维持现网供数稳定，不因 Phase C 打断生产
 ```
 
 **交接要点：**
 - Mini 是数据主机（172.16.0.49:8105），`~/jbt-data/` 为数据根目录
 - 21 个采集器文件在 `src/collectors/`，涵盖 tqsdk/tushare/akshare/rss/news_api/macro/sentiment 等
-- 当前 Mini 仍通过 legacy cron + `data_scheduler --daemon` 运行
+- `stock_minute_collector.py` 已存在，当前 `STOCK_MINUTE_ENABLED` 默认关闭；Phase C 要求切到“按 watchlist 动态采集”而非全量轮询
+- 股票日线采集与 stock_basic 能力已存在，当前缺的是 bars API 路由层和调度模式切换
 - 全量迁移要求"无中断"：不得先停旧 cron 再补救
 - 飞书 webhook 命名兼容：`FEISHU_NEWS_WEBHOOK_URL` → `FEISHU_INFO_WEBHOOK_URL`
 - 35 个期货品种 + 260 symbols + 63 KQ连续合约
 
 ### 6.4 回测 Agent
 
-**当前状态：** 75%阶段性结案，双引擎运行，批次B/C-SUP active
+**当前状态：** Phase E 基线闭环，但因人工二次回测与股票手动回测新增职责而重新进入扩容态
 **开工前必读：**
 1. `WORKFLOW.md`
 2. `docs/prompts/公共项目提示词.md`
@@ -571,12 +715,11 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **任务队列（按优先级）：**
 
 ```
-┌─ TASK-0018-C-SUP  本地引擎补数据  ← token已active
-├─ TASK-0008  泛化引擎+报告导出     ← 等Jay.S Token
-├─ TASK-0026  新增因子(Spread/RSI)  ← 等Jay.S Token
-├─ TASK-0007-B  正式后端并回        ← 等Jay.S Token
-├─ TASK-0007-C  前端8004收口        ← 依赖B完成
-└─ TASK-0005  容器命名统一          ← 低优先级
+┌─ CG1  策略导入与待审队列                ← 接收研究中心优化策略
+├─ CG2  人工手动回测 + 审核确认           ← 所有策略进入策略池前必经
+├─ CG3  股票手动回测 + 看板扩容           ← 新增 stock review 页面
+├─ CK2 / CK3  因子双地同步与缺失通知协同  ← 与 decision 共线
+└─ 保持 Air 手动回测主机稳定，不接管自动研究回测
 ```
 
 **交接要点：**
@@ -586,6 +729,8 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 - FC-224 策略已验证 total_trades=242，final_equity 可追溯
 - 风控引擎 risk_engine.py 执行 max_drawdown + daily_loss_limit 双规则
 - 结果 report.json 包含完整元数据（策略/品种/区间/资金/手续费/滑点/status）
+- backtest 不再承担 research-center 的自动回测主路径，而是承担“人工最终复核 + 是否启用策略”的确认责任
+- 回测端后续必须支持 stock 策略导入、股票手动回测和人工审核页面
 
 ### 6.5 看板 Agent
 
@@ -599,8 +744,8 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **任务队列：**
 
 ```
-┌─ TASK-0015  SimNow临时看板        ← 等 sim-trading 临时看板链路再收口 + 白名单
-└─ 聚合看板（新任务）               ← 等各服务临时看板基本收口 + Phase B/C/D/E基本完成后一次性启动
+┌─ TASK-0015  SimNow临时看板         ← 等 sim-trading 临时看板链路再收口 + 白名单
+└─ 聚合看板（新任务）                ← 等 decision/backtest/data 的 Phase C 页面先在各自容器内闭环后，再统一聚合
 ```
 
 **交接要点：**
@@ -629,6 +774,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 - 契约可复用 sim-trading 范式，但以 `shared/contracts/live-trading/` 独立维护
 - 真实 CTP 前置地址与 SimNow 不同，需独立配置
 - 部署在 Studio，不在 Mini
+- Phase H 启动时需直接复用 decision `CS1` 容灾框架与交接协议，形成 sim/live 两端一致的断联接管口径
 
 ### 6.7 项目架构师
 
@@ -640,6 +786,9 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 ├─ TASK-0012  legacy信号桥接        ← 跨 integrations (待Phase C)
 ├─ TASK-0011  legacy清退            ← 跨服务清退 (待Phase C/D)
 ├─ TASK-0039 灾备演练设计+验收      ← ✅ DR1/DR4 已修复; 仅剩 ISSUE-DR3-001 1个P1 Issue [2026-04-11]
+├─ TASK-0048 Phase C扩展与总计划修订 ← A0/A1/A2已完成，后续进入服务级拆批
+├─ TASK-0049 安全治理横线与统一修复预审 ← A0完成；SG1→SG5 顺序已纳入总计划
+├─ CK2 因子双地同步治理             ← `shared/python-common/**` 的后续 P0 预审入口
 ├─ Phase H1  live-trading 契约      ← shared/contracts (延后)
 ├─ 所有新任务预审                   ← 持续
 └─ 公共项目提示词维护               ← 持续
@@ -652,29 +801,31 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 模块 | 完成 | 目标 | 当前Phase | 下一里程碑 |
 |------|------|------|----------|-----------|
 | 治理 | 100% | 100% | ✅ 完成 | 维护 |
-| sim-trading | 70% | 100% | Phase B ✅→C | CTP重连与状态同步已修复；剩余 DR3 restart policy / 开盘验证 |
-| decision | 90% | 100% | Phase C | C3信号真闭环 → C7 PBO(TASK-0040) |
-| data | 96% | 100% | Phase D ✅ | data_scheduler LaunchAgent守护已补齐；剩余容器守护统一收口 |
-| backtest | 95% | 100% | Phase E ✅ | 维护态（只修bug不加功能） |
+| sim-trading | 68% | 100% | Phase B ✅→C 协同 | 开盘验证 + `CS1-S` 容灾交接接口 |
+| decision | 55% | 100% | Phase C 扩容待启动 / SG1待执行 | `SG1` 策略端只读安全检查 → `C0` 前置 + 双沙箱骨架 + 导入通道 |
+| data | 88% | 100% | Phase D ✅→C 协同 | `C0-1` 股票 bars 路由 + `CB5` watchlist 分钟K |
+| backtest | 80% | 100% | Phase E 基线闭环 / SG1待执行 | `SG1/SG2` 策略端安全检查与复核 → `CG1~CG3` 人工二次回测与股票手动回测 |
 | dashboard | 5% | 100% | Phase F | 待各服务临时看板基本收口 |
-| live-trading | 0% | 100% | Phase H | 待 sim-trading 稳定运行 2~3 个月 |
-| **总体** | **~65%** | **100%** | **Phase A~E 大部分闭环; B+ / C / D 收尾中** | **灾备演练(TASK-0039) + 决策链验证** |
+| live-trading | 0% | 100% | Phase H | 待 sim-trading 稳定运行 2~3 个月；后续复用 `CS1` 容灾框架 |
+| **总体** | **~54%** | **100%** | **Phase A/B/E 基线闭环；SG 横线已纳管；Phase C 扩容重算后重新进入主线** | **`SG1` 策略端安全检查 → `SG2` 策略端复核 → `C0/CA/CB/CG/CS/CK` 服务级拆批** |
 
 ---
 
 ## 八、Token 签发待办清单 [修订 2026-04-11]
 
-以下为当前真正需要 Jay.S 签发的批次（已完成项已移除）：
+以下为当前真正需要 Jay.S 签发的批次（已完成项已移除，或已冻结为待拆批）：
+
+> `TASK-0049` 的 A1 两文件最小 Token 已于 2026-04-11 签发并 validate，通过范围仅限 `docs/JBT_FINAL_MASTER_PLAN.md` 与 `ATLAS_PROMPT.md`；后续 SG5 若要进入任何实际修复，必须另起独立任务、白名单与 Token。
 
 | 优先级 | 任务 | 文件数 | Agent | 白名单概要 | 说明 |
 |--------|------|--------|-------|-----------|------|
-| ✅ P1 | TASK-0017-A4 | 2 | 模拟交易 | operations/page.tsx + intelligence/page.tsx locked [2026-04-10] |  |
-| ✅ P1 | TASK-0027-A1A4 | 39 | 数据 | collectors/utils/models/scheduler/health/ops 39文件 locked [2026-04-10] | 补办lockback |
-| ✅ P1 | TASK-0027-A6 | ~6 | 数据 | 由 TASK-0028 B1-B6 覆盖闭环 [2026-04-09] | 不再单独签发 |
-| ✅ P0 | TASK-0027-A7 | 3 | 数据 | docker-compose.dev.yml + .env.example + Dockerfile locked [2026-04-10] | 补办P0-lockback |
 | 🟡 P1 | TASK-0039 | 0 | 架构师 | 灾备演练场景脚本 | ✅ DR1~DR4执行完成[2026-04-10]; ISSUE-DR1-001 已由 TASK-0042 修复, ISSUE-DR4-001 已由 TASK-0043 修复, ISSUE-DR3-001 已独立建档为 TASK-0045 |
 | 🟡 P1 | TASK-0045 | 3~4 | 架构师 | Mini macOS容器自愈守护基线 | A0建档完成[2026-04-11]; 待A1白名单签发 |
 | 🟡 P1 | TASK-0040 | TBD | 决策 | PBO+CPCV+mlfinlab | A0建档完成[2026-04-10]; 待Phase C(C2)启动实施 |
+| 🟡 P1 | Phase C 决策双沙箱主链（待拆批） | TBD | 决策 | `C0-2/C0-3/CA/CB/CF/CS/CK` 对应 decision 文件 | 需以 `TASK-0048` 为母任务继续拆批 |
+| 🟡 P1 | Phase C 数据股票供数协同（待拆批） | TBD | 数据 | `C0-1` + `CB5` 对应 data 文件 | 股票 bars 路由与动态 watchlist 采集 |
+| 🟡 P1 | Phase C 回测人工复核（待拆批） | TBD | 回测 | `CG1/CG2/CG3` 对应 backtest 文件 | 人工二次回测、股票手动回测与审核看板 |
+| 🔴 P0 | Phase C 共享因子库同步（待独立建档） | TBD | 项目架构师 | `shared/python-common/**` + 决策/回测接线 | P0 区域，只能在独立预审后启动 |
 
 ### 已完成存档（2026-04-11 清理）
 
@@ -699,48 +850,40 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | ✅ | TASK-0032/0033 | data_web locked |
 | ✅ | TASK-0034~0038 | data端U0全部locked |
 | ✅ | TASK-0041/0042/0043 | sim/data 运行态收口 locked |
+| ✅ | TASK-0048 | Phase C 扩展总计划、ATLAS 与 prompt 口径已同步 |
 
 ---
 
 ## 九、关键依赖链 [修订 2026-04-11]
 
 ```
-TASK-0031(data热修) ──────────────────── ✅ locked ──┐
-TASK-0017(开盘验证) ──────────── ⚠️ A4 pending ─────┤
-TASK-0018-B/C-SUP(回测数据) ──────────── ✅ locked ──┤
-                                                      ├── Phase A ~95%
-TASK-0014(事件接线) ─── ✅ ──┐                        │
-TASK-0009(风控验收) ─── ✅ ──┤                        │
-TASK-0013(统一风控) ─── ✅ ──┤── Phase B ✅ ──────────┤
-TASK-0010(SimNow骨架) ─ ✅ ──┤                        │
-TASK-0019(报表) ─────── ✅ ──┘                        │
-                                                      │
-TASK-0039(灾备演练,原0036) ──── Phase B+ 质量门禁 ───┤  [修订 2026-04-11]
-                                                      │
-TASK-0021续(data接入) ── ✅ ┐                         │
-TASK-0021续(研发中心) ── ✅ ┤── Phase C ~90% ────────┤
-TASK-0021续(信号闭环) ── ⚠️ ┤  (C3 待验证)           │
-TASK-0040(PBO,原0037) ─ � ┤  A0建档完成[2026-04-10] │
-TASK-0012(桥接) ──────── 🔲 ┤                        │
-TASK-0016(正式接入) ──── 🔲 ┘                        │
-                                                      │
-TASK-0027(data迁移) ─── ⚠️ ┐                        │
-通知统一(0028) ──────── ✅ ─┤── Phase D ~85% ────────┤
-data_web(0032+0033) ─── ✅ ─┘                        │
-                                                      │
-TASK-0008(泛化引擎) ─── ✅ ─┐                        │
-TASK-0026(新增因子) ─── ✅ ─┤── Phase E ✅           │
-TASK-0007-B/C(并回) ─── ✅ ─┘                        │
-                                                      │
-TASK-0015(临时看板) ─── 🔲 ─┐                        │
-聚合看板 ───────────── 🔲 ──┤── Phase F 未启动      │
-TASK-0020(ECS) ──────── 🔲 ─┘  (阻塞DNS+SSH)       │
-                                                      │
-TASK-0011(legacy清退) ── 🔲 ── Phase G 未启动        │
-                                                      │
-live-trading 全线 ───── 🔲 ── Phase H 延后 ← 依赖B+C  │
-                                                      │
-战略规划(多策略/淘汰/沙箱+安全围栏/模型/预读) ←── 依赖C+D │
+TASK-0049(安全治理横线) ──> SG1(策略端只读安全检查) ──> SG2(策略端复核冻结) ──> SG3(全域只读安全检查) ──> SG4(全域复核冻结) ──> SG5(统一修复预审与拆批)
+
+TASK-0048(总计划修订) ────────────────┐
+                                      ├─> C0-1(data 股票 bars 路由) ──┐
+                                      ├─> C0-3(decision 导入解析器) ──┤
+                                      └─> C0-2(FactorLoader股票支持) ─┘
+
+C0 前置完成 ────────────────┬─> CA2'(期货沙箱) ──┬─> CA3(报告) ──> CA4(调优) ──> CA5(UI) ──┐
+                           │                    │                                             │
+                           │                    └─> TASK-0040(PBO) ───────────────────────────┤
+                           │                                                                  ├─> CG1/CG2/CG3 人工二次回测关卡 ──> CA6 执行链闭环
+                           └─> CB2'(股票沙箱) ──┬─> CB3(选股 benchmark) ──> CB4(股票池) ────┤
+                                                ├─> CB5(data watchlist 分钟K) ──────────────┤
+                                                ├─> CB6(盘中提醒) ──> CB7(盘后评估) ───────┤
+                                                └─> CB8(晚间再选) ──> CB9(股票研究页面) ───┘
+
+CF1'(飞书口头策略) ──┐
+                     ├─> C0-3 导入解析器 ──> 双沙箱主链
+CF2(邮件/看板 YAML) ─┘
+
+CK1(因子覆盖率 90%+) ──> CK2(双地同步/hash校验) ──> CK3(因子缺失/新增通知)
+
+CS1(decision 本地Sim容灾) ──> CS1-S(sim/live 交接接口) ──> Phase H 复用
+
+TASK-0017(开盘验证) + TASK-0039/0045(DR3 自愈) ──> sim-trading 基线稳定 ──> Phase H 延后启动
+
+dashboard 聚合看板 ──> 继续后置，待 decision/backtest/data 的 Phase C 页面在各自服务内先闭环
 ```
 
 ---
