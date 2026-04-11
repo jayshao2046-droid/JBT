@@ -243,6 +243,15 @@ def _sync_gateway_state() -> Optional[Dict[str, Any]]:
     _system_state["last_disconnect_time"] = st.get("last_md_disconnect_time") or st.get("last_td_disconnect_time")
     return st
 
+
+def _safe_state() -> Dict[str, Any]:
+    """返回脱敏后的 _system_state 副本，屏蔽密码与鉴权码明文。"""
+    s = dict(_system_state)
+    for key in ("ctp_password", "ctp_auth_code"):
+        if s.get(key):
+            s[key] = "***"
+    return s
+
 # ---------- 基础状态 ----------
 @router.get("/status")
 def get_status():
@@ -407,7 +416,7 @@ def pause_trading(req: PauseRequest):
         emit_alert("P1", req.reason, {"event_code": "TRADING_PAUSED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
     except Exception:
         pass
-    return {"result": "paused", "state": _system_state}
+    return {"result": "paused", "state": _safe_state()}
 
 @router.post("/system/resume")
 def resume_trading():
@@ -418,7 +427,7 @@ def resume_trading():
         emit_alert("P2", "手动恢复交易", {"event_code": "TRADING_RESUMED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
     except Exception:
         pass
-    return {"result": "resumed", "state": _system_state}
+    return {"result": "resumed", "state": _safe_state()}
 
 @router.post("/system/preset")
 def set_preset(body: dict):
@@ -536,7 +545,7 @@ def ctp_disconnect():
         emit_alert("P2", "CTP 接口主动断开连接", {"event_code": "CTP_DISCONNECTED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
     except Exception:
         pass
-    return {"result": "disconnected", "state": _system_state}
+    return {"result": "disconnected", "state": _safe_state()}
 
 
 @router.get("/ctp/status")
