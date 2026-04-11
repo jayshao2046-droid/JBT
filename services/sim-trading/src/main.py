@@ -52,7 +52,7 @@ logging.getLogger().addHandler(memory_log_handler)
 logger = logging.getLogger("sim-trading")
 
 # --- FastAPI 应用 ---
-app = FastAPI(title="sim-trading", version="0.1.0-skeleton")
+app = FastAPI(title="sim-trading", version="1.0.0")
 
 app.include_router(router)
 
