@@ -104,7 +104,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 研究中心骨架 | ✅ 已完成 | `src/research/`（factor_loader/trainer/optuna/shap/onnx）已投产为 Phase C 基线 |
 | 期货沙箱回测 | ✅ 已完成 | `CA2'` TASK-0056 sandbox_engine.py 投产 [2026-04-12] |
 | 股票沙箱回测 | ✅ 已完成 | `CB2'` TASK-0057 sandbox_engine.py T+1/涨跌停扩展 [2026-04-12] |
-| 策略调优引擎 | 🔶 待重构 | 现有 `optuna_search.py` 仅覆盖 ML 超参；需新增交易参数与真实 Sharpe 目标 |
+| 策略调优引擎 | ✅ 已完成 | `CA4` TASK-0061 trade_optimizer 网格搜索投产 [2026-04-12] |
 | 导入通道 | 🔶 策略导入已完成 | `C0-3` TASK-0051 strategy_importer 投产 [2026-04-12]；邮件/飞书待扩容 |
 | 股票研究中心 | ❌ 待实施 | `CB1~CB9`，30 只股票池、盘中跟踪、盘后评估与晚间轮换 |
 | 本地 Sim 容灾 | ❌ 待实施 | `CS1`，平时 standby，断联时由 decision 本地 Sim 接管 |

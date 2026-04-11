@@ -8,6 +8,7 @@ from .routes.model import router as model_router
 from .routes.strategy_import import router as strategy_import_router
 from .routes.sandbox import router as sandbox_router
 from .routes.report import router as report_router
+from .routes.optimizer import router as optimizer_router
 
 
 def create_app() -> FastAPI:
@@ -25,6 +26,7 @@ def create_app() -> FastAPI:
     app.include_router(strategy_import_router)
     app.include_router(sandbox_router)
     app.include_router(report_router)
+    app.include_router(optimizer_router)
 
     return app
 
