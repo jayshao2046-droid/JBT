@@ -62,7 +62,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ## 二、服务状态与归属矩阵
 
-### 2.1 模拟交易 sim-trading — 70% [修订 2026-04-11 CTP连通+重连收口]
+### 2.1 模拟交易 sim-trading — 85% [修订 2026-04-12 全盘审核+安全修复收口]
 
 **负责 Agent：模拟交易**
 **服务目录：`services/sim-trading/`**
@@ -71,13 +71,15 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 模块 | 状态 | 说明 |
 |------|------|------|
 | CTP/SimNow 网关 | ✅ 已部署 | `src/gateway/simnow.py`，Mini 容器运行中 |
-| API 路由 | ✅ 基本完成 | `src/api/router.py`，含 system_state/connect/disconnect/strategy/publish |
+| API 路由 | ✅ 已完成 | `src/api/router.py`，28 个端点，含 API Key 认证、密码脱敏 |
 | 期货公司接通 | ✅ 已完成 | 光大期货 CTP 已接通；MD/TD 基础链路可用，策略执行链仍待 decision Phase C 真闭环 |
-| 风控守卫 | 🔶 骨架 | `src/risk/guards.py`，emit_alert 已接线，但规则引擎待完善 |
-| 交易执行 | 🔶 骨架 | `src/execution/`，待调试 |
-| 账本 | 🔶 骨架 | `src/ledger/service.py`，待调试 |
-| 通知 | 🔶 部分 | A1 dispatcher/guards 已锁回；A2 系统事件接线待执行 |
+| 风控守卫 | ✅ 已完成 | `src/risk/guards.py`，reduce_only + disaster_stop 真实实现，测试覆盖 |
+| 交易执行 | ✅ 已完成 | `src/execution/service.py`，ExecutionService 真实委托 Gateway，已激活接入路由 |
+| 账本 | ✅ 已完成 | `src/ledger/service.py`，record_trade 真实委托 add_trade，线程安全 |
+| 通知 | ✅ 已完成 | dispatcher/guards 已接线，系统事件告警通道可用 |
 | 发布接口 | ✅ 已锁回 | TASK-0023-A，`POST /api/v1/strategy/publish` |
+| 安全加固 | ✅ 2026-04-12 | 9 项安全问题全部修复：API Key 认证、密码脱敏、并发锁、内存泄漏等 |
+| 版本 | ✅ 1.0.0 | main.py 版本号已更新，/status stage 字段已修正 |
 | 容灾交接接口 | ❌ 待实施 | `CS1-S`，接收 decision 本地 Sim / future live failover 的任务交接与账本同步 |
 | 运行态收口 | 🔶 A批完成 | TASK-0022-A locked；B批日志查看 pending |
 | Docker/Mini | ✅ 已部署 | TASK-0017-A3，待开盘验证CTP |
