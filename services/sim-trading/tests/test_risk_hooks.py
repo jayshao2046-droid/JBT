@@ -43,6 +43,57 @@ def test_risk_guards_has_emit_alert():
     assert hasattr(guards, "emit_alert")
 
 
+def test_reduce_only_blocks_open_order(monkeypatch):
+    """只减仓模式：offset='0'（开仓）应被拒绝。"""
+    monkeypatch.setattr("src.risk.guards.get_dispatcher", lambda: None)
+    guards = RiskGuards()
+    order = {"instrument_id": "rb2510", "offset": "0", "direction": "0"}
+    assert guards.check_reduce_only(order, []) is False
+
+
+def test_reduce_only_allows_close_order(monkeypatch):
+    """只减仓模式：offset='1'（平仓）应允许通过。"""
+    monkeypatch.setattr("src.risk.guards.get_dispatcher", lambda: None)
+    guards = RiskGuards()
+    order = {"instrument_id": "rb2510", "offset": "1", "direction": "1"}
+    assert guards.check_reduce_only(order, []) is True
+
+
+def test_reduce_only_allows_close_today(monkeypatch):
+    """只减仓模式：offset='3'（平今）应允许通过。"""
+    monkeypatch.setattr("src.risk.guards.get_dispatcher", lambda: None)
+    guards = RiskGuards()
+    order = {"instrument_id": "rb2510", "offset": "3", "direction": "1"}
+    assert guards.check_reduce_only(order, []) is True
+
+
+def test_disaster_stop_triggers_on_large_drawdown(monkeypatch):
+    """灾难止损：回撤超阈值时返回 False。"""
+    monkeypatch.setenv("RISK_NAV_DRAWDOWN_HALT", "0.10")
+    monkeypatch.setattr("src.risk.guards.get_dispatcher", lambda: None)
+    guards = RiskGuards()
+    acct = {"balance": 400000, "pre_balance": 500000}  # 20% 回撤
+    assert guards.check_disaster_stop(acct) is False
+
+
+def test_disaster_stop_ok_within_threshold(monkeypatch):
+    """灾难止损：回撤未超阈值时返回 True。"""
+    monkeypatch.setenv("RISK_NAV_DRAWDOWN_HALT", "0.10")
+    monkeypatch.setattr("src.risk.guards.get_dispatcher", lambda: None)
+    guards = RiskGuards()
+    acct = {"balance": 480000, "pre_balance": 500000}  # 4% 回撤
+    assert guards.check_disaster_stop(acct) is True
+
+
+def test_disaster_stop_safe_on_zero_pre_balance(monkeypatch):
+    """灾难止损：pre_balance 为 0 时安全放行。"""
+    monkeypatch.setenv("RISK_NAV_DRAWDOWN_HALT", "0.10")
+    monkeypatch.setattr("src.risk.guards.get_dispatcher", lambda: None)
+    guards = RiskGuards()
+    acct = {"balance": 500000, "pre_balance": 0}
+    assert guards.check_disaster_stop(acct) is True
+
+
 def test_emit_alert_without_dispatcher_returns_none(monkeypatch):
     """未 bootstrap dispatcher 时，emit_alert 应安全跳过，不抛异常。"""
     monkeypatch.setenv("STAGE", "sim")
