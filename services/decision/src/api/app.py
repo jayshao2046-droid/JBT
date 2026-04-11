@@ -10,6 +10,7 @@ from .routes.sandbox import router as sandbox_router
 from .routes.report import router as report_router
 from .routes.optimizer import router as optimizer_router
 from .routes.screener import router as screener_router
+from .routes.import_channel import router as import_channel_router
 
 
 def create_app() -> FastAPI:
@@ -29,6 +30,7 @@ def create_app() -> FastAPI:
     app.include_router(report_router)
     app.include_router(optimizer_router)
     app.include_router(screener_router)
+    app.include_router(import_channel_router)
 
     return app
 
