@@ -119,7 +119,7 @@ class CtpConfigRequest(BaseModel):
     md_front: str
     td_front: str
     app_id: str = "client_jbtsim_1.0.0"
-    auth_code: str = "QN76PPIPR9EKM4QK"
+    auth_code: str = ""  # 不设硬编码默认值，由调用方显式传入或从 env 读取
 
 class RiskPresetUpdateRequest(BaseModel):
     symbol: str
