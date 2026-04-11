@@ -14,8 +14,8 @@ class LedgerService:
         self._positions: list = []
 
     def record_trade(self, trade: dict) -> None:
-        """记录成交（占位，保持向后兼容）"""
-        raise NotImplementedError
+        """记录成交（委托到 add_trade，保持向后兼容）。"""
+        self.add_trade(trade)
 
     def add_trade(self, trade_data: dict) -> None:
         """记录一笔成交到当日列表。"""
