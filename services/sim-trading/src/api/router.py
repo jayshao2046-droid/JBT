@@ -173,7 +173,20 @@ class SignalReceiveRequest(BaseModel):
     meta_data: Optional[dict] = None
 
 _signal_queue: deque = deque(maxlen=10000)
-_received_signal_ids: set = set()
+# 有界幂等去重表：最多保留 50k 条记录，FIFO 淘汰，防止内存无界增长
+_MAX_SIGNAL_IDS = 50_000
+_received_signal_ids: Dict[str, bool] = {}   # insertion-ordered (Python 3.7+)
+
+
+def _has_seen_signal(signal_id: str) -> bool:
+    return signal_id in _received_signal_ids
+
+
+def _mark_signal_seen(signal_id: str) -> None:
+    if len(_received_signal_ids) >= _MAX_SIGNAL_IDS:
+        oldest = next(iter(_received_signal_ids))
+        del _received_signal_ids[oldest]
+    _received_signal_ids[signal_id] = True
 
 
 def _build_local_virtual_account() -> Dict[str, Any]:
@@ -627,7 +640,7 @@ def receive_signal(req: SignalReceiveRequest):
         }
 
     # 幂等：重复 signal_id 直接返回 received 但不再入队
-    if req.signal_id in _received_signal_ids:
+    if _has_seen_signal(req.signal_id):
         return {
             "status": "received",
             "signal_id": req.signal_id,
@@ -650,7 +663,7 @@ def receive_signal(req: SignalReceiveRequest):
         "received_at": datetime.utcnow().isoformat() + "Z",
     }
     _signal_queue.append(entry)
-    _received_signal_ids.add(req.signal_id)
+    _mark_signal_seen(req.signal_id)
 
     return {
         "status": "received",
