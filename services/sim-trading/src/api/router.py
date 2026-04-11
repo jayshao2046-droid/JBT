@@ -716,6 +716,25 @@ def receive_signal(req: SignalReceiveRequest):
     }
 
 
+@router.get("/signals/queue")
+def get_signal_queue(limit: int = Query(default=50, ge=1, le=500)):
+    """
+    查看信号接收队列（只读）。
+
+    ⚠️ 已知局限：当前队列无自动消费者，信号入队后不会自动触发下单。
+    如需执行，须手动调用 POST /orders 接口。
+    该端点用于运维监控与调试，不影响队列内容。
+    """
+    items = list(_signal_queue)[-limit:]
+    return {
+        "count": len(items),
+        "total_received": len(_received_signal_ids),
+        "consumer": "none",
+        "note": "队列当前无自动消费者，信号需手动通过 /orders 接口执行",
+        "signals": items,
+    }
+
+
 @router.post("/strategy/publish", status_code=202)
 def receive_strategy_publish(req: StrategyPublishRequest):
     if req.publish_target != "sim-trading":
