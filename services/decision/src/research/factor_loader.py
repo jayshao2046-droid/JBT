@@ -9,6 +9,7 @@ import numpy as np
 
 from ..core.settings import get_settings
 from ..gating.backtest_gate import get_backtest_gate
+from .stock_data_client import StockDataClient
 
 
 class FactorLoadError(RuntimeError):
@@ -23,6 +24,7 @@ class FactorLoader:
     _CONTINUOUS_DIR_PATTERN = re.compile(r"(?i)^KQ_m_([A-Za-z]+)_([A-Za-z]+)$")
     _CONTINUOUS_ALIAS_PATTERN = re.compile(r"(?i)^KQ\.m@([A-Za-z]+)\.([A-Za-z]+)$")
     _EXACT_SYMBOL_PATTERN = re.compile(r"(?i)^([A-Za-z]+)[._]([A-Za-z]+?)(\d+)?$")
+    _STOCK_SYMBOL_PATTERN = re.compile(r"^\d{6}\.(SZ|SH|BJ)$", re.IGNORECASE)
 
     def __init__(self) -> None:
         self._settings = get_settings()
@@ -77,8 +79,14 @@ class FactorLoader:
                 cls._CONTINUOUS_DIR_PATTERN,
                 cls._CONTINUOUS_ALIAS_PATTERN,
                 cls._EXACT_SYMBOL_PATTERN,
+                cls._STOCK_SYMBOL_PATTERN,
             )
         )
+
+    @classmethod
+    def _is_stock_symbol(cls, symbol: str) -> bool:
+        """判断是否为 A 股股票代码。"""
+        return cls._STOCK_SYMBOL_PATTERN.fullmatch(symbol) is not None
 
     def _fetch_bars(
         self,
@@ -87,6 +95,12 @@ class FactorLoader:
         start_date: str,
         end_date: str,
     ) -> list[dict[str, Any]]:
+        # 股票代码走 stock_data_client
+        if self._is_stock_symbol(symbol):
+            return self._fetch_stock_bars(
+                symbol=symbol, start_date=start_date, end_date=end_date
+            )
+
         base_url = self._settings.data_service_url.rstrip("/")
         url = f"{base_url}/api/v1/bars"
         params = {
@@ -110,6 +124,37 @@ class FactorLoader:
             raise FactorLoadError(
                 f"Data service returned insufficient bars for symbol {symbol}"
             )
+
+        return bars
+
+    def _fetch_stock_bars(
+        self,
+        *,
+        symbol: str,
+        start_date: str,
+        end_date: str,
+    ) -> list[dict[str, Any]]:
+        """通过 StockDataClient 获取股票 K 线，并补齐 open_interest=0。"""
+        from .stock_data_client import StockDataClient, StockDataError
+
+        client = StockDataClient()
+        try:
+            bars = client.fetch_bars(
+                symbol=symbol, start_date=start_date, end_date=end_date
+            )
+        except StockDataError as exc:
+            raise FactorLoadError(
+                f"Failed to load stock bars for symbol {symbol}: {exc}"
+            ) from exc
+
+        if len(bars) < self._MIN_REQUIRED_BARS:
+            raise FactorLoadError(
+                f"Data service returned insufficient bars for stock {symbol}"
+            )
+
+        # 股票无持仓量，统一填 0
+        for bar in bars:
+            bar.setdefault("open_interest", 0)
 
         return bars
 
