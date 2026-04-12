@@ -1,11 +1,14 @@
 import collections
+import hmac
 import logging
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.security import APIKeyHeader
 
 # --- 加载 .env（如存在）---
 _env_file = Path(__file__).parent.parent / ".env"
@@ -51,8 +54,25 @@ logging.getLogger().addHandler(memory_log_handler)
 
 logger = logging.getLogger("sim-trading")
 
+# --- API Key 认证 ---
+_SIM_API_KEY = os.environ.get("SIM_API_KEY", "")
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+_PUBLIC_PATHS = {"/health", "/api/v1/health", "/api/v1/version"}
+
+
+async def _verify_api_key(request: Request, api_key: Optional[str] = Depends(_api_key_header)) -> None:
+    """全局 API Key 认证中间件，与 data/backtest/decision 三端保持一致。"""
+    if not _SIM_API_KEY:
+        return
+    if request.url.path in _PUBLIC_PATHS:
+        return
+    if not api_key or not hmac.compare_digest(api_key, _SIM_API_KEY):
+        raise HTTPException(status_code=403, detail="invalid or missing API key")
+
+
 # --- FastAPI 应用 ---
-app = FastAPI(title="sim-trading", version="1.0.0")
+app = FastAPI(title="sim-trading", version="1.0.0", dependencies=[Depends(_verify_api_key)])
 
 app.include_router(router)
 
