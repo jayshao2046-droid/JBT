@@ -1539,11 +1539,16 @@ class _SafeExpressionValidator(ast.NodeVisitor):
         if not isinstance(node.op, self._allowed_bin_ops):
             raise StrategyConfigError("unsupported binary operator")
         if isinstance(node.op, ast.Pow):
-            if isinstance(node.right, ast.Constant) and isinstance(node.right.value, (int, float)):
-                if node.right.value > self._MAX_POW_EXPONENT:
-                    raise StrategyConfigError(
-                        f"exponent {node.right.value} exceeds max allowed ({self._MAX_POW_EXPONENT})"
-                    )
+            if not isinstance(node.right, ast.Constant) or not isinstance(
+                getattr(node.right, "value", None), (int, float)
+            ):
+                raise StrategyConfigError(
+                    "Pow exponent must be a numeric constant"
+                )
+            if node.right.value > self._MAX_POW_EXPONENT:
+                raise StrategyConfigError(
+                    f"exponent {node.right.value} exceeds max allowed ({self._MAX_POW_EXPONENT})"
+                )
         self.visit(node.left)
         self.visit(node.right)
 

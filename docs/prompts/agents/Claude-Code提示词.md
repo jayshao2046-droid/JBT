@@ -79,6 +79,14 @@
 - **原因**: F-001 安全漏洞 — `eval()` 虽有 AST 白名单，但缺少长度/复杂度/Pow 指数限制，恶意表达式可制造 CPU 拒绝服务
 - **验证**: 5 项安全测试全部通过（基本表达式、合法 Pow、超限 Pow、超长表达式、超复杂表达式）
 
+### 修改 7b: generic_strategy.py F-001 Pow 非常量指数拒绝
+- **文件**: `services/backtest/src/backtest/generic_strategy.py`
+- **变更**: `visit_BinOp` 中 Pow 分支增强：非常量指数（变量、子表达式）一律拒绝
+  - 原逻辑仅检查「常量 > 100」，非常量直接放行 → 攻击者可用 `x ** y` 绕过
+  - 新逻辑：Pow 右操作数必须是 `ast.Constant` 且 value 为 int/float，否则抛错
+- **原因**: Atlas 复审指出非常量 Pow 指数是安全缺口
+- **验证**: 5 项测试通过（常量合法、常量超限、变量指数拒绝、表达式指数拒绝、普通数学正常）
+
 ### 修改 8: backtest 服务 API Key 认证中间件
 - **文件**: `services/backtest/src/api/app.py`
 - **变更**:
