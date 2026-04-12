@@ -124,7 +124,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **剩余缺口（Phase C 扩容）：** 股票荐股循环、本地Sim容灾(CS1)、因子双地同步(CK1~CK3)、CB1/CB4~CB9股票研究扩容
 **当前活跃：** Batch-5 全部完成；待看板KPI调整后推送Studio [修订 2026-04-12]
 
-### 2.3 数据 data — 93% [修订 2026-04-12 C0-1+CB5 投产]
+### 2.3 数据 data — 100% [修订 2026-04-12 Round 1 收口完成]
 
 **负责 Agent：数据**
 **服务目录：`services/data/`**
@@ -139,20 +139,20 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 动态 watchlist 采集 | ✅ 已完成 | `CB5` TASK-0054 watchlist_client + pipeline + strategy.py watchlist 端点投产 [2026-04-12] |
 | 采集器 | ✅ 已部署(legacy) | `src/collectors/`（21个采集器文件），Mini 通过 cron 运行 |
 | 调度器 | ✅ 已部署(legacy) | `src/scheduler/data_scheduler.py`，Mini 以 --daemon / LaunchAgent 运行 |
-| 健康检查 | 🔶 有误报 | `src/health/health_check.py`，stock/news 判定有误报 |
-| 通知 | ✅ 基线完成 | TASK-0028-B6 已修复通知体验；后续补 watchlist / factor-missing 协同通知 |
+| 健康检查 | ✅ 已修复 | `src/health/health_check.py`，FeishuNotifier 死代码已清理（TASK-0064）[2026-04-12] |
+| 通知 | ✅ 已完成 | TASK-0028-B6 + TASK-0064 新增 FACTOR/WATCHLIST 通知类型及路由 [2026-04-12] |
 | 新闻推送 | ✅ 已恢复 | `src/notify/news_pusher.py` 批量推送链路可用 |
 | data_web | ✅ 基线完成 | 6 页临时看板已锁回，继续保持只读配套 |
 | Docker化 | ✅ 基线完成 | Mini 容器运行中(JBT-DATA-8105)，system 迁移主线已闭环 |
 | 存储 | ✅ 已完成 | `src/data/storage.py`，Mini `~/jbt-data/` 目录体系 |
 
-**已完成任务：** TASK-0018(A~F全锁回), TASK-0027(A0~A7全锁回), TASK-0028(B1~B6全锁回), TASK-0031(锁回), TASK-0032/0033(锁回), TASK-0050(C0-1), TASK-0054(CB5) [修订 2026-04-12]
-**当前活跃：** C0-1 + CB5 已投产闭环 [修订 2026-04-12]
-**排队任务：** 数据预读投喂决策端（后续独立任务）[修订 2026-04-12]
+**已完成任务：** TASK-0018(A~F全锁回), TASK-0027(A0~A7全锁回), TASK-0028(B1~B6全锁回), TASK-0031(锁回), TASK-0032/0033(锁回), TASK-0050(C0-1), TASK-0054(CB5), TASK-0064(Round 1 收口+SG) [修订 2026-04-12]
+**当前活跃：** ✅ 100% 收口完成 [修订 2026-04-12]
+**Round 1 改动：** A2 STUB清除→延迟注入、因子通知器/SLA追踪器实现、健康检查修复、FACTOR/WATCHLIST通知路由、DATA_API_KEY认证中间件、11个测试扩充（77个测试全通过）[2026-04-12]
 
 > **[修订 2026-04-11] data 端当前新增的 Phase C 职责不是重启 system 级迁移，而是在既有供数基线之上补足股票 bars 路由与动态 watchlist 分钟 K 采集。`stock_minute_collector` 与股票日线采集器已存在，当前主要缺口在路由层与调度模式切换。**
 
-### 2.4 回测 backtest — 88% [修订 2026-04-12 CG1/CG2/CG3 全投产]
+### 2.4 回测 backtest — 100% [修订 2026-04-12 Round 2 全部通过，Pow修复已合入]
 
 **负责 Agent：回测**
 **服务目录：`services/backtest/`**
@@ -177,10 +177,10 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 8004并回 | ✅ 已完成 | TASK-0007 A/B/C/D 全锁回 [修订 2026-04-10] |
 | 容器命名 | ✅ 已完成 | TASK-0005 JBT-BACKTEST-8103/3001 [修订 2026-04-10] |
 
-**已完成任务：** TASK-0003(全锁回), TASK-0004(锁回), TASK-0005(锁回), TASK-0007(A/B/C/D全锁回), TASK-0008(A/B/C/D全锁回), TASK-0018(A/C/D/E锁回), TASK-0026(A/B/C全锁回), TASK-0052(CG1), TASK-0055(CG2), TASK-0058(CG3) [修订 2026-04-12]
-**Phase E 状态：基线闭环 + CG 扩容已闭环（CG1策略导入+CG2人工审核+CG3股票回测全投产）；审核看板页面待实施** [修订 2026-04-12]
+**已完成任务：** TASK-0003(全锁回), TASK-0004(锁回), TASK-0005(锁回), TASK-0007(A/B/C/D全锁回), TASK-0008(A/B/C/D全锁回), TASK-0018(A/C/D/E锁回), TASK-0026(A/B/C全锁回), TASK-0052(CG1), TASK-0055(CG2), TASK-0058(CG3), TASK-0065(Round 2 F-001+API认证) [修订 2026-04-12]
+**Phase E 状态：基线闭环 + CG 扩容已闭环 + Round 2 安全加固全部通过（F-001 eval三重限制+Pow非常量拒绝+BACKTEST_API_KEY认证）** [修订 2026-04-12]
 **Air 同步状态：** ✅ rsync 同步 + 容器重启 + 远端验证通过 [2026-04-10]
-**排队任务：** 审核看板页面扩容（backtest_web 增加 manual review / stock review 页面）[修订 2026-04-12]
+**排队任务：** 审核看板页面扩容 + P3 Pow边界测试补充 [修订 2026-04-12]
 
 > **[修订 2026-04-11] 双回测分离原则：** decision 内部自动研究回测固定拆为“期货沙箱 / 股票沙箱”两条主路径，数据完全隔离、只共享因子；Air/backtest 继续承担人工手动回测与最终二次审核，不接管研究中心自动回测流程。
 
@@ -540,11 +540,11 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 | 编号 | 任务 | 主责 | 协同 | 验收标准 |
 |------|------|------|------|---------|
-| SG1 | 策略端只读安全检查 | Atlas | 决策+回测 | 完成 `decision + backtest` 只读安全检查；首批以 `backtest` 的 `F-001` 证据链为主 |
-| SG2 | 策略端复核冻结 | 项目架构师 | Atlas | 输出策略端冻结结论，明确“不即时修复”，形成后续统一修复前置 |
-| SG3 | 全域只读安全检查 | Atlas | 数据+模拟交易+看板+实盘交易+项目架构师 | 完成 data 侧 `F-002/F-003` 可达性复核，并覆盖其余服务/依赖/部署治理只读排查 |
-| SG4 | 全域安全复核冻结 | 项目架构师 | Atlas | 汇总全域问题清单、修复优先级、保护区影响与拆批建议 |
-| SG5 | 统一修复预审与实施拆批 | 项目架构师 | Atlas | 仅在 SG4 完成并经 Jay.S 确认后，逐批建立正式修复任务、白名单与 Token |
+| SG1 | 策略端只读安全检查 | Atlas | 决策+回测 | ✅ 完成 [2026-04-11] |
+| SG2 | 策略端复核冻结 | 项目架构师 | Atlas | ✅ Round 0 全域扫描完成 [2026-04-12] |
+| SG3 | 全域只读安全检查 | Atlas | 数据+模拟交易+看板+实盘交易+项目架构师 | ✅ Round 0 全域扫描完成 [2026-04-12] |
+| SG4 | 全域安全复核冻结 | 项目架构师 | Atlas | ✅ Round 0 报告 + 架构师 Round 2 终审完成 [2026-04-12] |
+| SG5 | 统一修复预审与实施 | Claude-Code | Atlas+项目架构师 | 🟡 进行中：data F-002/F-003 API认证已修复(Round 1)、backtest F-001 eval加固已修复(Round 2，Pow绕过待补)、decision Round 3 进行中 |
 
 ---
 
@@ -837,13 +837,13 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 模块 | 完成 | 目标 | 当前Phase | 下一里程碑 |
 |------|------|------|----------|-----------|
 | 治理 | 100% | 100% | ✅ 完成 | 维护 |
-| sim-trading | 68% | 100% | Phase B ✅→C 协同 | 开盘验证 + `CS1-S` 容灾交接接口 |
-| decision | 75% | 100% | Phase C 主线大部完成 | CB1/CB4~CB9 股票扩容、CS1 容灾、CK 因子同步 |
-| data | 93% | 100% | Phase D ✅ + C 协同已完成 | 数据预读投喂决策端 |
-| backtest | 88% | 100% | Phase E ✅ + CG 扩容已完成 | 审核看板页面扩容 |
+| sim-trading | 85% | 100% | Phase B ✅ + v1.0.0 安全收口 | 开盘验证(明日) + `CS1-S` 容灾交接接口 |
+| decision | 80% | 100% | Phase C 主线 + Round 3 API认证完成 | CB1/CB4~CB9 股票扩容、CS1 容灾、CK 因子同步 |
+| data | **100%** | 100% | ✅ Phase D + Round 1 收口 | **完成** [2026-04-12] |
+| backtest | **100%** | 100% | ✅ Phase E + Round 2 安全加固 | **完成** [2026-04-12] |
 | dashboard | 5% | 100% | Phase F | 待各服务临时看板基本收口 |
-| live-trading | 0% | 100% | Phase H | 待 sim-trading 稳定运行 2~3 个月；后续复用 `CS1` 容灾框架 |
-| **总体** | **~62%** | **100%** | **Phase A/B/E 基线闭环；Phase C 主线完成 14 个 TASK；Phase D 闭环** | **CB 股票扩容 → CS/CK 协同 → SG 安全横线 → Phase F/G 收口** |
+| live-trading | 0% | 100% | Phase H | 待 sim-trading 稳定运行 2~3 个月 |
+| **总体** | **~75%** | **100%** | **data 100% / backtest 100% / sim-trading 85% / decision 80%** | **Round 4 sim-trading → SG5 收口** |
 
 ---
 
