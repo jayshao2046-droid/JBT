@@ -2,3 +2,4 @@
 # stock_pool: /api/v1/stock/pool (TASK-0070 CB4)
 # intraday: /api/v1/stock/intraday (TASK-0071 CB6)
 # post_market: /api/v1/stock/post-market (TASK-0072 CB7)
+# evening_rotation: /api/v1/stock/rotation (TASK-0073 CB8)
