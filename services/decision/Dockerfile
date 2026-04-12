@@ -5,7 +5,7 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir poetry \
+    && pip install --no-cache-dir poetry==1.8.3 \
     && poetry config virtualenvs.create false \
     && poetry install --only main --no-interaction --no-ansi
 
