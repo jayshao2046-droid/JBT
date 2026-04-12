@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Any, NamedTuple, Optional
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Header, Query
+from fastapi import Depends, FastAPI, HTTPException, Header, Query, Request
+from fastapi.security import APIKeyHeader
 
 try:
     import yaml
@@ -179,7 +180,22 @@ _FRESHNESS_THRESHOLDS = {
     "forex": 26.0, "cftc": 170.0, "options": 26.0, "health_log": 1.0,
     "watchlist": 26.0,
 }
-app = FastAPI(title="JBT Data Service", version=SERVICE_VERSION)
+app = FastAPI(title="JBT Data Service", version=SERVICE_VERSION, dependencies=[Depends(_verify_api_key)])
+
+# ── API Key 认证 ──────────────────────────────────────────
+_DATA_API_KEY = os.environ.get("DATA_API_KEY", "")
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+_PUBLIC_PATHS = {"/health", "/api/v1/health", "/api/v1/version"}
+
+
+async def _verify_api_key(request: Request, api_key: str | None = Depends(_api_key_header)) -> None:
+    if not _DATA_API_KEY:
+        return
+    if request.url.path in _PUBLIC_PATHS:
+        return
+    if not api_key or not hmac.compare_digest(api_key, _DATA_API_KEY):
+        raise HTTPException(status_code=403, detail="invalid or missing API key")
 
 
 class ParsedTimeRange(NamedTuple):
