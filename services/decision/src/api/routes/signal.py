@@ -15,6 +15,8 @@ from ...reporting.daily import get_daily_reporter
 router = APIRouter(prefix="/signals", tags=["signal"])
 
 _decisions: dict[str, dict] = {}
+# NOTE: _decisions 为纯内存存储，服务重启后会丢失。
+# 如需持久化，可考虑接入 state_store 或独立 JSON 文件。
 
 _L1_MODEL_PROFILE = {
     "profile_id": "local-l1-qwen2.5-series",

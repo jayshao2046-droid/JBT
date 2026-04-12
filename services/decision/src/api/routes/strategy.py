@@ -281,6 +281,44 @@ def list_strategies() -> list[dict]:
     return [p.to_contract_dict() for p in repo.list_all()]
 
 
+@router.get("/dashboard")
+def dashboard_strategies() -> list[dict]:
+    """策略仓库摘要列表（只读聚合，供临时看板使用）。"""
+    repo = get_repository()
+    strategies = repo.list_all()
+    return [
+        {
+            "strategy_id": pkg.strategy_id,
+            "name": pkg.strategy_name,
+            "status": to_contract_state(pkg.lifecycle_status),
+            "symbols": pkg.allowed_targets,
+            "last_updated": pkg.updated_at,
+        }
+        for pkg in sorted(strategies, key=lambda s: s.updated_at, reverse=True)
+    ]
+
+
+@router.get("/watchlist")
+def get_watchlist() -> list[str]:
+    """返回当前活跃策略的去重股票代码列表（供数据端 watchlist 采集使用）。
+
+    TASK-0054-E CB5: 方案 A — watchlist 编入同批 Token。
+    """
+    repo = get_repository()
+    symbols: set[str] = set()
+    for pkg in repo.list_all():
+        if pkg.lifecycle_status in (
+            LifecycleStatus.backtest_confirmed,
+            LifecycleStatus.pending_execution,
+            LifecycleStatus.in_production,
+        ):
+            for target in pkg.allowed_targets:
+                stripped = target.strip()
+                if stripped:
+                    symbols.add(stripped)
+    return sorted(symbols)
+
+
 @router.get("/{strategy_id}")
 def get_strategy(strategy_id: str) -> dict:
     repo = get_repository()
@@ -347,41 +385,3 @@ def publish_strategy(strategy_id: str, req: StrategyPublishRequest) -> JSONRespo
     if result.status == PublishStatus.GATE_REJECTED:
         return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=body)
     return JSONResponse(status_code=status.HTTP_502_BAD_GATEWAY, content=body)
-
-
-@router.get("/dashboard")
-def dashboard_strategies() -> list[dict]:
-    """策略仓库摘要列表（只读聚合，供临时看板使用）。"""
-    repo = get_repository()
-    strategies = repo.list_all()
-    return [
-        {
-            "strategy_id": pkg.strategy_id,
-            "name": pkg.strategy_name,
-            "status": to_contract_state(pkg.lifecycle_status),
-            "symbols": pkg.allowed_targets,
-            "last_updated": pkg.updated_at,
-        }
-        for pkg in sorted(strategies, key=lambda s: s.updated_at, reverse=True)
-    ]
-
-
-@router.get("/watchlist")
-def get_watchlist() -> list[str]:
-    """返回当前活跃策略的去重股票代码列表（供数据端 watchlist 采集使用）。
-
-    TASK-0054-E CB5: 方案 A — watchlist 编入同批 Token。
-    """
-    repo = get_repository()
-    symbols: set[str] = set()
-    for pkg in repo.list_all():
-        if pkg.lifecycle_status in (
-            LifecycleStatus.backtest_confirmed,
-            LifecycleStatus.pending_execution,
-            LifecycleStatus.in_production,
-        ):
-            for target in pkg.allowed_targets:
-                stripped = target.strip()
-                if stripped:
-                    symbols.add(stripped)
-    return sorted(symbols)
