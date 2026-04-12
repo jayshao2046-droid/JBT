@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from services.data.src.collectors.base import BaseCollector
+from src.collectors.base import BaseCollector
 
 
 class VolatilityCollector(BaseCollector):
@@ -89,7 +89,7 @@ class VolatilityCollector(BaseCollector):
 
     def _fetch_yfinance_vix(self, *, name: str, ticker: str, timestamp: str, full_history: bool = False) -> list[dict[str, Any]]:
         """Fetch CBOE VIX/VXN via yfinance."""
-        from services.data.src.utils.proxy import overseas_proxy_env
+        from src.utils.proxy import overseas_proxy_env
         try:
             import yfinance as yf
         except ImportError:

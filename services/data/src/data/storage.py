@@ -1,7 +1,7 @@
 """Parquet-based storage utilities for data records.
 
 Migrated from legacy J_BotQuant/src/data/storage.py.
-Import paths updated: src.utils → services.data.src.utils
+Import paths updated: services.data.src.utils → src.utils
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import Any
 
 import os
 
-from services.data.src.utils.exceptions import StorageError
+from src.utils.exceptions import StorageError
 
 try:
     import duckdb  # type: ignore

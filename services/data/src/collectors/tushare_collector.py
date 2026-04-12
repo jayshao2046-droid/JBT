@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-from services.data.src.collectors.base import BaseCollector
+from src.collectors.base import BaseCollector
 
 
 class TushareDailyCollector(BaseCollector):

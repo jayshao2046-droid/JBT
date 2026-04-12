@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from services.data.src.collectors.base import BaseCollector
+from src.collectors.base import BaseCollector
 
 
 # AkShare CFTC 品种映射

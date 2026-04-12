@@ -308,7 +308,7 @@ def get_service_status() -> dict:
     # 代理境外连通性测试（仅 Mini）
     if IS_MINI:
         try:
-            from services.data.src.utils.proxy import check_overseas_targets, is_proxy_alive
+            from src.utils.proxy import check_overseas_targets, is_proxy_alive
             if is_proxy_alive():
                 proxy_results = check_overseas_targets()
                 ok_count = sum(1 for r in proxy_results if r["ok"])
@@ -645,8 +645,8 @@ def send_p0_alert(report: dict) -> None:
         return
 
     try:
-        from services.data.src.notify import card_templates as ct
-        from services.data.src.notify.feishu import FeishuSender
+        from src.notify import card_templates as ct
+        from src.notify.feishu import FeishuSender
 
         alarm_lines = "\n".join(f"  - {a['metric']}: {a['value']} ({a['rule']})" for a in p0_list)
         ops_base = os.environ.get("DATA_OPS_URL", "http://localhost:8105")
@@ -672,7 +672,7 @@ def send_p0_alert(report: dict) -> None:
         print(f"[飞书] P0 告警发送失败: {e}")
         # 回退: 直接使用 FeishuSender 发送原始卡片
         try:
-            from services.data.src.notify.feishu import FeishuSender
+            from src.notify.feishu import FeishuSender
             sender = FeishuSender()
             now_str = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M")
             alarm_lines = "\n".join(f"  - {a['metric']}: {a['value']} ({a['rule']})" for a in p0_list)
@@ -700,7 +700,7 @@ def send_remediation_confirm(report: dict, remediation_results: list) -> None:
         return
 
     try:
-        from services.data.src.notify.feishu import FeishuSender
+        from src.notify.feishu import FeishuSender
         sender = FeishuSender()
 
         all_ok = all(r.get("result") == "成功" for r in remediation_results)
@@ -744,8 +744,8 @@ def send_collector_alert(
         return
 
     try:
-        from services.data.src.notify import card_templates as ct
-        from services.data.src.notify.feishu import FeishuSender
+        from src.notify import card_templates as ct
+        from src.notify.feishu import FeishuSender
         sender = FeishuSender()
 
         for level in ("P0", "P1"):
@@ -780,8 +780,8 @@ def send_recovery_notice(
         return
 
     try:
-        from services.data.src.notify import card_templates as ct
-        from services.data.src.notify.feishu import FeishuSender
+        from src.notify import card_templates as ct
+        from src.notify.feishu import FeishuSender
         sender = FeishuSender()
 
         recovered_names = [s.get("label", s.get("name", "")) for s in recovered]
@@ -808,7 +808,7 @@ def send_proxy_alert(services: dict) -> None:
         return
 
     try:
-        from services.data.src.notify.feishu import FeishuSender
+        from src.notify.feishu import FeishuSender
         sender = FeishuSender()
 
         now_str = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M")

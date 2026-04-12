@@ -20,7 +20,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
-from services.data.src.collectors.base import BaseCollector
+from src.collectors.base import BaseCollector
 
 
 # ── yfinance 分钟级品种 (20+1) ──────────────────────────
@@ -155,7 +155,7 @@ class OverseasMinuteCollector(BaseCollector):
         interval: str | None = None,
         as_of: str | None = None,
     ) -> list[dict[str, Any]]:
-        from services.data.src.utils.proxy import overseas_proxy_env
+        from src.utils.proxy import overseas_proxy_env
 
         symbol_list = symbols or self.symbols
         cur_period = period or self.period

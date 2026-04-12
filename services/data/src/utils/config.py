@@ -14,7 +14,7 @@ from typing import Any
 
 import yaml
 
-from services.data.src.utils.exceptions import ConfigError
+from src.utils.exceptions import ConfigError
 
 
 _SERVICE_ROOT = Path(__file__).resolve().parents[2]  # services/data/

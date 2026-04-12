@@ -13,7 +13,7 @@ import os
 import time
 from pathlib import Path
 
-from services.data.src.utils.logger import get_logger
+from src.utils.logger import get_logger
 
 logger = get_logger("data.ops.cleanup")
 

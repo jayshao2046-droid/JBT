@@ -20,7 +20,7 @@ from email.mime.text import MIMEText
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from services.data.src.notify.dispatcher import DataEvent
+    from src.notify.dispatcher import DataEvent
 
 logger = logging.getLogger(__name__)
 

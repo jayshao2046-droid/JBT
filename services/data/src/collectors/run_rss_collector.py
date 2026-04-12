@@ -1,6 +1,6 @@
 import os
 
-from services.data.src.collectors.rss_collector import RSSCollector
+from src.collectors.rss_collector import RSSCollector
 
 if __name__ == '__main__':
     # 代理环境变量，确保境外源可访问

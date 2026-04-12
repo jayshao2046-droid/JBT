@@ -6,26 +6,26 @@ import logging
 import os
 from typing import Any
 
-from services.data.src.collectors.akshare_backup import AkshareBackupCollector
-from services.data.src.collectors.base import BaseCollector
-from services.data.src.collectors.cftc_collector import CftcCollector
-from services.data.src.collectors.watchlist_client import WatchlistClient
-from services.data.src.collectors.forex_collector import ForexCollector
-from services.data.src.collectors.macro_collector import MacroCollector
-from services.data.src.collectors.news_api_collector import NewsAPICollector
-from services.data.src.collectors.options_collector import OptionsCollector
-from services.data.src.collectors.position_collector import PositionCollector
-from services.data.src.collectors.rss_collector import RSSCollector
-from services.data.src.collectors.sentiment_collector import SentimentCollector
-from services.data.src.collectors.shipping_collector import ShippingCollector
-from services.data.src.collectors.tqsdk_collector import TqSdkCollector
-from services.data.src.collectors.tushare_futures_collector import TushareFuturesCollector
-from services.data.src.collectors.tushare_collector import TushareDailyCollector
-from services.data.src.collectors.volatility_collector import VolatilityCollector
-from services.data.src.data.source_manager import SourceManager
-from services.data.src.data.storage import HDF5Storage
-from services.data.src.data.sentiment_mapper import map_news_to_score, map_sentiment_to_score
-from services.data.src.utils.config import get_config
+from src.collectors.akshare_backup import AkshareBackupCollector
+from src.collectors.base import BaseCollector
+from src.collectors.cftc_collector import CftcCollector
+from src.collectors.watchlist_client import WatchlistClient
+from src.collectors.forex_collector import ForexCollector
+from src.collectors.macro_collector import MacroCollector
+from src.collectors.news_api_collector import NewsAPICollector
+from src.collectors.options_collector import OptionsCollector
+from src.collectors.position_collector import PositionCollector
+from src.collectors.rss_collector import RSSCollector
+from src.collectors.sentiment_collector import SentimentCollector
+from src.collectors.shipping_collector import ShippingCollector
+from src.collectors.tqsdk_collector import TqSdkCollector
+from src.collectors.tushare_futures_collector import TushareFuturesCollector
+from src.collectors.tushare_collector import TushareDailyCollector
+from src.collectors.volatility_collector import VolatilityCollector
+from src.data.source_manager import SourceManager
+from src.data.storage import HDF5Storage
+from src.data.sentiment_mapper import map_news_to_score, map_sentiment_to_score
+from src.utils.config import get_config
 
 _logger = logging.getLogger(__name__)
 
@@ -182,7 +182,7 @@ def run_overseas_daily_pipeline(
     resolved_config = config or get_config()
     resolved_storage = storage or _build_storage(resolved_config)
 
-    from services.data.src.collectors.overseas_minute_collector import OverseasMinuteCollector
+    from src.collectors.overseas_minute_collector import OverseasMinuteCollector
     collector = OverseasMinuteCollector(config=resolved_config, storage=resolved_storage)
 
     result: dict[str, int] = {}
@@ -215,7 +215,7 @@ def run_overseas_minute_yf_pipeline(
     resolved_config = config or get_config()
     resolved_storage = storage or _build_storage(resolved_config)
 
-    from services.data.src.collectors.overseas_minute_collector import OverseasMinuteCollector
+    from src.collectors.overseas_minute_collector import OverseasMinuteCollector
     collector = OverseasMinuteCollector(config=resolved_config, storage=resolved_storage)
 
     result: dict[str, int] = {}
@@ -243,7 +243,7 @@ def run_stock_minute_pipeline(
     resolved_config = config or get_config()
     resolved_storage = storage or _build_storage(resolved_config)
 
-    from services.data.src.collectors.stock_minute_collector import StockMinuteCollector
+    from src.collectors.stock_minute_collector import StockMinuteCollector
     collector = StockMinuteCollector(
         config=resolved_config,
         storage=resolved_storage,
@@ -297,7 +297,7 @@ def run_macro_pipeline(
     except Exception as exc:
         _logger.warning("macro primary (AkShare) failed: %s, trying Tushare backup", exc)
         try:
-            from services.data.src.collectors.tushare_full_collector import TushareFullCollector
+            from src.collectors.tushare_full_collector import TushareFullCollector
             ts_col = TushareFullCollector(config=resolved_config)
             shibor = ts_col.collect_shibor()
             records = [{"symbol": symbol, "indicator": "shibor", "value": r} for r in shibor]
@@ -459,7 +459,7 @@ def run_sentiment_pipeline(
     except Exception as exc:
         _logger.warning("sentiment primary (AkShare) failed: %s, trying Tushare backup", exc)
         try:
-            from services.data.src.collectors.tushare_full_collector import TushareFullCollector
+            from src.collectors.tushare_full_collector import TushareFullCollector
             ts_col = TushareFullCollector(config=resolved_config)
             margin = ts_col.collect_margin_detail() if hasattr(ts_col, "collect_margin_detail") else []
             records = [{"symbol": symbol, "indicator": "margin", "value": r} for r in margin]
@@ -611,7 +611,7 @@ def run_watchlist_minute_pipeline(
     """CB5: 从决策服务 watchlist API 动态获取股票列表，采集分钟 K 线。"""
     from collections import defaultdict
 
-    from services.data.src.collectors.stock_minute_collector import StockMinuteCollector
+    from src.collectors.stock_minute_collector import StockMinuteCollector
 
     resolved_config = config or get_config()
     resolved_storage = storage or _build_storage(resolved_config)

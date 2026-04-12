@@ -13,7 +13,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from services.data.src.utils.logger import get_logger
+from src.utils.logger import get_logger
 
 logger = get_logger("data.heartbeat")
 
@@ -124,7 +124,7 @@ class DeviceHealthReporter:
             ).stdout
             for label, keyword in [
                 ("数据采集调度", "data_scheduler"),
-                ("数据 API",     "services.data.src.main"),
+                ("数据 API",     "src.main"),
             ]:
                 procs.append({"label": label, "ok": keyword in ps_out, "uptime": ""})
         except Exception:
@@ -153,8 +153,8 @@ class DeviceHealthReporter:
             return
 
         try:
-            from services.data.src.notify import card_templates as ct
-            from services.data.src.notify.feishu import FeishuSender
+            from src.notify import card_templates as ct
+            from src.notify.feishu import FeishuSender
 
             card = ct.device_health_card(
                 cpu_pct=cpu_pct,

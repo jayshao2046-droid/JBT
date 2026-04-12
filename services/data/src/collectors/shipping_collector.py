@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from services.data.src.collectors.base import BaseCollector
+from src.collectors.base import BaseCollector
 
 
 class ShippingCollector(BaseCollector):
@@ -104,7 +104,7 @@ class ShippingCollector(BaseCollector):
     def _fetch_restricted_index(self, *, name: str, timestamp: str) -> list[dict[str, Any]]:
         """Attempt to fetch SCFI/CCFI from Investing.com via httpx."""
         import httpx
-        from services.data.src.utils.proxy import get_httpx_proxy_kwargs
+        from src.utils.proxy import get_httpx_proxy_kwargs
         # Investing.com 提供 Baltic 和集装箱运价指数的公开页面
         ticker_map = {
             "scfi": "https://www.investing.com/indices/shanghai-containerized-freight",

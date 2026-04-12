@@ -14,8 +14,8 @@ import time
 from datetime import datetime
 from typing import Any
 
-from services.data.src.collectors.base import BaseCollector
-from services.data.src.collectors.watchlist_client import WatchlistClient
+from src.collectors.base import BaseCollector
+from src.collectors.watchlist_client import WatchlistClient
 
 
 class StockMinuteCollector(BaseCollector):

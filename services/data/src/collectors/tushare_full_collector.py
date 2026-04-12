@@ -11,8 +11,8 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from services.data.src.collectors.base import BaseCollector
-from services.data.src.utils.logger import get_logger
+from src.collectors.base import BaseCollector
+from src.utils.logger import get_logger
 
 logger = get_logger("tushare_full_collector")
 

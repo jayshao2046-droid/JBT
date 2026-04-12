@@ -1,7 +1,7 @@
 """Manage failover between primary and secondary data sources.
 
 Migrated from legacy J_BotQuant/src/data/source_manager.py.
-Import paths updated: src.utils → services.data.src.utils
+Import paths updated: services.data.src.utils → src.utils
 """
 
 from __future__ import annotations
@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Protocol
 
-from services.data.src.utils.exceptions import DataError
-from services.data.src.utils.logger import get_logger
+from src.utils.exceptions import DataError
+from src.utils.logger import get_logger
 
 
 class DataSource(Protocol):
