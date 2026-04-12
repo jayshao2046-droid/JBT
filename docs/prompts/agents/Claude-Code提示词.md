@@ -43,3 +43,11 @@
 - **原因**: `FeishuNotifier` 类已在新通知系统迁移时移除，旧 fallback 代码会抛出 NameError
 - **影响范围**: health_check.py send_p0_alert 函数的 except 分支
 - **SG 备注**: F-002(subprocess)/F-003(query) 涉及的文件 (storage.py/health_remediate.py) 不在当前 Token 白名单，留待 SG5 统一修复
+
+### 修改 5: dispatcher.py 添加 FACTOR/WATCHLIST 通知类型
+- **文件**: `services/data/src/notify/dispatcher.py`
+- **变更**:
+  - `NotifyType` 枚举新增 `FACTOR` 和 `WATCHLIST` 两个值
+  - `_webhook_for_type` 新增两种类型的 Webhook 路由链：FACTOR → 交易群优先，WATCHLIST → 资讯群优先
+- **原因**: 因子通知器和 watchlist 更新需要通过标准通知流水线发送
+- **影响范围**: dispatcher.py NotifyType 枚举 + _webhook_for_type 路由函数
