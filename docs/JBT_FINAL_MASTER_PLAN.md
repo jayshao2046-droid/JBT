@@ -16,10 +16,10 @@
 | data | `████████████` **100%** | ✅ 生产运行中 | Round 1 收口完成，维护态 |
 | backtest | `████████████` **100%** | ✅ 生产运行中 | Round 2 安全加固完成，维护态 |
 | sim-trading | `███████████░` **90%** | ✅ 待开盘CTP验证 | Phase B全闭环；等待正式交易日验证 |
-| decision | `██████████░░` **85%** | 🔶 Phase C收尾 | CB1~CB9+CA1~CA5股票链已完成；CA7/CS1收尾中 |
+| decision | `███████████░` **90%** | 🔶 Phase C主体闭环 | CB/CA/CS全闭环；剩余CK因子同步+CF1'口头策略 |
 | dashboard | `█░░░░░░░░░░░` **5%** | ⏳ 后置 | 等待所有后端服务稳定后一次性上线 |
 | live-trading | `░░░░░░░░░░░░` **0%** | ⏳ 后置 | 等待sim稳定运行2~3月后评估 |
-| **整体** | `██████████░░` **~84%** | **Phase C收口中** | **ECS已永久停用；J_BotQuant Phase C后切割** |
+| **整体** | `██████████░░` **~87%** | **Phase C主体闭环** | **ECS已永久停用；J_BotQuant Phase C后切割** |
 
 > **更新规则：** 每次 Atlas 更新治理文件时同步刷新本表格和百分比。
 
@@ -110,7 +110,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 > **[修订 2026-04-11] 当前 sim-trading 已完成光大期货 CTP 接通、前端下单/撤单 UI、system/state 脱敏、自动重连与状态同步；但仍未接通期货公式 / 策略公式执行链路。**
 
-### 2.2 决策 decision — 85% [修订 2026-04-13 Phase C CB股票链+CA前端全闭环]
+### 2.2 决策 decision — 90% [修订 2026-04-13 Phase C 主体全闭环]
 
 **负责 Agent：决策**
 **服务目录：`services/decision/`**
@@ -126,8 +126,8 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 股票沙箱回测 | ✅ 已完成 | `CB2'` TASK-0057 sandbox_engine.py T+1/涨跌停扩展 [2026-04-12] |
 | 策略调优引擎 | ✅ 已完成 | `CA4` TASK-0061 trade_optimizer 网格搜索投产 [2026-04-12] |
 | 导入通道 | ✅ 已完成 | `C0-3` TASK-0051 strategy_importer + `CF2` TASK-0063 邮件+看板YAML导入投产 [2026-04-12] |
-| 股票研究中心 | ✅ 主体完成 | CB1~CB9全链路已投产 (TASK-0069~0074)；CA7 PBO检验/CS1 容灾收尾中 [2026-04-13] |
-| 本地 Sim 容灾 | 🔶 实施中 | `CS1` TASK-0076 LocalSimEngine，Claude Code 执行中 [2026-04-13] |
+| 股票研究中心 | ✅ 全闭环 | CB1~CB9全链路+CA7 PBO检验投产 (TASK-0069~0075)，200测试通过 [2026-04-13] |
+| 本地 Sim 容灾 | ✅ 已完成 | `CS1` TASK-0076 LocalSimEngine commit 3c8be69，12测试通过 [2026-04-13] |
 | 因子同步 | 🔶 规划中 | `CK1~CK3`，研究中心与回测端双地一致；研究中心自研因子必须同步 |
 | 模型路由 | 🔶 资格验证 | `src/model/router.py`，版本对齐+因子HASH校验，无实际推理加载（P2） |
 | 门控 | ✅ 已完成 | `src/gating/`（backtest_gate/research_gate） |
@@ -136,11 +136,11 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 报告 | ✅ 基线完成 | `src/reporting/`（daily+research_summary投产）；后续补回测/荐股/盘后评估报告 |
 | 临时看板 | ✅ 已扩容 | `decision_web/` 7+3 页面：股票池/盘中信号/期货研究面板已上线 (TASK-0074) [2026-04-13] |
 | Dockerfile | ✅ 已修复 | TASK-0021-H0 |
-| 测试 | ✅ 146+用例 | `tests/` CB4~CB8 四模块 41 用例扩容后基线 [修订 2026-04-13] |
+| 测试 | ✅ 200用例 | `tests/` Phase C 全量扩容后通过 [修订 2026-04-13] |
 
-**已完成任务：** TASK-0021(A契约+H0~H7全批次锁回), TASK-0024(部署审查), TASK-0050(C0-1), TASK-0051(C0-3), TASK-0052(CG1), TASK-0053(C0-2), TASK-0054(CB5), TASK-0055(CG2), TASK-0056(CA2'), TASK-0057(CB2'), TASK-0058(CG3), TASK-0059(CA6), TASK-0060(CA3), TASK-0061(CA4), TASK-0062(CB3), TASK-0063(CF2), TASK-0069(CB1), TASK-0070(CB4), TASK-0071(CB6), TASK-0072(CB7), TASK-0073(CB8), TASK-0074(CB9+CA1+CA5前端) [修订 2026-04-13]
-**剩余缺口（Phase C 收尾）：** CA7 PBO过拟合检验(TASK-0075，执行中)、CS1 本地Sim容灾(TASK-0076，执行中)、CS1-S 交易端接口、CF1' 飞书口头策略(后置)、因子双地同步 CK1~CK3(涉及P0，单独预审)
-**当前活跃：** TASK-0075/0076 Claude Code 执行中；路由注册 app.py 同步更新 [修订 2026-04-13]
+**已完成任务：** TASK-0021(A契约+H0~H7全批次锁回), TASK-0024(部署审查), TASK-0050(C0-1), TASK-0051(C0-3), TASK-0052(CG1), TASK-0053(C0-2), TASK-0054(CB5), TASK-0055(CG2), TASK-0056(CA2'), TASK-0057(CB2'), TASK-0058(CG3), TASK-0059(CA6), TASK-0060(CA3), TASK-0061(CA4), TASK-0062(CB3), TASK-0063(CF2), TASK-0069(CB1), TASK-0070(CB4), TASK-0071(CB6), TASK-0072(CB7), TASK-0073(CB8), TASK-0074(CB9+CA1+CA5前端), TASK-0075(CA7), TASK-0076(CS1+路由注册) [修订 2026-04-13]
+**剩余缺口（Phase C 尾项）：** CS1-S 交易端交接接口、CF1' 飞书口头策略(后置/需LLM)、CK1~CK3 因子双地同步(涉及P0 shared/python-common)
+**当前活跃：** Phase C 主体全闭环，9枚Token全锁回，200全量测试通过 [修订 2026-04-13]
 
 ### 2.3 数据 data — 100% [修订 2026-04-12 Round 1 收口完成]
 
@@ -412,7 +412,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 > - **CA6**：✅ 已完成 → TASK-0059 signal_dispatcher 投产 [2026-04-12]
 > - **CA1**：✅ 已完成 → TASK-0074 期货研究入口页面+FuturesResearchPanel 投产 [2026-04-13]
 > - **CA5**：✅ 已完成 → TASK-0074 期货研究中心 UI 投产 [2026-04-13]
-> - **CA7**：🔶 执行中 → TASK-0075 PBOValidator Claude Code 实施中 [2026-04-13]
+> - **CA7**：✅ 已完成 → TASK-0075 PBOValidator CSCV实现 commit eb33055，11测试通过 [2026-04-13]
 
 #### CB 股票研究链路
 
@@ -476,7 +476,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | CS1 | decision 本地 Sim 容灾引擎 | 决策 | 模拟交易/实盘交易 | 平时 standby；一旦与正式交易端断联，即可本地接管任务与临时账本 |
 | CS1-S | 交易端交接接口 | 模拟交易 | 决策/实盘交易 | 正式交易端恢复后可接收订单/持仓/账本差异并完成任务回切 |
 
-> **[修订 2026-04-13] CS1**：🔶 执行中 → TASK-0076 LocalSimEngine Claude Code 实施中，token tok-b317417b [2026-04-13]
+> **[修订 2026-04-13] CS1**：✅ 已完成 → TASK-0076 LocalSimEngine failover 引擎 commit 3c8be69，12测试通过 [2026-04-13]
 
 #### CK 因子体系
 
