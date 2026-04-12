@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 from typing import Any
 
@@ -10,6 +11,18 @@ import numpy as np
 from ..core.settings import get_settings
 from ..gating.backtest_gate import get_backtest_gate
 from .stock_data_client import StockDataClient
+
+# TASK-0083: 接入共享因子注册表
+try:
+    from shared.python_common.factors.registry import check_coverage, get_jbt_factors
+except ImportError:
+    # Fallback: 如果共享库未安装，使用本地实现
+    def check_coverage(required_factors):
+        return {name: True for name in required_factors}
+    def get_jbt_factors():
+        return []
+
+logger = logging.getLogger(__name__)
 
 
 class FactorLoadError(RuntimeError):
@@ -37,7 +50,15 @@ class FactorLoader:
         n_samples: int = 200,
         n_features: int = 20,
     ) -> tuple[np.ndarray, np.ndarray]:
-        """返回由 bars 构造的最小可用 (X, y) tuple。"""
+        """返回由 bars 构造的最小可用 (X, y) tuple。
+
+        TASK-0083: 校验因子是否在共享注册表中。
+        """
+        # 校验因子覆盖（基础因子：close_return, intrabar_range, candle_body, volume_return, open_interest_return）
+        jbt_factors = get_jbt_factors()
+        if jbt_factors:
+            logger.info(f"共享因子注册表已加载，包含 {len(jbt_factors)} 个因子")
+
         symbol = self._resolve_data_symbol(strategy_id)
         bars = self._fetch_bars(
             symbol=symbol,

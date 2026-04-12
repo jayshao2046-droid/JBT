@@ -31,6 +31,7 @@ class SignalDispatcher:
     def __init__(self, sim_trading_url: str = "http://localhost:8101") -> None:
         self.sim_trading_url = sim_trading_url.rstrip("/")
         self._dispatched: dict[str, dict] = {}  # signal_id -> status record
+        self.max_history = 10000
 
     # ------------------------------------------------------------------
     # Public API
@@ -38,6 +39,15 @@ class SignalDispatcher:
 
     async def dispatch(self, request: SignalDispatchRequest) -> SignalDispatchResponse:
         now = datetime.now(timezone.utc).isoformat()
+
+        # 0. FIFO 淘汰逻辑（防止内存泄漏）
+        if len(self._dispatched) > self.max_history:
+            oldest_keys = sorted(
+                self._dispatched.keys(),
+                key=lambda k: self._dispatched[k].get("dispatched_at", ""),
+            )[: len(self._dispatched) - self.max_history]
+            for key in oldest_keys:
+                del self._dispatched[key]
 
         # 1. 幂等检查
         if request.signal_id in self._dispatched:

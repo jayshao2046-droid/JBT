@@ -1,4 +1,7 @@
-"""LLM API routes."""
+"""LLM API routes.
+
+TASK-0083: 增强 API，支持传入 symbol+timeframe 自动拉取数据，支持 auto_backtest 参数。
+"""
 
 import logging
 from typing import Any, Dict, Optional
@@ -6,8 +9,8 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from ..llm.client import OllamaClient
-from ..llm.pipeline import LLMPipeline
+from ...llm.client import OllamaClient
+from ...llm.pipeline import LLMPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +63,14 @@ class AuditResponse(BaseModel):
 
 
 class AnalyzeRequest(BaseModel):
-    """Request for performance analysis."""
+    """Request for performance analysis.
+
+    TASK-0083: 支持传入 symbol+timeframe 自动拉取数据。
+    """
 
     performance_data: Dict[str, Any]
+    symbol: Optional[str] = None
+    timeframe: Optional[str] = None
 
 
 class AnalyzeResponse(BaseModel):
@@ -75,10 +83,14 @@ class AnalyzeResponse(BaseModel):
 
 
 class PipelineRequest(BaseModel):
-    """Request for full pipeline execution."""
+    """Request for full pipeline execution.
+
+    TASK-0083: 支持 auto_backtest 参数。
+    """
 
     intent: str
     performance_data: Optional[Dict[str, Any]] = None
+    auto_backtest: bool = False
 
 
 class PipelineResponse(BaseModel):
@@ -128,14 +140,16 @@ async def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
     """
     Analyze strategy performance data.
 
+    TASK-0083: 支持传入 symbol+timeframe 自动拉取数据。
+
     Args:
-        req: Analysis request with performance data
+        req: Analysis request with performance data and optional symbol/timeframe
 
     Returns:
         Analysis report with insights
     """
     pipeline = get_pipeline()
-    result = await pipeline.analyze(req.performance_data)
+    result = await pipeline.analyze(req.performance_data, req.symbol, req.timeframe)
     return AnalyzeResponse(**result)
 
 
@@ -144,12 +158,14 @@ async def pipeline(req: PipelineRequest) -> PipelineResponse:
     """
     Execute full pipeline: research → audit → analyze.
 
+    TASK-0083: 支持 auto_backtest=true 参数。
+
     Args:
-        req: Pipeline request with intent and optional performance data
+        req: Pipeline request with intent, optional performance data, and auto_backtest flag
 
     Returns:
         Results from all pipeline steps
     """
     pipeline_instance = get_pipeline()
-    result = await pipeline_instance.full_pipeline(req.intent, req.performance_data)
+    result = await pipeline_instance.full_pipeline(req.intent, req.performance_data, req.auto_backtest)
     return PipelineResponse(**result)

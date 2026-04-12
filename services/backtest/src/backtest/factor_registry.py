@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import math
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
@@ -8,6 +9,20 @@ try:
     from .strategy_base import StrategyConfigError
 except ImportError:
     from strategy_base import StrategyConfigError
+
+# TASK-0083: 接入共享因子注册表
+try:
+    from shared.python_common.factors.registry import (
+        FactorRegistry as SharedFactorRegistry,
+        get_jbt_factors,
+    )
+    _shared_registry = SharedFactorRegistry()
+except ImportError:
+    _shared_registry = None
+    def get_jbt_factors():
+        return []
+
+logger = logging.getLogger(__name__)
 
 FactorCalculator = Callable[[List[Dict[str, Any]], Dict[str, Any]], List[Dict[str, Any]]]
 
@@ -128,6 +143,31 @@ class FactorRegistry:
 
 
 factor_registry = FactorRegistry()
+
+
+# TASK-0083: 启动时校验本地因子与共享注册表的一致性
+def _validate_factor_consistency():
+    """启动时校验本地因子与共享注册表的一致性。"""
+    if _shared_registry is None:
+        logger.warning("共享因子注册表未加载，跳过一致性校验")
+        return
+
+    local_factors = factor_registry.list_factors()
+    jbt_factors = get_jbt_factors()
+
+    missing = set(jbt_factors) - set(local_factors)
+    if missing:
+        logger.warning(f"本地因子注册表缺失 JBT 标准因子: {', '.join(sorted(missing))}")
+
+    extra = set(local_factors) - set(jbt_factors)
+    if extra:
+        logger.info(f"本地因子注册表包含额外因子: {', '.join(sorted(extra))}")
+
+    logger.info(f"因子注册表校验完成: 本地 {len(local_factors)} 个，JBT 标准 {len(jbt_factors)} 个")
+
+
+# 模块加载时自动校验
+_validate_factor_consistency()
 
 
 def _normalize_factor_name(factor_name: str) -> str:

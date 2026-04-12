@@ -1,4 +1,7 @@
-"""Ollama HTTP client for model inference."""
+"""Ollama HTTP client for model inference.
+
+TASK-0083: 必要时增加 data 拉取辅助方法（当前无需修改）。
+"""
 
 import logging
 import os

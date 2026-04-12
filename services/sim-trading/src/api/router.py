@@ -554,14 +554,15 @@ def ctp_connect(silent: bool = False):
 @router.post("/ctp/disconnect")
 def ctp_disconnect():
     global _gateway
-    if _gateway is not None:
-        try:
-            _gateway.disconnect()
-        except Exception:
-            pass
-        _gateway = None
-    _system_state["ctp_md_connected"] = False
-    _system_state["ctp_td_connected"] = False
+    with _connect_lock:
+        if _gateway is not None:
+            try:
+                _gateway.disconnect()
+            except Exception:
+                pass
+            _gateway = None
+        _system_state["ctp_md_connected"] = False
+        _system_state["ctp_td_connected"] = False
     try:
         from src.risk.guards import emit_alert
         emit_alert("P2", "CTP 接口主动断开连接", {"event_code": "CTP_DISCONNECTED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})

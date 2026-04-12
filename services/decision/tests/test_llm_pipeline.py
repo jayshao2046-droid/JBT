@@ -1,4 +1,7 @@
-"""Tests for LLM pipeline."""
+"""Tests for LLM pipeline.
+
+TASK-0083: 补充集成测试（data 拉取、auto_backtest）。
+"""
 
 import json
 from unittest.mock import AsyncMock, patch
@@ -198,3 +201,85 @@ async def test_pipeline_full_normal_execution():
     assert "skipped" not in result["analysis_result"]
     assert "Strategy shows good momentum" in result["analysis_result"]["analysis"]
     assert result["total_duration_seconds"] > 0
+
+
+@pytest.mark.asyncio
+async def test_pipeline_auto_backtest():
+    """Test full_pipeline with auto_backtest=True.
+
+    TASK-0083: 测试自动沙箱回测功能。
+    """
+    mock_client = AsyncMock(spec=OllamaClient)
+
+    # Mock research response
+    research_response = {
+        "content": "def strategy():\n    pass",
+        "model": "deepcoder:14b",
+        "total_duration": 1000000000,
+        "eval_count": 50,
+        "eval_duration": 500000000,
+    }
+
+    # Mock audit response (passed)
+    audit_response = {
+        "passed": True,
+        "issues": [],
+        "risk_level": "low",
+        "summary": "Code looks good",
+    }
+
+    mock_client.chat = AsyncMock(
+        side_effect=[
+            research_response,
+            {"content": json.dumps(audit_response), "model": "qwen3:14b"},
+        ]
+    )
+
+    pipeline = LLMPipeline(client=mock_client)
+    result = await pipeline.full_pipeline(
+        "Create a momentum strategy", auto_backtest=True
+    )
+
+    assert "research_result" in result
+    assert "audit_result" in result
+    assert result["audit_result"]["passed"] is True
+    assert "backtest_result" in result
+    # 当前返回占位结果
+    assert result["backtest_result"]["status"] == "not_implemented"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_analyze_with_symbol():
+    """Test analyze with symbol and timeframe for auto data fetching.
+
+    TASK-0083: 测试自动拉取 K 线数据功能。
+    """
+    mock_client = AsyncMock(spec=OllamaClient)
+
+    analysis_response = {
+        "content": "Strategy shows good momentum characteristics",
+        "model": "phi4-reasoning:14b",
+        "total_duration": 1000000000,
+        "eval_count": 50,
+        "eval_duration": 500000000,
+    }
+
+    mock_client.chat = AsyncMock(return_value=analysis_response)
+
+    pipeline = LLMPipeline(client=mock_client)
+
+    # Mock _fetch_kline_data
+    with patch.object(pipeline, "_fetch_kline_data", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = [
+            {"open": 100, "high": 105, "low": 99, "close": 103, "volume": 1000},
+            {"open": 103, "high": 107, "low": 102, "close": 106, "volume": 1200},
+        ]
+
+        result = await pipeline.analyze(
+            {"sharpe": 1.5}, symbol="000001.SZ", timeframe="1m"
+        )
+
+        assert "error" not in result
+        assert "analysis" in result
+        mock_fetch.assert_called_once()
+
