@@ -129,4 +129,13 @@
   - 正确 Key 正常访问（/strategies 200）
   - /health 始终可达
   - 错误 Key 返回 403
-- **验证**: 5/5 通过
+- **验证**: 决策端 5/5 认证测试通过
+
+### 修改 12: decision settings.py 添加 sim_trading_url + Python 3.9 兼容修复
+- **文件**: `services/decision/src/core/settings.py`
+  - 新增 `sim_trading_url: str = "http://localhost:8101"` 设置项
+- **文件**: `services/decision/src/research/sandbox_engine.py`
+  - 修复 2 处 Python 3.10+ 类型语法 → Python 3.9 兼容
+- **文件**: `services/decision/src/research/stock_screener.py`
+  - 修复 4 处 Python 3.10+ 类型语法 → Python 3.9 兼容
+- **验证**: 108 同步测试通过

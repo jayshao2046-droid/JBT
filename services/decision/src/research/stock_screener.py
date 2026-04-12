@@ -7,7 +7,7 @@ import math
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -19,7 +19,7 @@ class ScreenResult:
     universe_size: int
     top_n: int
     ranked_list: list[dict] = field(default_factory=list)
-    benchmark: dict | None = None
+    benchmark: Optional[Dict] = None
     screening_params: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -42,7 +42,7 @@ class StockScreener:
         symbols: list[str],
         top_n: int = 20,
         lookback_days: int = 20,
-        benchmark_symbol: str | None = None,
+        benchmark_symbol: Optional[str] = None,
     ) -> ScreenResult:
         """对 *symbols* 列表做多因子打分，返回 TOP-N 排名。"""
         screen_id = f"scr-{uuid.uuid4().hex[:12]}"
@@ -77,7 +77,7 @@ class StockScreener:
             })
 
         # benchmark
-        bench: dict | None = None
+        bench: Optional[Dict] = None
         if benchmark_symbol:
             try:
                 bench_bars = self._fetch_daily_bars(benchmark_symbol, lookback_days)
@@ -103,7 +103,7 @@ class StockScreener:
         self._results[screen_id] = result
         return result
 
-    def get_result(self, screen_id: str) -> ScreenResult | None:
+    def get_result(self, screen_id: str) -> Optional[ScreenResult]:
         return self._results.get(screen_id)
 
     def list_results(self) -> list[ScreenResult]:

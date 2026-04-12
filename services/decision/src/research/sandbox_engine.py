@@ -9,7 +9,7 @@ import math
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, List, Optional
 
 import httpx
 
@@ -48,7 +48,7 @@ class SandboxEngine:
         end_time: str,
         asset_type: str = "futures",
         initial_capital: float = 1_000_000,
-        symbols: list[str] | None = None,
+        symbols: Optional[List[str]] = None,
     ) -> SandboxResult:
         backtest_id = f"sandbox-{uuid.uuid4().hex[:12]}"
         ts_start = datetime.now(timezone.utc).isoformat()
@@ -186,7 +186,7 @@ class SandboxEngine:
         position = 0.0
         entry_price = 0.0
         trades: list[dict] = []
-        buy_bar_date: str | None = None  # T+1 tracking for stock
+        buy_bar_date: Optional[str] = None  # T+1 tracking for stock
 
         for i in range(long_window, len(closes)):
             sma_short = sum(closes[i - short_window : i]) / short_window

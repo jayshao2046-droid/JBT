@@ -35,6 +35,7 @@ class Settings(BaseSettings):
 
     # 服务集成
     backtest_service_url: str = "http://localhost:8103"
+    sim_trading_url: str = "http://localhost:8101"
     data_service_url: str = "http://localhost:8105"
     data_service_timeout: int = 30
     decision_state_file: str = "./runtime/decision-state.json"
