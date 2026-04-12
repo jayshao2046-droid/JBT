@@ -178,3 +178,129 @@ def test_tqsdk_mock_collect_returns_list() -> None:
     c = TqSdkCollector(use_mock=True)
     records = c.collect()
     assert isinstance(records, list)
+
+
+# ── BaseCollector storage_ready 属性测试 ───────────────────
+
+def test_base_collector_storage_ready_false_when_none() -> None:
+    """storage_ready should be False when storage is None."""
+    from services.data.src.collectors.base import BaseCollector
+
+    class _TestCollector(BaseCollector):
+        def collect(self, **kwargs: Any) -> list[dict[str, Any]]:
+            return []
+
+    c = _TestCollector(name="test_storage")
+    assert c.storage_ready is False
+
+
+def test_base_collector_storage_ready_true_when_set() -> None:
+    """storage_ready should be True when storage is provided."""
+    from services.data.src.collectors.base import BaseCollector
+
+    class _TestCollector(BaseCollector):
+        def collect(self, **kwargs: Any) -> list[dict[str, Any]]:
+            return []
+
+    c = _TestCollector(name="test_storage", storage=object())
+    assert c.storage_ready is True
+
+
+def test_base_collector_save_returns_zero_without_storage() -> None:
+    """save() should return 0 and not crash when storage is None."""
+    from services.data.src.collectors.base import BaseCollector
+
+    class _TestCollector(BaseCollector):
+        def collect(self, **kwargs: Any) -> list[dict[str, Any]]:
+            return [{"foo": "bar"}]
+
+    c = _TestCollector(name="test_save")
+    result = c.save(symbol="test", records=[{"foo": "bar"}], data_type="test")
+    assert result == 0
+
+
+def test_base_collector_save_returns_zero_with_empty_records() -> None:
+    """save() should return 0 for empty records list."""
+    from services.data.src.collectors.base import BaseCollector
+
+    class _TestCollector(BaseCollector):
+        def collect(self, **kwargs: Any) -> list[dict[str, Any]]:
+            return []
+
+    c = _TestCollector(name="test_empty")
+    result = c.save(symbol="test", records=[], data_type="test")
+    assert result == 0
+
+
+def test_base_collector_retry_on_failure() -> None:
+    """_collect_with_retry should retry up to retry_times."""
+    from services.data.src.collectors.base import BaseCollector
+    from services.data.src.utils.exceptions import DataError
+
+    call_count = 0
+
+    class _FailCollector(BaseCollector):
+        def collect(self, **kwargs: Any) -> list[dict[str, Any]]:
+            nonlocal call_count
+            call_count += 1
+            raise ValueError("always fail")
+
+    c = _FailCollector(name="test_retry")
+    c.retry_times = 2
+    with pytest.raises(DataError, match="collect failed after 2 attempts"):
+        c._collect_with_retry()
+    assert call_count == 2
+
+
+# ── NotifierDispatcher 通知类型测试 ──────────────────────────
+
+def test_notify_type_includes_factor_and_watchlist() -> None:
+    """NotifyType enum should include FACTOR and WATCHLIST."""
+    from services.data.src.notify.dispatcher import NotifyType
+
+    assert hasattr(NotifyType, "FACTOR")
+    assert hasattr(NotifyType, "WATCHLIST")
+    assert NotifyType.FACTOR.value == "FACTOR"
+    assert NotifyType.WATCHLIST.value == "WATCHLIST"
+
+
+def test_webhook_for_type_returns_string() -> None:
+    """_webhook_for_type should return a string for all notify types."""
+    from services.data.src.notify.dispatcher import NotifyType, _webhook_for_type
+
+    for nt in NotifyType:
+        result = _webhook_for_type(nt)
+        assert isinstance(result, str)
+
+
+# ── API 认证测试 ──────────────────────────────────────────────
+
+def test_data_api_key_env_not_set_allows_access() -> None:
+    """When DATA_API_KEY is not set, all endpoints should be accessible."""
+    import os
+    os.environ.pop("DATA_API_KEY", None)
+
+    from services.data.src.main import app
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+    resp = client.get("/api/v1/symbols")
+    assert resp.status_code in (200, 404)  # 200 or 404 depending on data dir
+
+
+def test_health_endpoint_always_accessible() -> None:
+    """Health endpoint should always be accessible regardless of API key."""
+    import os
+    os.environ["DATA_API_KEY"] = "test-secret-key-12345"
+
+    try:
+        from services.data.src.main import app, _DATA_API_KEY
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        resp = client.get("/health")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+    finally:
+        os.environ.pop("DATA_API_KEY", None)

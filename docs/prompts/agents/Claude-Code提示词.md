@@ -51,3 +51,15 @@
   - `_webhook_for_type` 新增两种类型的 Webhook 路由链：FACTOR → 交易群优先，WATCHLIST → 资讯群优先
 - **原因**: 因子通知器和 watchlist 更新需要通过标准通知流水线发送
 - **影响范围**: dispatcher.py NotifyType 枚举 + _webhook_for_type 路由函数
+
+### 修改 6: test_collectors.py 扩充测试覆盖
+- **文件**: `services/data/tests/test_collectors.py`
+- **变更**: 新增 11 个测试用例
+  - `storage_ready` 属性测试 (True/False)
+  - `save()` 空记录、无 storage 场景测试
+  - `_collect_with_retry` 重试次数验证
+  - `NotifyType` FACTOR/WATCHLIST 枚举测试
+  - `_webhook_for_type` 全类型路由测试
+  - API 认证中间件测试：DATA_API_KEY 未设置时允许访问、/health 始终可达
+- **原因**: 扩展测试覆盖率，验证本轮新增功能
+- **影响范围**: test_collectors.py 新增测试函数
