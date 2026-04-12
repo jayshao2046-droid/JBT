@@ -16,6 +16,7 @@ from .routes.report import router as report_router
 from .routes.optimizer import router as optimizer_router
 from .routes.screener import router as screener_router
 from .routes.import_channel import router as import_channel_router
+from .routes.stock_template import router as stock_template_router
 
 _DECISION_API_KEY = os.environ.get("DECISION_API_KEY", "")
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
     app.include_router(optimizer_router)
     app.include_router(screener_router)
     app.include_router(import_channel_router)
+    app.include_router(stock_template_router)
 
     return app
 
