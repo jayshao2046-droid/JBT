@@ -807,3 +807,30 @@ def get_logs_tail(
         records = [r for r in records if source in r["source"]]
     tail = records[-limit:]
     return {"logs": tail, "total": len(tail)}
+
+
+# ---------- Failover 容灾交接 ----------
+from src.failover.handler import FailoverHandler, HandoverPayload
+
+_failover_handler = FailoverHandler()
+
+
+@router.post("/failover/handover")
+def failover_handover(data: HandoverPayload):
+    """接收来自 decision LocalSimEngine 的交接数据"""
+    result = _failover_handler.receive_handover(data)
+    return result
+
+
+@router.get("/failover/status")
+def failover_status():
+    """查询当前交接状态"""
+    return _failover_handler.get_status()
+
+
+@router.post("/failover/confirm")
+def failover_confirm(body: dict):
+    """确认交接完成"""
+    handover_id = body.get("handover_id", "")
+    success = _failover_handler.confirm_handover(handover_id)
+    return {"success": success, "handover_id": handover_id}
