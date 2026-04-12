@@ -1,6 +1,8 @@
 """调优路由 — TASK-0061 CA4"""
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -45,7 +47,7 @@ def run_optimization(req: OptimizeRequest):
 
 
 @router.get("/results")
-def list_results(strategy_id: str | None = None):
+def list_results(strategy_id: Optional[str] = None):
     """列出调优历史。"""
     results = _optimizer.list_results(strategy_id=strategy_id)
     return [r.to_dict() for r in results]

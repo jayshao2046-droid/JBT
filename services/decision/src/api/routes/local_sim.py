@@ -1,6 +1,8 @@
 """本地 Sim 容灾 API 路由 — TASK-0076 CS1"""
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -32,7 +34,7 @@ class PlaceOrderResponse(BaseModel):
     price: float
     status: str
     created_at: str
-    filled_at: str | None
+    filled_at: Optional[str]
 
 
 class GetPositionsResponse(BaseModel):
@@ -50,7 +52,7 @@ class BacktestRequest(BaseModel):
     end_time: str = Field(..., description="结束时间（ISO 格式）")
     asset_type: str = Field("futures", description="资产类型（futures/stock）")
     initial_capital: float = Field(1_000_000, description="初始资金")
-    symbols: list[str] | None = Field(None, description="合约列表")
+    symbols: Optional[list[str]] = Field(None, description="合约列表")
 
 
 @router.post("/order", response_model=PlaceOrderResponse)

@@ -1,6 +1,8 @@
 """选股路由 — TASK-0062 CB3"""
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -19,7 +21,7 @@ class ScreenRequest(BaseModel):
     symbols: list[str]
     top_n: int = 20
     lookback_days: int = 20
-    benchmark_symbol: str | None = None
+    benchmark_symbol: Optional[str] = None
 
 
 # ------------------------------------------------------------------
