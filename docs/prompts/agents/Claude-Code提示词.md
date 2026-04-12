@@ -99,3 +99,26 @@
   - /api/health 始终可达
   - 错误 Key 返回 403
 - **验证**: 5/5 通过
+
+---
+
+## TASK-0066 decision 服务收口 100% + SG API 认证
+
+### 修改 10: decision 服务 API Key 认证中间件
+- **文件**: `services/decision/src/api/app.py`
+- **变更**:
+  - 新增 `DECISION_API_KEY` 环境变量驱动的全局 API Key 认证
+  - `_verify_api_key` 作为 FastAPI 全局依赖注入
+  - `/health`、`/ready` 免认证
+  - `hmac.compare_digest` 防时序攻击，Key 为空时跳过
+- **原因**: decision 服务此前零认证，11 个路由组完全暴露
+
+### 修改 11: decision 服务认证测试
+- **文件**: `services/decision/tests/test_api_auth.py`（新建）
+- **变更**: 新增 5 个 API Key 认证测试
+  - Key 未设置时允许访问
+  - Key 设置后无认证返回 403
+  - 正确 Key 正常访问（/strategies 200）
+  - /health 始终可达
+  - 错误 Key 返回 403
+- **验证**: 5/5 通过
