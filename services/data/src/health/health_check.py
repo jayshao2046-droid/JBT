@@ -670,14 +670,15 @@ def send_p0_alert(report: dict) -> None:
         print(f"[飞书] P0 告警已发送 (新通知系统)")
     except Exception as e:
         print(f"[飞书] P0 告警发送失败: {e}")
-        # 回退: 尝试旧方式
+        # 回退: 直接使用 FeishuSender 发送原始卡片
         try:
-            notifier = FeishuNotifier(webhook_url=webhook, keyword="BotQuant 报警", mock_mode=False)
+            from services.data.src.notify.feishu import FeishuSender
+            sender = FeishuSender()
             now_str = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M")
             alarm_lines = "\n".join(f"  - {a['metric']}: {a['value']} ({a['rule']})" for a in p0_list)
             card = {
                 "header": {
-                    "title": {"tag": "plain_text", "content": f"🚨 P0 紧急告警 — {report['device_label']}"},
+                    "title": {"tag": "plain_text", "content": f"P0 紧急告警 — {report['device_label']}"},
                     "template": "red",
                 },
                 "elements": [
@@ -686,7 +687,7 @@ def send_p0_alert(report: dict) -> None:
                     {"tag": "hr"},
                 ],
             }
-            notifier.send_card(card)
+            sender.send_card(webhook, card)
         except Exception:
             pass
 

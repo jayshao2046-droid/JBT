@@ -34,3 +34,12 @@
   - 清理 3 处已过时的注释掉的 import 行
 - **原因**: STUB 导致因子报告和 SLA 日报功能空转，现在接入真实的通知调度
 - **影响范围**: data_scheduler.py 两个函数 + 3 处注释清理
+
+### 修改 4: health_check.py 修复 legacy FeishuNotifier 死代码引用
+- **文件**: `services/data/src/health/health_check.py`
+- **变更**:
+  - `send_p0_alert` 中的 fallback 从引用不存在的 `FeishuNotifier` 类替换为使用 `FeishuSender.send_card` 直接发送原始卡片
+  - 保持 fallback 逻辑：新通知系统失败时退回到原始卡片方式
+- **原因**: `FeishuNotifier` 类已在新通知系统迁移时移除，旧 fallback 代码会抛出 NameError
+- **影响范围**: health_check.py send_p0_alert 函数的 except 分支
+- **SG 备注**: F-002(subprocess)/F-003(query) 涉及的文件 (storage.py/health_remediate.py) 不在当前 Token 白名单，留待 SG5 统一修复
