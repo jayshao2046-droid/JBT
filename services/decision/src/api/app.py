@@ -17,6 +17,13 @@ from .routes.optimizer import router as optimizer_router
 from .routes.screener import router as screener_router
 from .routes.import_channel import router as import_channel_router
 from .routes.stock_template import router as stock_template_router
+# Phase C routes
+from .routes.stock_pool import router as stock_pool_router
+from .routes.intraday import router as intraday_router
+from .routes.post_market import router as post_market_router
+from .routes.evening_rotation import router as evening_rotation_router
+from .routes.pbo import router as pbo_router
+from .routes.local_sim import router as local_sim_router
 
 _DECISION_API_KEY = os.environ.get("DECISION_API_KEY", "")
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -54,6 +61,13 @@ def create_app() -> FastAPI:
     app.include_router(screener_router)
     app.include_router(import_channel_router)
     app.include_router(stock_template_router)
+    # Phase C routes
+    app.include_router(stock_pool_router, prefix="/api/v1/stock")
+    app.include_router(intraday_router, prefix="/api/v1/stock")
+    app.include_router(post_market_router, prefix="/api/v1/stock")
+    app.include_router(evening_rotation_router, prefix="/api/v1/stock")
+    app.include_router(pbo_router, prefix="/api/v1/stock")
+    app.include_router(local_sim_router, prefix="/api/v1/stock")
 
     return app
 
