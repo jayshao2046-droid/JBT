@@ -2,6 +2,7 @@
 name = "jbt-decision"
 version = "0.1.0"
 description = "JBT Decision Service"
+authors = ["JBT Team <noreply@jbt.local>"]
 
 [[tool.poetry.source]]
 name = "aliyun"
