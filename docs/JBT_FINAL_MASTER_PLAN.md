@@ -62,7 +62,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ## 二、服务状态与归属矩阵
 
-### 2.1 模拟交易 sim-trading — 85% [修订 2026-04-12 全盘审核+安全修复收口]
+### 2.1 模拟交易 sim-trading — 90% [修订 2026-04-12 SG API认证+二次核验通过]
 
 **负责 Agent：模拟交易**
 **服务目录：`services/sim-trading/`**
@@ -85,7 +85,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | Docker/Mini | ✅ 已部署 | TASK-0017-A3，待开盘验证CTP |
 | 临时看板 | ✅ 基本可用 | `sim-trading_web/`，operations+intelligence 页面 |
 
-**已完成任务：** TASK-0002(契约), TASK-0009(治理闭环), TASK-0010(骨架闭环), TASK-0013(治理闭环), TASK-0014(A1~A4全锁回), TASK-0017-A3, TASK-0019(B1/B2锁回), TASK-0022(A/B全锁回), TASK-0023-A, TASK-0041(A/B/C locked), TASK-0042(自动重连+状态同步 locked), TASK-0043(data_scheduler LaunchAgent守护 locked) [修订 2026-04-11]
+**已完成任务：** TASK-0002(契约), TASK-0009(治理闭环), TASK-0010(骨架闭环), TASK-0013(治理闭环), TASK-0014(A1~A4全锁回), TASK-0017-A3, TASK-0019(B1/B2锁回), TASK-0022(A/B全锁回), TASK-0023-A, TASK-0041(A/B/C locked), TASK-0042(自动重连+状态同步 locked), TASK-0043(data_scheduler LaunchAgent守护 locked), TASK-0067(SG API认证+旧auth清理 locked) [修订 2026-04-12]
 **Phase B 状态：✅ 全闭环** [修订 2026-04-10]
 **当前活跃：** TASK-0017(待开盘验证) + TASK-0039 剩余 DR3 修复子任务
 **排队任务：** Phase C `CA6/CS1-S` 执行协同 + Phase H 前置容灾复用
@@ -544,7 +544,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | SG2 | 策略端复核冻结 | 项目架构师 | Atlas | ✅ Round 0 全域扫描完成 [2026-04-12] |
 | SG3 | 全域只读安全检查 | Atlas | 数据+模拟交易+看板+实盘交易+项目架构师 | ✅ Round 0 全域扫描完成 [2026-04-12] |
 | SG4 | 全域安全复核冻结 | 项目架构师 | Atlas | ✅ Round 0 报告 + 架构师 Round 2 终审完成 [2026-04-12] |
-| SG5 | 统一修复预审与实施 | Claude-Code | Atlas+项目架构师 | 🟡 进行中：data F-002/F-003 API认证已修复(Round 1)、backtest F-001 eval加固已修复(Round 2，Pow绕过待补)、decision Round 3 进行中 |
+| SG5 | 统一修复预审与实施 | Claude-Code | Atlas+项目架构师 | 🟡 进行中：data Round 1 ✅、backtest Round 2 ✅（含Pow补丁）、decision Round 3 ✅、sim-trading Round 4 ✅（3 commits, 架构师终审通过） |
 
 ---
 
@@ -837,13 +837,13 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 模块 | 完成 | 目标 | 当前Phase | 下一里程碑 |
 |------|------|------|----------|-----------|
 | 治理 | 100% | 100% | ✅ 完成 | 维护 |
-| sim-trading | 85% | 100% | Phase B ✅ + v1.0.0 安全收口 | 开盘验证(明日) + `CS1-S` 容灾交接接口 |
-| decision | 80% | 100% | Phase C 主线 + Round 3 API认证完成 | CB1/CB4~CB9 股票扩容、CS1 容灾、CK 因子同步 |
-| data | **100%** | 100% | ✅ Phase D + Round 1 收口 | **完成** [2026-04-12] |
-| backtest | **100%** | 100% | ✅ Phase E + Round 2 安全加固 | **完成** [2026-04-12] |
+| sim-trading | 90% | 100% | Phase B ✅ + v1.0.0 安全收口 + SG API认证 ✅ | 开盘验证CTP（周一）+ `CS1-S` 容灾交接接口 |
+| decision | 80% | 100% | Phase C 主线 + Round 3 API认证完成 + 看板上线 ✅ | CB1/CB4~CB9 股票扩容、CS1 容灾、CK 因子同步 |
+| data | **100%** | 100% | ✅ Phase D + Round 1 收口 + 看板上线 ✅ | **完成** [2026-04-12] |
+| backtest | **100%** | 100% | ✅ Phase E + Round 2 安全加固 + 看板上线 ✅ | **完成** [2026-04-12] |
 | dashboard | 5% | 100% | Phase F | 待各服务临时看板基本收口 |
 | live-trading | 0% | 100% | Phase H | 待 sim-trading 稳定运行 2~3 个月 |
-| **总体** | **~75%** | **100%** | **data 100% / backtest 100% / sim-trading 85% / decision 80%** | **Round 4 sim-trading → SG5 收口** |
+| **总体** | **~80%** | **100%** | **data 100% / backtest 100% / sim-trading 90% / decision 80%** | **SG5 收口 → Phase C 继续** |
 
 ---
 
