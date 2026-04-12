@@ -4,8 +4,8 @@ FROM python:3.11-slim AS builder
 WORKDIR /app
 
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir poetry==1.8.3 -i https://pypi.tuna.tsinghua.edu.cn/simple && \
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel --timeout=300 && \
+    pip install --no-cache-dir poetry==1.8.3 -i https://pypi.tuna.tsinghua.edu.cn/simple --timeout=300 && \
     poetry config virtualenvs.create false && \
     poetry source add --priority=primary tuna https://pypi.tuna.tsinghua.edu.cn/simple && \
     poetry install --only main --no-interaction --no-ansi
