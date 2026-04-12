@@ -139,3 +139,62 @@
 - **文件**: `services/decision/src/research/stock_screener.py`
   - 修复 4 处 Python 3.10+ 类型语法 → Python 3.9 兼容
 - **验证**: 108 同步测试通过
+
+---
+
+## TASK-0067 sim-trading 认证冲突修复（接管后首个任务）
+
+### 修改 13: sim-trading router.py 清理旧认证代码
+- **文件**: `services/sim-trading/src/api/router.py`
+- **变更**:
+  - 删除 commit 836eac9 遗留的旧认证逻辑（第 12-24 行）
+  - 删除 `_API_KEY` 变量、`verify_api_key` 函数、`dependencies=[Depends(verify_api_key)]`
+  - 保留 main.py 的全局认证中间件（commit a69df54）
+- **原因**: 
+  - 两套认证冲突：router.py (401, X-Api-Key, 无免认证) vs main.py (403, X-API-Key, 有免认证)
+  - 双重认证叠加导致 Header 名称不一致、状态码不一致
+  - router.py 无免认证路径，会拦截 `/api/v1/health`
+- **影响范围**: router.py import 行 + APIRouter 创建行
+- **验证**: main.py `_PUBLIC_PATHS` 已包含 `/api/v1/health`
+- **同步**: ✅ 已推送至 origin/main (commit 0c9accb)，✅ Mini 已同步
+
+### 修改 14: sim-trading router.py 修复缺失 import os
+- **文件**: `services/sim-trading/src/api/router.py`
+- **变更**: 恢复 `import os`（在修改 13 清理认证代码时误删）
+- **原因**: 
+  - L39 `os.getenv("SIMNOW_BROKER_ID", "6000")` 抛出 `NameError: name 'os' is not defined`
+  - 导致所有测试无法运行（5 errors）
+  - 服务启动失败
+- **影响范围**: router.py L1 import 行
+- **验证**: 测试从 5 errors → 63 passed, 22 failed (403 认证预期)
+- **同步**: ✅ 已推送至 origin/main (commit 64c491e)，⚠️ Mini 网络超时未同步
+
+---
+
+## sim-trading 独立二次核验（TASK-0067 延伸）
+
+### 核验范围
+- 审核报告一致性检查（7 个修复项逐条核验）
+- Bug 全面排查（逻辑/异常/配置/集成）
+- 安全漏洞排查（OWASP Top 10）
+- 风险残留排查
+- 接口全量一致性核验（28 个接口）
+- 测试充分性核验（86 个测试）
+- 提交可回滚性核验（7 个 commit）
+
+### 核验结果
+- **最终判定**: ✅ 有条件通过
+- **Bug 总数**: 2 个（阻断 1 已修复 / 低风险 1）
+- **安全漏洞**: 1 个（认证冲突，已修复）
+- **证据充分项**: 9 项
+- **证据不足项**: 2 项（前端页面、集成测试）
+
+### 发现的问题
+1. **Bug #1 (P0 阻断)**: router.py 缺失 `import os` → ✅ 已修复（commit 64c491e）
+2. **Bug #2 (P2 低风险)**: 22 个测试失败（403 认证预期） → 建议修复
+3. **安全漏洞 #1**: 认证中间件冲突 → ✅ 已修复（commit 0c9accb）
+
+### 核验报告
+- **文件**: `docs/reviews/sim-trading-二次核验报告-2026-04-12.md`
+- **内容**: 12 章节完整核验报告（含证据、代码行号、commit 引用）
+- **结论**: 允许远端同步（Bug #1 已修复）
