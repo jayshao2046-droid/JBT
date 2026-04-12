@@ -63,3 +63,18 @@
   - API 认证中间件测试：DATA_API_KEY 未设置时允许访问、/health 始终可达
 - **原因**: 扩展测试覆盖率，验证本轮新增功能
 - **影响范围**: test_collectors.py 新增测试函数
+
+---
+
+## TASK-0065 backtest 服务收口 100% + F-001 安全修复
+
+### 修改 7: generic_strategy.py F-001 eval() 安全加固
+- **文件**: `services/backtest/src/backtest/generic_strategy.py`
+- **变更**:
+  - `_safe_eval_expression` 新增 1024 字符长度限制和 200 AST 节点复杂度限制
+  - `_SafeExpressionValidator` 新增 `node_count` 计数器，每次 `generic_visit` 递增
+  - 新增 `_MAX_POW_EXPONENT = 100` 类属性
+  - `visit_BinOp` 新增 Pow 指数上限检查：当右操作数为常量且 > 100 时拒绝执行
+  - 修复 Python 3.9 兼容：`set[str]` → `Set[str]`（typing import）
+- **原因**: F-001 安全漏洞 — `eval()` 虽有 AST 白名单，但缺少长度/复杂度/Pow 指数限制，恶意表达式可制造 CPU 拒绝服务
+- **验证**: 5 项安全测试全部通过（基本表达式、合法 Pow、超限 Pow、超长表达式、超复杂表达式）

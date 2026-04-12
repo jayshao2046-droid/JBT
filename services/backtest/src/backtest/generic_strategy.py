@@ -5,7 +5,7 @@ import math
 import re
 from dataclasses import dataclass
 from datetime import datetime, time as time_of_day, timezone
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set
 
 try:
     from .factor_registry import factor_registry, normalize_bars  # noqa: F401 — resolve_factor_name via registry
@@ -1372,14 +1372,21 @@ def _evaluate_market_filter_conditions(
 
 def _safe_eval_expression(expression: str, environment: Mapping[str, Any]) -> Any:
     prepared = _prepare_expression(expression)
+    if len(prepared) > 1024:
+        raise StrategyConfigError(f"expression too long ({len(prepared)} chars, max 1024)")
     try:
         tree = ast.parse(prepared, mode="eval")
-        _SafeExpressionValidator(set(environment) | set(_ALLOWED_FUNCTIONS)).visit(tree)
+        validator = _SafeExpressionValidator(set(environment) | set(_ALLOWED_FUNCTIONS))
+        validator.visit(tree)
+        if validator.node_count > 200:
+            raise StrategyConfigError(f"expression too complex ({validator.node_count} nodes, max 200)")
         return eval(
             compile(tree, "<generic-strategy-expression>", "eval"),
             {"__builtins__": {}},
             {**_ALLOWED_FUNCTIONS, **dict(environment)},
         )
+    except StrategyConfigError:
+        raise
     except Exception as exc:
         raise StrategyConfigError(f"expression evaluation failed: {expression} ({exc})") from exc
 
@@ -1498,10 +1505,14 @@ class _SafeExpressionValidator(ast.NodeVisitor):
     _allowed_bool_ops = (ast.And, ast.Or)
     _allowed_compare_ops = (ast.Eq, ast.NotEq, ast.Gt, ast.GtE, ast.Lt, ast.LtE)
 
-    def __init__(self, allowed_names: set[str]) -> None:
+    _MAX_POW_EXPONENT = 100
+
+    def __init__(self, allowed_names: Set[str]) -> None:
         self._allowed_names = allowed_names
+        self.node_count = 0
 
     def generic_visit(self, node: ast.AST) -> None:
+        self.node_count += 1
         if not isinstance(node, self._allowed_nodes):
             raise StrategyConfigError(f"unsupported expression node {type(node).__name__}")
         super().generic_visit(node)
@@ -1527,6 +1538,12 @@ class _SafeExpressionValidator(ast.NodeVisitor):
     def visit_BinOp(self, node: ast.BinOp) -> None:
         if not isinstance(node.op, self._allowed_bin_ops):
             raise StrategyConfigError("unsupported binary operator")
+        if isinstance(node.op, ast.Pow):
+            if isinstance(node.right, ast.Constant) and isinstance(node.right.value, (int, float)):
+                if node.right.value > self._MAX_POW_EXPONENT:
+                    raise StrategyConfigError(
+                        f"exponent {node.right.value} exceeds max allowed ({self._MAX_POW_EXPONENT})"
+                    )
         self.visit(node.left)
         self.visit(node.right)
 
