@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "JBT Decision Service"
 
 [[tool.poetry.source]]
-name = "tuna"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
 priority = "primary"
 
 [tool.poetry.dependencies]
