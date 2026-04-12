@@ -7,6 +7,24 @@
 
 > 本文件为 JBT 多服务工作区的最终收口计划。所有 Agent 在开始工作前必须读取本文件，确认自己的任务队列和衔接入口。
 
+---
+
+## 📊 实时进度总览 [修订 2026-04-12]
+
+| 服务 | 进度 | 状态 | 当前焦点 |
+|------|------|------|---------|
+| data | `████████████` **100%** | ✅ 生产运行中 | Round 1 收口完成，维护态 |
+| backtest | `████████████` **100%** | ✅ 生产运行中 | Round 2 安全加固完成，维护态 |
+| sim-trading | `███████████░` **90%** | ✅ 待开盘CTP验证 | Phase B全闭环；等待正式交易日验证 |
+| decision | `█████████░░░` **75%** | 🔶 Phase C进行中 | Batch-5已完成；CB1~CB9股票链待实施 |
+| dashboard | `█░░░░░░░░░░░` **5%** | ⏳ 后置 | 等待所有后端服务稳定后一次性上线 |
+| live-trading | `░░░░░░░░░░░░` **0%** | ⏳ 后置 | 等待sim稳定运行2~3月后评估 |
+| **整体** | `██████████░░` **~82%** | **Phase C收口中** | **ECS已永久停用；J_BotQuant Phase C后切割** |
+
+> **更新规则：** 每次 Atlas 更新治理文件时同步刷新本表格和百分比。
+
+---
+
 ## ⚠️ 终局计划冲突管理规则（P0 最高优先级）
 
 > **本章规则优先级高于本文件其余所有内容，高于任何单任务预审结论，高于任何 Agent 私有 prompt。**
@@ -45,7 +63,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | Mini | 数据+模拟交易 | 192.168.31.74 | 172.16.0.49 | data:8105, sim-trading:8101, sim-trading-web:3002 |
 | Air | 回测生产 | 192.168.31.245 | — | backtest:8103, backtest-web:3001 |
 | Studio | 决策+看板 | 192.168.31.142 | 172.16.1.130 | decision:8104, decision-web:3003, dashboard:8106 |
-| ECS | 云端（备用） | 47.103.36.144 | — | 暂停，待域名+SSH就绪 |
+| ~~ECS~~ | ❌ 已永久停用 | 47.103.36.144 | — | [修订 2026-04-12] ECS永久停用，全部ECS相关任务取消 |
 
 ### 端口分配（冻结）
 
@@ -297,7 +315,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | TASK-0038 | data端国内K线降噪 | data | Atlas | ✅ locked (U0) | P1 |
 | TASK-0025 | SimNow备用方案 | decision | 决策 | 预审(待Phase C) | P2 |
 | TASK-0015 | SimNow临时看板 | dashboard | 看板 | 预审(待各端临时看板收口) | P2 |
-| TASK-0020 | ECS云部署 | 运维 | 运维 | 阻塞(DNS+SSH) | P2 |
+| ~~TASK-0020~~ | ~~ECS云部署~~ | ~~运维~~ | ~~运维~~ | ❌ 已取消（[修订 2026-04-12] ECS永久停用） | ~~P2~~ |
 | TASK-0011 | legacy清退 | sim-trading | 项目架构师 | 后置(待Phase C/D) | P2 |
 | TASK-0012 | legacy信号桥接 | integrations | 项目架构师 | 后置(待Phase C-C3) | P1 |
 | TASK-0016 | 决策端正式接入 | decision | 决策 | 后置(待Phase C-C5) | P1 |
@@ -499,15 +517,18 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 |------|------|-------|------|---------|
 | F1 | TASK-0015 SimNow临时看板 | 看板 | Phase B基本完成 | dashboard聚合sim-trading只读数据 |
 | F2 | 聚合看板（新任务） | 看板 | Phase B/C/D/E基本完成 | 6服务状态聚合显示，一次性部署 |
-| F3 | TASK-0020 ECS部署 | 运维 | DNS+SSH就绪 | sim.jbotquant.com 可访问 |
+| ~~F3~~ | ~~TASK-0020 ECS部署~~ | ~~运维~~ | ~~DNS+SSH就绪~~ | ❌ 已取消（[修订 2026-04-12] ECS永久停用，公网访问不再纳入计划） |
 
 ### Phase G — 收口与legacy清退
 
-**目标：** JBT 完全独立运行，legacy J_BotQuant 退役
+**目标：** JBT 完全独立运行，legacy J_BotQuant 退役并从工作区切割
+
+> **[修订 2026-04-12] Phase C完成后立即执行 G0（J_BotQuant工作区切割）；G1~G3随后跟进。**
 
 | 序号 | 任务 | Agent | 依赖 | 验收标准 |
-|------|------|-------|------|---------|
-| G1 | TASK-0011 legacy清退 | 项目架构师 | Phase C/D完成 | Mini/Studio legacy进程全部停止 |
+|------|------|-------|------|----------|
+| G0 | J_BotQuant工作区切割 | Atlas | Phase C完成 | 1. 停止Mini/Studio所有legacy J_BotQuant容器；2. 将J_BotQuant从VS Code工作区（.code-workspace）移除；3. J_BotQuant目录保留只读归档，不再承接任何开发 |
+| G1 | TASK-0011 legacy清退 | 项目架构师 | G0完成 | Mini/Studio legacy进程全部停止，cron/LaunchAgent清退 |
 | G2 | 数据目录迁移 | 数据 | G1完成 | ~/J_BotQuant/BotQuan_Data → ~/jbt-data 完全切换 |
 | G3 | cron/launchctl 清退 | 运维 | G1完成 | 无legacy定时任务残留 |
 
