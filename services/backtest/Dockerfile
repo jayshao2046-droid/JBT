@@ -24,10 +24,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # 复制源码
 COPY src/ ./src/
-COPY configs/ ./configs/
 
 # 运行时目录由 docker-compose 挂载卷创建，此处仅预建空目录作为 fallback
-RUN mkdir -p /runtime/strategies /runtime/results /runtime/backtests /runtime/reports
+RUN mkdir -p /runtime/strategies /runtime/results /runtime/backtests /runtime/reports /app/configs
 
 ENV PYTHONPATH=/app
 ENV JBT_SERVICE_NAME=backtest
