@@ -1,9 +1,9 @@
 # JBT Atlas Prompt
 
 【签名】Atlas
-【时间】2026-04-11
+【时间】2026-04-13
 【设备】MacBook
-【状态】JBT-only 管理已切换 / TASK-0046(RooCode) 全闭环 / TASK-0047(agent-model升级) 全闭环 / TASK-0048(Phase C扩展总计划) 全闭环 / TASK-0049(安全治理横线) A0/A1完成+A2 Atlas侧同步完成
+【状态】Phase C CB股票链全闭环 / TASK-0070~0074 完成+41测试通过 / TASK-0075/0076 Claude Code执行中
 
 ## 本文件定位
 
@@ -74,6 +74,16 @@
 - 2026-04-12：Git 状态：HEAD 64c491e，origin/main 64c491e（已同步），Mini 64c491e（已同步），Studio SSH 连接被拒（待 Jay.S 手动处理）。
 - 2026-04-12：**sim-trading 进度 85% → 90%**。SG API 认证完成 + 二次核验通过。剩余：开盘验证 CTP、CS1-S 容灾交接接口、Phase C 执行协同。总进度 ~75% → ~80%。
 - 2026-04-12：**全服务看板上线 ✅**。所有 JBT 容器全部启动并配置 restart=unless-stopped：Mini（JBT-SIM-TRADING-8101/WEB-3002、JBT-DATA-8105/WEB-3004）；Studio（JBT-BACKTEST-8103/WEB-3001、JBT-DECISION-8104/WEB-3003）。Docker 基础设施修复：两台机器 PATH+credsStore+镜像源全部修复，Studio Docker VM 崩溃已重启恢复。jbt-data(8105) API 返回 200 正常但容器 healthcheck 标记为 unhealthy（假阳性，待修）。
+- 2026-04-13：**Phase C CB股票链全闭环 ✅**。Atlas 批量签发 8 枚 Token（TASK-0070~0076 + app.py路由注册）；Claude Code 一次性完成 CB4~CB8 后端 + CB9+CA1+CA5 前端共 5 批次任务。
+  - TASK-0070 CB4 StockPool 管理器（add/remove/rotate，10测试）commit 94fedbc ✅
+  - TASK-0071 CB6 IntradayTracker breakout/volume_spike信号（10测试）commit 0568ec2 ✅
+  - TASK-0072 CB7 PostMarketEvaluator 5级评级+批量评估（12测试）commit cfd2998 ✅
+  - TASK-0073 CB8 EveningRotator 多因子打分+轮换计划（9测试）commit 96bc534 ✅
+  - TASK-0074 CB9+CA1+CA5 decision_web 扩容（StockPoolTable/IntradaySignal/FuturesResearchPanel/Navbar+/research页面）commit aec3dae ✅
+  - 注：前端路由 Claude 采用 /research 合并页替代白名单的 /stock-research + /futures-research 双页方案，功能等价，已记入[PLAN-DELTA]
+  - 41个后端测试全部通过（test_stock_pool/intraday_tracker/post_market/evening_rotation）
+- 2026-04-13：TASK-0075 CA7 PBO过拟合检验（tok-960eb266）+ TASK-0076 CS1 本地Sim容灾（tok-b317417b）+ app.py路由注册（tok-475eb1b3）已派发 Claude Code 执行，执行中待汇报。
+- 2026-04-13：**decision 进度 75% → 85%**（CB链+CA链前端全闭环），总进度 ~82% → ~84%。待 TASK-0075/0076 完成后可达 ~87%。
 
 ## 接管要求
 
