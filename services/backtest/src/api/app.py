@@ -1,7 +1,12 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+import hmac
+import os
+from typing import Optional
+
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
 
 if __package__:
     from ..core.settings import get_settings
@@ -26,6 +31,21 @@ else:
     from api.routes.support import router as support_router
     from core.settings import get_settings
 
+_BACKTEST_API_KEY = os.environ.get("BACKTEST_API_KEY", "")
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+_PUBLIC_PATHS = {"/api/health", "/api/v1/health", "/api/v1/version"}
+
+
+async def _verify_api_key(
+    request: Request, api_key: Optional[str] = Depends(_api_key_header)
+) -> None:
+    if not _BACKTEST_API_KEY:
+        return
+    if request.url.path in _PUBLIC_PATHS:
+        return
+    if not api_key or not hmac.compare_digest(api_key, _BACKTEST_API_KEY):
+        raise HTTPException(status_code=403, detail="invalid or missing API key")
+
 
 def create_app() -> FastAPI:
     settings = get_settings()
@@ -35,6 +55,7 @@ def create_app() -> FastAPI:
         version="0.1.0",
         docs_url="/docs",
         redoc_url="/redoc",
+        dependencies=[Depends(_verify_api_key)],
     )
     app.add_middleware(
         CORSMiddleware,

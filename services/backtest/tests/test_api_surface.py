@@ -659,3 +659,48 @@ def test_market_list_returns_categories(monkeypatch, tmp_path: Path) -> None:
     assert {"key", "name_zh", "name_en", "codes"}.issubset(first.keys())
     assert isinstance(first["codes"], list)
     assert len(first["codes"]) > 0
+
+
+# ---------------------------------------------------------------------------
+# API Key authentication tests
+# ---------------------------------------------------------------------------
+
+
+def test_api_key_not_set_allows_access(monkeypatch, tmp_path: Path) -> None:
+    """BACKTEST_API_KEY 未设置时所有端点可访问"""
+    monkeypatch.setattr("services.backtest.src.api.app._BACKTEST_API_KEY", "")
+    client = _make_client(monkeypatch, tmp_path)
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+
+
+def test_api_key_set_blocks_unauthenticated(monkeypatch, tmp_path: Path) -> None:
+    """BACKTEST_API_KEY 设置后，无 Key 访问业务端点返回 403"""
+    monkeypatch.setattr("services.backtest.src.api.app._BACKTEST_API_KEY", "test-secret-key-abc123")
+    client = _make_client(monkeypatch, tmp_path)
+    resp = client.get("/api/strategies")
+    assert resp.status_code == 403
+
+
+def test_api_key_set_allows_authenticated(monkeypatch, tmp_path: Path) -> None:
+    """BACKTEST_API_KEY 设置后，正确 Key 可正常访问"""
+    monkeypatch.setattr("services.backtest.src.api.app._BACKTEST_API_KEY", "test-secret-key-abc123")
+    client = _make_client(monkeypatch, tmp_path)
+    resp = client.get("/api/strategies", headers={"X-API-Key": "test-secret-key-abc123"})
+    assert resp.status_code == 200
+
+
+def test_health_always_accessible_with_api_key(monkeypatch, tmp_path: Path) -> None:
+    """即使设置了 API Key，/api/health 端点也始终可访问"""
+    monkeypatch.setattr("services.backtest.src.api.app._BACKTEST_API_KEY", "test-secret-key-abc123")
+    client = _make_client(monkeypatch, tmp_path)
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+
+
+def test_wrong_api_key_rejected(monkeypatch, tmp_path: Path) -> None:
+    """错误的 API Key 返回 403"""
+    monkeypatch.setattr("services.backtest.src.api.app._BACKTEST_API_KEY", "correct-key")
+    client = _make_client(monkeypatch, tmp_path)
+    resp = client.get("/api/strategies", headers={"X-API-Key": "wrong-key"})
+    assert resp.status_code == 403

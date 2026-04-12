@@ -78,3 +78,24 @@
   - 修复 Python 3.9 兼容：`set[str]` → `Set[str]`（typing import）
 - **原因**: F-001 安全漏洞 — `eval()` 虽有 AST 白名单，但缺少长度/复杂度/Pow 指数限制，恶意表达式可制造 CPU 拒绝服务
 - **验证**: 5 项安全测试全部通过（基本表达式、合法 Pow、超限 Pow、超长表达式、超复杂表达式）
+
+### 修改 8: backtest 服务 API Key 认证中间件
+- **文件**: `services/backtest/src/api/app.py`
+- **变更**:
+  - 新增 `BACKTEST_API_KEY` 环境变量驱动的全局 API Key 认证
+  - `_verify_api_key` 作为 FastAPI 全局依赖注入
+  - `/api/health`、`/api/v1/health`、`/api/v1/version` 免认证
+  - 使用 `hmac.compare_digest` 防止时序攻击
+  - Key 为空时跳过认证（兼容开发环境）
+- **原因**: backtest 服务此前零认证，所有 8 个路由组完全暴露
+- **影响范围**: app.py import + 认证逻辑块 + FastAPI dependencies 参数
+
+### 修改 9: backtest 服务认证测试
+- **文件**: `services/backtest/tests/test_api_surface.py`
+- **变更**: 新增 5 个 API Key 认证测试
+  - Key 未设置时允许访问
+  - Key 设置后无认证返回 403
+  - 正确 Key 正常访问
+  - /api/health 始终可达
+  - 错误 Key 返回 403
+- **验证**: 5/5 通过
