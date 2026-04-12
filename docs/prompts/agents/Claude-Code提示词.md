@@ -16,3 +16,12 @@
   - 使用 `hmac.compare_digest` 防止时序攻击
 - **原因**: SG 安全修复 — 所有业务端点此前完全无认证保护
 - **影响范围**: main.py import 行 + app 创建 + 新增认证逻辑块
+
+### 修改 2: base.py 清除 A2 STUB，转为正式延迟注入设计
+- **文件**: `services/data/src/collectors/base.py`
+- **变更**:
+  - `TODO(A2)` 注释替换为正式的"延迟注入"设计说明
+  - `storage=None` 时的 warning 降级为 debug（这是正常运行模式，非异常）
+  - 新增 `storage_ready` 属性，方便调用方判断存储后端是否已注入
+- **原因**: A2 存储迁移已收口，当前所有采集器通过 scheduler 的文件持久化路径存储，STUB 注释已过时
+- **影响范围**: base.py 注释 + save() 日志级别 + 新增 property

@@ -5,8 +5,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-# TODO(A2): storage 模块将在 A2 批次迁移后启用
-# from src.data.storage import HDF5Storage
+# Storage 采用延迟注入模式：调用方通过 storage 参数传入后端实例。
+# 当前所有采集器均通过 data_scheduler 的文件持久化路径存储，
+# storage 参数预留给未来 HDF5 / Parquet 统一存储层。
 from services.data.src.utils.config import get_config
 from services.data.src.utils.exceptions import DataError
 from services.data.src.utils.logger import get_logger
@@ -24,10 +25,14 @@ class BaseCollector(ABC):
     ) -> None:
         self.name = name
         self.logger = get_logger(f"data.collector.{name}")
-        self.storage = storage  # TODO(A2): 默认使用 HDF5Storage()
+        self.storage = storage  # None = 文件持久化模式（由 scheduler 管理）
         self.config = config or get_config()
         collection_cfg = self.config.get("collection", {})
         self.retry_times = int(collection_cfg.get("retry_times", 3))
+
+    @property
+    def storage_ready(self) -> bool:
+        return self.storage is not None
 
     @abstractmethod
     def collect(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
@@ -50,7 +55,7 @@ class BaseCollector(ABC):
             self.logger.warning("no records to save: source=%s symbol=%s", self.name, symbol)
             return 0
         if self.storage is None:
-            self.logger.warning("storage not initialized (A2 pending): source=%s symbol=%s, skipping save", self.name, symbol)
+            self.logger.debug("storage not injected, using file-based persistence: source=%s symbol=%s", self.name, symbol)
             return 0
         try:
             return self.storage.write_records(
