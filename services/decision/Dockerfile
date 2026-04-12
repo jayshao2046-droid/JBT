@@ -5,9 +5,9 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
-    pip install --no-cache-dir poetry==1.8.3 && \
+    pip install --no-cache-dir poetry==1.8.3 -i https://pypi.tuna.tsinghua.edu.cn/simple && \
     poetry config virtualenvs.create false && \
+    poetry source add --priority=primary tuna https://pypi.tuna.tsinghua.edu.cn/simple && \
     poetry install --only main --no-interaction --no-ansi
 
 # ─── Stage 2: 运行镜像 ───────────────────────────────────────────────────────
