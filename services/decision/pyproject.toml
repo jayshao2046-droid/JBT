@@ -3,6 +3,11 @@ name = "jbt-decision"
 version = "0.1.0"
 description = "JBT Decision Service"
 
+[[tool.poetry.source]]
+name = "tuna"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+priority = "primary"
+
 [tool.poetry.dependencies]
 python = "^3.11"
 fastapi = "^0.115.0"
