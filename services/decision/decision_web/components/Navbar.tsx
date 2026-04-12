@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils"
 const navItems = [
   { href: "/", label: "首页" },
   { href: "/research", label: "策略研究" },
+  { href: "/import", label: "策略导入" },
+  { href: "/optimizer", label: "参数调优" },
+  { href: "/reports", label: "回测报告" },
 ]
 
 export function Navbar() {
