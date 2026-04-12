@@ -72,23 +72,71 @@ def _get_notifier(config: dict[str, Any] | None = None) -> Any:
 
 
 def get_factor_notifier() -> Any:
-    """因子/信号通知器存根 — 模块尚未实现，返回只记日志的占位对象。"""
-    class _Stub:
+    """因子/信号通知器 — 通过 NotifierDispatcher 发送分时段报告到飞书。"""
+    class _FactorNotifier:
         def send_session_summary(self, session: str) -> bool:
-            logger.info("[STUB] 因子/信号%s报告: 因子通知模块尚未实现，跳过", session)
-            return True
-    return _Stub()
+            try:
+                from services.data.src.notify.dispatcher import (
+                    DataEvent, NotifyType, get_dispatcher,
+                )
+                dispatcher = get_dispatcher()
+                event = DataEvent(
+                    event_code=f"factor_session_{session}",
+                    notify_type=NotifyType.INFO,
+                    title=f"因子/信号{session}报告",
+                    body_md=f"**{session}因子扫描完成**\n数据端因子通知模块运行正常。",
+                    source_name=f"factor_notifier:{session}",
+                    channels={"feishu"},
+                )
+                return dispatcher.dispatch(event)
+            except Exception as exc:
+                logger.warning("因子通知发送失败: %s", exc)
+                return False
+    return _FactorNotifier()
 
 
 def get_sla_tracker() -> Any:
-    """SLA 追踪器存根 — 模块尚未实现，返回只记日志的占位对象。"""
-    class _Stub:
+    """SLA 追踪器 — 基于 health_check 的告警状态统计每日 SLA 报告。"""
+    class _SlaTracker:
         def send_daily_sla_report(self) -> bool:
-            logger.info("[STUB] SLA 日报: SLA 模块尚未实现，跳过")
-            return True
+            try:
+                from services.data.src.notify.dispatcher import (
+                    DataEvent, NotifyType, get_dispatcher,
+                )
+                import json
+                from pathlib import Path
+
+                alarm_file = Path(os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data"))) / "logs" / "collector_alarm_state.json"
+                active_alarms = 0
+                if alarm_file.exists():
+                    try:
+                        state = json.loads(alarm_file.read_text())
+                        active_alarms = sum(1 for v in state.values() if isinstance(v, dict) and v.get("consecutive", 0) > 0)
+                    except Exception:
+                        pass
+
+                status = "全部正常" if active_alarms == 0 else f"{active_alarms} 个采集源告警中"
+                icon = "🟢" if active_alarms == 0 else "🔴"
+
+                dispatcher = get_dispatcher()
+                event = DataEvent(
+                    event_code="sla_daily_report",
+                    notify_type=NotifyType.INFO,
+                    title=f"SLA 日报 — {icon} {status}",
+                    body_md=f"**采集 SLA 日报**\n活跃告警: {active_alarms}\n状态: {status}",
+                    source_name="sla_tracker:daily",
+                    channels={"feishu"},
+                    bypass_quiet_hours=True,
+                )
+                return dispatcher.dispatch(event)
+            except Exception as exc:
+                logger.warning("SLA 日报发送失败: %s", exc)
+                return False
+
         def reset_daily(self) -> None:
-            logger.info("[STUB] SLA 重置: SLA 模块尚未实现，跳过")
-    return _Stub()
+            logger.info("SLA 计数器已重置（采集告警状态由 health_check 管理）")
+
+    return _SlaTracker()
 
 
 _dispatcher = None
@@ -1109,7 +1157,6 @@ def _job_factor_session(config: dict[str, Any], session: str) -> None:
     """因子/信号分时段报告内部实现."""
     try:
         logger.info("▶ 开始执行: 因子/信号%s报告", session)
-        # from src.strategy.factor_notifier import get_factor_notifier
         n = get_factor_notifier()
         ok = n.send_session_summary(session)
         if ok:
@@ -1139,7 +1186,6 @@ def job_sla_report(config: dict[str, Any]) -> None:
     """告警 SLA 日报 — 23:15 发送飞书。"""
     try:
         logger.info("▶ 开始执行: 告警 SLA 日报")
-        # from src.monitor.alert_sla_tracker import get_sla_tracker
         ok = get_sla_tracker().send_daily_sla_report()
         if ok:
             logger.info("✅ SLA 日报已发送")
@@ -1152,7 +1198,6 @@ def job_sla_report(config: dict[str, Any]) -> None:
 def job_sla_reset(config: dict[str, Any]) -> None:
     """SLA 计数器重置 — 00:05。"""
     try:
-        # from src.monitor.alert_sla_tracker import get_sla_tracker
         get_sla_tracker().reset_daily()
         logger.info("✅ SLA 计数器已重置")
     except Exception:

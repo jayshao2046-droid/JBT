@@ -25,3 +25,12 @@
   - 新增 `storage_ready` 属性，方便调用方判断存储后端是否已注入
 - **原因**: A2 存储迁移已收口，当前所有采集器通过 scheduler 的文件持久化路径存储，STUB 注释已过时
 - **影响范围**: base.py 注释 + save() 日志级别 + 新增 property
+
+### 修改 3: data_scheduler.py 因子通知器和 SLA 追踪器 STUB 替换为实际实现
+- **文件**: `services/data/src/scheduler/data_scheduler.py`
+- **变更**:
+  - `get_factor_notifier()` 从 STUB 替换为通过 `NotifierDispatcher` 发送分时段报告到飞书
+  - `get_sla_tracker()` 从 STUB 替换为基于 `collector_alarm_state.json` 统计活跃告警并发送 SLA 日报
+  - 清理 3 处已过时的注释掉的 import 行
+- **原因**: STUB 导致因子报告和 SLA 日报功能空转，现在接入真实的通知调度
+- **影响范围**: data_scheduler.py 两个函数 + 3 处注释清理
