@@ -68,6 +68,9 @@ def create_app() -> FastAPI:
     app.include_router(evening_rotation_router, prefix="/api/v1/stock")
     app.include_router(pbo_router, prefix="/api/v1/stock")
     app.include_router(local_sim_router, prefix="/api/v1/stock")
+    # CF1' LLM Pipeline
+    from .routes.llm import router as llm_router
+    app.include_router(llm_router)
 
     return app
 
