@@ -133,8 +133,10 @@ class TestMarketMoverCalculator:
         ]
         movers = calculator.calculate_price_change_rate(instruments, 10)
         assert len(movers) == 2
-        assert movers[0]["symbol"] == "RB2505"
-        assert 1.3 < movers[0]["change_rate"] < 1.4  # (3850-3800)/3800 ≈ 1.32%
+        # HC2505 变化率绝对值更大 (-2.7%) 所以排第一
+        assert movers[0]["symbol"] == "HC2505"
+        assert movers[1]["symbol"] == "RB2505"
+        assert 1.3 < movers[1]["change_rate"] < 1.4  # (3850-3800)/3800 ≈ 1.32%
 
     def test_calculate_amplitude(self):
         calculator = MarketMoverCalculator()
