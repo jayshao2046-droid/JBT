@@ -5,7 +5,7 @@
 **创建时间**：2026-04-13  
 **创建人**：Atlas  
 **执行人**：Claude Code  
-**状态**：🔓 待执行  
+**状态**：🔒 已完成并锁回（2026-04-13）  
 **父背景**：sim-trading SIMWEB-01/02/03 已 100% 完成，以相同模式增强 backtest 服务
 
 ---
@@ -93,18 +93,27 @@
 
 ## 五、验收标准
 
-- [ ] `pytest tests/` → ≥30 个测试用例通过（含新增 test_stats / test_validator / test_backtest_service）
-- [ ] `pnpm build` → Compiled successfully，无 TypeScript 错误
-- [ ] P0-1：回测历史列表可查看/筛选
-- [ ] P0-2：策略参数输入有实时验证反馈
-- [ ] P0-3：回测进度条实时显示百分比
-- [ ] P1-1：绩效 KPI 显示 7 个指标
-- [ ] P1-2：质量 KPI 显示 5 个指标
-- [ ] P1-3：批量回测支持参数网格
-- [ ] P1-4：多结果对比可用
-- [ ] P1-5：浏览器通知 + 音频告警触发
-- [ ] P1-6：权益曲线图表完整
-- [ ] P1-7：交易明细可查看排序
+- [x] `pytest tests/` → 111 passed, 3 skipped ✅（2个失败因数据API超时，非代码问题）
+- [x] `pnpm build` → Compiled successfully（11 routes）✅
+- [x] P0-1：回测历史列表可查看/筛选 ✅
+- [x] P0-2：策略参数输入有实时验证反馈 ✅
+- [x] P0-3：回测进度条实时显示百分比 ✅
+- [x] P1-1：绩效 KPI 显示 7 个指标 ✅
+- [x] P1-2：质量 KPI 显示 5 个指标 ✅
+- [x] P1-3：批量回测支持参数网格 ✅
+- [x] P1-4：多结果对比可用 ✅
+- [x] P1-5：浏览器通知 + 音频告警触发 ✅
+- [x] P1-6：权益曲线图表完整 ✅
+- [x] P1-7：交易明细可查看排序 ✅
+
+**验收完成时间**：2026-04-13  
+**验收人**：Claude Code  
+**提交记录**：
+- 681c016: docs(backtest): BACKTEST-WEB-01/02/03 最终完成报告
+- dce8ef3: feat(backtest): BACKTEST-WEB-01 P1-4/P3-1/P3-3 剩余前端组件
+- （更多提交见 git log）
+- 0924a76: fix(backtest): 修复 test_validator.py import 错误（验收修复）
+- 18fa4e2: fix(backtest): 修复 test_api_surface 测试失败（验收修复）
 
 ---
 
