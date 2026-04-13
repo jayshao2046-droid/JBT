@@ -27,6 +27,7 @@ if __package__:
     from ...backtest.result_builder import BacktestReport
     from ...backtest.validator import ParameterValidator
     from ...core.settings import get_settings
+    from ...stats.performance import PerformanceCalculator
     from .support import ACTIVE_STATUSES
     from .support import append_event_log
     from .support import append_system_log
@@ -50,6 +51,7 @@ else:
     from backtest.runner import OnlineBacktestRunner
     from backtest.validator import ParameterValidator
     from core.settings import get_settings
+    from stats.performance import PerformanceCalculator
     from support import ACTIVE_STATUSES
     from support import append_event_log
     from support import append_system_log
@@ -1607,6 +1609,51 @@ def get_result_trades(task_id: str, request: Request) -> list[dict[str, Any]]:
     result = _result_or_404(state, task_id)
     trades = list(result.get("trades", []))
     return _expand_local_engine_trades(result, trades)
+
+
+@router.get("/results/{task_id}/performance")
+def get_result_performance(task_id: str, request: Request) -> dict[str, Any]:
+    """获取回测绩效 KPI"""
+    state = get_compat_state(request)
+    _refresh_all_results(state)
+    result = _result_or_404(state, task_id)
+
+    # 提取数据
+    initial_capital = result.get("initialCapital", 500000)
+    final_capital = result.get("finalCapital", initial_capital)
+    equity_curve = result.get("equity_curve", [])
+    trades = result.get("trades", [])
+
+    # 解析日期
+    payload = result.get("payload", {})
+    start_str = payload.get("start", "2024-01-01")
+    end_str = payload.get("end", "2024-12-31")
+
+    try:
+        start_date = datetime.fromisoformat(start_str).date()
+    except (ValueError, TypeError):
+        start_date = date(2024, 1, 1)
+
+    try:
+        end_date = datetime.fromisoformat(end_str).date()
+    except (ValueError, TypeError):
+        end_date = date(2024, 12, 31)
+
+    # 计算绩效指标
+    calculator = PerformanceCalculator()
+    performance = calculator.calculate_all_metrics(
+        initial_capital=initial_capital,
+        final_capital=final_capital,
+        start_date=start_date,
+        end_date=end_date,
+        equity_curve=equity_curve,
+        trades=trades,
+    )
+
+    return {
+        "performance": performance,
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.get("/results/{task_id}/report")
