@@ -25,6 +25,7 @@ if __package__:
     from ...backtest.runner import BacktestJobInput
     from ...backtest.runner import OnlineBacktestRunner
     from ...backtest.result_builder import BacktestReport
+    from ...backtest.validator import ParameterValidator
     from ...core.settings import get_settings
     from .support import ACTIVE_STATUSES
     from .support import append_event_log
@@ -47,6 +48,7 @@ else:
     from backtest.result_builder import BacktestReport
     from backtest.runner import BacktestJobInput
     from backtest.runner import OnlineBacktestRunner
+    from backtest.validator import ParameterValidator
     from core.settings import get_settings
     from support import ACTIVE_STATUSES
     from support import append_event_log
@@ -95,6 +97,11 @@ class BacktestAdjustPayload(BaseModel):
 
 class BatchDeletePayload(BaseModel):
     ids: list[str] = Field(default_factory=list)
+
+
+class ValidateParamsPayload(BaseModel):
+    strategy_id: str
+    params: dict[str, Any] = Field(default_factory=dict)
 
 
 def _now_ts() -> int:
@@ -1054,6 +1061,17 @@ def _store_local_result(state: dict[str, Any], result: dict[str, Any]) -> dict[s
         f"local result stored for {strategy_name} ({result['id']}, status={result['status']})",
     )
     return result
+
+
+@router.post("/validate")
+def validate_params(payload: ValidateParamsPayload) -> dict[str, Any]:
+    """验证策略参数"""
+    validator = ParameterValidator()
+    valid, errors = validator.validate_strategy_params(payload.strategy_id, payload.params)
+    return {
+        "valid": valid,
+        "errors": errors,
+    }
 
 
 @router.get("/summary")
