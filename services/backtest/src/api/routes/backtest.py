@@ -12,7 +12,7 @@ from uuid import uuid4
 _logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 if __package__:
@@ -1754,6 +1754,49 @@ def get_progress(task_id: str, request: Request) -> dict[str, Any]:
         "progress": result.get("progress", 100),
         "current_date": result.get("current_date"),
     }
+
+
+@router.get("/progress/{task_id}/stream")
+async def get_progress_stream(task_id: str, request: Request) -> StreamingResponse:
+    """SSE 实时推送回测进度"""
+    async def event_generator():
+        import json
+        state = get_compat_state(request)
+
+        # 最多推送 60 次（每秒一次，最多 1 分钟）
+        for _ in range(60):
+            _refresh_all_results(state)
+            result = state["results"].get(task_id)
+
+            if result is None:
+                yield f"data: {json.dumps({'error': 'task not found'})}\n\n"
+                break
+
+            progress_data = {
+                "task_id": task_id,
+                "status": result.get("status"),
+                "progress": result.get("progress", 0),
+                "current_date": result.get("current_date"),
+                "estimated_completion": None,  # 可以根据进度计算预计完成时间
+            }
+
+            yield f"data: {json.dumps(progress_data)}\n\n"
+
+            # 如果已完成或失败，停止推送
+            if result.get("status") in {"completed", "failed", "cancelled"}:
+                break
+
+            await asyncio.sleep(1)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/cancel/{task_id}")
