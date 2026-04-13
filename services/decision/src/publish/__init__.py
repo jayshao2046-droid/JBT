@@ -3,6 +3,7 @@
 from .gate import PublishGate, PublishEligibility
 from .executor import PublishExecutor, PublishResult, PublishStatus
 from .sim_adapter import SimTradingAdapter
+from .failover import FailoverManager, FailoverState
 
 __all__ = [
     "PublishGate",
@@ -11,4 +12,6 @@ __all__ = [
     "PublishResult",
     "PublishStatus",
     "SimTradingAdapter",
+    "FailoverManager",
+    "FailoverState",
 ]

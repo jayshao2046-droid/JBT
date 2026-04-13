@@ -29,6 +29,22 @@ class SimTradingAdapter:
     def _publish_url(self) -> str:
         return f"{self._base_url}/api/v1/strategy/publish"
 
+    def health_check(self) -> bool:
+        """
+        健康检查 sim-trading 服务。
+
+        Returns:
+            True if healthy, False otherwise
+        """
+        url = f"{self._base_url}/health"
+        try:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return resp.getcode() == 200
+        except (urllib.error.HTTPError, urllib.error.URLError, Exception) as exc:
+            logger.debug(f"Health check failed: {exc}")
+            return False
+
     @staticmethod
     def _decode_payload(payload: bytes) -> dict[str, Any]:
         raw = payload.decode("utf-8", errors="replace")

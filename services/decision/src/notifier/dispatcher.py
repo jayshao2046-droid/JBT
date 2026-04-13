@@ -1,6 +1,6 @@
 """
-NotifierDispatcher — TASK-0021 F batch
-决策服务双通道通知调度器（飞书 + 邮件）。
+NotifierDispatcher — TASK-0021 F batch + TASK-0025 failover integration
+决策服务双通道通知调度器（飞书 + 邮件）+ SimNow 备用方案。
 """
 from __future__ import annotations
 
@@ -50,15 +50,17 @@ class DispatchState(enum.Enum):
 
 
 class NotifierDispatcher:
-    """决策服务双通道通知调度器。"""
+    """决策服务双通道通知调度器 + SimNow 备用方案集成。"""
 
     def __init__(
         self,
         feishu: DecisionFeishuNotifier,
         email: DecisionEmailNotifier,
+        failover_manager: Optional[Any] = None,
     ) -> None:
         self._feishu = feishu
         self._email = email
+        self._failover = failover_manager
         self._state = DispatchState.NORMAL
         self._event_history: list[dict[str, Any]] = []
         self._channel_stats: dict[str, dict[str, Any]] = {
@@ -207,11 +209,14 @@ class NotifierDispatcher:
         return [dict(item) for item in self._event_history[:limit]]
 
     def runtime_snapshot(self, recent_limit: int = 10) -> dict[str, Any]:
-        return {
+        snapshot = {
             "dispatcher_state": self._state.value,
             "recent_events": self.recent_events(recent_limit),
             "channels": self._channel_statuses(),
         }
+        if self._failover:
+            snapshot["failover"] = self._failover.get_status()
+        return snapshot
 
     def dashboard_notifications(self, limit: int = 50) -> list[dict[str, Any]]:
         """最近通知列表（只读聚合，供临时看板使用）。"""
@@ -242,6 +247,14 @@ class NotifierDispatcher:
         self._record_channel_attempt("feishu", feishu_ok, event, dispatched_at)
         self._record_channel_attempt("email", email_ok, event, dispatched_at)
         self._append_event(event, dispatched_at, feishu_ok, email_ok)
+
+        # TASK-0025: 如果通知失败且配置了 failover，记录事件
+        if self._failover and not (feishu_ok or email_ok):
+            self._failover.record_notification_failure(
+                event_code=event.event_code,
+                title=event.title,
+                body=event.body,
+            )
 
         logger.info(
             "dispatch event=%s level=%s state=%s feishu=%s email=%s",

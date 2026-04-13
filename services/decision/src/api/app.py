@@ -24,6 +24,8 @@ from .routes.post_market import router as post_market_router
 from .routes.evening_rotation import router as evening_rotation_router
 from .routes.pbo import router as pbo_router
 from .routes.local_sim import router as local_sim_router
+# Decision Web routes
+from .routes.decision_web import router as decision_web_router
 
 _DECISION_API_KEY = os.environ.get("DECISION_API_KEY", "")
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -71,6 +73,8 @@ def create_app() -> FastAPI:
     # CF1' LLM Pipeline
     from .routes.llm import router as llm_router
     app.include_router(llm_router)
+    # Decision Web routes
+    app.include_router(decision_web_router)
 
     return app
 

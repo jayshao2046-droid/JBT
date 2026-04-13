@@ -13,16 +13,91 @@ from ..gating.backtest_gate import get_backtest_gate
 from .stock_data_client import StockDataClient
 
 # TASK-0083: 接入共享因子注册表
+# TASK-0084: 添加双地同步检查和飞书通知
 try:
-    from shared.python_common.factors.registry import check_coverage, get_jbt_factors
+    from shared.python_common.factors.registry import check_coverage, get_jbt_factors, get_global_registry
+    from shared.python_common.factors.sync import compare_registries, generate_sync_report
+    _SHARED_FACTORS_AVAILABLE = True
 except ImportError:
     # Fallback: 如果共享库未安装，使用本地实现
     def check_coverage(required_factors):
         return {name: True for name in required_factors}
     def get_jbt_factors():
         return []
+    def get_global_registry():
+        return None
+    def compare_registries(d, b, on_mismatch=None):
+        return {}
+    def generate_sync_report(result):
+        return ""
+    _SHARED_FACTORS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+
+# TASK-0084: 启动时同步检查
+def _check_factor_sync():
+    """启动时检查 decision 与 backtest 因子同步状态，发现不一致时发飞书告警。"""
+    if not _SHARED_FACTORS_AVAILABLE:
+        logger.debug("共享因子库未加载，跳过同步检查")
+        return
+
+    try:
+        # 获取 decision 端因子（从全局注册表）
+        global_registry = get_global_registry()
+        if global_registry is None:
+            return
+        decision_factors = global_registry.export_hash_map()
+
+        # 获取 backtest 端因子（通过 HTTP API 或直接 import）
+        try:
+            from backtest.factor_registry import export_backtest_hash_map
+            backtest_factors = export_backtest_hash_map()
+        except ImportError:
+            logger.debug("无法导入 backtest 因子注册表，跳过同步检查")
+            return
+
+        # 比对两端因子
+        def _on_mismatch(result):
+            """发现不一致时发飞书 P2 告警。"""
+            try:
+                from ..notifier.dispatcher import DecisionEvent, NotifyLevel, get_dispatcher
+                dispatcher = get_dispatcher()
+                report = generate_sync_report(result)
+
+                event = DecisionEvent(
+                    event_type="SYSTEM",
+                    event_code="factor_sync_mismatch",
+                    notify_level=NotifyLevel.P2,
+                    title="🔔 [DECISION-P2] 因子同步异常",
+                    body=report,
+                    trace_id="factor_sync_check",
+                )
+                dispatcher.dispatch(event)
+                logger.warning(f"因子同步异常，已发送飞书告警")
+            except Exception as e:
+                logger.error(f"发送因子同步告警失败: {e}")
+
+        result = compare_registries(decision_factors, backtest_factors, on_mismatch=_on_mismatch)
+
+        # 记录同步状态
+        consistent_count = len(result.get("consistent", []))
+        missing_decision = len(result.get("missing_in_decision", []))
+        missing_backtest = len(result.get("missing_in_backtest", []))
+        hash_mismatch = len(result.get("hash_mismatch", []))
+
+        logger.info(
+            f"因子同步检查完成: 一致={consistent_count}, "
+            f"decision缺失={missing_decision}, backtest缺失={missing_backtest}, "
+            f"hash不一致={hash_mismatch}"
+        )
+
+    except Exception as e:
+        logger.error(f"因子同步检查失败: {e}")
+
+
+# 模块加载时自动执行同步检查
+_check_factor_sync()
 
 
 class FactorLoadError(RuntimeError):

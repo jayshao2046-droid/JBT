@@ -1,6 +1,7 @@
 """
 PublishExecutor — TASK-0021 G batch
 统一发布执行器：门禁校验 → 状态迁移 → HTTP 推送 → 通知。
+TASK-0025: 集成 FailoverManager 备用方案。
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from ..strategy.repository import get_repository
 from ..strategy.lifecycle import LifecycleStatus
 from .gate import PublishGate
 from .sim_adapter import SimTradingAdapter
+from .failover import FailoverManager, FailoverState
 from ..notifier.dispatcher import DecisionEvent, NotifyLevel, get_dispatcher
 
 logger = logging.getLogger(__name__)
@@ -46,15 +48,19 @@ class PublishExecutor:
     3. SimTradingAdapter.publish → 推送策略包
     4. 根据推送结果更新策略状态 (in_production / pending_execution 维持)
     5. 发送飞书/邮件通知
+
+    TASK-0025: 集成 FailoverManager，FAILOVER 模式下转到仅平仓。
     """
 
     def __init__(
         self,
         gate: Optional[PublishGate] = None,
         adapter: Optional[SimTradingAdapter] = None,
+        failover_manager: Optional[FailoverManager] = None,
     ) -> None:
         self._gate = gate or PublishGate()
         self._adapter = adapter or SimTradingAdapter()
+        self._failover_manager = failover_manager or FailoverManager()
         self._dispatcher = get_dispatcher()
 
     def execute(self, strategy_id: str, target: str = "sim-trading") -> PublishResult:
@@ -66,6 +72,24 @@ class PublishExecutor:
                 strategy_id=strategy_id,
                 target=target,
                 message=f"Strategy {strategy_id} not found",
+            )
+
+        # TASK-0025: 检查 failover 状态
+        self._failover_manager.probe_and_update_state()
+        failover_state = self._failover_manager.get_state()
+
+        if failover_state == FailoverState.FAILOVER:
+            # 备用模式：仅平仓，跳过正常发布流程
+            logger.warning(
+                f"FailoverManager 处于 FAILOVER 状态，策略 {strategy_id} 发布请求转为仅平仓模式"
+            )
+            # 这里不实际执行平仓，只是记录日志并返回特殊状态
+            # 真实平仓操作由 close_position() 方法单独调用
+            return PublishResult(
+                status=PublishStatus.ADAPTER_FAILED,
+                strategy_id=strategy_id,
+                target="simnow-failover",
+                message="sim-trading 不可用，已进入 SimNow 备用模式（仅平仓）",
             )
 
         # 1. 门禁校验
