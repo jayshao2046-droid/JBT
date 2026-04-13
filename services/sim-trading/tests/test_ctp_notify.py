@@ -33,10 +33,7 @@ def test_simnow_import_without_ctp():
 # 2. pause_trading 路由触发 emit_alert
 # ---------------------------------------------------------------------------
 
-@pytest.fixture
-def client():
-    from src.main import app
-    return TestClient(app)
+# 使用 conftest.py 中的 client fixture
 
 
 def test_pause_triggers_emit_alert(client):

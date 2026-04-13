@@ -1,13 +1,7 @@
 # TASK-0010-B: minimum health check test
 
-from fastapi.testclient import TestClient
 
-from src.main import app
-
-client = TestClient(app)
-
-
-def test_health_returns_200_with_ok():
+def test_health_returns_200_with_ok(client):
     response = client.get("/health")
     assert response.status_code == 200
     data = response.json()

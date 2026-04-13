@@ -195,15 +195,11 @@ def test_report_with_account_data():
 # 报表 API 端点
 # ---------------------------------------------------------------------------
 
-def test_report_daily_endpoint():
+def test_report_daily_endpoint(client):
     """GET /api/v1/report/daily 返回正确的报表结构。"""
     from src.ledger.service import reset_ledger
     reset_ledger()
 
-    from src.main import app
-    from fastapi.testclient import TestClient
-
-    client = TestClient(app)
     resp = client.get("/api/v1/report/daily")
     assert resp.status_code == 200
     data = resp.json()
@@ -211,7 +207,7 @@ def test_report_daily_endpoint():
     assert required_keys == set(data.keys())
 
 
-def test_report_trades_endpoint():
+def test_report_trades_endpoint(client):
     """GET /api/v1/report/trades 返回当日成交列表。"""
     from src.ledger.service import get_ledger, reset_ledger
     reset_ledger()
@@ -219,10 +215,6 @@ def test_report_trades_endpoint():
     ledger = get_ledger()
     ledger.add_trade({"instrument_id": "rb2510", "price": 3500.0, "volume": 1, "trade_id": "T1"})
 
-    from src.main import app
-    from fastapi.testclient import TestClient
-
-    client = TestClient(app)
     resp = client.get("/api/v1/report/trades")
     assert resp.status_code == 200
     data = resp.json()
@@ -231,7 +223,7 @@ def test_report_trades_endpoint():
     reset_ledger()
 
 
-def test_report_positions_endpoint():
+def test_report_positions_endpoint(client):
     """GET /api/v1/report/positions 返回当前持仓列表。"""
     from src.ledger.service import get_ledger, reset_ledger
     reset_ledger()
@@ -239,10 +231,6 @@ def test_report_positions_endpoint():
     ledger = get_ledger()
     ledger.update_positions([{"instrument_id": "rb2510", "position": 5}])
 
-    from src.main import app
-    from fastapi.testclient import TestClient
-
-    client = TestClient(app)
     resp = client.get("/api/v1/report/positions")
     assert resp.status_code == 200
     data = resp.json()

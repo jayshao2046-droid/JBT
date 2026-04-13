@@ -1,10 +1,5 @@
 from copy import deepcopy
 
-from fastapi.testclient import TestClient
-
-from src.main import app
-
-client = TestClient(app)
 
 _BASE_PAYLOAD = {
     "strategy_id": "S001",
@@ -24,7 +19,7 @@ def _payload(**overrides):
     return payload
 
 
-def test_strategy_publish_accepts_valid_package():
+def test_strategy_publish_accepts_valid_package(client):
     response = client.post("/api/v1/strategy/publish", json=_payload())
 
     assert response.status_code == 202
@@ -38,7 +33,7 @@ def test_strategy_publish_accepts_valid_package():
     assert data["received_at"].endswith("Z")
 
 
-def test_strategy_publish_rejects_mismatched_publish_target():
+def test_strategy_publish_rejects_mismatched_publish_target(client):
     response = client.post(
         "/api/v1/strategy/publish",
         json=_payload(publish_target="live-trading"),
@@ -48,7 +43,7 @@ def test_strategy_publish_rejects_mismatched_publish_target():
     assert response.json() == {"detail": "publish_target must be sim-trading"}
 
 
-def test_strategy_publish_rejects_missing_allowed_target():
+def test_strategy_publish_rejects_missing_allowed_target(client):
     response = client.post(
         "/api/v1/strategy/publish",
         json=_payload(allowed_targets=["live-trading"]),
@@ -58,7 +53,7 @@ def test_strategy_publish_rejects_missing_allowed_target():
     assert response.json() == {"detail": "allowed_targets must include sim-trading"}
 
 
-def test_strategy_publish_rejects_invalid_lifecycle_status():
+def test_strategy_publish_rejects_invalid_lifecycle_status(client):
     response = client.post(
         "/api/v1/strategy/publish",
         json=_payload(lifecycle_status="published"),
@@ -68,7 +63,7 @@ def test_strategy_publish_rejects_invalid_lifecycle_status():
     assert response.json() == {"detail": "lifecycle_status must be publish_pending"}
 
 
-def test_strategy_publish_rejects_invalid_visibility_mode():
+def test_strategy_publish_rejects_invalid_visibility_mode(client):
     response = client.post(
         "/api/v1/strategy/publish",
         json=_payload(live_visibility_mode="public"),
@@ -78,7 +73,7 @@ def test_strategy_publish_rejects_invalid_visibility_mode():
     assert response.json() == {"detail": "live_visibility_mode must be locked_visible"}
 
 
-def test_strategy_publish_requires_contract_fields():
+def test_strategy_publish_requires_contract_fields(client):
     payload = _payload()
     payload.pop("package_hash")
 
@@ -87,7 +82,7 @@ def test_strategy_publish_requires_contract_fields():
     assert response.status_code == 422
 
 
-def test_strategy_publish_requires_valid_published_at():
+def test_strategy_publish_requires_valid_published_at(client):
     response = client.post(
         "/api/v1/strategy/publish",
         json=_payload(published_at="not-a-timestamp"),

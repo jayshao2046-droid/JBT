@@ -1,12 +1,8 @@
-from fastapi.testclient import TestClient
 import threading
 import time
 
 from src.api import router as router_mod
 from src.gateway import simnow as simnow_mod
-from src.main import app
-
-client = TestClient(app)
 
 
 class _GatewayStub:
@@ -21,7 +17,7 @@ class _GatewayStub:
         raise AssertionError("_query_account should not be called when snapshot is already present")
 
 
-def test_account_endpoint_returns_local_virtual_and_ctp_snapshot():
+def test_account_endpoint_returns_local_virtual_and_ctp_snapshot(client):
     original_gateway = router_mod._gateway
     router_mod._gateway = _GatewayStub(
         {
@@ -187,7 +183,7 @@ def test_disconnect_prevents_reconnect_scheduling():
     assert gateway._schedule_reconnect("md", delay_seconds=0.01) is False
 
 
-def test_system_state_endpoint_syncs_gateway_status_and_masks_credentials():
+def test_system_state_endpoint_syncs_gateway_status_and_masks_credentials(client):
     class _StatusGatewayStub:
         @property
         def status(self):

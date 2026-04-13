@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.main import app, bootstrap_notifier_dispatcher
+from src.main import bootstrap_notifier_dispatcher
 from src.notifier.dispatcher import NotifierDispatcher, RiskEvent, SystemRiskState
 from src.notifier.dispatcher import bootstrap_dispatcher, clear_dispatcher, get_dispatcher
 from src.notifier.feishu import FeishuNotifier
@@ -158,6 +158,9 @@ def test_main_bootstrap_registers_dispatcher_on_app_state(monkeypatch):
     monkeypatch.setenv("NOTIFY_EMAIL_ENABLED", "false")
 
     dispatcher = bootstrap_notifier_dispatcher(force=True)
+
+    # 在测试函数内部导入 app，避免模块级别导入被其他测试的 reload 影响
+    from src.main import app
 
     assert get_dispatcher() is dispatcher
     assert app.state.notifier_dispatcher is dispatcher
