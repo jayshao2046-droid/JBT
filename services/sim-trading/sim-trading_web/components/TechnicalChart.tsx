@@ -18,12 +18,21 @@ import {
 
 interface TechnicalChartProps {
   symbol: string
-  interval?: string
 }
 
-export function TechnicalChart({ symbol, interval = "1m" }: TechnicalChartProps) {
+const INTERVALS = [
+  { value: "1m", label: "1分" },
+  { value: "5m", label: "5分" },
+  { value: "15m", label: "15分" },
+  { value: "30m", label: "30分" },
+  { value: "1h", label: "1时" },
+  { value: "1d", label: "日线" },
+]
+
+export function TechnicalChart({ symbol }: TechnicalChartProps) {
   const [klines, setKlines] = useState<KlinePoint[]>([])
   const [loading, setLoading] = useState(true)
+  const [interval, setInterval] = useState("5m")
 
   useEffect(() => {
     const fetchKlines = async () => {
@@ -83,9 +92,24 @@ export function TechnicalChart({ symbol, interval = "1m" }: TechnicalChartProps)
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">
-          {symbol} 技术指标 ({interval})
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">{symbol} 技术指标</CardTitle>
+          <div className="flex gap-1">
+            {INTERVALS.map(int => (
+              <button
+                key={int.value}
+                onClick={() => setInterval(int.value)}
+                className={`px-2 py-1 text-xs rounded transition-colors ${
+                  interval === int.value
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary hover:bg-secondary/80"
+                }`}
+              >
+                {int.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* 价格和均线 */}
