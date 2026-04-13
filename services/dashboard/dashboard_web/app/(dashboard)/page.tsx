@@ -1,95 +1,119 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Activity, TrendingUp, AlertCircle, Database } from 'lucide-react';
+"use client"
+
+import { Skeleton } from "@/components/ui/skeleton"
+import { Card, CardContent } from "@/components/ui/card"
+import { useDashboardData } from "@/hooks/use-dashboard-data"
+import { KpiCard } from "@/components/dashboard/kpi-card"
+import { CurrentPositions } from "@/components/dashboard/current-positions"
+import { StrategySignals } from "@/components/dashboard/strategy-signals"
+import { RealTimeRisk } from "@/components/dashboard/real-time-risk"
+import { DataSourceStatus } from "@/components/dashboard/data-source-status"
+import { NewsList } from "@/components/dashboard/news-list"
+import { TrendingUp, DollarSign, Activity, AlertTriangle } from "lucide-react"
 
 export default function DashboardPage() {
-  const services = [
+  const { account, performance, risk, positions, signals, collectors, news, loading, error } =
+    useDashboardData()
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-red-400">{error}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const kpiData = [
     {
-      name: '模拟交易',
+      title: "总权益",
+      value: account?.equity || 0,
+      icon: DollarSign,
+      change: performance ? `${performance.daily_pnl >= 0 ? "+" : ""}${performance.daily_pnl}` : undefined,
+      changeType: performance && performance.daily_pnl >= 0 ? ("positive" as const) : ("negative" as const),
+      status: "success" as const,
+    },
+    {
+      title: "可用资金",
+      value: account?.available || 0,
       icon: TrendingUp,
-      status: 'running',
-      description: '实时交易执行与风控监控',
-      stats: { active: 12, total: 15 },
+      status: "default" as const,
     },
     {
-      name: '回测系统',
+      title: "浮动盈亏",
+      value: account?.float_pnl || 0,
       icon: Activity,
-      status: 'running',
-      description: '策略回测与参数优化',
-      stats: { running: 3, completed: 45 },
+      changeType: account && account.float_pnl >= 0 ? ("positive" as const) : ("negative" as const),
+      status: account && account.float_pnl >= 0 ? ("success" as const) : ("danger" as const),
     },
     {
-      name: '决策引擎',
-      icon: AlertCircle,
-      status: 'running',
-      description: '信号生成与策略研究',
-      stats: { signals: 8, strategies: 23 },
+      title: "保证金占用",
+      value: account?.margin || 0,
+      icon: AlertTriangle,
+      progress: risk ? risk.position_usage * 100 : 0,
+      description: "占总权益",
+      status: risk && risk.position_usage > 0.8 ? ("danger" as const) : ("warning" as const),
+    },
+  ]
+
+  const riskMetrics = [
+    {
+      label: "保证金使用率",
+      value: risk ? Math.round(risk.position_usage * 100) : 0,
+      unit: "%",
+      status: risk && risk.position_usage > 0.8 ? ("danger" as const) : ("normal" as const),
+      description: "占总权益",
     },
     {
-      name: '数据服务',
-      icon: Database,
-      status: 'running',
-      description: '数据采集与质量监控',
-      stats: { sources: 18, quality: '98.5%' },
+      label: "当日回撤",
+      value: risk ? Math.abs(risk.drawdown) : 0,
+      unit: "¥",
+      status: "normal" as const,
+      description: "最大回撤",
     },
-  ];
+    {
+      label: "VaR风险值",
+      value: risk ? Math.abs(risk.var_1d) : 0,
+      unit: "¥",
+      status: "normal" as const,
+      description: "单日风险敞口",
+    },
+  ]
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-white">统一看板</h1>
-        <p className="text-gray-400 mt-2">JBT 交易平台总览</p>
+    <div className="p-6 space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpiData.map((kpi, idx) => (
+          <KpiCard key={idx} {...kpi} />
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {services.map((service) => {
-          const Icon = service.icon;
-          return (
-            <Card key={service.name} className="bg-gray-900 border-gray-800">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <Icon className="h-8 w-8 text-blue-500" />
-                  <span className="text-xs text-green-500">● {service.status}</span>
-                </div>
-                <CardTitle className="text-white">{service.name}</CardTitle>
-                <CardDescription className="text-gray-400">{service.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm text-gray-300">
-                  {Object.entries(service.stats).map(([key, value]) => (
-                    <div key={key} className="flex justify-between py-1">
-                      <span className="text-gray-400">{key}:</span>
-                      <span className="font-medium">{value}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <CurrentPositions positions={positions} />
+        <StrategySignals signals={signals} />
       </div>
 
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
-          <CardTitle className="text-white">今日重点</CardTitle>
-          <CardDescription className="text-gray-400">需要关注的事项</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3 text-gray-300">
-            <div className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg">
-              <AlertCircle className="h-5 w-5 text-yellow-500" />
-              <span>3 个策略等待审核</span>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg">
-              <AlertCircle className="h-5 w-5 text-red-500" />
-              <span>1 个数据源连接异常</span>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg">
-              <AlertCircle className="h-5 w-5 text-blue-500" />
-              <span>5 个回测任务进行中</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <RealTimeRisk metrics={riskMetrics} />
+        <DataSourceStatus dataSources={collectors} />
+        <NewsList news={news} />
+      </div>
     </div>
-  );
+  )
 }

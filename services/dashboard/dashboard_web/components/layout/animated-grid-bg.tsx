@@ -35,7 +35,6 @@ export function AnimatedGridBg() {
     const ORANGE_CORE  = (a: number) => `hsla(28,  100%, 62%, ${a})`
     const AMBER_MID    = (a: number) => `hsla(38,  95%,  55%, ${a})`
     const GOLD_EDGE    = (a: number) => `hsla(48,  90%,  50%, ${a})`
-    const ELECTRIC_ARC = (a: number) => `hsla(22,  100%, 68%, ${a})`
 
     // ── State ────────────────────────────────────────────────
     let W = 0, H = 0
@@ -172,6 +171,7 @@ export function AnimatedGridBg() {
     }
 
     function drawPulses() {
+      if (!ctx) return
       for (const p of pulses) {
         if (p.path.length < 2) continue
 
@@ -231,6 +231,7 @@ export function AnimatedGridBg() {
 
     // ── Radial glow scatter (background haze) ────────────────
     function drawGlowHaze(t: number) {
+      if (!ctx) return
       for (const g of GLOW_SOURCES) {
         const gx = g.fx * W + Math.sin(t * 0.4 + g.fy * 5) * W * 0.06
         const gy = g.fy * H + Math.cos(t * 0.35 + g.fx * 5) * H * 0.06
