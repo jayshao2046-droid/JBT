@@ -1,5 +1,11 @@
 """测试参数验证器"""
 import pytest
+import sys
+from pathlib import Path
+
+# 添加 src 目录到 Python 路径
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
 from backtest.validator import ParameterValidator
 
 
