@@ -28,6 +28,7 @@ if __package__:
     from ...backtest.validator import ParameterValidator
     from ...core.settings import get_settings
     from ...stats.performance import PerformanceCalculator
+    from ...stats.quality import QualityCalculator
     from .support import ACTIVE_STATUSES
     from .support import append_event_log
     from .support import append_system_log
@@ -52,6 +53,7 @@ else:
     from backtest.validator import ParameterValidator
     from core.settings import get_settings
     from stats.performance import PerformanceCalculator
+    from stats.quality import QualityCalculator
     from support import ACTIVE_STATUSES
     from support import append_event_log
     from support import append_system_log
@@ -1652,6 +1654,23 @@ def get_result_performance(task_id: str, request: Request) -> dict[str, Any]:
 
     return {
         "performance": performance,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+@router.get("/results/{task_id}/quality")
+def get_result_quality(task_id: str, request: Request) -> dict[str, Any]:
+    """获取回测质量 KPI"""
+    state = get_compat_state(request)
+    _refresh_all_results(state)
+    result = _result_or_404(state, task_id)
+
+    # 计算质量指标（使用默认值或从结果中提取）
+    calculator = QualityCalculator()
+    quality = calculator.calculate_all_metrics()
+
+    return {
+        "quality": quality,
         "timestamp": datetime.now().isoformat(),
     }
 
