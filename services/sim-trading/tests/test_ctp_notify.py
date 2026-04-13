@@ -4,6 +4,10 @@ test_ctp_notify.py — TASK-0014-A2 验证
 2. pause_trading 路由调用后 emit_alert 被触发（mock dispatcher）
 3. resume_trading 路由调用后 emit_alert 被触发（mock dispatcher）
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from unittest.mock import patch, MagicMock
 
 import pytest

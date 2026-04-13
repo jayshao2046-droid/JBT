@@ -1,10 +1,11 @@
 """因子双地同步工具 — 比对 decision 与 backtest 两端因子注册表。
 
 TASK-0083 / Token: tok-e166b118
+TASK-0084 / Token: tok-966162da
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 def compare_registries(
     decision_factors: Dict[str, str],
     backtest_factors: Dict[str, str],
+    on_mismatch: Optional[Callable[[Dict], None]] = None,
 ) -> Dict[str, any]:
     """比对 decision 与 backtest 两端因子注册表。
 
@@ -67,6 +69,10 @@ def compare_registries(
             f"因子版本不一致: {', '.join([m['name'] for m in hash_mismatch])}"
         )
 
+    # 调用回调函数（如果有不一致）
+    if on_mismatch and (missing_in_decision or missing_in_backtest or hash_mismatch):
+        on_mismatch(result)
+
     return result
 
 
@@ -115,3 +121,54 @@ def get_missing_factors(
         logger.warning(f"缺失因子: {', '.join(missing)}")
 
     return missing
+
+
+def generate_sync_report(result: Dict) -> str:
+    """生成因子同步报告（Markdown 格式）。
+
+    Args:
+        result: compare_registries() 返回的结果字典
+
+    Returns:
+        Markdown 格式的报告文本
+    """
+    lines = ["## 因子同步状态报告\n"]
+
+    # 一致因子
+    consistent = result.get("consistent", [])
+    lines.append(f"**✅ 一致因子**: {len(consistent)} 个")
+    if consistent:
+        lines.append(f"  - {', '.join(sorted(consistent)[:10])}")
+        if len(consistent) > 10:
+            lines.append(f"  - ... 及其他 {len(consistent) - 10} 个")
+    lines.append("")
+
+    # 缺失因子（decision 端）
+    missing_in_decision = result.get("missing_in_decision", [])
+    if missing_in_decision:
+        lines.append(f"**⚠️ Decision 端缺失**: {len(missing_in_decision)} 个")
+        lines.append(f"  - {', '.join(sorted(missing_in_decision))}")
+        lines.append("")
+
+    # 缺失因子（backtest 端）
+    missing_in_backtest = result.get("missing_in_backtest", [])
+    if missing_in_backtest:
+        lines.append(f"**⚠️ Backtest 端缺失**: {len(missing_in_backtest)} 个")
+        lines.append(f"  - {', '.join(sorted(missing_in_backtest))}")
+        lines.append("")
+
+    # Hash 不一致
+    hash_mismatch = result.get("hash_mismatch", [])
+    if hash_mismatch:
+        lines.append(f"**❌ Hash 不一致**: {len(hash_mismatch)} 个")
+        for item in hash_mismatch[:5]:
+            lines.append(
+                f"  - {item['name']}: "
+                f"decision={item['decision_hash'][:8]}... "
+                f"backtest={item['backtest_hash'][:8]}..."
+            )
+        if len(hash_mismatch) > 5:
+            lines.append(f"  - ... 及其他 {len(hash_mismatch) - 5} 个")
+        lines.append("")
+
+    return "\n".join(lines)

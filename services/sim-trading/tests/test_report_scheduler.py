@@ -2,6 +2,10 @@
 test_report_scheduler.py — TASK-0019-B1
 pytest 测试：scheduler 注册、generate_daily_report 结构、定时触发、SMTP 未配置不崩溃
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import asyncio
 from datetime import datetime
 from unittest.mock import MagicMock

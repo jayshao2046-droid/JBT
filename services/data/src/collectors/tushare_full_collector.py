@@ -58,7 +58,7 @@ class TushareFullCollector(BaseCollector):
         # Storage base
         storage_cfg = self.config.get("storage", {})
         self.base_path = Path(os.path.expanduser(
-            storage_cfg.get("base_path", os.environ.get("DATA_STORAGE_ROOT", "~/jbt-data"))
+            storage_cfg.get("base_path", os.environ.get("DATA_STORAGE_ROOT", "/data"))
         ))
         # Progress tracking
         self.progress_file = self.base_path / "tushare_full_progress.json"

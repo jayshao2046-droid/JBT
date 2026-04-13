@@ -1,5 +1,9 @@
 # Tests for statistics modules (SIMWEB-01)
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import pytest
 from datetime import datetime, timedelta
 from src.stats.performance import PerformanceCalculator

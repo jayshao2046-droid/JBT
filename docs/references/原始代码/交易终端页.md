@@ -1,0 +1,636 @@
+"use client"
+
+import { useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import {
+  Send,
+  X,
+  AlertTriangle,
+  Clock,
+} from "lucide-react"
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts"
+
+export default function SimNowTradingTerminal() {
+  const [isLoading, setIsLoading] = useState(false)
+  const [lastUpdate, setLastUpdate] = useState(new Date())
+  const [pauseTrading, setPauseTrading] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+
+  // 账户状态
+  const [accountState] = useState({
+    equity: 512500,
+    floatingPnl: 3250,
+    availableFunds: 412300,
+    riskLevel: 28,
+    marginRate: 58,
+  })
+
+  // 下单参数
+  const [orderParams, setOrderParams] = useState({
+    contract: "螺纹钢2510",
+    direction: "buy",
+    openClose: "open",
+    quantity: 1,
+    priceType: "market",
+    limitPrice: 3850,
+  })
+
+  const [orderError, setOrderError] = useState("")
+
+  // 合约白名单
+  const contractWhitelist = [
+    "螺纹钢2510",
+    "沪铜2509",
+    "豆粕2509",
+    "沪金2512",
+  ]
+
+  // 持仓
+  const [positions] = useState([
+    {
+      id: 1,
+      contract: "螺纹钢2510",
+      direction: "buy",
+      quantity: 5,
+      avgPrice: 3842,
+      currentPrice: 3875,
+      floatPnl: 1650,
+      stopLoss: 3800,
+      takeProfit: 3920,
+      touched: false,
+    },
+    {
+      id: 2,
+      contract: "沪铜2509",
+      direction: "sell",
+      quantity: 3,
+      avgPrice: 78600,
+      currentPrice: 78450,
+      floatPnl: 4500,
+      stopLoss: 78800,
+      takeProfit: 78200,
+      touched: false,
+    },
+  ])
+
+  // 订单/成交流
+  const [orderStream] = useState([
+    {
+      id: "ORD-001",
+      time: "14:32:45",
+      contract: "螺纹钢2510",
+      action: "买开",
+      price: 3875,
+      quantity: 5,
+      status: "已成交",
+      reason: null,
+    },
+    {
+      id: "ORD-002",
+      time: "14:28:12",
+      contract: "沪铜2509",
+      action: "卖开",
+      price: 78450,
+      quantity: 3,
+      status: "已成交",
+      reason: null,
+    },
+    {
+      id: "ORD-003",
+      time: "14:25:30",
+      contract: "豆粕2509",
+      action: "买开",
+      price: 3128,
+      quantity: 2,
+      status: "废单",
+      reason: "触达日亏限额 1.8%",
+    },
+  ])
+
+  // 权益曲线数据
+  const equityCurveData = [
+    { time: "09:30", equity: 500000 },
+    { time: "10:15", equity: 502000 },
+    { time: "11:00", equity: 505500 },
+    { time: "12:00", equity: 503200 },
+    { time: "13:00", equity: 508000 },
+    { time: "14:00", equity: 510200 },
+    { time: "14:30", equity: 512500 },
+  ]
+
+  const handlePlaceOrder = () => {
+    setOrderError("")
+    
+    if (pauseTrading) {
+      setOrderError("交易已暂停，无法下单")
+      return
+    }
+
+    if (accountState.riskLevel > 35) {
+      setOrderError("风险度超过 35%，拒绝下单")
+      return
+    }
+
+    if (accountState.marginRate > 80) {
+      setOrderError("保证金率触达 80%，无法开仓")
+      return
+    }
+
+    // TODO: 连接到 trading_api:8003 WebSocket 发送订单
+    setIsLoading(true)
+    setTimeout(() => {
+      setIsLoading(false)
+      alert(`已下单: ${orderParams.direction === "buy" ? "买" : "卖"} ${orderParams.contract} ${orderParams.quantity}手`)
+    }, 300)
+  }
+
+  const handleClosePosition = (positionId: number) => {
+    alert(`平仓 ID: ${positionId}`)
+    // TODO: 连接到 trading_api:8003 WebSocket
+  }
+
+  const handleReversePosition = (positionId: number) => {
+    alert(`反手 ID: ${positionId}`)
+    // TODO: 连接到 trading_api:8003 WebSocket
+  }
+
+  const handleModifyStopLoss = (positionId: number) => {
+    alert(`修改止损 ID: ${positionId}`)
+    // TODO: 连接到 trading_api:8003 WebSocket
+  }
+
+  const handleClearAllPositions = () => {
+    alert("已一键清仓所有持仓")
+    // TODO: 连接到 trading_api:8003 WebSocket
+    setShowClearConfirm(false)
+  }
+
+  return (
+    <div className="p-6 space-y-6 bg-neutral-950 min-h-screen">
+      {/* 头部 */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-wider">SimNow 交易终端</h1>
+          <p className="text-sm text-neutral-400">极简、低延迟的模拟交易操作界面</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setPauseTrading(!pauseTrading)}
+            className={pauseTrading ? "bg-orange-600 hover:bg-orange-700" : "bg-neutral-700 hover:bg-neutral-600"}
+          >
+            <Clock className="w-4 h-4 mr-2" />
+            {pauseTrading ? "交易已暂停" : "交易正常"}
+          </Button>
+          <Button
+            onClick={() => setShowClearConfirm(true)}
+            className="bg-red-600 hover:bg-red-700 text-white font-bold"
+          >
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            一键清仓
+          </Button>
+        </div>
+      </div>
+
+      {/* 更新时间 */}
+      <div className="text-xs text-neutral-500 text-right">
+        最后更新: {lastUpdate.toLocaleString("zh-CN")}
+      </div>
+
+      {/* 账户概览 - 大字体卡片 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <Card className="bg-neutral-900 border-neutral-700">
+          <CardContent className="p-4">
+            <p className="text-xs text-neutral-400 mb-1">动态权益</p>
+            <p className="text-2xl font-bold text-white font-mono">
+              ¥{accountState.equity.toLocaleString()}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className={`bg-neutral-900 border ${accountState.floatingPnl >= 0 ? "border-green-600" : "border-red-600"}`}>
+          <CardContent className="p-4">
+            <p className="text-xs text-neutral-400 mb-1">浮动盈亏</p>
+            <p className={`text-2xl font-bold font-mono ${accountState.floatingPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+              {accountState.floatingPnl >= 0 ? "+" : ""}¥{accountState.floatingPnl.toLocaleString()}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-neutral-900 border-neutral-700">
+          <CardContent className="p-4">
+            <p className="text-xs text-neutral-400 mb-1">可用资金</p>
+            <p className="text-2xl font-bold text-white font-mono">
+              ¥{accountState.availableFunds.toLocaleString()}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className={`bg-neutral-900 border ${accountState.riskLevel > 30 ? "border-orange-600" : "border-neutral-600"}`}>
+          <CardContent className="p-4">
+            <p className="text-xs text-neutral-400 mb-1">风险度</p>
+            <p className={`text-2xl font-bold font-mono ${accountState.riskLevel > 30 ? "text-orange-400" : "text-white"}`}>
+              {accountState.riskLevel}%
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className={`bg-neutral-900 border ${accountState.marginRate > 70 ? "border-red-600" : "border-yellow-600"}`}>
+          <CardContent className="p-4">
+            <p className="text-xs text-neutral-400 mb-1">保证金率</p>
+            <p className={`text-2xl font-bold font-mono ${accountState.marginRate > 70 ? "text-red-400" : "text-yellow-400"}`}>
+              {accountState.marginRate}%
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 下单面板 + 权益曲线 */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* 下单面板 */}
+        <Card className="bg-neutral-900 border-neutral-700 lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-neutral-300">快速下单</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* 品种选择 */}
+            <div>
+              <label className="text-xs text-neutral-400 block mb-2">品种</label>
+              <select
+                value={orderParams.contract}
+                onChange={(e) => setOrderParams({ ...orderParams, contract: e.target.value })}
+                className="w-full bg-neutral-800 border border-neutral-700 text-white text-sm p-2 rounded"
+              >
+                {contractWhitelist.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 方向/开平 */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-neutral-400 block mb-2">方向</label>
+                <select
+                  value={orderParams.direction}
+                  onChange={(e) => setOrderParams({ ...orderParams, direction: e.target.value as any })}
+                  className="w-full bg-neutral-800 border border-neutral-700 text-white text-sm p-2 rounded"
+                >
+                  <option value="buy">买</option>
+                  <option value="sell">卖</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-neutral-400 block mb-2">开平</label>
+                <select
+                  value={orderParams.openClose}
+                  onChange={(e) => setOrderParams({ ...orderParams, openClose: e.target.value as any })}
+                  className="w-full bg-neutral-800 border border-neutral-700 text-white text-sm p-2 rounded"
+                >
+                  <option value="open">开仓</option>
+                  <option value="close">平仓</option>
+                </select>
+              </div>
+            </div>
+
+            {/* 手数 */}
+            <div>
+              <label className="text-xs text-neutral-400 block mb-2">手数</label>
+              <Input
+                type="number"
+                min="1"
+                value={orderParams.quantity}
+                onChange={(e) =>
+                  setOrderParams({
+                    ...orderParams,
+                    quantity: parseInt(e.target.value) || 1,
+                  })
+                }
+                className="bg-neutral-800 border-neutral-700 text-white text-sm"
+              />
+              <p className="text-xs text-neutral-500 mt-1">
+                智能推荐: {Math.floor(accountState.availableFunds / 10000)} 手
+              </p>
+            </div>
+
+            {/* 价格类型 */}
+            <div>
+              <label className="text-xs text-neutral-400 block mb-2">价格类型</label>
+              <div className="flex gap-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={orderParams.priceType === "market"}
+                    onChange={() =>
+                      setOrderParams({ ...orderParams, priceType: "market" })
+                    }
+                    className="accent-orange-500"
+                  />
+                  <span className="text-sm text-neutral-300">市价</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={orderParams.priceType === "limit"}
+                    onChange={() =>
+                      setOrderParams({ ...orderParams, priceType: "limit" })
+                    }
+                    className="accent-orange-500"
+                  />
+                  <span className="text-sm text-neutral-300">限价</span>
+                </label>
+              </div>
+            </div>
+
+            {/* 限价 */}
+            {orderParams.priceType === "limit" && (
+              <div>
+                <label className="text-xs text-neutral-400 block mb-2">限价</label>
+                <Input
+                  type="number"
+                  step="0.5"
+                  value={orderParams.limitPrice}
+                  onChange={(e) =>
+                    setOrderParams({
+                      ...orderParams,
+                      limitPrice: parseFloat(e.target.value),
+                    })
+                  }
+                  className="bg-neutral-800 border-neutral-700 text-white text-sm"
+                />
+              </div>
+            )}
+
+            {/* 一键下单 */}
+            <Button
+              onClick={handlePlaceOrder}
+              disabled={isLoading || pauseTrading}
+              className={`w-full font-bold h-10 ${
+                orderParams.direction === "buy"
+                  ? "bg-green-600 hover:bg-green-700"
+                  : "bg-red-600 hover:bg-red-700"
+              } text-white`}
+            >
+              <Send className="w-4 h-4 mr-2" />
+              {orderParams.direction === "buy" ? "买入" : "卖出"}
+            </Button>
+
+            {/* 错误提示 */}
+            {orderError && (
+              <div className="bg-red-900/20 border border-red-600/50 rounded p-2">
+                <p className="text-xs text-red-400">{orderError}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 权益曲线 */}
+        <Card className="bg-neutral-900 border-neutral-700 lg:col-span-3">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-neutral-300">实时权益曲线</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={equityCurveData}>
+                  <defs>
+                    <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#404040" />
+                  <XAxis dataKey="time" stroke="#737373" />
+                  <YAxis stroke="#737373" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      border: "1px solid #404040",
+                      borderRadius: "4px",
+                    }}
+                    labelStyle={{ color: "#fff" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="equity"
+                    stroke="#f97316"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 持仓表格 */}
+      <Card className="bg-neutral-900 border-neutral-700">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-neutral-300">
+            持仓 ({positions.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-700">
+                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400">合约</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400">方向</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400">手数</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400">均价</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400">最新价</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400">浮盈亏</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400">止损/止盈</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map((position) => (
+                  <tr
+                    key={position.id}
+                    className={`border-b border-neutral-800 ${
+                      position.touched
+                        ? "bg-red-900/10 animate-pulse"
+                        : "hover:bg-neutral-800/50"
+                    }`}
+                  >
+                    <td className="py-3 px-4 text-white font-mono">{position.contract}</td>
+                    <td className="py-3 px-4">
+                      <Badge
+                        className={
+                          position.direction === "buy"
+                            ? "bg-green-900/30 text-green-400"
+                            : "bg-red-900/30 text-red-400"
+                        }
+                      >
+                        {position.direction === "buy" ? "买" : "卖"}
+                      </Badge>
+                    </td>
+                    <td className="py-3 px-4 text-white font-mono">{position.quantity}</td>
+                    <td className="py-3 px-4 text-neutral-300 font-mono">
+                      {position.avgPrice}
+                    </td>
+                    <td className="py-3 px-4 text-white font-mono">{position.currentPrice}</td>
+                    <td
+                      className={`py-3 px-4 font-mono ${
+                        position.floatPnl >= 0
+                          ? "text-green-400"
+                          : "text-red-400"
+                      }`}
+                    >
+                      {position.floatPnl >= 0 ? "+" : ""}¥{position.floatPnl.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4 text-xs text-neutral-400">
+                      <div className="flex gap-1">
+                        <span>SL: {position.stopLoss}</span>
+                        <span>/</span>
+                        <span>TP: {position.takeProfit}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white text-xs h-7 px-2"
+                          onClick={() => handleClosePosition(position.id)}
+                        >
+                          平
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white text-xs h-7 px-2"
+                          onClick={() => handleReversePosition(position.id)}
+                        >
+                          反
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white text-xs h-7 px-2"
+                          onClick={() => handleModifyStopLoss(position.id)}
+                        >
+                          改
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 订单/成交流 */}
+      <Card className="bg-neutral-900 border-neutral-700">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-neutral-300">
+            订单记录 ({orderStream.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {orderStream.map((order) => (
+              <div
+                key={order.id}
+                className={`border rounded p-2 text-xs flex justify-between items-start ${
+                  order.status === "废单"
+                    ? "bg-red-900/20 border-red-600/50"
+                    : "bg-neutral-800/30 border-neutral-700"
+                }`}
+              >
+                <div className="flex-1">
+                  <div className="flex gap-2">
+                    <span className="text-neutral-400">{order.time}</span>
+                    <span className="font-mono text-white">{order.contract}</span>
+                    <span
+                      className={
+                        order.action.includes("买")
+                          ? "text-green-400"
+                          : "text-red-400"
+                      }
+                    >
+                      {order.action}
+                    </span>
+                    <span className="text-neutral-300">{order.quantity}手</span>
+                    <span className="text-neutral-500">@{order.price}</span>
+                  </div>
+                  {order.reason && (
+                    <div className="text-red-400 mt-1">⚠ {order.reason}</div>
+                  )}
+                </div>
+                <Badge
+                  className={
+                    order.status === "已成交"
+                      ? "bg-green-900/30 text-green-400"
+                      : "bg-red-900/30 text-red-400"
+                  }
+                >
+                  {order.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 一键清仓确认对话 */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <Card className="bg-neutral-900 border-red-600 w-full max-w-md">
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <CardTitle className="text-lg font-bold text-red-400">
+                  一键清仓确认
+                </CardTitle>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowClearConfirm(false)}
+                  className="text-neutral-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-neutral-300">
+                即将平仓所有 <span className="font-bold">{positions.length}</span> 个持仓，此操作不可撤销。
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleClearAllPositions}
+                  className="bg-red-600 hover:bg-red-700 text-white flex-1 font-bold"
+                >
+                  确认清仓
+                </Button>
+                <Button
+                  onClick={() => setShowClearConfirm(false)}
+                  variant="outline"
+                  className="border-neutral-700 text-neutral-400 hover:bg-neutral-800 flex-1"
+                >
+                  取消
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  )
+}

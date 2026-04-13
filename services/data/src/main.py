@@ -24,7 +24,7 @@ except Exception:  # pragma: no cover - yaml is an optional runtime dependency i
 
 SERVICE_NAME = "jbt-data"
 SERVICE_VERSION = "1.0.0"
-DEFAULT_STORAGE_ROOT = Path(os.path.expanduser("~/jbt-data"))
+DEFAULT_STORAGE_ROOT = Path(os.environ.get("DATA_STORAGE_ROOT", str(Path(__file__).resolve().parents[2] / "runtime" / "data")))
 MINUTE_DATA_SUBDIR = Path("futures_minute") / "1m"
 BAR_COLUMNS = (
     "datetime",

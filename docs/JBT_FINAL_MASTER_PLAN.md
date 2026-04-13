@@ -9,17 +9,17 @@
 
 ---
 
-## 📊 实时进度总览 [修订 2026-04-12]
+## 📊 实时进度总览 [修订 2026-04-13]
 
 | 服务 | 进度 | 状态 | 当前焦点 |
 |------|------|------|---------|
 | data | `████████████` **100%** | ✅ 生产运行中 | Round 1 收口完成，维护态 |
 | backtest | `████████████` **100%** | ✅ 生产运行中 | Round 2 安全加固完成，维护态 |
-| sim-trading | `███████████░` **90%** | ✅ 待开盘CTP验证 | Phase B全闭环；等待正式交易日验证 |
-| decision | `███████████░` **90%** | 🔶 Phase C主体闭环 | CB/CA/CS全闭环；剩余CK因子同步+CF1'口头策略 |
+| sim-trading | `███████████░` **90%** | ✅ 待开盘CTP验证 | Phase B全闭环；CS1-S容灾交接已完成；等待正式交易日验证 |
+| decision | `████████████` **99%** | ✅ Phase C 全闭环 | CK2/CK3因子同步+TASK-0025 SimNow备用方案已完成；仅剩生产验证 |
 | dashboard | `█░░░░░░░░░░░` **5%** | ⏳ 后置 | 等待所有后端服务稳定后一次性上线 |
 | live-trading | `░░░░░░░░░░░░` **0%** | ⏳ 后置 | 等待sim稳定运行2~3月后评估 |
-| **整体** | `██████████░░` **~87%** | **Phase C主体闭环** | **ECS已永久停用；J_BotQuant Phase C后切割** |
+| **整体** | `███████████░` **~94%** | **Phase C 全闭环** | **TASK-0084 CK因子同步+TASK-0025 SimNow备用已完成；仅剩后置项** |
 
 > **更新规则：** 每次 Atlas 更新治理文件时同步刷新本表格和百分比。
 
@@ -98,19 +98,20 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 发布接口 | ✅ 已锁回 | TASK-0023-A，`POST /api/v1/strategy/publish` |
 | 安全加固 | ✅ 2026-04-12 | 9 项安全问题全部修复：API Key 认证、密码脱敏、并发锁、内存泄漏等 |
 | 版本 | ✅ 1.0.0 | main.py 版本号已更新，/status stage 字段已修正 |
-| 容灾交接接口 | ❌ 待实施 | `CS1-S`，接收 decision 本地 Sim / future live failover 的任务交接与账本同步 |
+| 容灾交接接口 | ✅ 已完成 | `CS1-S` TASK-0077 commit 8afc8f5，接收 decision 本地 Sim / future live failover 的任务交接与账本同步 [2026-04-13] |
 | 运行态收口 | 🔶 A批完成 | TASK-0022-A locked；B批日志查看 pending |
 | Docker/Mini | ✅ 已部署 | TASK-0017-A3，待开盘验证CTP |
 | 临时看板 | ✅ 基本可用 | `sim-trading_web/`，operations+intelligence 页面 |
 
-**已完成任务：** TASK-0002(契约), TASK-0009(治理闭环), TASK-0010(骨架闭环), TASK-0013(治理闭环), TASK-0014(A1~A4全锁回), TASK-0017-A3, TASK-0019(B1/B2锁回), TASK-0022(A/B全锁回), TASK-0023-A, TASK-0041(A/B/C locked), TASK-0042(自动重连+状态同步 locked), TASK-0043(data_scheduler LaunchAgent守护 locked), TASK-0067(SG API认证+旧auth清理 locked) [修订 2026-04-12]
+**已完成任务：** TASK-0002(契约), TASK-0009(治理闭环), TASK-0010(骨架闭环), TASK-0013(治理闭环), TASK-0014(A1~A4全锁回), TASK-0017-A3, TASK-0019(B1/B2锁回), TASK-0022(A/B全锁回), TASK-0023-A, TASK-0041(A/B/C locked), TASK-0042(自动重连+状态同步 locked), TASK-0043(data_scheduler LaunchAgent守护 locked), TASK-0067(SG API认证+旧auth清理 locked), TASK-0077(CS1-S容灾交接接口 locked) [修订 2026-04-14]
 **Phase B 状态：✅ 全闭环** [修订 2026-04-10]
-**当前活跃：** TASK-0017(待开盘验证) + TASK-0039 剩余 DR3 修复子任务
-**排队任务：** Phase C `CA6/CS1-S` 执行协同 + Phase H 前置容灾复用
+**当前活跃：** TASK-0017(待开盘验证CTP — 周一执行)
+**DR3 修复：** ✅ ISSUE-DR3-001 已由 TASK-0045 watchdog LaunchAgent 闭环 [2026-04-11]
+**排队任务：** Phase H 前置容灾复用（CS1-S 已完成，CA6 已完成）
 
 > **[修订 2026-04-11] 当前 sim-trading 已完成光大期货 CTP 接通、前端下单/撤单 UI、system/state 脱敏、自动重连与状态同步；但仍未接通期货公式 / 策略公式执行链路。**
 
-### 2.2 决策 decision — 90% [修订 2026-04-13 Phase C 主体全闭环]
+### 2.2 决策 decision — 99% [修订 2026-04-13 TASK-0084 CK因子同步+TASK-0025 SimNow备用 全部完成]
 
 **负责 Agent：决策**
 **服务目录：`services/decision/`**
@@ -128,19 +129,20 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 导入通道 | ✅ 已完成 | `C0-3` TASK-0051 strategy_importer + `CF2` TASK-0063 邮件+看板YAML导入投产 [2026-04-12] |
 | 股票研究中心 | ✅ 全闭环 | CB1~CB9全链路+CA7 PBO检验投产 (TASK-0069~0075)，200测试通过 [2026-04-13] |
 | 本地 Sim 容灾 | ✅ 已完成 | `CS1` TASK-0076 LocalSimEngine commit 3c8be69，12测试通过 [2026-04-13] |
-| 因子同步 | 🔶 规划中 | `CK1~CK3`，研究中心与回测端双地一致；研究中心自研因子必须同步 |
+| LLM Pipeline | ✅ 已完成 | `CF1'` TASK-0083 LLM集成+研究中心auto_backtest, Atlas复核通过 [2026-04-13] |
+| 因子同步 | ✅ 已完成 | `CK1~CK3` TASK-0084 双地同步+覆盖率+缺失通知，Claude执行+Atlas审核通过 [2026-04-13] |
 | 模型路由 | 🔶 资格验证 | `src/model/router.py`，版本对齐+因子HASH校验，无实际推理加载（P2） |
 | 门控 | ✅ 已完成 | `src/gating/`（backtest_gate/research_gate） |
 | 持久化 | ✅ 已完成 | `src/persistence/`（FileStateStore） |
 | 通知 | ✅ 已完成 | `src/notifier/`（飞书+邮件双通道投产，6级通知，JBT统一颜色） |
 | 报告 | ✅ 基线完成 | `src/reporting/`（daily+research_summary投产）；后续补回测/荐股/盘后评估报告 |
-| 临时看板 | ✅ 已扩容 | `decision_web/` 7+3 页面：股票池/盘中信号/期货研究面板已上线 (TASK-0074) [2026-04-13] |
+| 临时看板 | ✅ 已扩容 | `decision_web/` 7+3+3 页面：股票池/盘中信号/期货研究面板+审批管理/研究报告/因子分析已上线 (TASK-0074+TASK-0079) [2026-04-14] |
 | Dockerfile | ✅ 已修复 | TASK-0021-H0 |
 | 测试 | ✅ 200用例 | `tests/` Phase C 全量扩容后通过 [修订 2026-04-13] |
 
-**已完成任务：** TASK-0021(A契约+H0~H7全批次锁回), TASK-0024(部署审查), TASK-0050(C0-1), TASK-0051(C0-3), TASK-0052(CG1), TASK-0053(C0-2), TASK-0054(CB5), TASK-0055(CG2), TASK-0056(CA2'), TASK-0057(CB2'), TASK-0058(CG3), TASK-0059(CA6), TASK-0060(CA3), TASK-0061(CA4), TASK-0062(CB3), TASK-0063(CF2), TASK-0069(CB1), TASK-0070(CB4), TASK-0071(CB6), TASK-0072(CB7), TASK-0073(CB8), TASK-0074(CB9+CA1+CA5前端), TASK-0075(CA7), TASK-0076(CS1+路由注册) [修订 2026-04-13]
-**剩余缺口（Phase C 尾项）：** CS1-S 交易端交接接口、CF1' 飞书口头策略(后置/需LLM)、CK1~CK3 因子双地同步(涉及P0 shared/python-common)
-**当前活跃：** Phase C 主体全闭环，9枚Token全锁回，200全量测试通过 [修订 2026-04-13]
+**已完成任务：** TASK-0021(A契约+H0~H7全批次锁回), TASK-0024(部署审查), TASK-0050(C0-1), TASK-0051(C0-3), TASK-0052(CG1), TASK-0053(C0-2), TASK-0054(CB5), TASK-0055(CG2), TASK-0056(CA2'), TASK-0057(CB2'), TASK-0058(CG3), TASK-0059(CA6), TASK-0060(CA3), TASK-0061(CA4), TASK-0062(CB3), TASK-0063(CF2), TASK-0069(CB1), TASK-0070(CB4), TASK-0071(CB6), TASK-0072(CB7), TASK-0073(CB8), TASK-0074(CB9+CA1+CA5前端), TASK-0075(CA7), TASK-0076(CS1+路由注册), TASK-0079(看板3页扩容+Navbar), TASK-0080(Phase C全闭环审核), TASK-0083(LLM Pipeline+Factor Sync+Bug Fix Atlas复核通过), TASK-0084(CK2/CK3因子双地同步+缺失通知), TASK-0025(SimNow备用方案-仅平仓) [修订 2026-04-13]
+**剩余缺口：** 无（Phase C 全闭环）
+**当前活跃：** 无活跃任务，decision 服务进入维护态 [修订 2026-04-13]
 
 ### 2.3 数据 data — 100% [修订 2026-04-12 Round 1 收口完成]
 
@@ -188,17 +190,19 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 手动期货回测 | ✅ 基线完成 | Air 现网可用，继续承担人工最终复核 |
 | 手动股票回测 | ✅ 已完成 | `CG3` TASK-0058 stock_runner + stock_approval T+1/涨跌停投产 [2026-04-12] |
 | 策略导入审核 | ✅ 已完成 | `CG1` TASK-0052 strategy_queue + `CG2` TASK-0055 manual_runner + approval 投产 [2026-04-12] |
-| 审核看板 | ❌ 待实施 | `backtest_web` 增加 manual review / stock review 页面 |
+| 审核看板 | ✅ 已完成 | `backtest_web` manual review / stock review 页面已上线, TASK-0078 commit 9f1d9fb [2026-04-13] |
 | 看板两页 | ✅ 基线完成 | agent-network + operations，后续扩容为人工审核入口 |
 | 泛化引擎 | ✅ 已完成 | TASK-0008 A/B/C/D 四批全锁回 [修订 2026-04-10] |
 | 新增因子 | ✅ 已完成 | TASK-0026 A/B/C 三批全 locked_back [修订 2026-04-10] |
 | 8004并回 | ✅ 已完成 | TASK-0007 A/B/C/D 全锁回 [修订 2026-04-10] |
 | 容器命名 | ✅ 已完成 | TASK-0005 JBT-BACKTEST-8103/3001 [修订 2026-04-10] |
 
-**已完成任务：** TASK-0003(全锁回), TASK-0004(锁回), TASK-0005(锁回), TASK-0007(A/B/C/D全锁回), TASK-0008(A/B/C/D全锁回), TASK-0018(A/C/D/E锁回), TASK-0026(A/B/C全锁回), TASK-0052(CG1), TASK-0055(CG2), TASK-0058(CG3), TASK-0065(Round 2 F-001+API认证) [修订 2026-04-12]
-**Phase E 状态：基线闭环 + CG 扩容已闭环 + Round 2 安全加固全部通过（F-001 eval三重限制+Pow非常量拒绝+BACKTEST_API_KEY认证）** [修订 2026-04-12]
+**已完成任务：** TASK-0003(全锁回), TASK-0004(锁回), TASK-0005(锁回), TASK-0007(A/B/C/D全锁回), TASK-0008(A/B/C/D全锁回), TASK-0018(A/C/D/E锁回), TASK-0026(A/B/C全锁回), TASK-0052(CG1), TASK-0055(CG2), TASK-0058(CG3), TASK-0065(Round 2 F-001+API认证), TASK-0078(审核看板页面扩容 locked) [修订 2026-04-14]
+**Phase E 状态：基线闭环 + CG 扩容已闭环 + 审核看板已上线 + Round 2 安全加固全部通过（F-001 eval三重限制+Pow非常量拒绝+BACKTEST_API_KEY认证）** [修订 2026-04-14]
+**httpx 依赖修复：** requirements.txt 新增 `httpx>=0.27.0,<1.0.0`（U0 hotfix, commit 265344c）[2026-04-14]
 **Air 同步状态：** ✅ rsync 同步 + 容器重启 + 远端验证通过 [2026-04-10]
-**排队任务：** 审核看板页面扩容 + P3 Pow边界测试补充 [修订 2026-04-12]
+**排队任务：** CK2/CK3 因子双地同步协同 + P3 Pow边界测试补充 [修订 2026-04-14]
+**Studio 容器状态：** ✅ JBT-BACKTEST-8103 + JBT-BACKTEST-WEB-3001 健康运行中 [2026-04-14]
 
 > **[修订 2026-04-11] 双回测分离原则：** decision 内部自动研究回测固定拆为“期货沙箱 / 股票沙箱”两条主路径，数据完全隔离、只共享因子；Air/backtest 继续承担人工手动回测与最终二次审核，不接管研究中心自动回测流程。
 
@@ -469,6 +473,12 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 > **[修订 2026-04-12] CF 实施情况：**
 > - **CF2**：✅ 已完成 → TASK-0063 EmailImporter + import_channel 路由投产 [2026-04-12]
 
+> **[修订 2026-04-13] CF1' LLM Pipeline：**
+> - **CF1'**：✅ 已完成 → TASK-0083 LLM Pipeline集成+研究中心auto_backtest+Bug Fix, Atlas复核通过 [2026-04-13]
+> - 架构：Studio M2 Max + BotQuantSSD 1TB，3×14B Ollama 模型串行流水线
+> - 模型：deepcoder:14b (策略研究 30.7tok/s) → qwen3:14b (审核校验 29.4tok/s) → phi4-reasoning:14b (数据分析 26.2tok/s)
+> - 约束：`keep_alive:0` 每次调用后即时卸载，`OLLAMA_NUM_PARALLEL=1`，串行流水线约 110s/短提示词、真实场景 3-5min
+
 #### CS 容灾与断联接管
 
 | 编号 | 任务 | 主责 | 协同 | 验收标准 |
@@ -477,6 +487,8 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | CS1-S | 交易端交接接口 | 模拟交易 | 决策/实盘交易 | 正式交易端恢复后可接收订单/持仓/账本差异并完成任务回切 |
 
 > **[修订 2026-04-13] CS1**：✅ 已完成 → TASK-0076 LocalSimEngine failover 引擎 commit 3c8be69，12测试通过 [2026-04-13]
+
+> **[修订 2026-04-14] CS1-S**：✅ 已完成 → TASK-0077 交易端容灾交接接口 commit 8afc8f5 [2026-04-13]
 
 #### CK 因子体系
 
@@ -650,16 +662,21 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
   3. 各服务临时看板优先在 decision_web / backtest_web 内落地扩容页面；聚合 dashboard 最后统一收口。
 - **实施阶段：** Phase C + Phase F
 
-### 5.6 本地模型集成（DeepSeek14b + Qwen7b coder）
+### 5.6 本地模型集成（Studio 3×14B Ollama 串行流水线）[修订 2026-04-14]
 
-- **归属服务：** decision（model router）
+- **归属服务：** decision（LLM Pipeline）
 - **前置条件：** 研究中心与口头策略通道完成基础接线
+- **硬件基平：** Studio M2 Max, 32GB 统一内存, 12核 CPU, 38核 GPU; BotQuantSSD 1TB 外置存储
+- **模型部署：** `OLLAMA_MODELS=/Volumes/BotQuantSSD/ollama_models`, 3 个 14B 模型已下载 (~26GB)
 - **实施路径：**
-  1. DeepSeek14b 负责把飞书口头策略转译为结构化策略意图、选股逻辑和因子建议。
-  2. Qwen7b coder 负责把结构化策略意图转换成 YAML / 规则模板 / 参数空间。
-  3. 研究中心再把模型生成结果送入双沙箱回测、调优和人工复核链路。
-- **现有资产：** `src/model/router.py` 骨架已存在
-- **实施阶段：** Phase C 后续
+  1. **deepcoder:14b**（策略研究员）：将飞书口头策略转译为结构化策略意图、选股逻辑和因子建议，包括生成 YAML 策略文件。延迟特征：深度思考链 ~175s，30.7 tok/s。
+  2. **qwen3:14b**（审核员）：对生成的策略 YAML 进行完整性、风控参数合理性、因子可用性校验。延迟特征：~13.5s，29.4 tok/s。
+  3. **phi4-reasoning:14b**（数据分析师）：基于历史回测结果和市场数据进行量化分析、风险评估和优化建议。延迟特征：~49s，26.2 tok/s。
+  4. 研究中心再把模型生成结果送入双沙箱回测、调优和人工复核链路。
+- **内存管理：** 32GB RAM 无法同时加载 3×14B，采用串行流水线：`keep_alive:0` 每次调用后立即卸载，`OLLAMA_NUM_PARALLEL=1`，模型切换开销 ~10-20s
+- **延迟预算：** 单次全流水线短提示词 ~110s，真实场景（完整策略研究+审核+分析）~3-5min
+- **现有资产：** `src/model/router.py` 骨架已存在；Ollama base URL `http://192.168.31.142:11434`
+- **实施阶段：** Phase C CF1' — TASK-0081 Token 已签发，Claude 执行中
 
 ### 5.7 数据端预读投喂决策端
 
@@ -705,7 +722,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ### 6.2 决策 Agent
 
-**当前状态：** 基线迁移闭环，Phase C 扩容待启动
+**当前状态：** Phase C 全闭环 + TASK-0083 LLM集成/因子同步/Bug修复 Atlas复核通过；Studio 3×14B Ollama 已部署
 **开工前必读：**
 1. `WORKFLOW.md`
 2. `docs/prompts/公共项目提示词.md`
@@ -716,25 +733,21 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **任务队列（按优先级）：**
 
 ```
-┌─ CB1  股票策略模板（短/中/长期）          ← 下一扩容批次
-├─ CB4  股票池管理器                         ← 30只常驻+轮换
-├─ CB6  盘中跟踪与飞书入离场提醒            ← 依赖分钟K
-├─ CB7  盘后评估与未来预判                   ← 收盘后任务
-├─ CB8  晚间再选+淘汰+报告                  ← 每日循环
-├─ CB9  股票研究中心页面                     ← 看板扩容
-├─ CF1' 飞书口头策略通道                     ← 与 research-center 共线
-├─ CS1  本地Sim容灾                          ← 与 sim/live failover 协同
-├─ CK1 / CK3  因子覆盖率与缺失通知          ← 与 backtest 协同
-├─ CA5  期货研究中心全流程UI                 ← 页面闭环
-├─ TASK-0040  PBO过拟合检验                  ← 依赖期货研究中心基础
+┌─ CK1 / CK2 / CK3  因子覆盖率与双地同步  ← 与 backtest 协同
 └─ TASK-0016  正式接入                       ← 依赖人工二次回测关卡稳定
 ```
 
-**已完成（Phase C 本轮 [2026-04-12]）：**
+**已完成（Phase C 本轮 [2026-04-13]）：**
 - ✅ C0-2 FactorLoader股票支持、C0-3 策略导入解析器
-- ✅ CA2' 期货沙箱、CA3 报告展示、CA4 调优引擎、CA6 信号分发
-- ✅ CB2' 股票沙箱、CB3 选股引擎、CB5 watchlist
-- ✅ CF2 邮件+看板YAML导入
+- ✅ CA1~CA7 期货研究全链路（沙箱/报告/调优/信号分发/UI/PBO检验）
+- ✅ CB1~CB9 股票研究全链路（模板/股票池/盘中跟踪/盘后评估/晚间译股/研究页面）
+- ✅ CB5 watchlist、CF2 邮件+看板 YAML 导入
+- ✅ CS1 本地 Sim 容灾引擎 (TASK-0076)
+- ✅ 看板扩容 7+3+3 页面 (TASK-0074+TASK-0079)
+- ✅ TASK-0040/CA7 PBO CSCV 实现 (TASK-0075)
+- ✅ CF1' LLM Pipeline 三模型串行流水线 (TASK-0083, Atlas复核通过)
+- ✅ Factor Sync 共享因子基础框架 (TASK-0083, shared/python-common/factors/)
+- ✅ Bug Fix: SignalDispatcher FIFO + ctp_disconnect lock (TASK-0083)
 
 **交接要点：**
 - 自动研究主路径固定在 decision 双沙箱内部完成；backtest 端只承担人工二次回测与审核确认
@@ -775,7 +788,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ### 6.4 回测 Agent
 
-**当前状态：** Phase E 基线闭环 + CG 扩容已完成（CG1/CG2/CG3 全投产）
+**当前状态：** Phase E 基线闭环 + CG 扩容已完成（CG1/CG2/CG3 全投产）+ 审核看板已上线（TASK-0078）
 **开工前必读：**
 1. `WORKFLOW.md`
 2. `docs/prompts/公共项目提示词.md`
@@ -786,15 +799,15 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **任务队列（按优先级）：**
 
 ```
-┌─ 审核看板页面扩容                       ← backtest_web 增加 manual review / stock review 页面
-├─ CK2 / CK3  因子双地同步与缺失通知协同  ← 与 decision 共线
+┌─ CK2 / CK3  因子双地同步与缺失通知协同  ← 与 decision 共线
 └─ 保持 Air 手动回测主机稳定，不接管自动研究回测
 ```
 
-**已完成（Phase C 本轮 [2026-04-12]）：**
+**已完成（Phase C 本轮 [2026-04-14]）：**
 - ✅ CG1 策略导入队列（TASK-0052）
 - ✅ CG2 人工手动回测 + 审核确认（TASK-0055）
 - ✅ CG3 股票手动回测（TASK-0058）
+- ✅ 审核看板 manual review / stock review 页面（TASK-0078）
 
 **交接要点：**
 - 双引擎架构：tqsdk(在线) + local(离线)，由 engine_router 路由
@@ -870,22 +883,22 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ---
 
-## 七、总进度仪表盘 [修订 2026-04-12]
+## 七、总进度仪表盘 [修订 2026-04-14]
 
 | 模块 | 完成 | 目标 | 当前Phase | 下一里程碑 |
-|------|------|------|----------|-----------|
+|------|------|------|----------|----------|
 | 治理 | 100% | 100% | ✅ 完成 | 维护 |
-| sim-trading | 90% | 100% | Phase B ✅ + v1.0.0 安全收口 + SG API认证 ✅ | 开盘验证CTP（周一）+ `CS1-S` 容灾交接接口 |
-| decision | 80% | 100% | Phase C 主线 + Round 3 API认证完成 + 看板上线 ✅ | CB1/CB4~CB9 股票扩容、CS1 容灾、CK 因子同步 |
+| sim-trading | 90% | 100% | Phase B ✅ + v1.0.0 安全收口 + SG API认证 ✅ + CS1-S 已完成 | 开盘验证CTP（周一）|  
+| decision | **99%** | 100% | Phase C 全闭环 + CK因子同步+SimNow备用 Claude执行+Atlas审核通过 | 维护态；PBO/CPCV 待启动 |
 | data | **100%** | 100% | ✅ Phase D + Round 1 收口 + 看板上线 ✅ | **完成** [2026-04-12] |
-| backtest | **100%** | 100% | ✅ Phase E + Round 2 安全加固 + 看板上线 ✅ | **完成** [2026-04-12] |
+| backtest | **100%** | 100% | ✅ Phase E + Round 2 安全加固 + 看板上线 ✅ + 审核看板已上线 | **完成** [2026-04-14] |
 | dashboard | 5% | 100% | Phase F | 待各服务临时看板基本收口 |
 | live-trading | 0% | 100% | Phase H | 待 sim-trading 稳定运行 2~3 个月 |
-| **总体** | **~80%** | **100%** | **data 100% / backtest 100% / sim-trading 90% / decision 80%** | **SG5 收口 → Phase C 继续** |
+| **总体** | **~94%** | **100%** | **data 100% / backtest 100% / sim-trading 90% / decision 99%** | **Phase G 工作区切割 → dashboard/live-trading** |
 
 ---
 
-## 八、Token 签发待办清单 [修订 2026-04-12]
+## 八、Token 签发待办清单 [修订 2026-04-14]
 
 以下为当前真正需要 Jay.S 签发的批次（已完成项已移除，或已冻结为待拆批）：
 
@@ -897,10 +910,12 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 🟡 P1 | TASK-0045 | 3~4 | 架构师 | Mini macOS容器自愈守护基线 | A0建档完成[2026-04-11]; 待A1白名单签发 |
 | 🟡 P1 | TASK-0040 | TBD | 决策 | PBO+CPCV+mlfinlab | A0建档完成[2026-04-10]; 待Phase C(C2)启动实施 |
 | 🟡 P1 | Phase C 股票研究扩容（CB1/CB4~CB9） | TBD | 决策 | 股票模板/池管理/盘中跟踪/盘后评估/晚间选股/研究页面 | C0/CA/CB/CG/CF 主线已完成；下一步扩容 |
-| 🟡 P1 | Phase C 容灾+因子同步（CS1/CK1~CK3） | TBD | 决策+回测+架构师 | decision 本地Sim + 因子双地同步 | 待独立建档 |
-| 🔴 P0 | Phase C 共享因子库同步（CK2） | TBD | 项目架构师 | `shared/python-common/**` + 决策/回测接线 | P0 区域，只能在独立预审后启动 |
+| ✅ 完成 | Phase C 容灾+因子同步（CS1/CK1~CK3） | 13 | 决策+回测+Claude | decision 本地Sim + 因子双地同步 | CS1-S(TASK-0077)+CK1(TASK-0083)+CK2/CK3(TASK-0084) 全部完成 [2026-04-13] |
+| ✅ 完成 | TASK-0081/0083 CF1' LLM Pipeline | 7+12 | Claude-Code | decision llm+pipeline+prompts+routes+test+factor_sync+bugfix | TASK-0083 Atlas复核通过; TASK-0081 由TASK-0083完全覆盖 [2026-04-13] |
+| ✅ 完成 | TASK-0084 CK2/CK3 因子双地同步 | 7 | Claude | shared/python-common/factors + decision/backtest接线 | Claude执行+Atlas审核通过 [2026-04-13] |
+| ✅ 完成 | TASK-0025 SimNow备用方案 | 6 | Claude | decision/publish/failover + executor + dispatcher + tests | Claude执行+Atlas审核通过; 10测试全通过 [2026-04-13] |
 
-### 已完成存档（2026-04-12 清理）
+### 已完成存档（2026-04-14 清理）
 
 | 状态 | 任务 | 说明 |
 |------|------|------|
@@ -938,6 +953,12 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | ✅ | TASK-0061 | CA4 交易参数调优引擎 locked [2026-04-12] |
 | ✅ | TASK-0062 | CB3 全A股选股引擎 locked [2026-04-12] |
 | ✅ | TASK-0063 | CF2 邮件+看板YAML导入 locked [2026-04-12] |
+| ✅ | TASK-0083 | 决策端全闭环收尾(LLM Pipeline+Factor Sync+Bug Fix) Atlas复核通过 [2026-04-13] |
+| ✅ | TASK-0081 | CF1' LLM Pipeline — 由TASK-0083完全覆盖实现 [2026-04-13] |
+| ✅ | TASK-0080 | G0 J_BotQuant工作区切割 — workspace已仅含JBT, legacy容器已清除 [2026-04-13] |
+| ✅ | TASK-0082 | Atlas Agent新建 — .github/agents/atlas.agent.md已存在 [2026-04-13] |
+| ✅ | TASK-0084 | CK2/CK3 因子双地同步+覆盖率+缺失通知 — Claude执行+Atlas审核通过 [2026-04-13] |
+| ✅ | TASK-0025 | SimNow备用方案-仅平仓模式 — Claude执行+Atlas审核通过; 10测试全通过 [2026-04-13] |
 
 ---
 

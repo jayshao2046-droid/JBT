@@ -33,7 +33,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # ── 常量 ──────────────────────────────────────────────────
-DATA_DIR = Path(os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data")))
+DATA_DIR = Path(os.environ.get("DATA_STORAGE_ROOT", str(Path(__file__).resolve().parents[3] / "runtime" / "data")))
 PARQUET_DIR = DATA_DIR / "parquet"
 LOG_DIR = DATA_DIR / "logs"
 

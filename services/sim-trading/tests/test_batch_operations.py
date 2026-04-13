@@ -1,5 +1,9 @@
 # Tests for batch operations (SIMWEB-01 P1-3)
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import pytest
 from src.ledger.service import LedgerService
 

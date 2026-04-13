@@ -2,6 +2,10 @@
 test_notifier.py — TASK-0014 P1
 pytest 测试：飞书通道 / 邮件通道 / Dispatcher 双通道失败阻单 / 字段完整性
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import dataclasses
 from unittest.mock import MagicMock
 

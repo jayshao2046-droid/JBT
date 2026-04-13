@@ -87,6 +87,16 @@
 - 2026-04-13：Python 3.9 兼容性热修：intraday.py/local_sim.py/optimizer.py/screener.py 的 `str|None` → `Optional[str]`，全量 200 测试通过，commit da1c84b。热修 Token tok-def3d8e7 已签发并锁回。
 - 2026-04-13：**Phase C 全批次 lockback ✅**。9枚 Token 批量锁回（tok-938f517e/8facbf4f/289be5f2/bec1095d/0b3688e6/960eb266/b317417b/475eb1b3/def3d8e7）。GitHub + Studio 已同步至 da1c84b。
 - 2026-04-13：**decision 进度 85% → 90%**（Phase C 主体全闭环），总进度 ~84% → ~87%。剩余：CS1-S交易端交接接口、CF1'飞书口头策略（后置）、CK1~CK3因子双地同步（涉及P0）。
+- 2026-04-13：**TASK-0077~0080 全批次签发 ✅**。5枚Token签发完毕：
+  - TASK-0077 CS1-S 容灾交接API（tok-629df929 / sim-trading / 4文件 / 480min）
+  - TASK-0078 backtest_web 审核看板（tok-87bcbffc / backtest / 3文件 / 480min）
+  - TASK-0079 decision_web 功能页扩容（tok-0ca581e2 / decision / 6文件 / 480min）
+  - TASK-0079-N Navbar导航补充（tok-60c4ba0a / decision / 1文件 / 480min）
+  - TASK-0080 G0工作区切割（tok-b7a463ce / 治理 / 1文件 / 480min）
+  - Phase 1 派发单：docs/handoffs/TASK-0077-0078-0079-Claude-派发单.md
+  - Phase 2 派发单：docs/handoffs/TASK-0079N-0080-Claude-派发单-Phase2.md
+  - Studio重建计划：完成Phase1 Claude任务后，Atlas执行SSH重建命令（Jay.S确认）
+  - G0执行顺序：Studio重建完成 → Claude做TASK-0080 → Jay.S/Atlas停legacy容器
 
 ## 接管要求
 

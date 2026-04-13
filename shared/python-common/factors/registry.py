@@ -60,6 +60,14 @@ class FactorRegistry:
         """
         return {name: name in self._factors for name in required_factors}
 
+    def export_hash_map(self) -> Dict[str, str]:
+        """导出所有因子的 hash 映射。
+
+        Returns:
+            Dict[因子名称, hash]
+        """
+        return {name: info["hash"] for name, info in self._factors.items()}
+
     @staticmethod
     def _compute_hash(calculator: Callable) -> str:
         """计算因子函数的 SHA-256 hash（基于源码）。"""
@@ -106,3 +114,25 @@ def check_coverage(required_factors: List[str]) -> Dict[str, bool]:
 def get_jbt_factors() -> List[str]:
     """返回 JBT 已有因子列表。"""
     return _JBT_FACTORS.copy()
+
+
+def register_global(
+    name: str,
+    calculator: Callable,
+    version: str = "1.0.0",
+    description: str = "",
+) -> None:
+    """注册因子到全局共享注册表。
+
+    Args:
+        name: 因子名称
+        calculator: 因子计算函数
+        version: 版本号
+        description: 因子描述
+    """
+    _global_registry.register(name, calculator, version, description)
+
+
+def get_global_registry() -> FactorRegistry:
+    """获取全局共享注册表实例。"""
+    return _global_registry

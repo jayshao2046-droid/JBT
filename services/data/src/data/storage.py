@@ -28,7 +28,7 @@ except Exception:  # pragma: no cover - optional dependency fallback
 
 def _default_storage_root() -> Path:
     """Return the data storage root from env or fallback."""
-    return Path(os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data")))
+    return Path(os.environ.get("DATA_STORAGE_ROOT", str(Path(__file__).resolve().parents[3] / "runtime" / "data")))
 
 
 class ParquetStorage:

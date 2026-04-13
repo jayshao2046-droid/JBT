@@ -1,5 +1,9 @@
 # TASK-0022-B: 只读日志查看 API 测试
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import logging
 
 from src.main import memory_log_handler

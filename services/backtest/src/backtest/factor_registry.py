@@ -15,10 +15,12 @@ try:
     from shared.python_common.factors.registry import (
         FactorRegistry as SharedFactorRegistry,
         get_jbt_factors,
+        register_global,
     )
     _shared_registry = SharedFactorRegistry()
 except ImportError:
     _shared_registry = None
+    register_global = None
     def get_jbt_factors():
         return []
 
@@ -90,6 +92,19 @@ class FactorRegistry:
         alias_key = _make_alias_key(normalized)
         if alias_key != normalized:
             self._alias_index[alias_key] = normalized
+
+        # TASK-0084: 同步注册到全局共享注册表
+        if register_global is not None:
+            try:
+                register_global(
+                    name=factor_name.strip(),
+                    calculator=calculator,
+                    version="1.0.0",
+                    description=f"Backtest factor: {factor_name}",
+                )
+            except Exception as e:
+                logger.debug(f"Failed to register {factor_name} to global registry: {e}")
+
         return calculator
 
     def resolve_factor_name(self, factor_name: str) -> str:
@@ -1714,3 +1729,19 @@ def _calculate_spread_rsi(bars: List[Dict[str, Any]], params: Dict[str, Any]) ->
                 rsi = 100.0 - 100.0 / (1.0 + g / loss)
         rows.append({"timestamp": bar["timestamp"], "spread_rsi": rsi})
     return rows
+
+
+# TASK-0084: 导出 backtest 端因子 hash 映射
+def export_backtest_hash_map() -> Dict[str, str]:
+    """导出 backtest 端所有因子的 hash 映射。
+
+    Returns:
+        Dict[因子名称, hash]
+    """
+    try:
+        from shared.python_common.factors.registry import get_global_registry
+        global_registry = get_global_registry()
+        return global_registry.export_hash_map()
+    except ImportError:
+        logger.warning("共享因子注册表未加载，无法导出 hash 映射")
+        return {}

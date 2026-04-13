@@ -3,7 +3,8 @@
 【签名】Atlas
 【时间】2026-04-08
 【设备】MacBook
-【状态】📋 已建档，待拆批与签发
+【状态】✅ 已完成（Claude 执行 + Atlas 审核通过）
+【Token】tok-e2c4419a-9f2f-4078-bae1-c5ca91a3c9c4（4320min / agent=claude）
 【优先级】P1
 【服务归属】services/decision/**
 
@@ -42,15 +43,16 @@ Jay.S 于 TASK-0024 全平台部署就绪审查中提出：
 - 备用模式不替代模拟交易端的正常运营
 - 备用模式仅为应急保护机制
 
-## 三、初步拆批建议
+## 三、文件白名单（冻结）
 
-| 批次 | 内容 | 保护级别 |
-|------|------|:---:|
-| A | 决策端 sim-trading 连通性检测 + 备用模式状态机 | P1 |
-| B | SimNow CTP/TTS 直连 + 仅平仓执行逻辑 | P1 |
-| C | 模式恢复检测 + 飞书通知集成 | P1 |
-
-> 具体白名单待项目架构师预审后冻结。
+| # | 文件路径 | 操作 | 说明 |
+|---|---------|------|------|
+| 1 | `services/decision/src/publish/failover.py` | 新建 | 健康探测 + 备用模式状态机 + CTP 仅平仓执行 |
+| 2 | `services/decision/src/publish/sim_adapter.py` | 修改 | 添加 health_check() 方法 |
+| 3 | `services/decision/src/publish/executor.py` | 修改 | 集成 failover 逻辑 |
+| 4 | `services/decision/src/publish/__init__.py` | 修改 | 导出 failover |
+| 5 | `services/decision/src/notifier/dispatcher.py` | 修改 | 添加 FAILOVER 事件类型 |
+| 6 | `services/decision/tests/test_failover.py` | 新建 | 备用模式单元测试 |
 
 ## 四、前置条件
 
@@ -63,3 +65,7 @@ Jay.S 于 TASK-0024 全平台部署就绪审查中提出：
 | 时间 | 操作 | 签名 |
 |------|------|------|
 | 2026-04-08 | 初始建档 | Atlas |
+| 2026-04-13 | 白名单冻结（6 文件） | Atlas |
+| 2026-04-13 | Token 签发 tok-e2c4419a（6 文件 / 4320min） | Jay.S |
+| 2026-04-13 | Claude 执行完成（6 文件全部落地，10 测试全通过） | Claude |
+| 2026-04-13 | Atlas 审核通过 | Atlas |

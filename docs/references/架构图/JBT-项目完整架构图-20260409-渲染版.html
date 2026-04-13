@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>JBT 项目完整架构图 渲染版</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f7fb;
+        --card: #ffffff;
+        --text: #111827;
+        --muted: #6b7280;
+        --line: #d1d5db;
+        --primary: #2563eb;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "PingFang SC", "Helvetica Neue", sans-serif;
+        background: linear-gradient(180deg, #eef5ff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+      .wrap {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .panel {
+        background: rgba(255,255,255,.92);
+        border: 1px solid rgba(209,213,219,.9);
+        border-radius: 18px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, .08);
+        padding: 20px;
+        backdrop-filter: blur(8px);
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      .toolbar {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin: 18px 0 20px;
+      }
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 18px;
+        background: var(--primary);
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #0f172a;
+      }
+      .hint {
+        margin-top: 10px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .diagram {
+        overflow: auto;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: #fff;
+        padding: 12px;
+      }
+      .diagram svg {
+        display: block;
+        margin: 0 auto;
+        max-width: none;
+        height: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="panel">
+        <h1>JBT 项目完整架构图</h1>
+        <p>这个页面会把 Mermaid 代码直接渲染成图。你可以点击下面按钮导出为 SVG 或 PNG。</p>
+        <div class="toolbar">
+          <button id="download-svg">下载 SVG</button>
+          <button id="download-png" class="secondary">下载 PNG</button>
+        </div>
+        <div class="diagram" id="diagram"></div>
+        <div class="hint">提示：如果浏览器默认下载到“下载”目录，可在保存对话框里改成桌面；SVG 是矢量图，适合继续编辑和打印。</div>
+      </div>
+    </div>
+
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+      const code = String.raw`flowchart LR
+  classDef governance fill:#f3f4f6,stroke:#4b5563,color:#111827,stroke-width:1.2px;
+  classDef infra fill:#eaf6ff,stroke:#2563eb,color:#0f172a,stroke-width:1.2px;
+  classDef shared fill:#f5ecff,stroke:#7c3aed,color:#111827,stroke-width:1.2px;
+  classDef active fill:#fff3cd,stroke:#b45309,color:#111827,stroke-width:1.4px;
+  classDef planned fill:#eaf7ea,stroke:#2f855a,color:#111827,stroke-width:1.2px;
+  classDef blocked fill:#fde2e1,stroke:#c53030,color:#111827,stroke-width:1.2px;
+
+  Jay["Jay.S<br/>任务确认 / Token 签发 / 验收"]:::governance
+  Mac["MacBook<br/>开发控制台<br/>Atlas / 项目架构师 / 各 Agent"]:::infra
+
+  subgraph GOV["治理与共享层"]
+    Workflow["WORKFLOW.md<br/>一件事一审核一上锁"]:::governance
+    Lockctl["governance/jbt_lockctl.py<br/>文件级 Token / validate / lockback"]:::governance
+    Plan["JBT_FINAL_MASTER_PLAN<br/>终局计划 / Phase / 依赖链"]:::governance
+    Contracts["shared/contracts<br/>跨服务契约 / API 模型"]:::shared
+    Common["shared/python-common<br/>无业务归属公共库"]:::shared
+    Legacy["integrations/legacy-botquant<br/>旧系统桥接与兼容"]:::shared
+  end
+
+  subgraph MINI["Mini 192.168.31.74 / 172.16.0.49"]
+    Data["data API :8105<br/>采集 / 清洗 / 供数<br/>当前 5%"]:::active
+    DataWeb["data_web :3004<br/>临时原型 / 当前冻结"]:::planned
+    Sim["sim-trading API :8101<br/>SimNow / 执行 / 账本<br/>当前 27%"]:::active
+    SimWeb["sim-trading_web :3002<br/>运行态临时看板"]:::active
+    JBTData["~/jbt-data<br/>Parquet / News / Futures / Stock"]:::infra
+  end
+
+  subgraph AIR["Air 192.168.31.245"]
+    Back["backtest API :8103<br/>双引擎回测 / 报告<br/>当前 75%"]:::active
+    BackWeb["backtest_web :3001<br/>策略网络 / 运行页"]:::active
+  end
+
+  subgraph STUDIO["Studio 192.168.31.142 / 172.16.1.130"]
+    Dec["decision API :8104<br/>信号 / 审批 / 编排<br/>当前 10%"]:::active
+    DecWeb["decision_web :3003<br/>研究与审批临时看板"]:::active
+    Dash["dashboard API :8106 / Web :3005<br/>聚合只读看板<br/>最后启动"]:::planned
+    Live["live-trading API :8102 / Web :3006<br/>实盘交易 / 后置 0%"]:::planned
+  end
+
+  subgraph ECS["ECS 47.103.36.144"]
+    ECSState["云部署入口<br/>DNS / SSH 未就绪<br/>当前阻塞"]:::blocked
+  end
+
+  subgraph ACCESS["访问与观测层"]
+    Browser["浏览器 / 运维访问入口"]:::infra
+    Metrics["8190 metrics<br/>8191 health aggregate"]:::infra
+    NAS["NAS 冷数据归档 / 备份"]:::infra
+  end
+
+  subgraph WINDOW["当前 3 天执行窗口（2026-04-09）"]
+    W1["TASK-0018-B<br/>data bars API<br/>Token active"]:::active
+    W2["TASK-0018-C-SUP<br/>local engine 真数据<br/>Token active"]:::active
+    W3["TASK-0017<br/>开盘验证窗口<br/>待开盘"]:::active
+    W4["TASK-0026-A/B<br/>需先补 PLAN-DELTA<br/>再重签"]:::blocked
+  end
+
+  Jay --> Mac
+  Mac --> Workflow
+  Workflow --> Lockctl
+  Workflow --> Plan
+  Workflow --> Contracts
+  Workflow --> Common
+  Workflow --> Legacy
+
+  Data --> JBTData
+  JBTData --> NAS
+
+  Data --> Dec
+  Data --> Back
+  Data --> Dash
+  Dec --> Sim
+  Dec -.审批结果 / 发布.-> Dash
+  Back -.回测证书 / 研究输入.-> Dec
+  Back --> Dash
+  Sim --> Dash
+  Live --> Dash
+  Legacy -.兼容桥接 TASK-0012.-> Sim
+  Legacy -.迁移输入.-> Dec
+
+  Browser --> SimWeb
+  Browser --> BackWeb
+  Browser --> DecWeb
+  Browser --> Dash
+  Browser -.临时原型.-> DataWeb
+
+  Metrics --- Data
+  Metrics --- Sim
+  Metrics --- Back
+  Metrics --- Dec
+  Metrics --- Dash
+  Metrics --- Live
+
+  W1 --> Data
+  W2 --> Back
+  W3 --> Sim
+  W4 -.待对齐后执行.-> Back`;
+
+      const mount = document.getElementById('diagram');
+      const svgFileName = 'JBT-项目完整架构图-20260409.svg';
+      const pngFileName = 'JBT-项目完整架构图-20260409.png';
+      let renderedSvg = '';
+
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'default',
+        flowchart: { htmlLabels: true, curve: 'linear' },
+        securityLevel: 'loose'
+      });
+
+      const { svg, bindFunctions } = await mermaid.render('jbt-arch-diagram', code);
+      renderedSvg = svg;
+      mount.innerHTML = svg;
+      bindFunctions?.(mount);
+
+      function triggerDownload(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      document.getElementById('download-svg').addEventListener('click', () => {
+        const blob = new Blob([renderedSvg], { type: 'image/svg+xml;charset=utf-8' });
+        triggerDownload(blob, svgFileName);
+      });
+
+      document.getElementById('download-png').addEventListener('click', async () => {
+        const svgBlob = new Blob([renderedSvg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        const img = new Image();
+        img.onload = () => {
+          const svgElement = mount.querySelector('svg');
+          const viewBox = svgElement?.viewBox?.baseVal;
+          const width = Math.max(1600, Math.ceil(viewBox?.width || img.width || 1600));
+          const height = Math.max(900, Math.ceil(viewBox?.height || img.height || 900));
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob((blob) => {
+            if (blob) triggerDownload(blob, pngFileName);
+          }, 'image/png');
+          URL.revokeObjectURL(url);
+        };
+        img.src = url;
+      });
+    </script>
+  </body>
+</html>

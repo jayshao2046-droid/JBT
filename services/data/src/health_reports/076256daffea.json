@@ -1,0 +1,44 @@
+{
+  "device": "076256daffea",
+  "device_label": "076256daffea",
+  "ts": "2026-04-13T05:12:05.535041+08:00",
+  "ts_display": "2026-04-13 05:12",
+  "cpu": {
+    "cores": 10,
+    "usage_percent": 0.1
+  },
+  "memory": {
+    "total_mb": 7836,
+    "used_mb": 1105,
+    "used_percent": 14.1
+  },
+  "disk": [
+    {
+      "mount": "/",
+      "total": "453G",
+      "used": "30G",
+      "avail": "400G",
+      "used_percent": 7.0
+    }
+  ],
+  "gpu": [],
+  "services": {
+    "vpn": "未部署",
+    "mihomo": "未部署",
+    "proxy_overseas": "未部署",
+    "collectors": 0
+  },
+  "parquet": {
+    "exists": false,
+    "note": "数据在 Mini"
+  },
+  "processes_high": [],
+  "alarms": [],
+  "has_p0": false,
+  "has_p1": false,
+  "collector_freshness": [],
+  "collector_alarms": [],
+  "collector_recovered": [],
+  "_alarm_state_updated": {},
+  "remediate_attempts": []
+}

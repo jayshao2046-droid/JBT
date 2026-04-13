@@ -7,7 +7,7 @@ device:
   name: Mini
   role: data_collection
   host: mini-remote         # .env DATA_ENDPOINT_HOST
-  data_dir: ~/jbt-data
+  data_dir: /data
   api_port: 8105
 
 # ═══════════════════════════════════════════════════════════════

@@ -59,7 +59,7 @@ LABEL = "Mini" if IS_MINI else ("Studio" if IS_STUDIO else _hostname)
 CN_TZ = timezone(timedelta(hours=8))
 
 # --------------- 数据目录 ---------------
-DATA_ROOT = Path(os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data")))
+DATA_ROOT = Path(os.environ.get("DATA_STORAGE_ROOT", str(Path(__file__).resolve().parents[3] / "runtime" / "data")))
 ALARM_STATE_FILE = DATA_ROOT / "logs" / "collector_alarm_state.json"
 COLLECTOR_STATUS_FILE = DATA_ROOT / "logs" / "collector_status_latest.json"
 

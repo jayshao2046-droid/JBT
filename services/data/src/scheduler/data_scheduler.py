@@ -106,7 +106,7 @@ def get_sla_tracker() -> Any:
                 import json
                 from pathlib import Path
 
-                alarm_file = Path(os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data"))) / "logs" / "collector_alarm_state.json"
+                alarm_file = Path(os.environ.get("DATA_STORAGE_ROOT", str(Path(__file__).resolve().parents[3] / "runtime" / "data"))) / "logs" / "collector_alarm_state.json"
                 active_alarms = 0
                 if alarm_file.exists():
                     try:
@@ -293,7 +293,7 @@ signal.signal(signal.SIGINT, _signal_handler)
 # ─────────────────────────────────────────────
 def _setup_scheduler_log() -> None:
     """额外添加 scheduler 专用日志文件输出。"""
-    log_dir = Path(os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data"))) / "logs"
+    log_dir = Path(os.environ.get("DATA_STORAGE_ROOT", str(Path(__file__).resolve().parents[3] / "runtime" / "data"))) / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "scheduler.log"
 

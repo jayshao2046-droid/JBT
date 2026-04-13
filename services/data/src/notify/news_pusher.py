@@ -80,7 +80,7 @@ SOURCE_CN_MAP: dict[str, str] = {
 }
 
 # ── 去重持久化文件 ──────────────────────────────────────
-_DEFAULT_DEDUP_DIR = Path(os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data"))) / "logs"
+_DEFAULT_DEDUP_DIR = Path(os.environ.get("DATA_STORAGE_ROOT", str(Path(__file__).resolve().parents[3] / "runtime" / "data"))) / "logs"
 _DEFAULT_DEDUP_FILE = _DEFAULT_DEDUP_DIR / "news_dedup_uids.json"
 _MAX_DEDUP_SIZE = 50000  # 最大缓存条数
 
@@ -202,7 +202,7 @@ class NewsPusher:
         if storage is None:
             from src.data.storage import HDF5Storage
 
-            storage_root = os.environ.get("DATA_STORAGE_ROOT", os.path.expanduser("~/jbt-data"))
+            storage_root = os.environ.get("DATA_STORAGE_ROOT", str(Path(__file__).resolve().parents[3] / "runtime" / "data"))
             storage = HDF5Storage(base_dir=storage_root)
 
         raw_records: list[dict[str, Any]] = []

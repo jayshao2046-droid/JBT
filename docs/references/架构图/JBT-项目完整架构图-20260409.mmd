@@ -1,0 +1,97 @@
+flowchart LR
+  classDef governance fill:#f3f4f6,stroke:#4b5563,color:#111827,stroke-width:1.2px;
+  classDef infra fill:#eaf6ff,stroke:#2563eb,color:#0f172a,stroke-width:1.2px;
+  classDef shared fill:#f5ecff,stroke:#7c3aed,color:#111827,stroke-width:1.2px;
+  classDef active fill:#fff3cd,stroke:#b45309,color:#111827,stroke-width:1.4px;
+  classDef planned fill:#eaf7ea,stroke:#2f855a,color:#111827,stroke-width:1.2px;
+  classDef blocked fill:#fde2e1,stroke:#c53030,color:#111827,stroke-width:1.2px;
+
+  Jay["Jay.S<br/>任务确认 / Token 签发 / 验收"]:::governance
+  Mac["MacBook<br/>开发控制台<br/>Atlas / 项目架构师 / 各 Agent"]:::infra
+
+  subgraph GOV["治理与共享层"]
+    Workflow["WORKFLOW.md<br/>一件事一审核一上锁"]:::governance
+    Lockctl["governance/jbt_lockctl.py<br/>文件级 Token / validate / lockback"]:::governance
+    Plan["JBT_FINAL_MASTER_PLAN<br/>终局计划 / Phase / 依赖链"]:::governance
+    Contracts["shared/contracts<br/>跨服务契约 / API 模型"]:::shared
+    Common["shared/python-common<br/>无业务归属公共库"]:::shared
+    Legacy["integrations/legacy-botquant<br/>旧系统桥接与兼容"]:::shared
+  end
+
+  subgraph MINI["Mini 192.168.31.74 / 172.16.0.49"]
+    Data["data API :8105<br/>采集 / 清洗 / 供数<br/>当前 5%"]:::active
+    DataWeb["data_web :3004<br/>临时原型 / 当前冻结"]:::planned
+    Sim["sim-trading API :8101<br/>SimNow / 执行 / 账本<br/>当前 27%"]:::active
+    SimWeb["sim-trading_web :3002<br/>运行态临时看板"]:::active
+    JBTData["~/jbt-data<br/>Parquet / News / Futures / Stock"]:::infra
+  end
+
+  subgraph AIR["Air 192.168.31.245"]
+    Back["backtest API :8103<br/>双引擎回测 / 报告<br/>当前 75%"]:::active
+    BackWeb["backtest_web :3001<br/>策略网络 / 运行页"]:::active
+  end
+
+  subgraph STUDIO["Studio 192.168.31.142 / 172.16.1.130"]
+    Dec["decision API :8104<br/>信号 / 审批 / 编排<br/>当前 10%"]:::active
+    DecWeb["decision_web :3003<br/>研究与审批临时看板"]:::active
+    Dash["dashboard API :8106 / Web :3005<br/>聚合只读看板<br/>最后启动"]:::planned
+    Live["live-trading API :8102 / Web :3006<br/>实盘交易 / 后置 0%"]:::planned
+  end
+
+  subgraph ECS["ECS 47.103.36.144"]
+    ECSState["云部署入口<br/>DNS / SSH 未就绪<br/>当前阻塞"]:::blocked
+  end
+
+  subgraph ACCESS["访问与观测层"]
+    Browser["浏览器 / 运维访问入口"]:::infra
+    Metrics["8190 metrics<br/>8191 health aggregate"]:::infra
+    NAS["NAS 冷数据归档 / 备份"]:::infra
+  end
+
+  subgraph WINDOW["当前 3 天执行窗口（2026-04-09）"]
+    W1["TASK-0018-B<br/>data bars API<br/>Token active"]:::active
+    W2["TASK-0018-C-SUP<br/>local engine 真数据<br/>Token active"]:::active
+    W3["TASK-0017<br/>开盘验证窗口<br/>待开盘"]:::active
+    W4["TASK-0026-A/B<br/>需先补 PLAN-DELTA<br/>再重签"]:::blocked
+  end
+
+  Jay --> Mac
+  Mac --> Workflow
+  Workflow --> Lockctl
+  Workflow --> Plan
+  Workflow --> Contracts
+  Workflow --> Common
+  Workflow --> Legacy
+
+  Data --> JBTData
+  JBTData --> NAS
+
+  Data --> Dec
+  Data --> Back
+  Data --> Dash
+  Dec --> Sim
+  Dec -.审批结果 / 发布.-> Dash
+  Back -.回测证书 / 研究输入.-> Dec
+  Back --> Dash
+  Sim --> Dash
+  Live --> Dash
+  Legacy -.兼容桥接 TASK-0012.-> Sim
+  Legacy -.迁移输入.-> Dec
+
+  Browser --> SimWeb
+  Browser --> BackWeb
+  Browser --> DecWeb
+  Browser --> Dash
+  Browser -.临时原型.-> DataWeb
+
+  Metrics --- Data
+  Metrics --- Sim
+  Metrics --- Back
+  Metrics --- Dec
+  Metrics --- Dash
+  Metrics --- Live
+
+  W1 --> Data
+  W2 --> Back
+  W3 --> Sim
+  W4 -.待对齐后执行.-> Back
