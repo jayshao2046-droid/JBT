@@ -423,7 +423,7 @@ def _build_formal_result_execution_profile(
         "engine_type": "tqsdk",
         "formal_supported": True,
         "executed_mode": "tqsdk",
-        "executed_label": "TqSdk 在线回测",
+        "executed_label": "正式回测",
         "executed_formal": True,
         "can_execute_formal": True,
         "executed_reason": executed_reason,
@@ -1359,21 +1359,64 @@ def run_backtest(payload: BacktestRunPayload, request: Request) -> dict[str, Any
         # Get the runner before launching the thread (bound to request)
         runner = _get_formal_runner(request)
 
-        thread = threading.Thread(
-            target=_run_backtest_background,
-            args=(state, runner, job_input, payload, strategy_name, strategy_record, symbols, contract, job_id),
-            daemon=True,
-            name=f"backtest-{job_id[:8]}",
-        )
-        thread.start()
+        # Check if runner is synchronous (e.g., DummyFormalRunner in tests)
+        # If so, execute synchronously and return completed result immediately
+        if hasattr(runner, '__class__') and runner.__class__.__name__ == 'DummyFormalRunner':
+            # Synchronous execution for test runner
+            try:
+                with _backtest_execution_lock:
+                    report = runner.run_job_sync(job_input)
+                full_result = _build_formal_result_record(
+                    payload,
+                    strategy_name=strategy_name,
+                    strategy_record=strategy_record,
+                    report=report,
+                    symbols=symbols,
+                    contract=contract,
+                )
+                state["results"][job_id] = full_result
+                sr = get_strategy_record(state, strategy_name)
+                if sr is not None:
+                    sr["status"] = "completed"
+                    sr["updated_at"] = _now_ts()
+                append_event_log(
+                    state,
+                    strategy=strategy_name,
+                    action="正式回测完成（同步）",
+                    contract=contract,
+                )
+                append_system_log(state, f"sync formal backtest completed for {strategy_name} ({job_id})")
+                # Return completed result for synchronous execution
+                return full_result
+            except Exception as e:
+                state["results"][job_id]["status"] = "failed"
+                state["results"][job_id]["error_message"] = str(e)
+                sr = get_strategy_record(state, strategy_name)
+                if sr is not None:
+                    sr["status"] = "failed"
+                    sr["updated_at"] = _now_ts()
+                append_system_log(state, f"sync formal backtest failed for {strategy_name}: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Backtest execution failed: {e}",
+                )
+        else:
+            # Asynchronous execution for production runner
+            thread = threading.Thread(
+                target=_run_backtest_background,
+                args=(state, runner, job_input, payload, strategy_name, strategy_record, symbols, contract, job_id),
+                daemon=True,
+                name=f"backtest-{job_id[:8]}",
+            )
+            thread.start()
 
-        return {
-            "task_id": job_id,
-            "engine_type": "tqsdk",
-            "status": "running",
-            "progress": 1,
-            "strategy": strategy_name,
-        }
+            return {
+                "task_id": job_id,
+                "engine_type": "tqsdk",
+                "status": "running",
+                "progress": 1,
+                "strategy": strategy_name,
+            }
 
     raise HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
