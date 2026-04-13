@@ -9,7 +9,7 @@
 | 服务归属 | `services/dashboard/` |
 | 前端子目录 | `services/dashboard/dashboard_web/` |
 | 优先级 | P0 |
-| 状态 | review_approved |
+| 状态 | ✅ locked |
 | 创建人 | Atlas |
 | 创建时间 | 2026-04-13 |
 | 执行人 | Claude（当前会话） |
