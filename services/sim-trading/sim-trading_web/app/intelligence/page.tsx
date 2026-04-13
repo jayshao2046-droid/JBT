@@ -32,6 +32,8 @@ import {
 import { simApi } from "@/lib/sim-api"
 import { toast } from "sonner"
 import { isTradingDay, getTodayHolidayName } from "@/lib/holidays-cn"
+import { requestNotificationPermission, showNotification } from "@/lib/notification"
+import { initAudio, playAlertSound } from "@/lib/audio"
 
 export default function RiskControlPage() {
   const [selectedAlert, setSelectedAlert] = useState(null)
@@ -164,6 +166,24 @@ export default function RiskControlPage() {
       if (raw) setAlertHistory(JSON.parse(raw))
     } catch {}
   }, [])
+
+  // SIMWEB-01: 初始化通知和音频
+  useEffect(() => {
+    initAudio()
+    requestNotificationPermission().then((granted) => {
+      if (granted) {
+        console.log("浏览器通知权限已授予")
+      }
+    })
+  }, [])
+
+  // SIMWEB-01: 监听风控告警并触发通知
+  useEffect(() => {
+    if (marginLevel && marginLevel > 70) {
+      showNotification("风控告警", `保证金率 ${marginLevel.toFixed(1)}% 超过 70%`, "error")
+      playAlertSound()
+    }
+  }, [marginLevel])
 
   // 将当前告警同步进历史
   useEffect(() => {

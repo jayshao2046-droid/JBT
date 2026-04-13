@@ -24,6 +24,9 @@ import {
 import { simApi, type OrderError } from "@/lib/sim-api"
 import { toast } from "sonner"
 import { ALL_CONTRACTS } from "@/lib/contracts"
+import { PerformanceKPI } from "@/components/PerformanceKPI"
+import { ExecutionQualityKPI } from "@/components/ExecutionQualityKPI"
+import { QuickOrderPresets } from "@/components/QuickOrderPresets"
 
 const LOCAL_VIRTUAL_PRINCIPAL = 500000
 
@@ -773,6 +776,15 @@ export default function SimNowTradingTerminal() {
           </CardContent>
         </Card>
       </div>
+
+      {/* SIMWEB-01: 绩效 KPI 和执行质量 KPI */}
+      <div className="grid grid-cols-1 gap-4">
+        <PerformanceKPI />
+        <ExecutionQualityKPI />
+      </div>
+
+      {/* SIMWEB-01: 快速下单预设 */}
+      <QuickOrderPresets />
 
       {/* 持仓表格 */}
       <Card className="bg-neutral-900 border-neutral-700">

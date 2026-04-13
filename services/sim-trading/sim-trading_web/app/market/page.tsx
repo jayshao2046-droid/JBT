@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo } from "react"
 import { RefreshCw, Wifi, WifiOff } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ALL_CONTRACTS, WATCHLISTS, FuturesContract, fmtPrice } from "@/lib/contracts"
+import { TechnicalChart } from "@/components/TechnicalChart"
+import { MarketMovers } from "@/components/MarketMovers"
 
 // ─── 数据类型 ────────────────────────────────────────────────────────────────
 
@@ -346,6 +348,18 @@ export default function MarketPage() {
           {now?.toLocaleTimeString("zh-CN") ?? "--"}
         </span>
       </div>
+
+      {/* SIMWEB-01: 市场异动监控 */}
+      <div className="px-4 py-4">
+        <MarketMovers />
+      </div>
+
+      {/* SIMWEB-01: 技术指标图表（示例：显示第一个合约）*/}
+      {contracts.length > 0 && (
+        <div className="px-4 pb-4">
+          <TechnicalChart symbol={contracts[0].symbol} interval="1m" />
+        </div>
+      )}
     </div>
   )
 }
