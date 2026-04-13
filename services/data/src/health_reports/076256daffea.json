@@ -1,16 +1,16 @@
 {
   "device": "076256daffea",
   "device_label": "076256daffea",
-  "ts": "2026-04-13T05:12:05.535041+08:00",
-  "ts_display": "2026-04-13 05:12",
+  "ts": "2026-04-13T14:29:29.769997+08:00",
+  "ts_display": "2026-04-13 14:29",
   "cpu": {
     "cores": 10,
-    "usage_percent": 0.1
+    "usage_percent": 15.4
   },
   "memory": {
     "total_mb": 7836,
-    "used_mb": 1105,
-    "used_percent": 14.1
+    "used_mb": 568,
+    "used_percent": 7.2
   },
   "disk": [
     {
