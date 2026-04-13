@@ -106,6 +106,17 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
   return res.json()
 }
 
+async function patch<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error(`${path} → ${res.status}`)
+  return res.json()
+}
+
 export interface SystemState {
   trading_enabled: boolean
   active_preset: string
@@ -127,6 +138,74 @@ export interface RiskPreset {
   enabled: boolean
   commission: number
   slippage_ticks: number
+}
+
+// SIMWEB-01 新增接口类型
+export interface EquityPoint {
+  timestamp: string
+  equity: number
+}
+
+export interface PerformanceStats {
+  win_rate: number
+  profit_loss_ratio: number
+  max_drawdown: number
+  sharpe_ratio: number
+  today_pnl: number
+  week_pnl: number
+  month_pnl: number
+}
+
+export interface ExecutionStats {
+  avg_slippage: number
+  rejection_rate: number
+  avg_latency_ms: number
+  cancel_rate: number
+  partial_fill_rate: number
+}
+
+export interface L1Status {
+  trading_enabled: boolean
+  ctp_connected: boolean
+  reduce_only_mode: boolean
+  disaster_stop_triggered: boolean
+  max_position_check: boolean
+  daily_loss_check: boolean
+  price_deviation_check: boolean
+  order_frequency_check: boolean
+  margin_rate_check: boolean
+  connection_quality_check: boolean
+}
+
+export interface L2Status {
+  consecutive_losses: number
+  margin_rate: number | null
+  daily_trade_count: number
+  daily_pnl: number
+  position_count: number
+}
+
+export interface MarketMover {
+  symbol: string
+  name: string
+  current_price?: number
+  prev_close?: number
+  change_rate?: number
+  high?: number
+  low?: number
+  amplitude?: number
+  current_volume?: number
+  avg_volume?: number
+  volume_ratio?: number
+}
+
+export interface KlinePoint {
+  timestamp: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
 }
 
 export const simApi = {
@@ -158,5 +237,48 @@ export const simApi = {
   instruments: (product?: string) =>
     get<{instruments: Record<string, InstrumentSpec>; count: number}>(
       `/api/v1/instruments${product ? `?product=${product}` : ""}`
+    ),
+
+  // SIMWEB-01 P0-1: 权益历史
+  equityHistory: (start?: string, end?: string) => {
+    const params = new URLSearchParams()
+    if (start) params.append("start", start)
+    if (end) params.append("end", end)
+    const query = params.toString() ? `?${params.toString()}` : ""
+    return get<{history: EquityPoint[]; count: number}>(`/api/v1/equity/history${query}`)
+  },
+
+  // SIMWEB-01 P0-2: L1/L2 风控状态
+  riskL1Status: () => get<{l1_status: L1Status; timestamp: string}>("/api/v1/risk/l1"),
+  riskL2Status: () => get<{l2_status: L2Status; timestamp: string}>("/api/v1/risk/l2"),
+
+  // SIMWEB-01 P0-3: 止损修改
+  updateStopLoss: (positionId: string, stopLoss: number) =>
+    patch<{success: boolean; position_id: string; stop_loss: number; message: string}>(
+      `/api/v1/positions/${positionId}/stop_loss`,
+      { stop_loss: stopLoss }
+    ),
+
+  // SIMWEB-01 P1-1: 绩效统计
+  performanceStats: () => get<{performance: PerformanceStats; timestamp: string}>("/api/v1/stats/performance"),
+
+  // SIMWEB-01 P1-2: 执行质量统计
+  executionStats: () => get<{execution: ExecutionStats; timestamp: string}>("/api/v1/stats/execution"),
+
+  // SIMWEB-01 P1-3: 批量平仓
+  batchClosePositions: (positionIds: string[]) =>
+    post<{results: Array<{position_id: string; success: boolean; message?: string; error?: string}>; total: number; success: number; failed: number}>(
+      "/api/v1/positions/batch_close",
+      { position_ids: positionIds }
+    ),
+
+  // SIMWEB-01 P1-6: K线数据
+  marketKline: (symbol: string, interval = "1m") =>
+    get<{symbol: string; interval: string; klines: KlinePoint[]}>(`/api/v1/market/kline/${symbol}?interval=${interval}`),
+
+  // SIMWEB-01 P1-7: 市场异动
+  marketMovers: (topN = 10) =>
+    get<{movers: {price_movers: MarketMover[]; amplitude_movers: MarketMover[]; volume_movers: MarketMover[]}; timestamp: string}>(
+      `/api/v1/market/movers?top_n=${topN}`
     ),
 }
