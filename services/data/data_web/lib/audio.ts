@@ -1,4 +1,4 @@
-"""音频告警工具"""
+// 音频告警工具
 
 let audioContext: AudioContext | null = null
 let alertBuffer: AudioBuffer | null = null

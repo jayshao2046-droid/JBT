@@ -1,4 +1,4 @@
-"""通知工具"""
+// 通知工具
 
 export async function requestNotificationPermission(): Promise<boolean> {
   if (!('Notification' in window)) {
