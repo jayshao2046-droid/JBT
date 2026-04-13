@@ -1,7 +1,8 @@
 # SimNow ledger service — TASK-0019-B2: actual data tracking
 
-from datetime import date
+from datetime import date, datetime
 from threading import Lock
+from typing import List, Tuple, Optional
 
 
 class LedgerService:
@@ -12,6 +13,7 @@ class LedgerService:
         self._trades: list = []
         self._account: dict = {}
         self._positions: list = []
+        self._equity_history: List[Tuple[datetime, float]] = []  # P0-1: 权益历史
 
     def record_trade(self, trade: dict) -> None:
         """记录成交（委托到 add_trade，保持向后兼容）。"""
@@ -85,6 +87,32 @@ class LedgerService:
             "positions": positions,
             "trades": summary.get("trades", []),
         }
+
+    def record_equity_snapshot(self, equity: float) -> None:
+        """记录权益快照（P0-1）。"""
+        with self._lock:
+            self._equity_history.append((datetime.now(), equity))
+            # 只保留最近 30 天数据（假设每分钟一个快照，30天约43200个点）
+            if len(self._equity_history) > 50000:
+                self._equity_history = self._equity_history[-43200:]
+
+    def get_equity_history(
+        self, start_time: Optional[datetime] = None, end_time: Optional[datetime] = None
+    ) -> List[dict]:
+        """获取权益历史数据（P0-1）。"""
+        with self._lock:
+            if not self._equity_history:
+                return []
+
+            result = []
+            for ts, equity in self._equity_history:
+                if start_time and ts < start_time:
+                    continue
+                if end_time and ts > end_time:
+                    continue
+                result.append({"timestamp": ts.isoformat(), "equity": equity})
+
+            return result
 
 
 # Module-level singleton

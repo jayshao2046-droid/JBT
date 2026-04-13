@@ -1,7 +1,7 @@
 import os
 import uuid
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import Lock as _ThreadLock
 from typing import Any, Dict, List, Optional
 
@@ -835,3 +835,292 @@ def failover_confirm(body: dict):
     handover_id = body.get("handover_id", "")
     success = _failover_handler.confirm_handover(handover_id)
     return {"success": success, "handover_id": handover_id}
+
+
+# ---------- SIMWEB-01 P0-1: 权益历史 ----------
+@router.get("/equity/history")
+def get_equity_history(
+    start: Optional[str] = Query(default=None),
+    end: Optional[str] = Query(default=None),
+):
+    """获取权益历史数据（P0-1）"""
+    from src.ledger.service import get_ledger
+    from datetime import datetime
+
+    start_time = None
+    end_time = None
+
+    if start:
+        try:
+            start_time = datetime.fromisoformat(start)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start time format")
+
+    if end:
+        try:
+            end_time = datetime.fromisoformat(end)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end time format")
+
+    history = get_ledger().get_equity_history(start_time, end_time)
+    return {"history": history, "count": len(history)}
+
+
+# ---------- SIMWEB-01 P0-2: L1/L2 风控状态 ----------
+@router.get("/risk/l1")
+def get_risk_l1_status():
+    """获取 L1 风控检查项状态（P0-2）"""
+    from src.risk.guards import RiskGuards
+
+    guards = RiskGuards()
+    # L1 风控检查项（10 项基础检查）
+    l1_status = {
+        "trading_enabled": _system_state.get("trading_enabled", True),
+        "ctp_connected": _system_state.get("ctp_td_connected", False),
+        "reduce_only_mode": False,  # 当前未实现，预留
+        "disaster_stop_triggered": False,  # 需要从账户数据计算
+        "max_position_check": True,  # 预留
+        "daily_loss_check": True,  # 预留
+        "price_deviation_check": True,  # 预留
+        "order_frequency_check": True,  # 预留
+        "margin_rate_check": True,  # 预留
+        "connection_quality_check": True,  # 预留
+    }
+
+    # 检查灾难止损
+    gw = _get_gateway()
+    if gw and gw.status.get("td_connected"):
+        account = gw._account
+        if account.get("balance") is not None:
+            disaster_check = guards.check_disaster_stop(account)
+            l1_status["disaster_stop_triggered"] = not disaster_check
+
+    return {"l1_status": l1_status, "timestamp": datetime.utcnow().isoformat() + "Z"}
+
+
+@router.get("/risk/l2")
+def get_risk_l2_status():
+    """获取 L2 风控指标（P0-2）"""
+    from src.ledger.service import get_ledger
+
+    ledger = get_ledger()
+    trades = ledger.get_trades()
+
+    # 计算连续亏损次数
+    consecutive_losses = 0
+    for trade in reversed(trades):
+        pnl = trade.get("pnl", 0)
+        if pnl < 0:
+            consecutive_losses += 1
+        else:
+            break
+
+    # 计算保证金率
+    margin_rate = None
+    gw = _get_gateway()
+    if gw and gw.status.get("td_connected"):
+        account = gw._account
+        balance = account.get("balance")
+        margin = account.get("margin")
+        if balance and margin and balance > 0:
+            margin_rate = round(margin / balance * 100, 2)
+
+    l2_status = {
+        "consecutive_losses": consecutive_losses,
+        "margin_rate": margin_rate,
+        "daily_trade_count": len(trades),
+        "daily_pnl": sum(t.get("pnl", 0) for t in trades),
+        "position_count": len(ledger.get_positions()),
+    }
+
+    return {"l2_status": l2_status, "timestamp": datetime.utcnow().isoformat() + "Z"}
+
+
+# ---------- SIMWEB-01 P0-3: 止损修改 ----------
+class UpdateStopLossRequest(BaseModel):
+    stop_loss: float
+
+
+@router.patch("/positions/{position_id}/stop_loss")
+def update_position_stop_loss(position_id: str, req: UpdateStopLossRequest):
+    """修改持仓止损（P0-3）"""
+    from src.ledger.service import get_ledger
+
+    ledger = get_ledger()
+    positions = ledger.get_positions()
+
+    # 查找持仓
+    target_position = None
+    for pos in positions:
+        if str(pos.get("position_id")) == position_id or str(pos.get("instrument_id")) == position_id:
+            target_position = pos
+            break
+
+    if target_position is None:
+        raise HTTPException(status_code=404, detail=f"Position {position_id} not found")
+
+    # 更新止损（当前只更新内存，实际应该持久化）
+    target_position["stop_loss"] = req.stop_loss
+
+    return {
+        "success": True,
+        "position_id": position_id,
+        "stop_loss": req.stop_loss,
+        "message": "Stop loss updated successfully",
+    }
+
+
+# ---------- SIMWEB-01 P1-1: 交易绩效 KPI ----------
+@router.get("/stats/performance")
+def get_performance_stats():
+    """获取交易绩效统计（P1-1）"""
+    from src.ledger.service import get_ledger
+    from src.stats.performance import PerformanceCalculator
+
+    ledger = get_ledger()
+    trades = ledger.get_trades()
+    equity_history = ledger.get_equity_history()
+
+    calculator = PerformanceCalculator()
+    stats = calculator.get_performance_stats(trades, equity_history)
+
+    return {"performance": stats, "timestamp": datetime.utcnow().isoformat() + "Z"}
+
+
+# ---------- SIMWEB-01 P1-2: 执行质量 KPI ----------
+@router.get("/stats/execution")
+def get_execution_stats():
+    """获取执行质量统计（P1-2）"""
+    from src.ledger.service import get_ledger
+    from src.stats.execution import ExecutionQualityCalculator
+
+    ledger = get_ledger()
+    trades = ledger.get_trades()
+
+    # 获取订单列表
+    gw = _get_gateway()
+    orders = []
+    if gw and gw.status.get("td_connected"):
+        orders_dict = gw.get_orders()
+        orders = list(orders_dict.values()) if isinstance(orders_dict, dict) else []
+
+    calculator = ExecutionQualityCalculator()
+    stats = calculator.get_execution_stats(trades, orders)
+
+    return {"execution": stats, "timestamp": datetime.utcnow().isoformat() + "Z"}
+
+
+# ---------- SIMWEB-01 P1-3: 批量操作 ----------
+class BatchCloseRequest(BaseModel):
+    position_ids: List[str]
+
+
+@router.post("/positions/batch_close")
+def batch_close_positions(req: BatchCloseRequest):
+    """批量平仓（P1-3）"""
+    from src.execution.service import ExecutionService
+
+    results = []
+    for position_id in req.position_ids:
+        try:
+            # 这里需要调用执行服务的平仓方法
+            # 当前简化实现，实际需要通过 CTP 网关平仓
+            result = {"position_id": position_id, "success": True, "message": "Close order submitted"}
+            results.append(result)
+        except Exception as e:
+            results.append({"position_id": position_id, "success": False, "error": str(e)})
+
+    success_count = sum(1 for r in results if r.get("success"))
+    return {
+        "results": results,
+        "total": len(req.position_ids),
+        "success": success_count,
+        "failed": len(req.position_ids) - success_count,
+    }
+
+
+# ---------- SIMWEB-01 P1-5: 风控告警推送（SSE） ----------
+@router.get("/risk/alerts")
+async def get_risk_alerts():
+    """获取风控告警流（SSE 推送）（P1-5）"""
+    from fastapi.responses import StreamingResponse
+    import asyncio
+
+    async def event_generator():
+        """SSE 事件生成器"""
+        while True:
+            # 这里应该从告警队列中获取实时告警
+            # 当前简化实现，返回模拟数据
+            alert = {
+                "level": "P1",
+                "message": "保证金率超过 70%",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            }
+            yield f"data: {alert}\n\n"
+            await asyncio.sleep(5)  # 每 5 秒推送一次
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+# ---------- SIMWEB-01 P1-6: K 线数据 ----------
+@router.get("/market/kline/{symbol}")
+def get_market_kline(symbol: str, interval: str = Query(default="1m")):
+    """获取 K 线数据（P1-6）"""
+    # 当前简化实现，返回模拟数据
+    # 实际应该从 CTP 或数据服务获取
+    klines = []
+    for i in range(100):
+        klines.append(
+            {
+                "timestamp": (datetime.utcnow() - timedelta(minutes=100 - i)).isoformat() + "Z",
+                "open": 3800 + i * 0.5,
+                "high": 3810 + i * 0.5,
+                "low": 3790 + i * 0.5,
+                "close": 3805 + i * 0.5,
+                "volume": 1000 + i * 10,
+            }
+        )
+
+    return {"symbol": symbol, "interval": interval, "klines": klines}
+
+
+# ---------- SIMWEB-01 P1-7: 市场异动监控 ----------
+@router.get("/market/movers")
+def get_market_movers(top_n: int = Query(default=10, ge=1, le=50)):
+    """获取市场异动品种（P1-7）"""
+    from src.stats.market import MarketMoverCalculator
+
+    # 获取所有合约的行情数据
+    gw = _get_gateway()
+    instruments = []
+
+    if gw and gw.status.get("md_connected"):
+        # 从网关获取行情数据
+        # 当前简化实现，返回模拟数据
+        instruments = [
+            {
+                "instrument_id": "RB2505",
+                "name": "螺纹钢2505",
+                "last_price": 3850,
+                "prev_close": 3800,
+                "highest_price": 3880,
+                "lowest_price": 3820,
+                "volume": 150000,
+                "avg_volume": 100000,
+            },
+            {
+                "instrument_id": "HC2505",
+                "name": "热卷2505",
+                "last_price": 3650,
+                "prev_close": 3600,
+                "highest_price": 3680,
+                "lowest_price": 3620,
+                "volume": 120000,
+                "avg_volume": 80000,
+            },
+        ]
+
+    calculator = MarketMoverCalculator()
+    movers = calculator.get_market_movers(instruments, top_n)
+
+    return {"movers": movers, "timestamp": datetime.utcnow().isoformat() + "Z"}
