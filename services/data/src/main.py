@@ -17,6 +17,10 @@ import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException, Header, Query, Request
 from fastapi.security import APIKeyHeader
 
+from api.routes.data_web import router as data_web_router
+from stats.optimizer import CollectionOptimizer
+from queue.manager import QueueManager
+
 try:
     import yaml
 except Exception:  # pragma: no cover - yaml is an optional runtime dependency in tests.
@@ -198,6 +202,13 @@ async def _verify_api_key(request: Request, api_key: Optional[str] = Depends(_ap
 
 
 app = FastAPI(title="JBT Data Service", version=SERVICE_VERSION, dependencies=[Depends(_verify_api_key)])
+
+# 注册数据看板路由
+app.include_router(data_web_router)
+
+# 全局实例
+_optimizer = CollectionOptimizer()
+_queue_manager = QueueManager()
 
 
 class ParsedTimeRange(NamedTuple):
