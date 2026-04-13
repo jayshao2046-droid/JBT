@@ -1452,6 +1452,54 @@ def adjust_backtest(payload: BacktestAdjustPayload, request: Request) -> dict[st
     }
 
 
+@router.get("/history")
+def get_all_history(
+    request: Request,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> dict[str, Any]:
+    """获取所有回测历史记录，支持日期范围筛选"""
+    state = get_compat_state(request)
+    _refresh_all_results(state)
+
+    all_results = list_results_sorted(state)
+
+    # 日期筛选
+    if start_date or end_date:
+        filtered = []
+        for result in all_results:
+            submitted_at = result.get("submitted_at", 0)
+            if submitted_at == 0:
+                continue
+
+            result_date = datetime.fromtimestamp(submitted_at).date()
+
+            if start_date:
+                try:
+                    start = datetime.fromisoformat(start_date).date()
+                    if result_date < start:
+                        continue
+                except (ValueError, TypeError):
+                    pass
+
+            if end_date:
+                try:
+                    end = datetime.fromisoformat(end_date).date()
+                    if result_date > end:
+                        continue
+                except (ValueError, TypeError):
+                    pass
+
+            filtered.append(result)
+
+        all_results = filtered
+
+    return {
+        "history": [build_result_summary(result) for result in all_results],
+        "count": len(all_results),
+    }
+
+
 @router.get("/history/{strategy_id}")
 def get_history(strategy_id: str, request: Request) -> list[dict[str, Any]]:
     state = get_compat_state(request)
