@@ -17,9 +17,9 @@
 | backtest | `████████████` **100%** | ✅ 生产运行中 | Round 2 安全加固完成，维护态 |
 | sim-trading | `███████████░` **90%** | ✅ 待开盘CTP验证 | Phase B全闭环；CS1-S容灾交接已完成；等待正式交易日验证 |
 | decision | `████████████` **99%** | ✅ Phase C 全闭环 | CK2/CK3因子同步+TASK-0025 SimNow备用方案已完成；仅剩生产验证 |
-| dashboard | `█░░░░░░░░░░░` **5%** | ⏳ 后置 | 等待所有后端服务稳定后一次性上线 |
+| dashboard | `███░░░░░░░░░` **25%** | 🟡 进行中 | TASK-0099/0100 locked；TASK-0101 Claude执行中；TASK-0102/0103 token active 排队中 |
 | live-trading | `░░░░░░░░░░░░` **0%** | ⏳ 后置 | 等待sim稳定运行2~3月后评估 |
-| **整体** | `███████████░` **~94%** | **Phase C 全闭环** | **TASK-0084 CK因子同步+TASK-0025 SimNow备用已完成；仅剩后置项** |
+| **整体** | `███████████░` **~94%** | **Phase C 全闭环 + Phase F 进行中** | **TASK-0084/0025 完成；dashboard TASK-0099/0100 locked；TASK-0101 进行中** |
 
 > **更新规则：** 每次 Atlas 更新治理文件时同步刷新本表格和百分比。
 
@@ -206,23 +206,40 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 > **[修订 2026-04-11] 双回测分离原则：** decision 内部自动研究回测固定拆为“期货沙箱 / 股票沙箱”两条主路径，数据完全隔离、只共享因子；Air/backtest 继续承担人工手动回测与最终二次审核，不接管研究中心自动回测流程。
 
-### 2.5 看板 dashboard — 5%
+### 2.5 看板 dashboard — 25% [修订 2026-04-14 TASK-0099/0100 locked，0101 进行中]
 
-**负责 Agent：看板**
+**负责 Agent：Claude（看板实施）+ Atlas（逐任务审核）**
 **服务目录：`services/dashboard/`**
+**Web 目录：`services/dashboard/dashboard_web/`**
+**部署设备：Studio (192.168.31.142)**
+**端口：API 8106 / Web 3005**
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
 | Dockerfile | ✅ 存在 | 基础骨架 |
 | .env.example | ✅ 存在 | 基础配置 |
-| src/ | ❌ 空目录 | 零代码 |
-| 聚合看板 | ❌ 未开始 | 需聚合6个服务的只读数据 |
+| dashboard_web | ✅ Next.js 15.2.6 | 统一聚合看板前端框架，TypeScript strict + shadcn/ui + Tailwind |
+| 登录页 | ✅ 已完成 | /login，基础认证 |
+| 总览首页 | ✅ 已完成 | /，KPI+持仓+信号+风控+新闻，对接 sim-trading 真实 API |
+| 总配置页 | ✅ 已完成 | /settings |
+| API 代理层 | ✅ 已完成 | next.config.ts 已配置 4 端代理（sim-trading/backtest/decision/data）|
+| sim-trading 子页面 | ✅ 已完成 | /sim-trading/…（总览/交易终端/行情/风控/品种风控/CTP配置），7路由+11组件+6基础设施 |
+| backtest 子页面 | 🟡 进行中 | /backtest/…（TASK-0101，Claude 执行中），23 files |
+| decision 子页面 | ⏳ 待发 | /decision/…（TASK-0102，token active，待 TASK-0101 locked 后发）|
+| data 子页面 | ⏳ 待发 | /data/…（TASK-0103，token active，待 TASK-0102 locked 后发）|
 
-**当前状态：** 各服务使用自己容器内的临时看板（backtest_web/sim-trading_web/decision_web/data_web）
-**定位：** 看板端为最后完成的服务。所有后端服务（sim-trading/decision/data/backtest）先完成 API 和数据能力，看板端最后纵观全局、一次性部署所有聚合功能。各服务容器内的临时看板跟随各自后端 Agent 配套更新，不受此顺序约束。
-**排队任务：** TASK-0015(SimNow临时看板，已有参考前端) → 聚合看板独立任务（等所有后端 Phase 基本完成后启动）
+**已完成任务 [修订 2026-04-14]：**
+- ✅ TASK-0099：统一看板首页框架（47 files，登录/总览/配置/Layout/导航，build+lint ✅，commit bee35c9，tok-3e1c1970 locked）
+- ✅ TASK-0100：sim-trading 全功能升级（24 files，7路由+11组件+6 API/hooks/lib，Atlas修复ESLint+TypeScript类型错误，build+lint ✅，commit 4969642，tok-279d4f99 locked）
 
-> **[修订 2026-04-10] 聚合 dashboard 继续后置。当前 sim-trading / decision / data 三端临时看板均未全部收口，因此总看板不进入实施，只继续保留治理与信息架构冻结。**
+**当前活跃：**
+- 🟡 TASK-0101：backtest 全功能升级（23 files，6路由+14组件+3 API/hooks，tok-92f7dce9 active，Claude 执行中）
+
+**排队任务（按顺序解锁）：**
+- ⏳ TASK-0102：decision 全功能升级（25 files，tok-1f25eea1 active，待 TASK-0101 locked 后发）
+- ⏳ TASK-0103：data 全功能升级（21 files，tok-bcdd740a active，待 TASK-0102 locked 后发）
+
+> **[修订 2026-04-14] dashboard 正式进入实施阶段。触发条件：四端后端 API 全部稳定，4 份功能比对报告均已建档。执行策略：Claude 每次做一个端的全功能升级（功能必须≥对应临时看板，零 mock），Atlas 独立验证 pnpm build + lint 通过后锁回，再发下一个 token。5 个 Token（140 files）全部就绪，完成一个锁回一个。**
 
 ### 2.6 实盘交易 live-trading — 0%
 
@@ -325,6 +342,11 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | TASK-0016 | 决策端正式接入 | decision | 决策 | 后置(待Phase C-C5) | P1 |
 | ~~TASK-0036~~ | 灾备演练(原定编号冲突) | 全局 | 项目架构师 | ✅ 已重编号→TASK-0039; A0建档完成 [2026-04-10] | P1 |
 | ~~TASK-0037~~ → TASK-0040 | PBO过拟合检验 | decision | 决策 | ✅ 已重编号→TASK-0040; A0建档完成 [2026-04-10]; 待Phase C(C2) | P1 |
+| TASK-0099 | 统一看板首页框架（Phase F-F0） | dashboard | Claude | ✅ locked (commit bee35c9, tok-3e1c1970) [2026-04-14] | P1 |
+| TASK-0100 | sim-trading 全功能升级（Phase F-F1） | dashboard | Claude | ✅ locked (commit 4969642, tok-279d4f99) [2026-04-14] | P1 |
+| TASK-0101 | backtest 全功能升级（Phase F-F2） | dashboard | Claude | 🟡 执行中 (tok-92f7dce9 active) [2026-04-14] | P1 |
+| TASK-0102 | decision 全功能升级（Phase F-F3） | dashboard | Claude | ⏳ 待 TASK-0101 locked (tok-1f25eea1 active) | P1 |
+| TASK-0103 | data 全功能升级（Phase F-F4） | dashboard | Claude | ⏳ 待 TASK-0102 locked (tok-bcdd740a active) | P1 |
 
 ---
 
@@ -828,19 +850,25 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 3. `docs/prompts/agents/看板提示词.md`
 4. `docs/tasks/TASK-0015-dashboard-SimNow-临时Next.js看板预审.md`
 
-**任务队列：**
+**任务队列（按顺序）：**
 
 ```
-┌─ TASK-0015  SimNow临时看板         ← 等 sim-trading 临时看板链路再收口 + 白名单
-└─ 聚合看板（新任务）                ← 等 decision/backtest/data 的 Phase C 页面先在各自容器内闭环后，再统一聚合
+├─ TASK-0099  首页框架                ✅ locked (commit bee35c9)
+├─ TASK-0100  sim-trading全功能升级   ✅ locked (commit 4969642)
+├─ TASK-0101  backtest全功能升级      🟡 Claude 执行中
+├─ TASK-0102  decision全功能升级      ⏳ token active，待 0101 locked
+├─ TASK-0103  data全功能升级          ⏳ token active，待 0102 locked
+└─ F5 整合收口                        ⏳ 待 0099~0103 全部 locked
 ```
 
 **交接要点：**
-- 聚合看板(dashboard:8106)是最后完成的服务——纵观全局后一次性部署所有功能
-- 各服务临时看板(*_web)跟随后端配套更新，看板Agent不负责
-- 参考前端已在 `services/sim-trading/参考文件/V0-模拟交易端 0406/`
 - 看板只做只读聚合，不得绕过 API 直接读服务内部数据
-- 前端技术栈：Next.js 15 + React 19
+- API 代理路径：`/api/sim-trading → 8101`、`/api/backtest → 8103`、`/api/decision → 8104`、`/api/data → 8105`
+- BASE 前缀规则：`/api/{service}/api/v1`（因各后端均使用 `/api/v1` 路由前缀）
+- TypeScript strict：无 any、无 unused imports；pnpm build + pnpm lint 必须双通过才可锁回
+- Claude 完成一个端后向 Atlas 报结果，Atlas 独立运行 pnpm build 验证通过才 locked 发下一个
+- 4 份功能比对报告已建档（`docs/handoffs/TASK-0099-比对-*.md`），Claude 按原始报告执行，不引入任何虚构 API 或组件
+- 前端技术栈：Next.js 15.2.6 + React 19 + TypeScript + shadcn/ui + Tailwind
 
 ### 6.6 实盘交易 Agent
 
@@ -892,9 +920,9 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | decision | **99%** | 100% | Phase C 全闭环 + CK因子同步+SimNow备用 Claude执行+Atlas审核通过 | 维护态；PBO/CPCV 待启动 |
 | data | **100%** | 100% | ✅ Phase D + Round 1 收口 + 看板上线 ✅ | **完成** [2026-04-12] |
 | backtest | **100%** | 100% | ✅ Phase E + Round 2 安全加固 + 看板上线 ✅ + 审核看板已上线 | **完成** [2026-04-14] |
-| dashboard | 5% | 100% | Phase F | 待各服务临时看板基本收口 |
+| dashboard | **25%** | 100% | Phase F 进行中 | TASK-0099/0100 locked；0101 Claude执行中；0102/0103 token active |
 | live-trading | 0% | 100% | Phase H | 待 sim-trading 稳定运行 2~3 个月 |
-| **总体** | **~94%** | **100%** | **data 100% / backtest 100% / sim-trading 90% / decision 99%** | **Phase G 工作区切割 → dashboard/live-trading** |
+| **总体** | **~94%** | **100%** | **data 100% / backtest 100% / sim-trading 90% / decision 99% / dashboard 25%** | **Phase F 进行中 → dashboard TASK-0099~0103 顺序执行** |
 
 ---
 
@@ -906,6 +934,9 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 | 优先级 | 任务 | 文件数 | Agent | 白名单概要 | 说明 |
 |--------|------|--------|-------|-----------|------|
+| 🟡 P1 | TASK-0101 | 23 | Claude | dashboard/backtest 6路由+14组件+3 API/hooks | 🟡 执行中（Claude）；Atlas 验证后锁回，发 TASK-0102 |
+| ⏳ P1 | TASK-0102 | 25 | Claude | dashboard/decision 6路由+15组件+4 API/hooks | ⏳ tok-1f25eea1 active；待 TASK-0101 locked 后发 |
+| ⏳ P1 | TASK-0103 | 21 | Claude | dashboard/data 5路由+12组件+4 API/hooks | ⏳ tok-bcdd740a active；待 TASK-0102 locked 后发 |
 | 🟡 P1 | TASK-0039 | 0 | 架构师 | 灾备演练场景脚本 | ✅ DR1~DR4执行完成[2026-04-10]; ISSUE-DR1-001 已由 TASK-0042 修复, ISSUE-DR4-001 已由 TASK-0043 修复, ISSUE-DR3-001 已独立建档为 TASK-0045 |
 | 🟡 P1 | TASK-0045 | 3~4 | 架构师 | Mini macOS容器自愈守护基线 | A0建档完成[2026-04-11]; 待A1白名单签发 |
 | 🟡 P1 | TASK-0040 | TBD | 决策 | PBO+CPCV+mlfinlab | A0建档完成[2026-04-10]; 待Phase C(C2)启动实施 |
@@ -959,6 +990,8 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | ✅ | TASK-0082 | Atlas Agent新建 — .github/agents/atlas.agent.md已存在 [2026-04-13] |
 | ✅ | TASK-0084 | CK2/CK3 因子双地同步+覆盖率+缺失通知 — Claude执行+Atlas审核通过 [2026-04-13] |
 | ✅ | TASK-0025 | SimNow备用方案-仅平仓模式 — Claude执行+Atlas审核通过; 10测试全通过 [2026-04-13] |
+| ✅ | TASK-0099 | 统一看板首页框架（47 files）— build+lint ✅，commit bee35c9，tok-3e1c1970 locked [2026-04-14] |
+| ✅ | TASK-0100 | sim-trading全功能升级（24 files）— Atlas修复3轮ESLint+类型错误，build+lint ✅，commit 4969642，tok-279d4f99 locked [2026-04-14] |
 
 ---
 
