@@ -154,54 +154,56 @@ async def _report_scheduler():
 
 async def _ctp_connection_guardian():
     """
-    后台守护协程：
-    - 盘前检查点发送连接状态通知（08:30/08:50/13:00/13:10/20:30/20:50）
-    - 交易时段（09:00-11:30, 13:00-15:00, 21:00-23:00）连续监控 + 断开重连
-    - 非交易时段低频巡查
-    - 非交易日只检查行情，不检查交易通道
-    - 定期刷新账户余额
+    后台守护协程 — 单一时段真相源：
+    - 交易时段：快速监控（30s）+ 断线重连 + 飞书告警
+    - 盘前窗口：主动建连 + 检查点通知
+    - 非交易时段（含周末）：完全静默，不连接、不监控、不告警
     """
     import asyncio
     from datetime import datetime, time as dtime
+    from src.gateway.simnow import is_trading_session
 
     user_id = os.getenv("SIMNOW_USER_ID", "")
     if not user_id:
         logger.info("[guardian] SIMNOW_USER_ID not set, guardian disabled")
         return
 
-    # --- 交易时段 & 检查点 ---
-    SESSIONS = [
-        (dtime(9, 0), dtime(11, 30)),
-        (dtime(13, 0), dtime(15, 0)),
-        (dtime(21, 0), dtime(23, 0)),
-    ]
+    # --- 盘前检查点（仅工作日触发）---
     CHECKPOINTS = [
         dtime(8, 30), dtime(8, 50),
         dtime(13, 0), dtime(13, 10),
         dtime(20, 30), dtime(20, 50),
     ]
+    # 盘前窗口：覆盖检查点时段，用于提前建连（交易时段之外的准备期）
+    _PRE_SESSION_WINDOWS = [
+        (dtime(8, 25), dtime(8, 55)),
+        (dtime(12, 55), dtime(13, 0)),
+        (dtime(20, 25), dtime(20, 55)),
+    ]
     FAST_INTERVAL = 30          # 交易时段检查间隔（秒）
-    SLOW_INTERVAL = 300         # 非交易时段检查间隔（秒）
+    PRE_INTERVAL = 60           # 盘前窗口检查间隔（秒）
+    IDLE_INTERVAL = 300         # 非交易时段休眠间隔（秒）
     ACCOUNT_REFRESH = 120       # 账户刷新间隔（秒）
     MAX_FAST_RETRIES = 3
     _fail_count = 0
     _last_checkpoint = None     # 避免同一检查点重复通知
     _last_account_refresh = 0.0
 
-    def _is_weekend():
-        return datetime.now().weekday() >= 5
-
-    def _in_session():
-        now = datetime.now().time()
-        return any(s <= now < e for s, e in SESSIONS)
+    def _in_pre_session():
+        """工作日盘前窗口判定（交易时段之前的准备期）"""
+        if datetime.now().weekday() >= 5:
+            return False
+        now_t = datetime.now().time()
+        return any(s <= now_t < e for s, e in _PRE_SESSION_WINDOWS)
 
     def _check_checkpoint():
-        """返回匹配的检查点 time 或 None"""
-        now = datetime.now().time()
+        """返回匹配的检查点 time 或 None（周末返回 None）"""
+        if datetime.now().weekday() >= 5:
+            return None
+        now_t = datetime.now().time()
         for cp in CHECKPOINTS:
-            # 检查点 ±2 分钟内触发一次
             cp_min = cp.hour * 60 + cp.minute
-            now_min = now.hour * 60 + now.minute
+            now_min = now_t.hour * 60 + now_t.minute
             if abs(now_min - cp_min) <= 2:
                 return cp
         return None
@@ -229,98 +231,115 @@ async def _ctp_connection_guardian():
         except Exception as exc:
             logger.warning("[guardian] alert dispatch error: %s", exc)
 
-    # --- 首次连接 ---
-    await asyncio.sleep(2)
-    try:
-        from src.api.router import ctp_connect
-        result = await asyncio.get_running_loop().run_in_executor(None, ctp_connect)
-        logger.info("[guardian] initial connect: %s", result)
-        if result.get("md_connected") or result.get("td_connected"):
-            _fail_count = 0
-        else:
+    async def _try_connect(silent: bool = True):
+        """尝试 CTP 建连，返回 (md_ok, td_ok)"""
+        nonlocal _fail_count
+        try:
+            from src.api.router import ctp_connect
+            result = await asyncio.get_running_loop().run_in_executor(
+                None, lambda: ctp_connect(silent=silent),
+            )
+            md_ok = result.get("md_connected", False)
+            td_ok = result.get("td_connected", False)
+            if md_ok or td_ok:
+                _fail_count = 0
+            else:
+                _fail_count += 1
+            return md_ok, td_ok
+        except Exception as exc:
             _fail_count += 1
-    except Exception as exc:
-        logger.warning("[guardian] initial connect failed: %s", exc)
-        _fail_count += 1
+            logger.warning("[guardian] connect failed (attempt %d): %s", _fail_count, exc)
+            return False, False
+
+    # --- 首次连接：仅在交易时段或盘前窗口 ---
+    await asyncio.sleep(2)
+    if is_trading_session() or _in_pre_session():
+        logger.info("[guardian] initial connect (in session or pre-session)")
+        await _try_connect(silent=False)
+    else:
+        logger.info("[guardian] skip initial connect (outside trading hours)")
 
     # --- 守护循环 ---
     while True:
-        in_session = _in_session()
-        is_weekend = _is_weekend()
-        interval = FAST_INTERVAL if in_session and not is_weekend else SLOW_INTERVAL
-        await asyncio.sleep(interval)
+        in_session = is_trading_session()
+        in_pre = _in_pre_session()
+
+        if in_session:
+            await asyncio.sleep(FAST_INTERVAL)
+        elif in_pre:
+            await asyncio.sleep(PRE_INTERVAL)
+        else:
+            # 非交易 + 非盘前 → 完全静默
+            await asyncio.sleep(IDLE_INTERVAL)
+            continue
 
         try:
             from src.api.router import _get_gateway, _system_state
             gw = _get_gateway()
 
-            # --- 更新系统状态 ---
-            if gw is not None:
-                st = gw.status
-                _system_state["ctp_md_connected"] = st["md_connected"]
-                _system_state["ctp_td_connected"] = st["td_connected"]
-                if st.get("last_md_disconnect_reason") is not None:
-                    _system_state["last_disconnect_reason"] = st["last_md_disconnect_reason"]
-                    _system_state["last_disconnect_time"] = st.get("last_md_disconnect_time")
-                if st.get("last_td_disconnect_reason") is not None:
-                    _system_state["last_disconnect_reason"] = st["last_td_disconnect_reason"]
-                    _system_state["last_disconnect_time"] = st.get("last_td_disconnect_time")
+            # --- gateway 未创建 → 尝试建连 ---
+            if gw is None:
+                logger.info("[guardian] gateway not created, attempting connect")
+                await _try_connect(silent=not in_session)
+                continue
 
-                md_ok = st["md_connected"]
-                td_ok = st["td_connected"]
+            # --- 同步系统状态 ---
+            st = gw.status
+            _system_state["ctp_md_connected"] = st["md_connected"]
+            _system_state["ctp_td_connected"] = st["td_connected"]
+            if st.get("last_md_disconnect_reason") is not None:
+                _system_state["last_disconnect_reason"] = st["last_md_disconnect_reason"]
+                _system_state["last_disconnect_time"] = st.get("last_md_disconnect_time")
+            if st.get("last_td_disconnect_reason") is not None:
+                _system_state["last_disconnect_reason"] = st["last_td_disconnect_reason"]
+                _system_state["last_disconnect_time"] = st.get("last_td_disconnect_time")
 
-                # --- 盘前检查点通知 ---
-                cp = _check_checkpoint()
-                if cp is not None and cp != _last_checkpoint:
-                    _last_checkpoint = cp
-                    cp_str = f"{cp.hour:02d}:{cp.minute:02d}"
-                    if not md_ok:
-                        _send_guardian_alert("P1", "CTP_MD_DOWN", f"盘前检查({cp_str})：行情通道断开")
-                    if not td_ok and not is_weekend:
-                        _send_guardian_alert("P1", "CTP_TD_DOWN", f"盘前检查({cp_str})：交易通道断开")
-                    if md_ok and (td_ok or is_weekend):
-                        logger.info("[guardian] checkpoint %s: all OK (weekend=%s)", cp_str, is_weekend)
+            md_ok = st["md_connected"]
+            td_ok = st["td_connected"]
 
-                # --- 交易时段：连续监控 + 重连 ---
-                if in_session and not is_weekend:
-                    if md_ok and td_ok:
-                        _fail_count = 0
-                        # 定期刷新账户
-                        import time as _time
-                        now_ts = _time.time()
-                        if now_ts - _last_account_refresh > ACCOUNT_REFRESH:
-                            gw.query_account()
-                            _last_account_refresh = now_ts
-                        continue
+            # --- 盘前检查点（仅工作日）---
+            cp = _check_checkpoint()
+            if cp is not None and cp != _last_checkpoint:
+                _last_checkpoint = cp
+                cp_str = f"{cp.hour:02d}:{cp.minute:02d}"
+                # 若未连接，先尝试建连再判断
+                if not md_ok or not td_ok:
+                    logger.info("[guardian] checkpoint %s: not fully connected, attempting connect", cp_str)
+                    md_ok, td_ok = await _try_connect(silent=True)
+                if not md_ok:
+                    _send_guardian_alert("P1", "CTP_MD_DOWN", f"盘前检查({cp_str})：行情通道断开")
+                if not td_ok:
+                    _send_guardian_alert("P1", "CTP_TD_DOWN", f"盘前检查({cp_str})：交易通道断开")
+                if md_ok and td_ok:
+                    logger.info("[guardian] checkpoint %s: all OK", cp_str)
 
-                    # 断开 → 重连
-                    logger.info("[guardian] session monitor: md=%s td=%s, reconnecting (attempt %d)",
-                                md_ok, td_ok, _fail_count + 1)
-                    from src.api.router import ctp_connect
-                    result = await asyncio.get_running_loop().run_in_executor(None, lambda: ctp_connect(silent=True))
-                    if result.get("md_connected") or result.get("td_connected"):
-                        _fail_count = 0
-                        try:
-                            from src.notifier.dispatcher import get_dispatcher
-                            dp = get_dispatcher()
-                            if dp:
-                                dp.emit_recovery("CTP_FRONT_DISCONNECTED")
-                        except Exception:
-                            pass
-                    else:
-                        _fail_count += 1
-                        if _fail_count == MAX_FAST_RETRIES:
-                            _send_guardian_alert("P0", "CTP_RECONNECT_FAIL",
-                                                 f"交易时段连续{_fail_count}次重连失败")
-                elif not in_session:
-                    # 非交易时段：只补连，不强制报警
-                    if not md_ok or (not td_ok and not is_weekend):
-                        from src.api.router import ctp_connect
-                        await asyncio.get_running_loop().run_in_executor(None, lambda: ctp_connect(silent=True))
+            # --- 交易时段：连续监控 + 重连 ---
+            if in_session:
+                if md_ok and td_ok:
                     _fail_count = 0
-            else:
-                # gateway 未创建
-                _fail_count += 1
+                    # 定期刷新账户
+                    import time as _time
+                    now_ts = _time.time()
+                    if now_ts - _last_account_refresh > ACCOUNT_REFRESH:
+                        gw.query_account()
+                        _last_account_refresh = now_ts
+                    continue
+
+                # 断开 → 重连
+                logger.info("[guardian] session monitor: md=%s td=%s, reconnecting (attempt %d)",
+                            md_ok, td_ok, _fail_count + 1)
+                md_ok, td_ok = await _try_connect(silent=True)
+                if md_ok or td_ok:
+                    try:
+                        from src.notifier.dispatcher import get_dispatcher
+                        dp = get_dispatcher()
+                        if dp:
+                            dp.emit_recovery("CTP_FRONT_DISCONNECTED")
+                    except Exception:
+                        pass
+                elif _fail_count >= MAX_FAST_RETRIES:
+                    _send_guardian_alert("P0", "CTP_RECONNECT_FAIL",
+                                         f"交易时段连续{_fail_count}次重连失败")
 
         except Exception as exc:
             _fail_count += 1

@@ -5,6 +5,8 @@ test_ctp_notify.py — TASK-0014-A2 验证
 3. resume_trading 路由调用后 emit_alert 被触发（mock dispatcher）
 """
 import sys
+import asyncio
+from datetime import datetime
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -111,6 +113,44 @@ def test_front_disconnected_event_dispatches_p1():
     event = feishu.send.call_args.args[0]
     assert event.event_code == "CTP_FRONT_DISCONNECTED"
     assert event.risk_level == "P1"
+
+
+def test_is_trading_session_filters_non_session_noise():
+    """非交易时段与周末不应被判定为交易时段。"""
+    from src.gateway.simnow import is_trading_session
+
+    # 工作日交易时段 → True
+    assert is_trading_session(datetime(2026, 4, 14, 9, 30)) is True    # Tue 9:30
+    assert is_trading_session(datetime(2026, 4, 14, 21, 30)) is True   # Tue 21:30 夜盘
+    assert is_trading_session(datetime(2026, 4, 15, 1, 0)) is True     # Wed 01:00 夜盘凌晨
+
+    # 工作日非交易时段 → False
+    assert is_trading_session(datetime(2026, 4, 14, 16, 0)) is False   # Tue 16:00
+    assert is_trading_session(datetime(2026, 4, 14, 6, 0)) is False    # Tue 06:00
+    assert is_trading_session(datetime(2026, 4, 13, 1, 0)) is False    # Mon 01:00（周一凌晨无夜盘）
+
+    # 周末完全静默 → False
+    assert is_trading_session(datetime(2026, 4, 18, 9, 30)) is False   # Sat 09:30
+    assert is_trading_session(datetime(2026, 4, 18, 21, 30)) is False  # Sat 21:30
+    assert is_trading_session(datetime(2026, 4, 19, 10, 0)) is False   # Sun 10:00
+
+
+def test_risk_alerts_sse_returns_keepalive():
+    """风控告警 SSE 不应再伪造固定 P1 告警。"""
+    from src.api.router import get_risk_alerts
+
+    async def _read_first_chunk():
+        resp = await get_risk_alerts()
+        first = await resp.body_iterator.__anext__()
+        return resp, first
+
+    resp, first_chunk = asyncio.run(_read_first_chunk())
+    if isinstance(first_chunk, bytes):
+        first_chunk = first_chunk.decode()
+
+    assert resp.media_type == "text/event-stream"
+    assert ": keepalive" in first_chunk
+    assert "保证金率超过 70%" not in first_chunk
 
 
 # ---------------------------------------------------------------------------

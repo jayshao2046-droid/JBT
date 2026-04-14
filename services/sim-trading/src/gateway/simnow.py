@@ -94,6 +94,39 @@ def _select_tradeable_contract(
     return ordered[-1]
 
 
+def is_trading_session(current_dt=None) -> bool:
+    """返回当前是否处于交易时段（含盘前缓冲）。
+
+    周末完全返回 False；工作日覆盖：
+    - 日盘前准备 + 日盘：08:55 - 11:35
+    - 午盘：13:00 - 15:05
+    - 夜盘：20:55 - 23:59
+    - 夜盘凌晨段：00:00 - 02:35（仅周二~周五凌晨，即周一晚不含）
+    """
+    from datetime import datetime, time as dtime
+
+    now = current_dt or datetime.now()
+    weekday = now.weekday()  # 0=Mon ... 6=Sun
+    current_time = now.time()
+
+    # 周末完全静默
+    if weekday >= 5:
+        return False
+
+    # 夜盘凌晨段：仅周二~周五凌晨（前一晚的夜盘延续）
+    overnight_end = dtime(2, 35)
+    if current_time < overnight_end and weekday in {1, 2, 3, 4}:
+        return True
+
+    # 日盘 + 夜盘开盘段
+    daytime_sessions = (
+        (dtime(8, 55), dtime(11, 35)),
+        (dtime(13, 0), dtime(15, 5)),
+        (dtime(20, 55), dtime(23, 59, 59, 999999)),
+    )
+    return any(start <= current_time < end for start, end in daytime_sessions)
+
+
 def _make_md_spi_class():
     base = _mdmod.CThostFtdcMdSpi
 
@@ -125,11 +158,14 @@ def _make_md_spi_class():
             logger.warning("[mdapi] disconnected reason=%d", nReason)
             self._on_status("md_disconnected")
             self._api._record_disconnect("md", nReason)
-            try:
-                from src.risk.guards import emit_alert
-                emit_alert("P1", f"CTP 行情前置断开 reason={nReason}", {"event_code": "CTP_FRONT_DISCONNECTED", "source": "simnow_md"})
-            except Exception:
-                pass
+            if is_trading_session():
+                try:
+                    from src.risk.guards import emit_alert
+                    emit_alert("P1", f"CTP 行情前置断开 reason={nReason}", {"event_code": "CTP_FRONT_DISCONNECTED", "source": "simnow_md"})
+                except Exception:
+                    pass
+            else:
+                logger.info("[mdapi] suppress disconnect alert outside trading session")
             self._api._schedule_reconnect("md")
 
         def OnRspUserLogin(self, pRspUserLogin, pRspInfo, nRequestID, bIsLast):
@@ -212,11 +248,14 @@ def _make_td_spi_class():
             logger.warning("[traderapi] disconnected reason=%d", nReason)
             self._on_status("td_disconnected")
             self._api._record_disconnect("td", nReason)
-            try:
-                from src.risk.guards import emit_alert
-                emit_alert("P1", f"CTP 交易前置断开 reason={nReason}", {"event_code": "CTP_FRONT_DISCONNECTED", "source": "simnow_td"})
-            except Exception:
-                pass
+            if is_trading_session():
+                try:
+                    from src.risk.guards import emit_alert
+                    emit_alert("P1", f"CTP 交易前置断开 reason={nReason}", {"event_code": "CTP_FRONT_DISCONNECTED", "source": "simnow_td"})
+                except Exception:
+                    pass
+            else:
+                logger.info("[traderapi] suppress disconnect alert outside trading session")
             self._api._schedule_reconnect("td")
 
         def OnRspAuthenticate(self, p, pRspInfo, nRequestID, bIsLast):
