@@ -17,6 +17,16 @@ export interface RiskL1 {
   position_usage: number
   var_1d: number
   drawdown: number
+  trading_enabled?: boolean
+  ctp_connected?: boolean
+  reduce_only_mode?: boolean
+  disaster_stop_triggered?: boolean
+  max_position_check?: boolean
+  daily_loss_check?: boolean
+  price_deviation_check?: boolean
+  order_frequency_check?: boolean
+  margin_rate_check?: boolean
+  connection_quality_check?: boolean
 }
 
 export interface DailyReport {
@@ -30,8 +40,10 @@ export interface Position {
   direction: "long" | "short"
   volume: number
   open_price: number
+  avg_price?: number
   current_price: number
   float_pnl: number
+  position_id?: string
 }
 
 export interface Order {
@@ -42,6 +54,8 @@ export interface Order {
   price: number
   status: string
   timestamp: string
+  insert_time?: string
+  order_ref?: string
 }
 
 // decision 接口

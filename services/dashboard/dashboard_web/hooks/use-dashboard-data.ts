@@ -32,21 +32,26 @@ export function useDashboardData() {
     setLoading(true)
     setError(null)
     Promise.allSettled([
-      simTradingApi.getAccount().then(setAccount),
-      simTradingApi.getPerformance().then(setPerformance),
-      simTradingApi.getRiskL1().then(setRisk),
-      simTradingApi.getPositions().then(setPositions),
-      simTradingApi.getOrders().then(setOrders),
-      decisionApi.getSignals().then(setSignals),
-      dataApi.getCollectors().then(setCollectors),
-      dataApi.getNews().then(setNews),
+      simTradingApi.getAccount().then(setAccount).catch(() => setAccount(null)),
+      simTradingApi.getPerformance().then(setPerformance).catch(() => setPerformance(null)),
+      simTradingApi.getRiskL1().then(setRisk).catch(() => setRisk(null)),
+      simTradingApi.getPositions().then(setPositions).catch(() => setPositions([])),
+      simTradingApi.getOrders().then(setOrders).catch(() => setOrders([])),
+      decisionApi.getSignals().then(setSignals).catch(() => setSignals([])),
+      dataApi.getCollectors().then(setCollectors).catch(() => setCollectors([])),
+      dataApi.getNews().then(setNews).catch(() => setNews([])),
     ])
       .then((results) => {
         const failed = results.filter((r) => r.status === "rejected")
         if (failed.length > 0) {
+          console.error('Failed requests:', results.filter((r) => r.status === "rejected"))
           setError(`${failed.length} 个数据接口加载失败`)
         }
         setLastUpdate(new Date())
+      })
+      .catch((err) => {
+        console.error('Fetch data error:', err)
+        setError('数据加载失败')
       })
       .finally(() => setLoading(false))
   }
