@@ -5,7 +5,7 @@
 【预审文件】`docs/reviews/TASK-0110-review.md`
 【锁控文件】`docs/locks/TASK-0110-lock.md`
 【执行 Agent】Claude-Code
-【执行策略】A → B → C → D → E 一次性全批执行，全部完成后统一核验。不必等单批验证再进入下批，但代码依赖顺序仍为 A→B→C→D→E。
+【执行策略】A → B → C → C2 → D → E 一次性全批执行，全部完成后统一核验。不必等单批验证再进入下批，但代码依赖顺序仍为 A→B→C→C2→D→E。
 
 ---
 
@@ -219,6 +219,199 @@ pytest services/data/tests/test_researcher_crawler.py -q
 ### 验证
 ```bash
 pytest services/data/tests/test_researcher_scheduler.py -q
+```
+
+---
+
+## 批次 C2 — 研究员独立通知体系（5 文件 + 1 测试，Alienware 独立飞书+邮件）
+
+**Token ID**：`tok-597e842c-f468-42ed-9b49-b8e069372ed2`
+
+### 设计原则
+
+研究员通知体系**完全独立于** data 端（Mini）和 sim-trading（Alienware）的现有通知系统：
+- **独立 webhook**：使用 `RESEARCHER_FEISHU_WEBHOOK_URL`，不复用 data/sim 的报警群/交易群/资讯群
+- **独立邮件**：使用 `RESEARCHER_EMAIL_*` 系列环境变量，不复用 data 端 SMTP 配置
+- **独立卡片模板**：研究员专用飞书卡片和邮件 HTML，与 data 端 `card_templates.py` 互不影响
+- **独立每日日报**：夜盘收盘后（约 02:50）自动汇总当日全部四段的执行/分析/建议
+
+### 环境变量（Alienware `.env` 新增）
+
+```env
+# 研究员独立飞书 — 单独建一个飞书群/机器人
+RESEARCHER_FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/xxx-researcher
+# 研究员独立邮件
+RESEARCHER_EMAIL_SMTP_HOST=smtp.qq.com
+RESEARCHER_EMAIL_SMTP_PORT=465
+RESEARCHER_EMAIL_SENDER=researcher@xxx.com
+RESEARCHER_EMAIL_PASSWORD=xxx
+RESEARCHER_EMAIL_RECIPIENTS=jay@xxx.com
+```
+
+### 文件清单
+| # | 文件 | 操作 |
+|---|------|------|
+| 1 | `services/data/src/researcher/notify/__init__.py` | 新建 |
+| 2 | `services/data/src/researcher/notify/feishu_sender.py` | 新建 |
+| 3 | `services/data/src/researcher/notify/email_sender.py` | 新建 |
+| 4 | `services/data/src/researcher/notify/card_templates.py` | 新建 |
+| 5 | `services/data/src/researcher/notify/daily_digest.py` | 新建 |
+| 6 | `services/data/tests/test_researcher_notify.py` | 新建 |
+
+### 核心要求
+
+#### feishu_sender.py — 独立飞书发送器
+
+- 只读 `RESEARCHER_FEISHU_WEBHOOK_URL`，与 data 端 `FEISHU_ALERT/TRADE/INFO_WEBHOOK_URL` 无关
+- 使用 `msg_type: "interactive"` 卡片格式（遵循 JBT 统一标准）
+- 发送失败时记录到本地 `runtime/researcher/logs/notify_failures.jsonl`
+- 不走 data 端 `dispatcher.py` 的三群路由
+
+#### email_sender.py — 独立邮件发送器
+
+- 只读 `RESEARCHER_EMAIL_*` 环境变量
+- 使用 JBT 统一 HTML Card 格式
+- SSL/TLS 加密
+- 发送失败时降级为本地日志
+
+#### card_templates.py — 研究员专用模板（飞书+邮件）
+
+**飞书卡片类型（6 种）：**
+
+| 卡片 | 颜色 | 触发时机 | 内容 |
+|------|------|---------|------|
+| `segment_start_card` | `blue` 📈 | 每段开始执行 | 时段名 / 开始时间 / 计划品种数 / 计划采集源数 |
+| `segment_done_card` | `turquoise` 📣 | 每段完成 | 品种覆盖 / 趋势变化 / 关键发现 / 耗时 / 采集统计 |
+| `segment_fail_card` | `orange` ⚠️ | 每段失败 | 失败原因 / 影响范围 / 降级状态 |
+| `recommendation_card` | `blue` 📈 | 随 segment_done 紧跟发送 | Top3 品种建议 / 风险提示 / 关注事项 |
+| `daily_digest_card` | `turquoise` 📣 | 夜盘后 ~02:50 | 全天汇总（见下方详细设计） |
+| `resource_warning_card` | `orange` ⚠️ | GPU>90% 或延迟>200ms | Alienware 资源告警 / 暂停研究通知 |
+
+**飞书 `segment_done_card` 结构：**
+```
+header: "📣 [RESEARCHER-NOTIFY] 盘前研究完成"  template: turquoise
+elements:
+  - div(lark_md): "**品种覆盖** 期货 35 / 股票 130"
+  - div(lark_md): "**趋势变化** 螺纹钢 偏多→偏空 | 沪铜 持平"
+  - div(lark_md): "**爬虫采集** 12源 48篇 | 失败: 金十(429)"
+  - hr
+  - div(lark_md): "**关键发现**\n• 螺纹钢库存连续3周增加\n• 原油受中东局势影响偏强"
+  - hr
+  - note: "JBT Researcher | 2026-04-15 08:45:00 | 耗时 12m30s"
+```
+
+**飞书 `recommendation_card` 结构：**
+```
+header: "📈 [RESEARCHER-INFO] 盘前研究建议"  template: blue
+elements:
+  - div(lark_md): "**Top3 关注品种**"
+  - div(lark_md): "1️⃣ 螺纹钢(rb) — 偏空 0.72 — 库存压力+需求放缓"
+  - div(lark_md): "2️⃣ 原油(sc) — 偏多 0.68 — 中东局势+库存下降"
+  - div(lark_md): "3️⃣ 沪铜(cu) — 观望 0.51 — 多空因素均衡"
+  - hr
+  - div(lark_md): "**风险提示**\n• 螺纹钢今日有交割月换月\n• 关注20:30美国CPI数据"
+  - hr
+  - note: "JBT Researcher | 2026-04-15 08:45:05"
+```
+
+**邮件 HTML 结构：** 遵循 JBT 统一 Card 格式，参照 `services/data/src/notify/email_notify.py` 的 `_build_event_html` 风格。
+
+#### daily_digest.py — 每日综合日报生成器
+
+**触发时间：** 夜盘收盘后约 02:50（或最后一段完成后 10 分钟）
+
+**日报内容结构（飞书长卡片 + 邮件 HTML）：**
+
+```
+═══════════════════════════════════════════════════
+📣 [RESEARCHER-NOTIFY] 2026-04-15 研究员每日总结
+═══════════════════════════════════════════════════
+
+📋 执行概况
+┌──────┬──────┬──────┬──────┬──────┐
+│ 时段 │ 状态 │ 耗时 │ 品种 │ 采集 │
+├──────┼──────┼──────┼──────┼──────┤
+│ 盘前 │ ✅   │ 12m  │ 165  │ 48篇 │
+│ 午间 │ ✅   │ 8m   │ 165  │ 32篇 │
+│ 盘后 │ ✅   │ 15m  │ 165  │ 55篇 │
+│ 夜盘 │ ✅   │ 10m  │ 35   │ 28篇 │
+└──────┴──────┴──────┴──────┴──────┘
+合计: 4段全部成功 | LLM调用 12次 | 爬虫采集 163篇
+
+📊 今日看了什么
+- 期货品种: 35个全覆盖（rb/cu/sc/...）
+- 股票品种: Top100 + 自选30 = 130只
+- 爬虫源: 东财/金十/新浪/上期所/大商所/郑商所/财联社
+  成功率: 11/12 (91.7%) | 金十午间429被限流
+- K线数据: 增量读取 12,450 bars
+- 预研上下文: 已整合 preread 四角色摘要
+
+📈 今日总结了什么
+- 期货整体: 黑色系偏空（库存压力），能化偏多（中东+库存）
+- 股票整体: 大盘震荡，科技板块领涨，地产持续承压
+- 关键变化:
+  • 螺纹钢(rb): 盘前偏多 → 盘后偏空（午间库存数据发布）
+  • 原油(sc): 全天偏多不变（中东局势持续发酵）
+  • 沪铜(cu): 午间偏多 → 盘后观望（晚间美CPI预期）
+
+💡 今日建议
+- 重点关注: 螺纹钢空头机会（库存拐点已确认）
+- 风险警示: 原油多头注意止损（若美CPI超预期可能回落）
+- 明日关注: 08:30 中国GDP / 20:30 美国零售数据
+- 策略建议:
+  • rb: 可考虑空单轻仓入场，止损 3600
+  • sc: 持有多单不加仓，观察美CPI后再定
+  • 股票: 科技ETF可关注回调买点
+
+🖥️ Alienware 资源
+- GPU 平均占用: 62% (峰值 85%)
+- 内存: 14.2/16 GB
+- sim-trading 延迟: avg 12ms (无影响)
+- 研究暂停次数: 0
+
+═══════════════════════════════════════════════════
+JBT Researcher | 2026-04-15 02:50:00 | Alienware
+═══════════════════════════════════════════════════
+```
+
+**日报数据来源：**
+- 从 `runtime/researcher/reports/{date}/` 读取当日所有时段报告
+- 从 `runtime/researcher/logs/execution_{date}.jsonl` 读取执行日志
+- 从 `runtime/researcher/staging/` 读取增量统计
+- 对比各时段的 `change_highlights` 提取趋势变化
+- 资源数据从 `scheduler.py` 的监控指标获取
+
+**日报实现要点：**
+```python
+class DailyDigestGenerator:
+    def generate(self, date: str) -> tuple[dict, str]:
+        """生成每日总结。返回 (飞书卡片payload, 邮件HTML)。"""
+        segments = self._load_all_segments(date)     # 加载四段报告
+        exec_logs = self._load_execution_logs(date)  # 加载执行日志
+        
+        digest = {
+            "execution_summary": self._build_execution_table(exec_logs),
+            "what_reviewed": self._build_review_summary(segments),
+            "what_summarized": self._build_analysis_summary(segments),
+            "recommendations": self._build_recommendations(segments),
+            "resource_stats": self._build_resource_stats(exec_logs),
+        }
+        
+        feishu_card = self._render_feishu_card(digest)
+        email_html = self._render_email_html(digest)
+        return feishu_card, email_html
+```
+
+### Batch C2 与 C 的关系
+
+- C 批的 `notifier.py` 负责调用 C2 的独立发送器，不走 data 端 `dispatcher.py`
+- C 批的 `scheduler.py` 在每段完成后调用 `notifier.py` → `feishu_sender` + `email_sender`
+- C 批的 `scheduler.py` 在夜盘收盘后调用 `daily_digest.py` 生成日报
+- C 批修改 `dispatcher.py` 只是新增 NotifyType 枚举值（用于状态查询），实际推送不经过 dispatcher
+
+### 验证
+```bash
+pytest services/data/tests/test_researcher_notify.py -q
 ```
 
 ---

@@ -51,7 +51,7 @@ Jay.S 2026-04-15 确认：
 | `services/data/src/researcher/crawler/anti_detect.py` | 新建 | 反检测：UA 轮换、请求间隔、Playwright 指纹 |
 | `services/data/tests/test_researcher_crawler.py` | 新建 | 爬虫引擎测试 |
 
-### 批次 C — 四段调度 + 通知推送（P1，5 文件）
+### 批次 C — 四段调度 + 通知推送（5 文件）
 
 | 文件 | 操作 | 说明 |
 |------|------|------|
@@ -60,6 +60,16 @@ Jay.S 2026-04-15 确认：
 | `services/data/src/scheduler/data_scheduler.py` | 修改 | 注册 researcher 四段 job |
 | `services/data/src/notify/dispatcher.py` | 修改 | 新增 RESEARCH_REPORT_DONE / RESEARCH_REPORT_FAIL 通知类型 |
 | `services/data/tests/test_researcher_scheduler.py` | 新建 | 调度 + 通知测试 |
+
+### 批次 C2 — 研究员独立通知体系（5 文件，Alienware 独立飞书+邮件）
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `services/data/src/researcher/notify/__init__.py` | 新建 | 通知子模块入口 |
+| `services/data/src/researcher/notify/feishu_sender.py` | 新建 | 独立飞书发送器（独立 webhook，不共享 data/sim 的群） |
+| `services/data/src/researcher/notify/email_sender.py` | 新建 | 独立邮件发送器（独立 SMTP 配置） |
+| `services/data/src/researcher/notify/card_templates.py` | 新建 | 研究员专用卡片/邮件模板（四段报告+每日总结+执行日志） |
+| `services/data/src/researcher/notify/daily_digest.py` | 新建 | 每日综合日报生成器（汇总当日所有段落的执行/分析/建议） |
 
 ### 批次 D — API 接口 + 采集源 CRUD（P1，4 文件）
 
@@ -82,7 +92,7 @@ Jay.S 2026-04-15 确认：
 ## 依赖链
 
 ```
-A（骨架） → B（爬虫） → C（调度+推送） → D（API） → E（看板）
+A（骨架） → B（爬虫） → C（调度+推送） → C2（独立通知体系） → D（API） → E（看板）
 ```
 
 ## 验收标准
@@ -90,6 +100,7 @@ A（骨架） → B（爬虫） → C（调度+推送） → D（API） → E（
 - A 批：`pytest services/data/tests/test_researcher_staging.py test_researcher_reporter.py -q` 全通过
 - B 批：`pytest services/data/tests/test_researcher_crawler.py -q` 全通过
 - C 批：`pytest services/data/tests/test_researcher_scheduler.py -q` 全通过
+- C2 批：`pytest services/data/tests/test_researcher_notify.py -q` 全通过
 - D 批：`pytest services/data/tests/test_researcher_api.py -q` 全通过
 - E 批：`pnpm build` 通过，页面可访问
 - 全量：Alienware 上端到端跑一次四段报告，飞书收到 Jay 版，Mini data API 可查决策版

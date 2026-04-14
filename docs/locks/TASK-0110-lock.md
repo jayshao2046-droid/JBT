@@ -13,3 +13,4 @@
 | C | `tok-4ad3a529-e41c-4b47-b02b-d84e3ec3bc88` | 5 | issued |
 | D | `tok-1346b99a-014b-42e0-b218-3c8dd459a0d9` | 4 | issued |
 | E | `tok-b2e48251-340d-4f7b-a84b-287058720fa8` | 4 | issued |
+| C2 | `tok-597e842c-f468-42ed-9b49-b8e069372ed2` | 6 | issued |
