@@ -15,11 +15,11 @@ export function useBacktest() {
       setLoading(true)
       setError(null)
       await Promise.allSettled([
-        backtestApi.getStrategies().then((res) => setStrategies(res.strategies)).catch((e) => {
+        backtestApi.getStrategies().then(setStrategies).catch((e) => {
           console.error("Failed to fetch strategies:", e)
           setStrategies([])
         }),
-        backtestApi.getJobs().then((res) => setJobs(res.jobs)).catch((e) => {
+        backtestApi.getJobs().then(setJobs).catch((e) => {
           console.error("Failed to fetch jobs:", e)
           setJobs([])
         }),

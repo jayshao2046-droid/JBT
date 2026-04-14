@@ -1,9 +1,11 @@
 /**
  * decision.ts — JBT Dashboard Decision API Client
- * 所有请求通过 /api/decision/api/v1 代理到 decision 服务 (port 8104)
+ * 所有请求通过 /api/decision/:path* 代理到 decision 服务 (port 8104)
+ * 代理规则：/api/decision/:path* → http://localhost:8104/:path*（直接剥离前缀）
+ * decision 后端路由无 /api/v1/ 前缀，直接在根路径下
  */
 
-const API_BASE = "/api/decision/api/v1"
+const API_BASE = "/api/decision"
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {

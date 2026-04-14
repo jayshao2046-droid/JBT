@@ -13,7 +13,7 @@ export function useBacktestResults() {
       setLoading(true)
       setError(null)
       const res = await backtestApi.getResults()
-      setResults(Array.isArray(res.results) ? res.results : [])
+      setResults(Array.isArray(res) ? res : [])
     } catch (err) {
       console.error("Failed to fetch backtest results:", err)
       setError(err instanceof Error ? err.message : "获取结果失败")

@@ -206,7 +206,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 > **[修订 2026-04-11] 双回测分离原则：** decision 内部自动研究回测固定拆为“期货沙箱 / 股票沙箱”两条主路径，数据完全隔离、只共享因子；Air/backtest 继续承担人工手动回测与最终二次审核，不接管研究中心自动回测流程。
 
-### 2.5 看板 dashboard — 25% [修订 2026-04-14 TASK-0099/0100 locked，0101 进行中]
+### 2.5 看板 dashboard — 98% [修订 2026-04-14 Phase F 全闭环]
 
 **负责 Agent：Claude（看板实施）+ Atlas（逐任务审核）**
 **服务目录：`services/dashboard/`**
@@ -222,24 +222,27 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 登录页 | ✅ 已完成 | /login，基础认证 |
 | 总览首页 | ✅ 已完成 | /，KPI+持仓+信号+风控+新闻，对接 sim-trading 真实 API |
 | 总配置页 | ✅ 已完成 | /settings |
-| API 代理层 | ✅ 已完成 | next.config.ts 已配置 4 端代理（sim-trading/backtest/decision/data）|
-| sim-trading 子页面 | ✅ 已完成 | /sim-trading/…（总览/交易终端/行情/风控/品种风控/CTP配置），7路由+11组件+6基础设施 |
-| backtest 子页面 | 🟡 进行中 | /backtest/…（TASK-0101，Claude 执行中），23 files |
-| decision 子页面 | ⏳ 待发 | /decision/…（TASK-0102，token active，待 TASK-0101 locked 后发）|
-| data 子页面 | ⏳ 待发 | /data/…（TASK-0103，token active，待 TASK-0102 locked 后发）|
+| API 代理层 | ✅ 已完成 | next.config.ts 环境变量化，sim-trading/data→Mini(.76)，decision/backtest→Studio localhost |
+| sim-trading 子页面 | ✅ 已完成 | /sim-trading（总览/交易终端/行情/风控/品种风控/CTP配置），7路由+11组件+6基础设施 |
+| backtest 子页面 | ✅ 已完成 | /backtest（总览/结果/审查/优化器/运营），6路由+14组件+3 API/hooks |
+| decision 子页面 | ✅ 已完成 | /decision（总览/信号/研究/仓库/模型/报告），6路由+12组件 |
+| data 子页面 | ✅ 已完成 | /data（总览/采集器/数据探索/新闻/系统），5路由+10组件 |
+| Studio 生产部署 | ✅ 已部署 | pnpm build 28/28 ✅，Next.js 运行于 :3005，4端 API proxy 全通 |
+| 功能强化 | 🟡 进行中 | TASK-0106：全端页面功能完整性与显示优化（当前活跃）|
 
 **已完成任务 [修订 2026-04-14]：**
-- ✅ TASK-0099：统一看板首页框架（47 files，登录/总览/配置/Layout/导航，build+lint ✅，commit bee35c9，tok-3e1c1970 locked）
-- ✅ TASK-0100：sim-trading 全功能升级（24 files，7路由+11组件+6 API/hooks/lib，Atlas修复ESLint+TypeScript类型错误，build+lint ✅，commit 4969642，tok-279d4f99 locked）
+- ✅ TASK-0099：统一看板首页框架（47 files，commit bee35c9，tok-3e1c1970 locked）
+- ✅ TASK-0100：sim-trading 全功能升级（24 files，commit 4969642，tok-279d4f99 locked）
+- ✅ TASK-0101：backtest 全功能升级（40 files，commit af0981c，tok-92f7dce9 locked）
+- ✅ TASK-0102：decision 全功能升级（45 files，架构 MainLayout 提升，commit 2ff4cda，tok-1f25eea1 locked）
+- ✅ TASK-0103：data 全功能升级（24 files，commit 65b5f40，tok-bcdd740a locked）
+- ✅ TASK-F5：sidebar 补全 + Studio 部署（1 file，commit 463bb0c，tok-16dffac3 locked）
+- ✅ TASK-0105：next.config.ts 环境变量化（commit 66a1b2f，tok-642d8752 locked）
 
 **当前活跃：**
-- 🟡 TASK-0101：backtest 全功能升级（23 files，6路由+14组件+3 API/hooks，tok-92f7dce9 active，Claude 执行中）
+- 🟡 TASK-0106：全端功能强化（API 对齐检查、显示完整性修复、空状态处理、API 路由对齐）
 
-**排队任务（按顺序解锁）：**
-- ⏳ TASK-0102：decision 全功能升级（25 files，tok-1f25eea1 active，待 TASK-0101 locked 后发）
-- ⏳ TASK-0103：data 全功能升级（21 files，tok-bcdd740a active，待 TASK-0102 locked 后发）
-
-> **[修订 2026-04-14] dashboard 正式进入实施阶段。触发条件：四端后端 API 全部稳定，4 份功能比对报告均已建档。执行策略：Claude 每次做一个端的全功能升级（功能必须≥对应临时看板，零 mock），Atlas 独立验证 pnpm build + lint 通过后锁回，再发下一个 token。5 个 Token（140 files）全部就绪，完成一个锁回一个。**
+> **[修订 2026-04-14] Phase F 全闭环。25 个页面全部上线，pnpm build 28/28 通过，Studio 已部署，4 端 API proxy 全通。剩余 2% 为 TASK-0106 功能强化（确保零 mock，显示与后端实际数据 100% 对齐）。**
 
 ### 2.6 实盘交易 live-trading — 0%
 

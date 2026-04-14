@@ -98,6 +98,18 @@
   - Studio重建计划：完成Phase1 Claude任务后，Atlas执行SSH重建命令（Jay.S确认）
   - G0执行顺序：Studio重建完成 → Claude做TASK-0080 → Jay.S/Atlas停legacy容器
 
+- 2026-04-14：**决策端 AI 模型配置全面修正 ✅**。Studio `~/jbt/services/decision/.env` 完成三轮清理：
+  - LOCAL_MODEL_* 修正（`qwen2.5`→`qwen3:14b`，`DeepSeek-R1-14B`→`phi4-reasoning:14b`）
+  - 新增 `OLLAMA_RESEARCHER_MODEL=deepcoder:14b`（夜间研究员）/ `OLLAMA_AUDITOR_MODEL=qwen3:14b`（L2信号审核）/ `OLLAMA_ANALYST_MODEL=phi4-reasoning:14b`（分析师数据阅读）
+  - 在线模型 ID 修正（规划占位名→真实 DashScope API ID）：`ONLINE_MODEL_DEFAULT=qwen-plus-latest`，`ONLINE_MODEL_UPGRADE=qwen-max-latest`，`ONLINE_MODEL_BACKUP=qwen-plus-latest`，`ONLINE_MODEL_DISPUTE=qwen-max-latest`
+  - Studio Ollama 实装模型确认：`deepcoder:14b`(9GB)、`qwen3:14b`(9.3GB)、`phi4-reasoning:14b`(11GB)，共 3 枚，原 `qwen2.5/DeepSeek-R1-14B` 从未下载。
+- 2026-04-14：**TASK-0104 data预读投喂决策端 建档 ✅**。完成 15 个 collector 数据资产清单分析与 L1/L2/分析师/研究员四角色注入映射；提出夜间 21:00 预读 → 08:30 决策拉取的 D0-D5 分阶段实施方案；TASK-0104 已建档于 `docs/tasks/TASK-0104-data预读投喂决策端.md`，待 Architect 预审后签发 Token 开始 D1-D5 实施。
+- 2026-04-14：**在线千问模型费用测算完成 ✅**（基于 DashScope 官方定价 2026-04-14）：
+  - `qwen-plus-latest`：入 ¥2/百万 token，出 ¥12/百万 token（≤256K 请求）
+  - `qwen-max-latest`：入 ¥2.5/百万 token（≤32K），出 ¥10/百万 token
+  - 三场景测算：当前（无 TASK-0104）≈¥0.2/天，TASK-0104 上线后≈¥1.6/天，高频策略日≈¥5.2/天
+  - 月费区间：¥4（当前）→ ¥35（TASK-0104后）→ ¥115（高频满载），成本可控，采用推荐配置。
+
 ## 接管要求
 
 1. 若 `docs/JBT_FINAL_MASTER_PLAN.md` 与总项目经理双 prompt 有时间差，以双 prompt 的较新留痕为准。
