@@ -5,15 +5,21 @@ import { useRiskControl } from "@/hooks/use-risk-control"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, XCircle, AlertTriangle } from "lucide-react"
+import MainLayout from "@/components/layout/main-layout"
 
 export default function IntelligencePage() {
-  const { l1Status, l2Status, alerts, loading } = useRiskControl()
+  const { l1Status, l2Status, alerts, loading, refetch } = useRiskControl()
+
+  // 防御性编程：确保数组类型
+  const safeAlerts = Array.isArray(alerts) ? alerts : []
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-96" />
-      </div>
+      <MainLayout title="风控智能" onRefresh={refetch}>
+        <div className="p-6 space-y-6">
+          <Skeleton className="h-96" />
+        </div>
+      </MainLayout>
     )
   }
 
@@ -29,7 +35,8 @@ export default function IntelligencePage() {
   ]
 
   return (
-    <div className="space-y-6">
+    <MainLayout title="风控智能" onRefresh={refetch}>
+      <div className="p-6 space-y-6">
       {/* L1 风控检查 */}
       <Card>
         <CardHeader>
@@ -90,14 +97,14 @@ export default function IntelligencePage() {
       {/* 告警历史 */}
       <Card>
         <CardHeader>
-          <CardTitle>告警历史 ({alerts.length})</CardTitle>
+          <CardTitle>告警历史 ({safeAlerts.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {alerts.length === 0 ? (
+          {safeAlerts.length === 0 ? (
             <p className="text-muted-foreground text-sm">暂无告警</p>
           ) : (
             <div className="space-y-2">
-              {alerts.map((alert, idx) => (
+              {safeAlerts.map((alert, idx) => (
                 <div key={idx} className="flex items-start gap-3 p-3 border rounded">
                   <AlertTriangle
                     className={`w-5 h-5 mt-0.5 ${
@@ -155,5 +162,6 @@ export default function IntelligencePage() {
         </Card>
       )}
     </div>
+    </MainLayout>
   )
 }

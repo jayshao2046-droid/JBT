@@ -23,14 +23,19 @@ function formatTimeAgo(timestamp: string): string {
 }
 
 export function NewsList({ news, title = "新闻资讯" }: NewsListProps) {
+  const safeNews = Array.isArray(news) ? news : []
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-0">
-        <div className="max-h-96 overflow-y-auto space-y-2">
-          {news.map((item) => (
+        {safeNews.length === 0 ? (
+          <p className="text-sm text-muted-foreground">暂无新闻</p>
+        ) : (
+          <div className="max-h-96 overflow-y-auto space-y-2">
+            {safeNews.map((item) => (
             <div
               key={item.id}
               className="flex gap-3 p-3 bg-white/[0.02] hover:bg-white/[0.06] rounded transition-colors cursor-pointer group"
@@ -46,8 +51,9 @@ export function NewsList({ news, title = "新闻资讯" }: NewsListProps) {
                 </div>
               </div>
             </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

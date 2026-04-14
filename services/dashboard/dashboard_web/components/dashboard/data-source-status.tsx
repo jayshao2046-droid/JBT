@@ -26,6 +26,8 @@ function formatTimeAgo(timestamp: string): string {
 }
 
 export function DataSourceStatus({ dataSources }: DataSourceStatusProps) {
+  const safeSources = Array.isArray(dataSources) ? dataSources : []
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "running":
@@ -39,8 +41,8 @@ export function DataSourceStatus({ dataSources }: DataSourceStatusProps) {
     }
   }
 
-  const onlineCount = dataSources.filter((d) => d.status === "running").length
-  const health = dataSources.length > 0 ? Math.round((onlineCount / dataSources.length) * 100) : 0
+  const onlineCount = safeSources.filter((d) => d.status === "running").length
+  const health = safeSources.length > 0 ? Math.round((onlineCount / safeSources.length) * 100) : 0
 
   return (
     <Card>
@@ -55,7 +57,10 @@ export function DataSourceStatus({ dataSources }: DataSourceStatusProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
-        {dataSources.map((source) => {
+        {safeSources.length === 0 ? (
+          <p className="text-sm text-muted-foreground">暂无数据源</p>
+        ) :
+          safeSources.map((source) => {
           const statusColor = getStatusColor(source.status)
           return (
             <div

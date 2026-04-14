@@ -17,12 +17,16 @@ export function useMarketData() {
     try {
       setLoading(true)
       setError(null)
-      const [ticksRes, moversRes] = await Promise.all([
-        simTradingApi.getTicks(),
-        simTradingApi.getMarketMovers(10),
+      await Promise.allSettled([
+        simTradingApi.getTicks().then((res) => setTicks(res.ticks)).catch((e) => {
+          console.error("Failed to fetch ticks:", e)
+          setTicks([])
+        }),
+        simTradingApi.getMarketMovers(10).then((res) => setMovers(res.movers)).catch((e) => {
+          console.error("Failed to fetch movers:", e)
+          setMovers({ price_movers: [], amplitude_movers: [], volume_movers: [] })
+        }),
       ])
-      setTicks(ticksRes.ticks)
-      setMovers(moversRes.movers)
     } catch (err) {
       setError(err instanceof Error ? err.message : "获取行情数据失败")
     } finally {

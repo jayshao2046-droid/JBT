@@ -4,27 +4,35 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useMarketData } from "@/hooks/use-market-data"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import MainLayout from "@/components/layout/main-layout"
 
 export default function MarketPage() {
-  const { ticks, movers, loading } = useMarketData()
+  const { ticks, movers, loading, refetch } = useMarketData()
+
+  // 防御性编程：确保数组类型
+  const safeTicks = Array.isArray(ticks) ? ticks : []
+  const safeMovers = movers || { price_movers: [], amplitude_movers: [], volume_movers: [] }
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-96" />
-      </div>
+      <MainLayout title="市场行情" onRefresh={refetch}>
+        <div className="p-6 space-y-6">
+          <Skeleton className="h-96" />
+        </div>
+      </MainLayout>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <MainLayout title="市场行情" onRefresh={refetch}>
+      <div className="p-6 space-y-6">
       {/* 实时行情 */}
       <Card>
         <CardHeader>
-          <CardTitle>实时行情 ({ticks.length})</CardTitle>
+          <CardTitle>实时行情 ({safeTicks.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {ticks.length === 0 ? (
+          {safeTicks.length === 0 ? (
             <p className="text-muted-foreground text-sm">暂无行情数据</p>
           ) : (
             <div className="overflow-x-auto">
@@ -41,7 +49,7 @@ export default function MarketPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ticks.map((tick, idx) => (
+                  {safeTicks.map((tick, idx) => (
                     <tr key={idx} className="border-b hover:bg-muted/50">
                       <td className="p-2 font-medium">{tick.symbol}</td>
                       <td className="text-right p-2">{tick.last_price.toFixed(2)}</td>
@@ -66,11 +74,11 @@ export default function MarketPage() {
             <CardTitle>价格异动</CardTitle>
           </CardHeader>
           <CardContent>
-            {movers?.price_movers.length === 0 ? (
+            {safeMovers.price_movers.length === 0 ? (
               <p className="text-muted-foreground text-sm">暂无数据</p>
             ) : (
               <div className="space-y-2">
-                {movers?.price_movers.map((mover, idx) => (
+                {safeMovers.price_movers.map((mover, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2 border rounded">
                     <div>
                       <p className="font-medium">{mover.symbol}</p>
@@ -94,11 +102,11 @@ export default function MarketPage() {
             <CardTitle>振幅异动</CardTitle>
           </CardHeader>
           <CardContent>
-            {movers?.amplitude_movers.length === 0 ? (
+            {safeMovers.amplitude_movers.length === 0 ? (
               <p className="text-muted-foreground text-sm">暂无数据</p>
             ) : (
               <div className="space-y-2">
-                {movers?.amplitude_movers.map((mover, idx) => (
+                {safeMovers.amplitude_movers.map((mover, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2 border rounded">
                     <div>
                       <p className="font-medium">{mover.symbol}</p>
@@ -122,11 +130,11 @@ export default function MarketPage() {
             <CardTitle>成交量异动</CardTitle>
           </CardHeader>
           <CardContent>
-            {movers?.volume_movers.length === 0 ? (
+            {safeMovers.volume_movers.length === 0 ? (
               <p className="text-muted-foreground text-sm">暂无数据</p>
             ) : (
               <div className="space-y-2">
-                {movers?.volume_movers.map((mover, idx) => (
+                {safeMovers.volume_movers.map((mover, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2 border rounded">
                     <div>
                       <p className="font-medium">{mover.symbol}</p>
@@ -146,5 +154,6 @@ export default function MarketPage() {
         </Card>
       </div>
     </div>
+    </MainLayout>
   )
 }

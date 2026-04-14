@@ -154,24 +154,6 @@ export default function DashboardPage() {
     )
   }
 
-  if (error) {
-    return (
-      <MainLayout onRefresh={refetch} lastUpdate={lastUpdate}>
-        <div className="p-6">
-          <Card>
-            <CardContent className="p-6 space-y-4">
-              <p className="text-red-400">{error}</p>
-              <Button onClick={refetch} variant="outline" size="sm">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                重试
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </MainLayout>
-    )
-  }
-
   const kpiData = [
     {
       title: "总权益",
@@ -231,6 +213,19 @@ export default function DashboardPage() {
   return (
     <MainLayout onRefresh={refetch} lastUpdate={lastUpdate}>
       <div className="p-6 space-y-6">
+        {/* 错误提示 */}
+        {error && (
+          <Card className="border-red-500/50 bg-red-500/10">
+            <CardContent className="p-4 flex items-center justify-between">
+              <p className="text-red-400 text-sm">{error}</p>
+              <Button onClick={refetch} variant="outline" size="sm">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                重试
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {/* KPI 卡片 + 服务状态 */}
         <div className="flex items-start gap-4">
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -274,16 +269,20 @@ export default function DashboardPage() {
           <div className="lg:col-span-2">
             <TodayTradingSummary
               data={{
-                tradeCount: orders.length,
-                openCount: orders.filter((o) => o.direction === "buy").length,
-                closeCount: orders.filter((o) => o.direction === "sell").length,
-                buyAmount: orders
-                  .filter((o) => o.direction === "buy")
-                  .reduce((sum, o) => sum + o.price * o.volume, 0),
-                sellAmount: orders
-                  .filter((o) => o.direction === "sell")
-                  .reduce((sum, o) => sum + o.price * o.volume, 0),
-                commission: orders.length * 5,
+                tradeCount: Array.isArray(orders) ? orders.length : 0,
+                openCount: Array.isArray(orders) ? orders.filter((o) => o.direction === "buy").length : 0,
+                closeCount: Array.isArray(orders) ? orders.filter((o) => o.direction === "sell").length : 0,
+                buyAmount: Array.isArray(orders)
+                  ? orders
+                      .filter((o) => o.direction === "buy")
+                      .reduce((sum, o) => sum + o.price * o.volume, 0)
+                  : 0,
+                sellAmount: Array.isArray(orders)
+                  ? orders
+                      .filter((o) => o.direction === "sell")
+                      .reduce((sum, o) => sum + o.price * o.volume, 0)
+                  : 0,
+                commission: Array.isArray(orders) ? orders.length * 5 : 0,
               }}
             />
           </div>

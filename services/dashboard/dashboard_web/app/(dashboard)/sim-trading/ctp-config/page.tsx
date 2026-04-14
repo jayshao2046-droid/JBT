@@ -9,6 +9,7 @@ import { simTradingApi, type SystemState } from "@/lib/api/sim-trading"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import MainLayout from "@/components/layout/main-layout"
 
 export default function CtpConfigPage() {
   const { toast } = useToast()
@@ -94,14 +95,17 @@ export default function CtpConfigPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-96" />
-      </div>
+      <MainLayout title="CTP配置" onRefresh={fetchData}>
+        <div className="p-6 space-y-6">
+          <Skeleton className="h-96" />
+        </div>
+      </MainLayout>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <MainLayout title="CTP配置" onRefresh={fetchData}>
+      <div className="p-6 space-y-6">
       {/* 连接状态 */}
       <Card>
         <CardHeader>
@@ -233,5 +237,6 @@ export default function CtpConfigPage() {
         </CardContent>
       </Card>
     </div>
+    </MainLayout>
   )
 }

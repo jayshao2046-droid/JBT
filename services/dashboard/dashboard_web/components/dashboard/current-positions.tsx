@@ -13,9 +13,10 @@ interface CurrentPositionsProps {
 }
 
 export function CurrentPositions({ positions, onClose }: CurrentPositionsProps) {
-  const totalPositions = positions.length
-  const totalFloatProfit = positions.reduce((sum, p) => sum + p.float_pnl, 0)
-  const totalMargin = positions.reduce((sum, p) => sum + p.open_price * p.volume, 0)
+  const safePositions = Array.isArray(positions) ? positions : []
+  const totalPositions = safePositions.length
+  const totalFloatProfit = safePositions.reduce((sum, p) => sum + (p.float_pnl || 0), 0)
+  const totalMargin = safePositions.reduce((sum, p) => sum + (p.open_price || 0) * (p.volume || 0), 0)
 
   return (
     <Card>
@@ -36,7 +37,7 @@ export function CurrentPositions({ positions, onClose }: CurrentPositionsProps) 
               <div className="text-center">操作</div>
             </div>
 
-            {positions.map((position) => {
+            {safePositions.map((position) => {
               const profitLossPercent =
                 position.open_price === 0
                   ? 0

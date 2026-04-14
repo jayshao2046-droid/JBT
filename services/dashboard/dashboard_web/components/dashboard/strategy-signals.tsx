@@ -21,8 +21,9 @@ export function StrategySignals({
   onConfirmSignal,
   onDisableSignal,
 }: StrategySignalsProps) {
+  const safeSignals = Array.isArray(signals) ? signals : []
   const [disabledSignals, setDisabledSignals] = useState<string[]>(
-    signals.filter((s) => s.status === "disabled").map((s) => s.id)
+    safeSignals.filter((s) => s.status === "disabled").map((s) => s.id)
   )
 
   const toggleDisable = (signal: StrategySignal) => {
@@ -42,7 +43,10 @@ export function StrategySignals({
         </Button>
       </CardHeader>
       <CardContent className="space-y-2">
-        {signals.map((signal) => {
+        {safeSignals.length === 0 ? (
+          <p className="text-sm text-muted-foreground">暂无信号</p>
+        ) :
+          safeSignals.map((signal) => {
           const isDisabled = disabledSignals.includes(signal.id)
           const signalColor = {
             long: "text-red-400 bg-red-500/20 border-red-500/30",

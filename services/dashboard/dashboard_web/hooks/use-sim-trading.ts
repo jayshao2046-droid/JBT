@@ -16,16 +16,24 @@ export function useSimTrading() {
     try {
       setLoading(true)
       setError(null)
-      const [accountRes, perfRes, posRes, ordersRes] = await Promise.all([
-        simTradingApi.getAccount(),
-        simTradingApi.getPerformance(),
-        simTradingApi.getPositions(),
-        simTradingApi.getOrders(),
+      await Promise.allSettled([
+        simTradingApi.getAccount().then(setAccount).catch((e) => {
+          console.error("Failed to fetch account:", e)
+          setAccount(null)
+        }),
+        simTradingApi.getPerformance().then(setPerformance).catch((e) => {
+          console.error("Failed to fetch performance:", e)
+          setPerformance(null)
+        }),
+        simTradingApi.getPositions().then(setPositions).catch((e) => {
+          console.error("Failed to fetch positions:", e)
+          setPositions([])
+        }),
+        simTradingApi.getOrders().then(setOrders).catch((e) => {
+          console.error("Failed to fetch orders:", e)
+          setOrders([])
+        }),
       ])
-      setAccount(accountRes)
-      setPerformance(perfRes)
-      setPositions(posRes)
-      setOrders(ordersRes)
     } catch (err) {
       setError(err instanceof Error ? err.message : "获取数据失败")
     } finally {

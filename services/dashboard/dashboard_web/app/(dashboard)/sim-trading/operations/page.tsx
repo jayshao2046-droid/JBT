@@ -11,10 +11,16 @@ import { simTradingApi } from "@/lib/api/sim-trading"
 import { useToast } from "@/hooks/use-toast"
 import { ALL_CONTRACTS } from "@/lib/contracts"
 import { Skeleton } from "@/components/ui/skeleton"
+import MainLayout from "@/components/layout/main-layout"
 
 export default function OperationsPage() {
   const { account, positions, orders, loading, refetch } = useSimTrading()
   const { toast } = useToast()
+
+  // 防御性编程：确保数组类型
+  const safePositions = Array.isArray(positions) ? positions : []
+  const safeOrders = Array.isArray(orders) ? orders : []
+
   const [orderForm, setOrderForm] = useState({
     instrument_id: "",
     direction: "long" as "long" | "short",
@@ -46,14 +52,17 @@ export default function OperationsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-96" />
-      </div>
+      <MainLayout title="交易操作" onRefresh={refetch}>
+        <div className="p-6 space-y-6">
+          <Skeleton className="h-96" />
+        </div>
+      </MainLayout>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <MainLayout title="交易操作" onRefresh={refetch}>
+      <div className="p-6 space-y-6">
       {/* 账户信息 */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -163,19 +172,19 @@ export default function OperationsPage() {
         {/* 持仓列表 */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>持仓 ({positions.length})</CardTitle>
+            <CardTitle>持仓 ({safePositions.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            {positions.length === 0 ? (
+            {safePositions.length === 0 ? (
               <p className="text-muted-foreground text-sm">暂无持仓</p>
             ) : (
               <div className="space-y-2">
-                {positions.map((pos, idx) => (
+                {safePositions.map((pos, idx) => (
                   <div key={idx} className="flex items-center justify-between p-3 border rounded">
                     <div>
                       <p className="font-medium">{pos.instrument_id}</p>
                       <p className="text-xs text-muted-foreground">
-                        {pos.direction === "long" ? "多" : "空"} {pos.volume}手 @ ¥{pos.avg_price}
+                        {pos.direction === "long" ? "多" : "空"} {pos.volume}手 @ ¥{(pos.avg_price || pos.open_price).toFixed(2)}
                       </p>
                     </div>
                     <div className="text-right">
@@ -195,14 +204,14 @@ export default function OperationsPage() {
       {/* 订单列表 */}
       <Card>
         <CardHeader>
-          <CardTitle>今日订单 ({orders.length})</CardTitle>
+          <CardTitle>今日订单 ({safeOrders.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {orders.length === 0 ? (
+          {safeOrders.length === 0 ? (
             <p className="text-muted-foreground text-sm">暂无订单</p>
           ) : (
             <div className="space-y-2">
-              {orders.map((order, idx) => (
+              {safeOrders.map((order, idx) => (
                 <div key={idx} className="flex items-center justify-between p-3 border rounded">
                   <div>
                     <p className="font-medium">{order.instrument_id}</p>
@@ -235,5 +244,6 @@ export default function OperationsPage() {
         </CardContent>
       </Card>
     </div>
+    </MainLayout>
   )
 }

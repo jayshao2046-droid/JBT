@@ -18,6 +18,8 @@ interface RealTimeRiskProps {
 }
 
 export function RealTimeRisk({ metrics }: RealTimeRiskProps) {
+  const safeMetrics = Array.isArray(metrics) ? metrics : []
+
   const getRiskColor = (status: string) => {
     if (status === "danger") {
       return { bg: "bg-red-500/20", text: "text-red-400", border: "border-red-500/30" }
@@ -37,7 +39,10 @@ export function RealTimeRisk({ metrics }: RealTimeRiskProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {metrics.map((metric, idx) => {
+        {safeMetrics.length === 0 ? (
+          <p className="text-sm text-muted-foreground">暂无风险数据</p>
+        ) :
+          safeMetrics.map((metric, idx) => {
           const color = getRiskColor(metric.status)
           const progressValue = typeof metric.value === "number" ? Math.min(metric.value, 100) : 0
 

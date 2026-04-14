@@ -4,10 +4,12 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import MainLayout from '@/components/layout/main-layout';
 
 export default function SettingsPage() {
   return (
-    <div className="space-y-6">
+    <MainLayout title="系统设置">
+      <div className="p-6 space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-white">系统设置</h1>
         <p className="text-gray-400 mt-2">配置交易平台参数</p>
@@ -126,5 +128,6 @@ export default function SettingsPage() {
         </TabsContent>
       </Tabs>
     </div>
+    </MainLayout>
   );
 }

@@ -15,14 +15,20 @@ export function useRiskControl() {
     try {
       setLoading(true)
       setError(null)
-      const [l1Res, l2Res, alertsRes] = await Promise.all([
-        simTradingApi.getRiskL1(),
-        simTradingApi.getRiskL2(),
-        simTradingApi.getRiskAlerts(),
+      await Promise.allSettled([
+        simTradingApi.getRiskL1().then(setL1Status).catch((e) => {
+          console.error("Failed to fetch L1 risk:", e)
+          setL1Status(null)
+        }),
+        simTradingApi.getRiskL2().then((res) => setL2Status(res.l2_status)).catch((e) => {
+          console.error("Failed to fetch L2 risk:", e)
+          setL2Status(null)
+        }),
+        simTradingApi.getRiskAlerts().then((res) => setAlerts(res.alerts)).catch((e) => {
+          console.error("Failed to fetch alerts:", e)
+          setAlerts([])
+        }),
       ])
-      setL1Status(l1Res)
-      setL2Status(l2Res.l2_status)
-      setAlerts(alertsRes.alerts)
     } catch (err) {
       setError(err instanceof Error ? err.message : "获取风控数据失败")
     } finally {

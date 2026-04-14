@@ -5,20 +5,27 @@ import { useSimTrading } from "@/hooks/use-sim-trading"
 import { useRiskControl } from "@/hooks/use-risk-control"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DollarSign, TrendingUp, Activity, AlertTriangle } from "lucide-react"
+import MainLayout from "@/components/layout/main-layout"
 
 export default function SimTradingOverviewPage() {
-  const { account, performance, positions, orders, loading: simLoading } = useSimTrading()
+  const { account, performance, positions, orders, loading: simLoading, refetch } = useSimTrading()
   const { l1Status, l2Status, loading: riskLoading } = useRiskControl()
+
+  // 防御性编程：确保数组类型
+  const safePositions = Array.isArray(positions) ? positions : []
+  const safeOrders = Array.isArray(orders) ? orders : []
 
   if (simLoading || riskLoading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-32" />
-          ))}
+      <MainLayout title="模拟交易" onRefresh={refetch}>
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-32" />
+            ))}
+          </div>
         </div>
-      </div>
+      </MainLayout>
     )
   }
 
@@ -50,9 +57,10 @@ export default function SimTradingOverviewPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      {/* KPI 卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <MainLayout title="模拟交易" onRefresh={refetch}>
+      <div className="p-6 space-y-6">
+        {/* KPI 卡片 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {kpiData.map((kpi, idx) => (
           <Card key={idx}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -86,14 +94,14 @@ export default function SimTradingOverviewPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>当前持仓 ({positions.length})</CardTitle>
+            <CardTitle>当前持仓 ({safePositions.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            {positions.length === 0 ? (
+            {safePositions.length === 0 ? (
               <p className="text-muted-foreground text-sm">暂无持仓</p>
             ) : (
               <div className="space-y-2">
-                {positions.slice(0, 5).map((pos, idx) => (
+                {safePositions.slice(0, 5).map((pos, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2 border rounded">
                     <div>
                       <p className="font-medium">{pos.instrument_id}</p>
@@ -115,14 +123,14 @@ export default function SimTradingOverviewPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>今日订单 ({orders.length})</CardTitle>
+            <CardTitle>今日订单 ({safeOrders.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            {orders.length === 0 ? (
+            {safeOrders.length === 0 ? (
               <p className="text-muted-foreground text-sm">暂无订单</p>
             ) : (
               <div className="space-y-2">
-                {orders.slice(0, 5).map((order, idx) => (
+                {safeOrders.slice(0, 5).map((order, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2 border rounded">
                     <div>
                       <p className="font-medium">{order.instrument_id}</p>
@@ -188,5 +196,6 @@ export default function SimTradingOverviewPage() {
         </CardContent>
       </Card>
     </div>
+    </MainLayout>
   )
 }
