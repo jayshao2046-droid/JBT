@@ -60,7 +60,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 设备 | 角色 | IP（内网） | IP（蒲公英） | 部署服务 |
 |------|------|-----------|-------------|---------|
 | MacBook | 开发/控制 | localhost | 172.16.3.136 | 全部开发环境 |
-| Mini | 数据+模拟交易 | 192.168.31.74 | 172.16.0.49 | data:8105, sim-trading:8101, sim-trading-web:3002 |
+| Mini | 数据+模拟交易 | 192.168.31.76 | 172.16.0.49 | data:8105, sim-trading:8101, sim-trading-web:3002 |
 | Air | 回测生产 | 192.168.31.245 | — | backtest:8103, backtest-web:3001 |
 | Studio | 决策+看板 | 192.168.31.142 | 172.16.1.130 | decision:8104, decision-web:3003, dashboard:8106 |
 | ~~ECS~~ | ❌ 已永久停用 | 47.103.36.144 | — | [修订 2026-04-12] ECS永久停用，全部ECS相关任务取消 |
@@ -702,13 +702,43 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ### 5.7 数据端预读投喂决策端
 
+- **任务编号：** TASK-0104（已建档，2026-04-14）
 - **归属服务：** data → decision
 - **前置条件：** `C0-1` 股票 bars 路由扩展 + `CB5` 动态 watchlist 分钟 K 已落地
 - **实施路径：**
-  1. data 在非交易时段预读 K 线、新闻、宏观与股票池 watchlist 数据。
-  2. decision 在开盘前拉取预读摘要，缩短盘中计算链路。
+  1. data 在非交易时段（21:00）预读 K 线、新闻、宏观与股票池 watchlist 数据。
+  2. decision 在开盘前（08:30）拉取预读摘要，缩短盘中计算链路。
   3. 股票研究中心每天 09:00 输出前夜报告，盘中依赖动态 watchlist 分钟 K 继续跟踪。
-- **实施阶段：** Phase C 后续 + Phase D 协同
+- **数据资产清单（15 个 collector）：**
+  - 市场：TushareDailyCollector、StockMinuteCollector、OverseasMinuteCollector
+  - 宏观/情绪：MacroCollector、SentimentCollector、CftcCollector、VolatilityCollector
+  - 新闻：NewsAPICollector、RSSCollector
+  - 衍生品：OptionsCollector、ForexCollector、ShippingCollector
+  - 深度：TqSdkCollector、TushareFullCollector、TushareFuturesCollector
+- **角色注入映射：**
+  - 研究员（deepcoder:14b）← 宏观/情绪/行业/CFTC 深度摘要
+  - L1 审核（qwen3:14b）← 核心 K 线摘要 + 关键事件
+  - L2 分析师（phi4-reasoning:14b）← 新闻摘要+情绪指数+波动率
+  - L3 在线（qwen-plus-latest）← 全量上下文（含前夜研究报告）
+- **Studio 本地 Ollama 模型配置（已确认落地，2026-04-14）：**
+  - `OLLAMA_RESEARCHER_MODEL=deepcoder:14b`
+  - `OLLAMA_AUDITOR_MODEL=qwen3:14b`
+  - `OLLAMA_ANALYST_MODEL=phi4-reasoning:14b`
+- **在线模型配置（已更新 Studio .env，2026-04-14）：**
+  - `ONLINE_MODEL_DEFAULT=qwen-plus-latest`（DashScope，¥2/百万输入 token）
+  - `ONLINE_MODEL_UPGRADE=qwen-max-latest`（DashScope，¥2.5/百万输入 token）
+  - `ONLINE_MODEL_BACKUP=qwen-plus-latest`
+  - `ONLINE_MODEL_DISPUTE=qwen-max-latest`
+- **费用基准（DashScope 官方定价 2026-04-14）：** TASK-0104 上线后约 ¥1.6/天 / ¥35/月（20 信号/天场景），高频满载约 ¥115/月，成本可控。
+- **分批实施（D0-D5）：**
+  - D0 数据结构设计（Architect 预审）
+  - D1 data 夜间调度器扩展
+  - D2 decision context_loader
+  - D3 prompt 模板更新
+  - D4 飞书前夜报告通知
+  - D5 健康检查与 SLA 告警
+- **当前状态：** A0 建档完成，待 Architect 预审 → Token 签发 → D1 实施
+- **实施阶段：** Phase D（Phase C 看板全部 locked 后启动）
 
 ---
 
