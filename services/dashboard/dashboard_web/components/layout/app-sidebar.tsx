@@ -54,6 +54,9 @@ const navItems: NavItem[] = [
     children: [
       { id: "bt-agents", label: "策略管理", href: "/backtest" },
       { id: "bt-operations", label: "回测详情", href: "/backtest/operations" },
+      { id: "bt-results", label: "回测结果", href: "/backtest/results" },
+      { id: "bt-review", label: "策略审查", href: "/backtest/review" },
+      { id: "bt-optimizer", label: "参数优化", href: "/backtest/optimizer" },
     ],
   },
   {
@@ -67,6 +70,7 @@ const navItems: NavItem[] = [
       { id: "dc-models", label: "模型与因子", href: "/decision/models" },
       { id: "dc-repository", label: "策略仓库", href: "/decision/repository" },
       { id: "dc-research", label: "研究中心", href: "/decision/research" },
+      { id: "dc-reports", label: "通知与日报", href: "/decision/reports" },
     ],
   },
   {
