@@ -5,31 +5,27 @@ import { useBacktest } from "@/hooks/use-backtest"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Cpu, HardDrive, Clock } from "lucide-react"
-import MainLayout from "@/components/layout/main-layout"
 
 export default function BacktestOverviewPage() {
-  const { strategies, jobs, systemStatus, loading, refetch } = useBacktest()
+  const { strategies, jobs, systemStatus, loading } = useBacktest()
 
   const safeStrategies = Array.isArray(strategies) ? strategies : []
   const safeJobs = Array.isArray(jobs) ? jobs : []
 
   if (loading) {
     return (
-      <MainLayout title="回测系统" onRefresh={refetch}>
-        <div className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-32" />
-            ))}
-          </div>
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
         </div>
-      </MainLayout>
+      </div>
     )
   }
 
   return (
-    <MainLayout title="回测系统" onRefresh={refetch}>
-      <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6">
       {/* 系统状态 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -119,6 +115,5 @@ export default function BacktestOverviewPage() {
         </CardContent>
       </Card>
     </div>
-    </MainLayout>
   )
 }

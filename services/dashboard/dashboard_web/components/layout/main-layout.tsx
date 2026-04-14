@@ -26,23 +26,16 @@ export default function MainLayout({
 }: MainLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
 
-  // Wait for client mount to avoid SSR/hydration mismatch
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
   // Check auth on mount (only client-side)
   useEffect(() => {
-    if (!mounted) return
     const user = localStorage.getItem("jbt_user")
     if (!user && pathname !== "/login") {
       router.push("/login")
     }
-  }, [mounted, pathname, router])
+  }, [pathname, router])
 
   // Close mobile menu on route change
   useEffect(() => {

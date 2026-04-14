@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { simTradingApi } from "@/lib/api/sim-trading"
-import { decisionApi } from "@/lib/api/decision"
+import { fetchHealth } from "@/lib/api/decision"
 import { dataApi } from "@/lib/api/data"
 import { backtestApi } from "@/lib/api/backtest"
 
@@ -24,7 +24,7 @@ export function useServiceStatus(intervalMs = 30000) {
         .catch(() => setStatuses((prev) => ({ ...prev, [name]: "error" })))
     }
     check("sim-trading", simTradingApi.getStatus())
-    check("decision", decisionApi.getHealth())
+    check("decision", fetchHealth())
     check("data", dataApi.getHealth())
     check("backtest", backtestApi.getHealth())
   }

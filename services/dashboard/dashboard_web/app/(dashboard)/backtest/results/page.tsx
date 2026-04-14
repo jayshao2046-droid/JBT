@@ -4,26 +4,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useBacktestResults } from "@/hooks/use-backtest-results"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
-import MainLayout from "@/components/layout/main-layout"
 
 export default function ResultsPage() {
-  const { results, loading, refetch } = useBacktestResults()
+  const { results, loading } = useBacktestResults()
 
   const safeResults = Array.isArray(results) ? results : []
 
   if (loading) {
     return (
-      <MainLayout title="回测结果" onRefresh={refetch}>
-        <div className="p-6 space-y-6">
-          <Skeleton className="h-96" />
-        </div>
-      </MainLayout>
+      <div className="p-6 space-y-6">
+        <Skeleton className="h-96" />
+      </div>
     )
   }
 
   return (
-    <MainLayout title="回测结果" onRefresh={refetch}>
-      <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>回测结果 ({safeResults.length})</CardTitle>
@@ -73,6 +69,5 @@ export default function ResultsPage() {
         </CardContent>
       </Card>
     </div>
-    </MainLayout>
   )
 }

@@ -9,7 +9,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { simTradingApi, type RiskPreset } from "@/lib/api/sim-trading"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
-import MainLayout from "@/components/layout/main-layout"
 
 export default function RiskPresetsPage() {
   const { toast } = useToast()
@@ -57,11 +56,9 @@ export default function RiskPresetsPage() {
 
   if (loading) {
     return (
-      <MainLayout title="风控预设" onRefresh={fetchPresets}>
-        <div className="p-6 space-y-6">
-          <Skeleton className="h-96" />
-        </div>
-      </MainLayout>
+      <div className="p-6 space-y-6">
+        <Skeleton className="h-96" />
+      </div>
     )
   }
 
@@ -79,8 +76,7 @@ export default function RiskPresetsPage() {
   }
 
   return (
-    <MainLayout title="风控预设" onRefresh={fetchPresets}>
-      <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6">
       <Tabs defaultValue="SHFE">
         <TabsList className="grid w-full grid-cols-6">
           {exchanges.map((ex) => (
@@ -169,6 +165,5 @@ export default function RiskPresetsPage() {
         ))}
       </Tabs>
     </div>
-    </MainLayout>
   )
 }

@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { useDashboardData } from "@/hooks/use-dashboard-data"
 import { useServiceStatus } from "@/hooks/use-service-status"
 import { useToast } from "@/hooks/use-toast"
-import MainLayout from "@/components/layout/main-layout"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { ChurnChart } from "@/components/dashboard/churn-chart"
 import { TodayTradingSummary } from "@/components/dashboard/today-trading-summary"
@@ -22,12 +21,12 @@ import { ManualOpenDialog } from "@/components/dashboard/manual-open-dialog"
 import { DisableSignalDialog } from "@/components/dashboard/disable-signal-dialog"
 import { TrendingUp, DollarSign, Activity, AlertTriangle, RefreshCw } from "lucide-react"
 import { simTradingApi } from "@/lib/api/sim-trading"
-import { decisionApi } from "@/lib/api/decision"
+import { reviewSignal } from "@/lib/api/decision"
 import type { Position, StrategySignal } from "@/lib/api/types"
 
 export default function DashboardPage() {
   const { toast } = useToast()
-  const { account, performance, risk, positions, signals, collectors, news, orders, loading, error, refetch, lastUpdate } =
+  const { account, performance, risk, positions, signals, collectors, news, orders, loading, error, refetch } =
     useDashboardData()
   const serviceStatuses = useServiceStatus()
 
@@ -123,7 +122,7 @@ export default function DashboardPage() {
 
   const handleDisableSignal = async (signal: StrategySignal, data: { reason: string; remarks: string }) => {
     try {
-      await decisionApi.disableSignal(signal.id, data.reason)
+      await reviewSignal({ decision_id: signal.id, action: "reject", reason: data.reason })
       toast({
         title: "信号已禁用",
         description: `已禁用信号 ${signal.instrument_id}`,
@@ -141,16 +140,14 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <MainLayout onRefresh={refetch} lastUpdate={lastUpdate}>
-        <div className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-32" />
-            ))}
-          </div>
-          <Skeleton className="h-96" />
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
         </div>
-      </MainLayout>
+        <Skeleton className="h-96" />
+      </div>
     )
   }
 
@@ -211,8 +208,7 @@ export default function DashboardPage() {
   ]
 
   return (
-    <MainLayout onRefresh={refetch} lastUpdate={lastUpdate}>
-      <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6">
         {/* 错误提示 */}
         {error && (
           <Card className="border-red-500/50 bg-red-500/10">
@@ -291,11 +287,11 @@ export default function DashboardPage() {
         {/* 持仓 + 信号 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <CurrentPositions
-            positions={positions}
+            positions={Array.isArray(positions) ? positions : []}
             onClose={(position) => setClosePositionDialog({ open: true, position })}
           />
           <StrategySignals
-            signals={signals}
+            signals={Array.isArray(signals) ? signals : []}
             onManualOpen={() => setManualOpenDialog(true)}
             onConfirmSignal={(signal) => setConfirmSignalDialog({ open: true, signal })}
             onDisableSignal={(signal) => setDisableSignalDialog({ open: true, signal })}
@@ -305,31 +301,30 @@ export default function DashboardPage() {
         {/* 风控 + 数据源 + 新闻 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <RealTimeRisk metrics={riskMetrics} />
-          <DataSourceStatus dataSources={collectors} />
-          <NewsList news={news} />
+          <DataSourceStatus dataSources={Array.isArray(collectors) ? collectors : []} />
+          <NewsList news={Array.isArray(news) ? news : []} />
         </div>
-      </div>
 
-      {/* Dialogs */}
-      <ManualOpenDialog open={manualOpenDialog} onOpenChange={setManualOpenDialog} onConfirm={handleManualOpen} />
-      <SignalConfirmDialog
-        open={confirmSignalDialog.open}
-        signal={confirmSignalDialog.signal}
-        onOpenChange={(open) => setConfirmSignalDialog({ open, signal: null })}
-        onConfirm={() => confirmSignalDialog.signal && handleConfirmSignal(confirmSignalDialog.signal)}
-      />
-      <ClosePositionDialog
-        open={closePositionDialog.open}
-        position={closePositionDialog.position}
-        onOpenChange={(open) => setClosePositionDialog({ open, position: null })}
-        onConfirm={(data) => closePositionDialog.position && handleClosePosition(closePositionDialog.position, data)}
-      />
-      <DisableSignalDialog
-        open={disableSignalDialog.open}
-        signal={disableSignalDialog.signal}
-        onOpenChange={(open) => setDisableSignalDialog({ open, signal: null })}
-        onConfirm={(data) => disableSignalDialog.signal && handleDisableSignal(disableSignalDialog.signal, data)}
-      />
-    </MainLayout>
-  )
-}
+        {/* Dialogs */}
+        <ManualOpenDialog open={manualOpenDialog} onOpenChange={setManualOpenDialog} onConfirm={handleManualOpen} />
+        <SignalConfirmDialog
+          open={confirmSignalDialog.open}
+          signal={confirmSignalDialog.signal}
+          onOpenChange={(open) => setConfirmSignalDialog({ open, signal: null })}
+          onConfirm={() => confirmSignalDialog.signal && handleConfirmSignal(confirmSignalDialog.signal)}
+        />
+        <ClosePositionDialog
+          open={closePositionDialog.open}
+          position={closePositionDialog.position}
+          onOpenChange={(open) => setClosePositionDialog({ open, position: null })}
+          onConfirm={(data) => closePositionDialog.position && handleClosePosition(closePositionDialog.position, data)}
+        />
+        <DisableSignalDialog
+          open={disableSignalDialog.open}
+          signal={disableSignalDialog.signal}
+          onOpenChange={(open) => setDisableSignalDialog({ open, signal: null })}
+          onConfirm={(data) => disableSignalDialog.signal && handleDisableSignal(disableSignalDialog.signal, data)}
+        />
+      </div>
+    )
+  }

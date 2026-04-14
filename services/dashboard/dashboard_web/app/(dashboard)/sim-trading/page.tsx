@@ -5,10 +5,9 @@ import { useSimTrading } from "@/hooks/use-sim-trading"
 import { useRiskControl } from "@/hooks/use-risk-control"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DollarSign, TrendingUp, Activity, AlertTriangle } from "lucide-react"
-import MainLayout from "@/components/layout/main-layout"
 
 export default function SimTradingOverviewPage() {
-  const { account, performance, positions, orders, loading: simLoading, refetch } = useSimTrading()
+  const { account, performance, positions, orders, loading: simLoading } = useSimTrading()
   const { l1Status, l2Status, loading: riskLoading } = useRiskControl()
 
   // 防御性编程：确保数组类型
@@ -17,15 +16,13 @@ export default function SimTradingOverviewPage() {
 
   if (simLoading || riskLoading) {
     return (
-      <MainLayout title="模拟交易" onRefresh={refetch}>
-        <div className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-32" />
-            ))}
-          </div>
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
         </div>
-      </MainLayout>
+      </div>
     )
   }
 
@@ -57,8 +54,7 @@ export default function SimTradingOverviewPage() {
   ]
 
   return (
-    <MainLayout title="模拟交易" onRefresh={refetch}>
-      <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6">
         {/* KPI 卡片 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {kpiData.map((kpi, idx) => (
@@ -196,6 +192,5 @@ export default function SimTradingOverviewPage() {
         </CardContent>
       </Card>
     </div>
-    </MainLayout>
   )
 }

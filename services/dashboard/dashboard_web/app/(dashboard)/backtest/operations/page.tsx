@@ -10,7 +10,6 @@ import { useBacktest } from "@/hooks/use-backtest"
 import { backtestApi } from "@/lib/api/backtest"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
-import MainLayout from "@/components/layout/main-layout"
 
 export default function OperationsPage() {
   const { strategies, loading, refetch } = useBacktest()
@@ -41,17 +40,14 @@ export default function OperationsPage() {
 
   if (loading) {
     return (
-      <MainLayout title="回测操作" onRefresh={refetch}>
-        <div className="p-6 space-y-6">
-          <Skeleton className="h-96" />
-        </div>
-      </MainLayout>
+      <div className="p-6 space-y-6">
+        <Skeleton className="h-96" />
+      </div>
     )
   }
 
   return (
-    <MainLayout title="回测操作" onRefresh={refetch}>
-      <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>发起回测</CardTitle>
@@ -96,6 +92,5 @@ export default function OperationsPage() {
         </CardContent>
       </Card>
     </div>
-    </MainLayout>
   )
 }

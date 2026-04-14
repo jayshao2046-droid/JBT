@@ -11,7 +11,6 @@ import { simTradingApi } from "@/lib/api/sim-trading"
 import { useToast } from "@/hooks/use-toast"
 import { ALL_CONTRACTS } from "@/lib/contracts"
 import { Skeleton } from "@/components/ui/skeleton"
-import MainLayout from "@/components/layout/main-layout"
 
 export default function OperationsPage() {
   const { account, positions, orders, loading, refetch } = useSimTrading()
@@ -52,17 +51,14 @@ export default function OperationsPage() {
 
   if (loading) {
     return (
-      <MainLayout title="交易操作" onRefresh={refetch}>
-        <div className="p-6 space-y-6">
-          <Skeleton className="h-96" />
-        </div>
-      </MainLayout>
+      <div className="p-6 space-y-6">
+        <Skeleton className="h-96" />
+      </div>
     )
   }
 
   return (
-    <MainLayout title="交易操作" onRefresh={refetch}>
-      <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6">
       {/* 账户信息 */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -244,6 +240,5 @@ export default function OperationsPage() {
         </CardContent>
       </Card>
     </div>
-    </MainLayout>
   )
 }

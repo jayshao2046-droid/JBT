@@ -5,21 +5,18 @@ import { useRiskControl } from "@/hooks/use-risk-control"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, XCircle, AlertTriangle } from "lucide-react"
-import MainLayout from "@/components/layout/main-layout"
 
 export default function IntelligencePage() {
-  const { l1Status, l2Status, alerts, loading, refetch } = useRiskControl()
+  const { l1Status, l2Status, alerts, loading } = useRiskControl()
 
   // 防御性编程：确保数组类型
   const safeAlerts = Array.isArray(alerts) ? alerts : []
 
   if (loading) {
     return (
-      <MainLayout title="风控智能" onRefresh={refetch}>
-        <div className="p-6 space-y-6">
-          <Skeleton className="h-96" />
-        </div>
-      </MainLayout>
+      <div className="p-6 space-y-6">
+        <Skeleton className="h-96" />
+      </div>
     )
   }
 
@@ -35,8 +32,7 @@ export default function IntelligencePage() {
   ]
 
   return (
-    <MainLayout title="风控智能" onRefresh={refetch}>
-      <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6">
       {/* L1 风控检查 */}
       <Card>
         <CardHeader>
@@ -162,6 +158,5 @@ export default function IntelligencePage() {
         </Card>
       )}
     </div>
-    </MainLayout>
   )
 }

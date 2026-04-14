@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { simTradingApi } from "@/lib/api/sim-trading"
-import { decisionApi } from "@/lib/api/decision"
+import { fetchSignals } from "@/lib/api/decision"
 import { dataApi } from "@/lib/api/data"
 import type {
   AccountInfo,
@@ -37,7 +37,18 @@ export function useDashboardData() {
       simTradingApi.getRiskL1().then(setRisk).catch(() => setRisk(null)),
       simTradingApi.getPositions().then(setPositions).catch(() => setPositions([])),
       simTradingApi.getOrders().then(setOrders).catch(() => setOrders([])),
-      decisionApi.getSignals().then(setSignals).catch(() => setSignals([])),
+      fetchSignals().then((data) => {
+        const adapted = data.map((s, idx) => ({
+          id: s.decision_id,
+          strategy_name: s.strategy_id,
+          instrument_id: s.symbol || s.strategy_id,
+          direction: (s.action === "long" ? "long" : "short") as "long" | "short",
+          confidence: s.confidence,
+          status: "pending" as const,
+          timestamp: s.generated_at,
+        }))
+        setSignals(adapted)
+      }).catch(() => setSignals([])),
       dataApi.getCollectors().then(setCollectors).catch(() => setCollectors([])),
       dataApi.getNews().then(setNews).catch(() => setNews([])),
     ])

@@ -321,8 +321,11 @@ export function AnimatedGridBg() {
     <canvas
       ref={canvasRef}
       aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-0"
-      style={{ display: "block" }}
+      className="pointer-events-none fixed inset-0 z-0 opacity-0 animate-fade-in"
+      style={{
+        display: "block",
+        animation: "fadeIn 0.8s ease-in forwards"
+      }}
     />
   )
 }
