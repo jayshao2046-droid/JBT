@@ -61,6 +61,8 @@ class NotifyType(enum.Enum):
     NOTIFY = "NOTIFY"
     FACTOR = "FACTOR"
     WATCHLIST = "WATCHLIST"
+    PREREAD_DONE = "PREREAD_DONE"
+    PREREAD_FAIL = "PREREAD_FAIL"
 
 
 @dataclass
@@ -123,6 +125,8 @@ def _webhook_for_type(notify_type: NotifyType) -> str:
         return _first_nonempty_env(FEISHU_TRADE_URL_KEY, FEISHU_TRADING_URL_KEY, FEISHU_INFO_URL_KEY, FEISHU_ALERT_URL_KEY)
     if notify_type == NotifyType.WATCHLIST:
         return _first_nonempty_env(FEISHU_INFO_URL_KEY, FEISHU_NEWS_URL_KEY, FEISHU_ALERT_URL_KEY)
+    if notify_type in (NotifyType.PREREAD_DONE, NotifyType.PREREAD_FAIL):
+        return _first_nonempty_env(FEISHU_TRADE_URL_KEY, FEISHU_TRADING_URL_KEY, FEISHU_ALERT_URL_KEY)
     return _first_nonempty_env(FEISHU_INFO_URL_KEY, FEISHU_NEWS_URL_KEY, FEISHU_ALERT_URL_KEY)
 
 

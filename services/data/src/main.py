@@ -206,6 +206,13 @@ try:
 except ImportError:
     pass  # 开发环境可能未安装所有依赖
 
+# 注册决策端上下文投喂路由
+try:
+    from api.routes.context_route import router as context_router
+    app.include_router(context_router)
+except ImportError:
+    pass  # 开发环境可能未安装所有依赖
+
 
 class ParsedTimeRange(NamedTuple):
     timestamp: pd.Timestamp

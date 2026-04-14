@@ -1204,6 +1204,93 @@ def job_sla_reset(config: dict[str, Any]) -> None:
         logger.error("❌ SLA 重置异常:\n%s", traceback.format_exc())
 
 
+def job_preread_daily(config: dict[str, Any]) -> None:
+    """夜间预读投喂 — 21:00 生成四角色摘要并推送通知。"""
+    try:
+        logger.info("▶ 开始执行: 夜间预读投喂")
+        import os
+        from pathlib import Path
+        from src.scheduler.preread_generator import PrereadGenerator
+
+        storage_root = os.environ.get(
+            "DATA_STORAGE_ROOT",
+            str(Path(__file__).resolve().parents[3] / "runtime" / "data"),
+        )
+        generator = PrereadGenerator(storage_root=storage_root)
+        result = generator.generate_daily_snapshot()
+
+        # 发送通知
+        d = _get_dispatcher()
+        if d:
+            try:
+                from src.notify.dispatcher import DataEvent, NotifyType
+                if result["ready_flag"]:
+                    # 成功通知
+                    d.dispatch(DataEvent(
+                        event_code="preread_done",
+                        notify_type=NotifyType.PREREAD_DONE,
+                        title="✅ 夜间预读投喂完成",
+                        body_md=(
+                            f"**夜间预读投喂已完成**\n"
+                            f"生成时间: {result['generated_at']}\n"
+                            f"状态: 就绪\n"
+                            f"错误数: {len(result['errors'])}"
+                        ),
+                        body_rows=[
+                            ("生成时间", result["generated_at"]),
+                            ("状态", "就绪"),
+                            ("错误数", str(len(result["errors"]))),
+                        ],
+                        source_name="preread_generator",
+                        channels={"feishu"},
+                        bypass_quiet_hours=True,
+                    ))
+                    logger.info("✅ 夜间预读投喂完成")
+                else:
+                    # 失败通知
+                    d.dispatch(DataEvent(
+                        event_code="preread_fail",
+                        notify_type=NotifyType.PREREAD_FAIL,
+                        title="⚠️ 夜间预读投喂部分失败",
+                        body_md=(
+                            f"**夜间预读投喂部分失败**\n"
+                            f"生成时间: {result['generated_at']}\n"
+                            f"状态: 降级\n"
+                            f"错误数: {len(result['errors'])}\n"
+                            f"错误详情:\n" + "\n".join(f"- {e}" for e in result["errors"][:5])
+                        ),
+                        body_rows=[
+                            ("生成时间", result["generated_at"]),
+                            ("状态", "降级"),
+                            ("错误数", str(len(result["errors"]))),
+                        ],
+                        source_name="preread_generator",
+                        channels={"feishu", "email"},
+                        bypass_quiet_hours=True,
+                    ))
+                    logger.warning("⚠️ 夜间预读投喂部分失败: %d 错误", len(result["errors"]))
+            except Exception as exc:
+                logger.error("通知发送失败: %s", exc)
+    except Exception:
+        logger.error("❌ 夜间预读投喂异常:\n%s", traceback.format_exc())
+        # 发送失败告警
+        d = _get_dispatcher()
+        if d:
+            try:
+                from src.notify.dispatcher import DataEvent, NotifyType
+                d.dispatch(DataEvent(
+                    event_code="preread_fail",
+                    notify_type=NotifyType.PREREAD_FAIL,
+                    title="❌ 夜间预读投喂失败",
+                    body_md=f"**夜间预读投喂失败**\n错误: {traceback.format_exc()[-200:]}",
+                    source_name="preread_generator",
+                    channels={"feishu", "email"},
+                    bypass_quiet_hours=True,
+                ))
+            except Exception:
+                pass
+
+
 def job_daily_reset(config: dict[str, Any]) -> None:
     """每日统计重置 — 00:00 清零当日计数器。"""
     n = _get_notifier(config)
@@ -1538,6 +1625,11 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
     scheduler.add_job(
         job_news_push_batch, IntervalTrigger(minutes=30),
         args=[config], id="news_push_batch", name="新闻批量推送",
+    )
+    # 夜间预读投喂: 每日 21:00
+    scheduler.add_job(
+        job_preread_daily, CronTrigger(hour=21, minute=0),
+        args=[config], id="preread_daily", name="夜间预读投喂",
     )
 
     logger.info("=" * 60)
