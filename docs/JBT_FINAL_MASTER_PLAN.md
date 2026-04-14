@@ -17,9 +17,9 @@
 | backtest | `████████████` **100%** | ✅ 生产运行中 | Round 2 安全加固完成，维护态 |
 | sim-trading | `███████████░` **90%** | ✅ 待开盘CTP验证 | Phase B全闭环；CS1-S容灾交接已完成；等待正式交易日验证 |
 | decision | `████████████` **99%** | ✅ Phase C 全闭环 | CK2/CK3因子同步+TASK-0025 SimNow备用方案已完成；仅剩生产验证 |
-| dashboard | `███░░░░░░░░░` **25%** | 🟡 进行中 | TASK-0099/0100 locked；TASK-0101 Claude执行中；TASK-0102/0103 token active 排队中 |
+| dashboard | `███████████░` **98%** | 🟡 进行中 | TASK-0106 B进行中（strategy-import路径+optimizer清理+lockback+Studio同步）|
 | live-trading | `░░░░░░░░░░░░` **0%** | ⏳ 后置 | 等待sim稳定运行2~3月后评估 |
-| **整体** | `███████████░` **~94%** | **Phase C 全闭环 + Phase F 进行中** | **TASK-0084/0025 完成；dashboard TASK-0099/0100 locked；TASK-0101 进行中** |
+| **整体** | `███████████░` **~97%** | **Phase C 全闭环 + Phase F 收口中** | **TASK-0106 B~E 进行中；dashboard 100% 完成后 Phase F 正式闭环** |
 
 > **更新规则：** 每次 Atlas 更新治理文件时同步刷新本表格和百分比。
 
@@ -55,15 +55,20 @@
 
 JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1 个治理层。目标是从 legacy J_BotQuant 单体系统迁移到完全隔离、可独立部署、API-first 的微服务架构。
 
-### 设备拓扑（冻结）
+### 设备拓扑（冻结）[修订 2026-04-14]
+
+> **[修订 2026-04-14] 运行态四设备架构正式冻结为 Mini / Studio / Alienware / Air；MacBook 仅保留开发/控制，不计入运行态四设备。**
 
 | 设备 | 角色 | IP（内网） | IP（蒲公英） | 部署服务 |
 |------|------|-----------|-------------|---------|
 | MacBook | 开发/控制 | localhost | 172.16.3.136 | 全部开发环境 |
-| Mini | 数据+模拟交易 | 192.168.31.76 | 172.16.0.49 | data:8105, sim-trading:8101, sim-trading-web:3002 |
+| Mini | 数据源+情报落库存储+快速投喂（现网 sim-trading 仍部署于此） | 192.168.31.76 | 172.16.0.49 | data:8105, sim-trading:8101, sim-trading-web:3002 |
 | Air | 回测生产 | 192.168.31.245 | — | backtest:8103, backtest-web:3001 |
-| Studio | 决策+看板 | 192.168.31.142 | 172.16.1.130 | decision:8104, decision-web:3003, dashboard:8106 |
+| Studio | 决策/开发主控 | 192.168.31.142 | 172.16.1.130 | decision:8104, decision-web:3003, dashboard:8106 |
+| Alienware | Windows 交易端+情报研究员节点 | 192.168.31.224 | — | Windows 官方交易软件（24h）、qwen3:14b |
 | ~~ECS~~ | ❌ 已永久停用 | 47.103.36.144 | — | [修订 2026-04-12] ECS永久停用，全部ECS相关任务取消 |
+
+> **[修订 2026-04-14] 关键过渡事实：** 当前 JBT 已部署的 sim-trading 容器/API 仍在 Mini；Alienware 上的 Windows 交易端是新的目标架构与交易软件承载面，但不等于 JBT 的 sim-trading 服务已经迁移完成。任何把交易执行正式切换到 Alienware 的服务级改造，都必须后续单独建任务、预审、白名单、Token。
 
 ### 端口分配（冻结）
 
@@ -242,7 +247,17 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **当前活跃：**
 - 🟡 TASK-0106：全端功能强化（API 对齐检查、显示完整性修复、空状态处理、API 路由对齐）
 
-> **[修订 2026-04-14] Phase F 全闭环。25 个页面全部上线，pnpm build 28/28 通过，Studio 已部署，4 端 API proxy 全通。剩余 2% 为 TASK-0106 功能强化（确保零 mock，显示与后端实际数据 100% 对齐）。**
+**TASK-0106 子任务清单 [修订 2026-04-15]：**
+
+| 子任务 | 内容 | 文件 | 状态 |
+|-------|------|------|------|
+| A | decision/backtest API路由对齐+兼容层 | decision.ts/backtest.ts/evening-rotation-plan.tsx/hooks | ✅ commit a741ed3 |
+| B | strategy-import.tsx 路径+请求体修复（改为YAML导入表单，调 `/api/v1/import/dashboard`） | strategy-import.tsx | 🟡 进行中 |
+| C | optimizer-panel.tsx 路径一致性清理 | optimizer-panel.tsx | ⏳ 排队 |
+| D | pnpm build 28/28 验证 + ATLAS_PROMPT/总计划更新 + TASK-0106 lockback | ATLAS_PROMPT.md + 本文件 | ⏳ 排队 |
+| E | git push → origin/main + Studio SSH 同步 + 容器重启验证 | — | ⏳ 待 Jay.S 确认 |
+
+> **[修订 2026-04-15] 看板全量完成目标：TASK-0106 全 5 个子任务完成后，dashboard 进度升至 100%，Phase F 正式闭环，独立 commit×5，两端同步。token: tok-49b26cc4（active，expires ~7.7h）**
 
 ### 2.6 实盘交易 live-trading — 0%
 
@@ -500,9 +515,9 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 > **[修订 2026-04-13] CF1' LLM Pipeline：**
 > - **CF1'**：✅ 已完成 → TASK-0083 LLM Pipeline集成+研究中心auto_backtest+Bug Fix, Atlas复核通过 [2026-04-13]
-> - 架构：Studio M2 Max + BotQuantSSD 1TB，3×14B Ollama 模型串行流水线
-> - 模型：deepcoder:14b (策略研究 30.7tok/s) → qwen3:14b (审核校验 29.4tok/s) → phi4-reasoning:14b (数据分析 26.2tok/s)
-> - 约束：`keep_alive:0` 每次调用后即时卸载，`OLLAMA_NUM_PARALLEL=1`，串行流水线约 110s/短提示词、真实场景 3-5min
+> - 架构：Mini 同源投喂 + Alienware 研究员报告 + Studio 决策/开发主控 的协同链路
+> - 本地模型冻结：Studio = deepcoder:14b（策略开发 / 因子挖掘）+ phi4-reasoning:14b（盘中门控 / 快速分析）；Alienware = qwen3:14b（研究报告生成）
+> - 约束：不再沿用“Studio 3×14B 串行流水线”口径；Alienware 负责输出两份格式化报告（Studio / Jay.S），Studio 消费 Mini 投喂数据与研究报告继续进入双沙箱 / 人工复核链路
 
 #### CS 容灾与断联接管
 
@@ -687,47 +702,57 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
   3. 各服务临时看板优先在 decision_web / backtest_web 内落地扩容页面；聚合 dashboard 最后统一收口。
 - **实施阶段：** Phase C + Phase F
 
-### 5.6 本地模型集成（Studio 3×14B Ollama 串行流水线）[修订 2026-04-14]
+### 5.6 本地模型集成（Studio + Alienware 协同架构）[修订 2026-04-14]
 
-- **归属服务：** decision（LLM Pipeline）
+- **归属服务：** decision（LLM Pipeline）+ Alienware 研究协同节点
 - **前置条件：** 研究中心与口头策略通道完成基础接线
-- **硬件基平：** Studio M2 Max, 32GB 统一内存, 12核 CPU, 38核 GPU; BotQuantSSD 1TB 外置存储
-- **模型部署：** `OLLAMA_MODELS=/Volumes/BotQuantSSD/ollama_models`, 3 个 14B 模型已下载 (~26GB)
-- **实施路径：**
-  1. **deepcoder:14b**（策略研究员）：将飞书口头策略转译为结构化策略意图、选股逻辑和因子建议，包括生成 YAML 策略文件。延迟特征：深度思考链 ~175s，30.7 tok/s。
-  2. **qwen3:14b**（审核员）：对生成的策略 YAML 进行完整性、风控参数合理性、因子可用性校验。延迟特征：~13.5s，29.4 tok/s。
-  3. **phi4-reasoning:14b**（数据分析师）：基于历史回测结果和市场数据进行量化分析、风险评估和优化建议。延迟特征：~49s，26.2 tok/s。
-  4. 研究中心再把模型生成结果送入双沙箱回测、调优和人工复核链路。
-- **内存管理：** 32GB RAM 无法同时加载 3×14B，采用串行流水线：`keep_alive:0` 每次调用后立即卸载，`OLLAMA_NUM_PARALLEL=1`，模型切换开销 ~10-20s
-- **延迟预算：** 单次全流水线短提示词 ~110s，真实场景（完整策略研究+审核+分析）~3-5min
-- **现有资产：** `src/model/router.py` 骨架已存在；Ollama base URL `http://192.168.31.142:11434`
-- **实施阶段：** Phase C CF1' — TASK-0081 Token 已签发，Claude 执行中
+- **运行态冻结：** 四设备架构固定为 Mini / Studio / Alienware / Air；MacBook 仅保留开发/控制，不计入运行态四设备。
+- **Studio 定位：** 决策/开发主控节点；本地常驻模型冻结为：
+  1. **deepcoder:14b**：策略开发 / 因子挖掘 / 研究结果结构化转译。
+  2. **phi4-reasoning:14b**：盘中门控 / 快速分析 / 读取 Mini 投喂数据与 Alienware 研究报告。
+  3. 不再把 `qwen3:14b` 记为 Studio 本地常驻模型。
+- **Alienware 定位：** Windows 交易端 + 情报研究员节点（192.168.31.224）；当前只保留一个本地模型 `qwen3:14b`，不再在 Alienware 上记录 deepcoder / phi4。
+- **Mini 定位：** 数据源 + 情报落库存储 + 快速投喂节点；负责采集、预读、存放研究员报告和投喂包，并向 Studio 与 Alienware 提供同源数据。
+- **Alienware 承担：**
+  1. 读取 Mini 的采集 / 预读 / 研究投喂数据，生成两份格式化研究报告：一份给 Studio，一份给 Jay.S。
+  2. 承载期货公司官方 Windows 交易软件，作为 24h 在线主机。
+- **关键过渡事实：**
+  1. 当前 JBT 已部署的 sim-trading 容器/API 仍在 Mini，这是现网事实。
+  2. Alienware 上的 Windows 交易端是新的目标架构与交易软件承载面，但不等于 JBT 的 sim-trading 服务已经迁移完成。
+  3. 任何把交易执行正式切换到 Alienware 的服务级改造，都必须后续单独建任务、预审、白名单、Token，不得把本次规划同步误读为代码已切换。
+- **实施阶段：** 当前仅冻结治理与规划口径；后续若需调整 decision 本地模型装载、研究路由或交易执行承载面，均需独立任务。
 
-### 5.7 数据端预读投喂决策端
+### 5.7 数据端预读投喂决策端 [修订 2026-04-14]
 
 - **任务编号：** TASK-0104（已建档，2026-04-14）
-- **归属服务：** data → decision
+- **归属服务：** data → decision；Alienware 为研究协同节点，不改写服务边界
 - **前置条件：** `C0-1` 股票 bars 路由扩展 + `CB5` 动态 watchlist 分钟 K 已落地
+- **Mini 节点职责：** 作为“数据源 + 情报落库存储 + 快速投喂节点”，负责采集、预读、存放研究员报告和投喂包，并向 Studio 与 Alienware 提供同源数据。
 - **实施路径：**
-  1. data 在非交易时段（21:00）预读 K 线、新闻、宏观与股票池 watchlist 数据。
-  2. decision 在开盘前（08:30）拉取预读摘要，缩短盘中计算链路。
-  3. 股票研究中心每天 09:00 输出前夜报告，盘中依赖动态 watchlist 分钟 K 继续跟踪。
+  1. Mini 在非交易时段（21:00）预读 K 线、新闻、宏观、情绪和股票池 watchlist 数据，生成统一投喂包并落库。
+  2. Mini 在开盘前与盘中同时向 Alienware 与 Studio 提供同源数据；Studio 不再假定自己本地承担完整三模型串行研究。
+  3. Alienware 读取 Mini 的采集 / 预读 / 研究投喂数据，由 `qwen3:14b` 生成两份格式化研究报告：一份给 Studio，一份给 Jay.S。
+  4. Studio 读取 Mini 投喂包与 Alienware 报告，由 `phi4-reasoning:14b` 承担盘中门控 / 快速分析，由 `deepcoder:14b` 承担策略开发 / 因子挖掘与结构化落地。
+- **研究范围冻结：**
+  1. 期货优先，只跟踪当前已有策略覆盖的品种，重点关注内外盘突发和实时关联消息。
+  2. 股票只分析策略筛出的 30 只股票池，不在池内的不分析。
+  3. 搜索 / 外部信息在研究环节中主要作为“排除项增强”，负面或不确定信息权重提高，不作为无条件加分项。
 - **数据资产清单（15 个 collector）：**
   - 市场：TushareDailyCollector、StockMinuteCollector、OverseasMinuteCollector
   - 宏观/情绪：MacroCollector、SentimentCollector、CftcCollector、VolatilityCollector
   - 新闻：NewsAPICollector、RSSCollector
   - 衍生品：OptionsCollector、ForexCollector、ShippingCollector
   - 深度：TqSdkCollector、TushareFullCollector、TushareFuturesCollector
-- **角色注入映射：**
-  - 研究员（deepcoder:14b）← 宏观/情绪/行业/CFTC 深度摘要
-  - L1 审核（qwen3:14b）← 核心 K 线摘要 + 关键事件
-  - L2 分析师（phi4-reasoning:14b）← 新闻摘要+情绪指数+波动率
-  - L3 在线（qwen-plus-latest）← 全量上下文（含前夜研究报告）
-- **Studio 本地 Ollama 模型配置（已确认落地，2026-04-14）：**
-  - `OLLAMA_RESEARCHER_MODEL=deepcoder:14b`
-  - `OLLAMA_AUDITOR_MODEL=qwen3:14b`
-  - `OLLAMA_ANALYST_MODEL=phi4-reasoning:14b`
-- **在线模型配置（已更新 Studio .env，2026-04-14）：**
+- **节点模型映射（治理冻结）：**
+  - Mini 投喂包 → Alienware `qwen3:14b` → Studio / Jay.S 双报告
+  - Mini 投喂包 → Studio `phi4-reasoning:14b` → 盘中门控 / 快速分析
+  - Mini 投喂包 + 研究报告 → Studio `deepcoder:14b` → 策略开发 / 因子挖掘
+  - 在线模型 `qwen-plus-latest / qwen-max-latest` 只作为上层扩展能力，不改变本地模型冻结口径
+- **Studio + Alienware 节点模型冻结（规划口径，2026-04-14）：**
+  - Studio：`OLLAMA_RESEARCHER_MODEL=deepcoder:14b`
+  - Studio：`OLLAMA_ANALYST_MODEL=phi4-reasoning:14b`
+  - Alienware：`OLLAMA_AUDITOR_MODEL=qwen3:14b`
+- **在线模型配置（扩展能力，2026-04-14）：**
   - `ONLINE_MODEL_DEFAULT=qwen-plus-latest`（DashScope，¥2/百万输入 token）
   - `ONLINE_MODEL_UPGRADE=qwen-max-latest`（DashScope，¥2.5/百万输入 token）
   - `ONLINE_MODEL_BACKUP=qwen-plus-latest`
@@ -736,9 +761,9 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 - **分批实施（D0-D5）：**
   - D0 数据结构设计（Architect 预审）
   - D1 data 夜间调度器扩展
-  - D2 decision context_loader
-  - D3 prompt 模板更新
-  - D4 飞书前夜报告通知
+  - D2 Mini → Studio / Alienware 双投喂接口
+  - D3 Alienware 研究报告模板与排除项增强
+  - D4 Studio 消费双报告 + Jay.S 报告通知
   - D5 健康检查与 SLA 告警
 - **当前状态：** A0 建档完成，待 Architect 预审 → Token 签发 → D1 实施
 - **实施阶段：** Phase D（Phase C 看板全部 locked 后启动）
@@ -749,7 +774,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ### 6.1 模拟交易 Agent
 
-**当前状态：** Phase B 基线闭环；当前等待开盘验证，并新增容灾交接协同待拆批
+**当前状态：** Phase B 基线闭环；当前等待开盘验证，并冻结“Mini 现网部署 + Alienware 目标承载面”过渡口径
 **开工前必读：**
 1. `WORKFLOW.md`
 2. `docs/prompts/公共项目提示词.md`
@@ -769,6 +794,9 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 **交接要点：**
 - SimNow 凭证只通过 `.env` 运行时注入，绝不写入 Git
 - Mini 是模拟交易主机(172.16.0.49:8101)，ECS 暂停
+- 当前 JBT 已部署的 sim-trading 容器/API 仍在 Mini，这是现网事实
+- Alienware 承载期货公司官方 Windows 交易软件与研究员节点，但不等于 sim-trading 服务已迁移
+- 若后续要把交易执行正式切到 Alienware，必须另建任务、预审、白名单、Token
 - 所有 API 调用只通过 Mini 蒲公英，不通过 ECS
 - MD 24h 保活，TD 仅交易时段
 - 风控规则必须从 guards.py emit_alert 走 dispatcher → feishu/email
@@ -777,7 +805,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ### 6.2 决策 Agent
 
-**当前状态：** Phase C 全闭环 + TASK-0083 LLM集成/因子同步/Bug修复 Atlas复核通过；Studio 3×14B Ollama 已部署
+**当前状态：** Phase C 全闭环 + TASK-0083 LLM集成/因子同步/Bug修复 Atlas复核通过；Studio + Alienware 协同研究/决策口径已冻结
 **开工前必读：**
 1. `WORKFLOW.md`
 2. `docs/prompts/公共项目提示词.md`
@@ -800,12 +828,15 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 - ✅ CS1 本地 Sim 容灾引擎 (TASK-0076)
 - ✅ 看板扩容 7+3+3 页面 (TASK-0074+TASK-0079)
 - ✅ TASK-0040/CA7 PBO CSCV 实现 (TASK-0075)
-- ✅ CF1' LLM Pipeline 三模型串行流水线 (TASK-0083, Atlas复核通过)
+- ✅ CF1' LLM Pipeline 基线已完成（TASK-0083, Atlas复核通过）；2026-04-14 起按“Studio=deepcoder+phi4 / Alienware=qwen3 双报告”口径运行
 - ✅ Factor Sync 共享因子基础框架 (TASK-0083, shared/python-common/factors/)
 - ✅ Bug Fix: SignalDispatcher FIFO + ctp_disconnect lock (TASK-0083)
 
 **交接要点：**
 - 自动研究主路径固定在 decision 双沙箱内部完成；backtest 端只承担人工二次回测与审核确认
+- Studio 本地常驻模型冻结为 `deepcoder:14b` + `phi4-reasoning:14b`；`qwen3:14b` 改记 Alienware 研究员节点，不再记为 Studio 本地常驻
+- decision 侧默认读取 Mini 同源投喂数据 + Alienware 双报告；Studio 本地主要承担门控、快速分析、策略开发与因子挖掘
+- 研究范围冻结：期货只跟踪已有策略覆盖品种；股票只分析 30 只股票池；搜索/外部信息只作排除项增强
 - 策略调优完成后必须先进入 backtest 人工复核，再允许进入 `pending_execution`
 - 飞书只接收口头策略需求；正式 YAML 仅允许邮件标准格式或看板导入
 - 研究中心若自研因子，必须同步到 backtest 端并通过版本/hash 校验后方可正式使用
@@ -813,7 +844,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ### 6.3 数据 Agent
 
-**当前状态：** system 级迁移基线已闭环 + Phase C 股票供数协同已完成（C0-1 + CB5 投产）
+**当前状态：** system 级迁移基线已闭环 + Phase C 股票供数协同已完成（C0-1 + CB5 投产）；Mini → Studio / Alienware 同源投喂口径已冻结
 **开工前必读：**
 1. `WORKFLOW.md`
 2. `docs/prompts/公共项目提示词.md`
@@ -834,6 +865,8 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 **交接要点：**
 - Mini 是数据主机（172.16.0.49:8105），`~/jbt-data/` 为数据根目录
+- Mini 当前固定为“数据源 + 情报落库存储 + 快速投喂节点”，除供数外还负责存放研究员报告与投喂包
+- Mini 需向 Studio 与 Alienware 提供同源数据，避免两端各自形成第二套研究输入源
 - 21 个采集器文件在 `src/collectors/`，涵盖 tqsdk/tushare/akshare/rss/news_api/macro/sentiment 等
 - `stock_minute_collector.py` 已存在，当前 `STOCK_MINUTE_ENABLED` 默认关闭；Phase C 要求切到“按 watchlist 动态采集”而非全量轮询
 - 股票日线采集与 stock_basic 能力已存在，当前缺的是 bars API 路由层和调度模式切换
@@ -1068,7 +1101,7 @@ dashboard 聚合看板 ──> 继续后置，待 decision/backtest/data 的 Pha
 
 1. **6 个服务全部可独立启动、构建、部署**
 2. **6 个服务全部有完整契约在 `shared/contracts/`**
-3. **Mini/Studio/Air 三端全部通过 docker-compose.dev.yml 部署**
+3. **Mini / Studio / Air 三个 JBT 服务部署节点通过 docker-compose.dev.yml 部署，Alienware 作为 Windows 交易端 / 研究节点保持独立在线**
 4. **legacy J_BotQuant 全部进程停止，无 cron/launchctl 残留**
 5. **决策→模拟交易→实盘交易 信号链路完整闭环**
 6. **数据端 24h 采集无中断**
