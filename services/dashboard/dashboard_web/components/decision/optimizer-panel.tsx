@@ -17,6 +17,8 @@ export function OptimizerPanel() {
       setOptimizing(true)
       setResult(null)
 
+      // 后端路由: POST /api/v1/optimizer/run (prefix /api/v1/optimizer + /run)
+      // 代理: /api/decision/api/v1/optimizer/run → http://8104/api/v1/optimizer/run
       const res = await fetch("/api/decision/api/v1/optimizer/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
