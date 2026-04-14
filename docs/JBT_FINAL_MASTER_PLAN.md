@@ -9,17 +9,17 @@
 
 ---
 
-## 📊 实时进度总览 [修订 2026-04-13]
+## 📊 实时进度总览 [修订 2026-04-15]
 
 | 服务 | 进度 | 状态 | 当前焦点 |
 |------|------|------|---------|
-| data | `████████████` **100%** | ✅ 生产运行中 | Round 1 收口完成，维护态 |
+| data | `████████████` **100%** | ✅ 生产运行中 | Round 1 收口完成；TASK-0104-D1 预读系统已部署（Mini 21:00 自动生效） |
 | backtest | `████████████` **100%** | ✅ 生产运行中 | Round 2 安全加固完成，维护态 |
-| sim-trading | `███████████░` **90%** | ✅ 待开盘CTP验证 | Phase B全闭环；CS1-S容灾交接已完成；等待正式交易日验证 |
-| decision | `████████████` **99%** | ✅ Phase C 全闭环 | CK2/CK3因子同步+TASK-0025 SimNow备用方案已完成；仅剩生产验证 |
-| dashboard | `████████████` **100%** | ✅ Phase F 闭环 | TASK-0106 全部完成；pnpm 28/28；Studio 同步待确认 |
+| sim-trading | `████████████` **95%** | ✅ Alienware 裸 Python 运行中 | TASK-0107 迁移完成；schtasks 开盘/收盘自动调度已建立；待正式交易日 CTP 验证 |
+| decision | `████████████` **99%** | ✅ Phase C 全闭环 | TASK-0104-D2 LLM 上下文注入已部署（待 Studio 重启生效）；仅剩生产验证 |
+| dashboard | `████████████` **100%** | ✅ Phase F 闭环 | TASK-0106 全部完成；.env.local 已配置 Alienware 代理；Studio 已同步 |
 | live-trading | `░░░░░░░░░░░░` **0%** | ⏳ 后置 | 等待sim稳定运行2~3月后评估 |
-| **整体** | `████████████` **~98%** | **Phase C+F 全闭环** | **dashboard 100%；TASK-0106-E（push+Studio同步）待 Jay.S 确认** |
+| **整体** | `████████████` **~99%** | **Phase C+D+F 全闭环** | **TASK-0104/0107/0108 全部 locked；两地已同步；D1 今晚自动生效，D2 待 Studio 重启** |
 
 > **更新规则：** 每次 Atlas 更新治理文件时同步刷新本表格和百分比。
 
@@ -55,26 +55,26 @@
 
 JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1 个治理层。目标是从 legacy J_BotQuant 单体系统迁移到完全隔离、可独立部署、API-first 的微服务架构。
 
-### 设备拓扑（冻结）[修订 2026-04-14]
+### 设备拓扑（冻结）[修订 2026-04-15]
 
 > **[修订 2026-04-14] 运行态四设备架构正式冻结为 Mini / Studio / Alienware / Air；MacBook 仅保留开发/控制，不计入运行态四设备。**
 
 | 设备 | 角色 | IP（内网） | IP（蒲公英） | 部署服务 |
 |------|------|-----------|-------------|---------|
 | MacBook | 开发/控制 | localhost | 172.16.3.136 | 全部开发环境 |
-| Mini | 数据源+情报落库存储+快速投喂（现网 sim-trading 仍部署于此） | 192.168.31.76 | 172.16.0.49 | data:8105, sim-trading:8101, sim-trading-web:3002 |
+| Mini | 纯数据采集 | 192.168.31.76 | 172.16.0.49 | data:8105 |
 | Air | 回测生产 | 192.168.31.245 | — | backtest:8103, backtest-web:3001 |
 | Studio | 决策/开发主控 | 192.168.31.142 | 172.16.1.130 | decision:8104, decision-web:3003, dashboard:8106 |
-| Alienware | Windows 交易端+情报研究员节点 | 192.168.31.224 | — | Windows 官方交易软件（24h）、qwen3:14b |
+| Alienware | 交易执行+情报研究员节点 | 192.168.31.224 | — | sim-trading:8101、Windows 官方交易软件（24h）、qwen3:14b |
 | ~~ECS~~ | ❌ 已永久停用 | 47.103.36.144 | — | [修订 2026-04-12] ECS永久停用，全部ECS相关任务取消 |
 
-> **[修订 2026-04-14] 关键过渡事实：** 当前 JBT 已部署的 sim-trading 容器/API 仍在 Mini；Alienware 上的 Windows 交易端是新的目标架构与交易软件承载面，但不等于 JBT 的 sim-trading 服务已经迁移完成。任何把交易执行正式切换到 Alienware 的服务级改造，都必须后续单独建任务、预审、白名单、Token。
+> **[修订 2026-04-15] TASK-0107 完成：** sim-trading API 已正式迁移至 Alienware（192.168.31.224:8101），验证通过（`curl /health` → 200，42 个端点可用）。Mini 不再承载 sim-trading，仅保留纯数据采集（data:8105）。本次迁移为裸 Python 部署；Docker 化部署待 BIOS 虚拟化开启后另行完成，不阻塞当前口径。
 
 ### 端口分配（冻结）
 
 | 服务 | API端口 | Web端口 | 归属设备 |
 |------|---------|---------|---------|
-| sim-trading | 8101 | 3002 | Mini |
+| sim-trading | 8101 | 3002 | Alienware |
 | live-trading | 8102 | 3006 | Studio（后置） |
 | backtest | 8103 | 3001 | Air |
 | decision | 8104 | 3003 | Studio |
@@ -108,15 +108,15 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | Docker/Mini | ✅ 已部署 | TASK-0017-A3，待开盘验证CTP |
 | 临时看板 | ✅ 基本可用 | `sim-trading_web/`，operations+intelligence 页面 |
 
-**已完成任务：** TASK-0002(契约), TASK-0009(治理闭环), TASK-0010(骨架闭环), TASK-0013(治理闭环), TASK-0014(A1~A4全锁回), TASK-0017-A3, TASK-0019(B1/B2锁回), TASK-0022(A/B全锁回), TASK-0023-A, TASK-0041(A/B/C locked), TASK-0042(自动重连+状态同步 locked), TASK-0043(data_scheduler LaunchAgent守护 locked), TASK-0067(SG API认证+旧auth清理 locked), TASK-0077(CS1-S容灾交接接口 locked) [修订 2026-04-14]
+**已完成任务：** TASK-0002(契约), TASK-0009(治理闭环), TASK-0010(骨架闭环), TASK-0013(治理闭环), TASK-0014(A1~A4全锁回), TASK-0017-A3, TASK-0019(B1/B2锁回), TASK-0022(A/B全锁回), TASK-0023-A, TASK-0041(A/B/C locked), TASK-0042(自动重连+状态同步 locked), TASK-0043(data_scheduler LaunchAgent守护 locked), TASK-0067(SG API认证+旧auth清理 locked), TASK-0077(CS1-S容灾交接接口 locked), TASK-0107(Alienware迁移 locked) [修订 2026-04-15]
 **Phase B 状态：✅ 全闭环** [修订 2026-04-10]
-**当前活跃：** TASK-0017(待开盘验证CTP — 周一执行)
+**当前活跃：** TASK-0017(待开盘验证CTP — Alienware 裸 Python 运行中，schtasks 定时启停已建立)
 **DR3 修复：** ✅ ISSUE-DR3-001 已由 TASK-0045 watchdog LaunchAgent 闭环 [2026-04-11]
 **排队任务：** Phase H 前置容灾复用（CS1-S 已完成，CA6 已完成）
 
-> **[修订 2026-04-11] 当前 sim-trading 已完成光大期货 CTP 接通、前端下单/撤单 UI、system/state 脱敏、自动重连与状态同步；但仍未接通期货公式 / 策略公式执行链路。**
+> **[修订 2026-04-15] sim-trading 已从 Mini Docker 迁移至 Alienware 裸 Python 部署（TASK-0107 locked）。schtasks 六组定时任务（早/午/夜开停）已建立。dashboard .env.local 代理已指向 Alienware:8101。仍未接通期货公式/策略公式执行链路。**
 
-### 2.2 决策 decision — 99% [修订 2026-04-13 TASK-0084 CK因子同步+TASK-0025 SimNow备用 全部完成]
+### 2.2 决策 decision — 99% [修订 2026-04-15 TASK-0104-D2 LLM上下文注入完成]
 
 **负责 Agent：决策**
 **服务目录：`services/decision/`**
@@ -136,6 +136,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 本地 Sim 容灾 | ✅ 已完成 | `CS1` TASK-0076 LocalSimEngine commit 3c8be69，12测试通过 [2026-04-13] |
 | LLM Pipeline | ✅ 已完成 | `CF1'` TASK-0083 LLM集成+研究中心auto_backtest, Atlas复核通过 [2026-04-13] |
 | 因子同步 | ✅ 已完成 | `CK1~CK3` TASK-0084 双地同步+覆盖率+缺失通知，Claude执行+Atlas审核通过 [2026-04-13] |
+| LLM 上下文注入 | ✅ 已完成 | `D2` TASK-0104-D2 context_loader TTL=8h + pipeline 三方法注入，commit d356511 [2026-04-15] |
 | 模型路由 | 🔶 资格验证 | `src/model/router.py`，版本对齐+因子HASH校验，无实际推理加载（P2） |
 | 门控 | ✅ 已完成 | `src/gating/`（backtest_gate/research_gate） |
 | 持久化 | ✅ 已完成 | `src/persistence/`（FileStateStore） |
@@ -145,9 +146,9 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | Dockerfile | ✅ 已修复 | TASK-0021-H0 |
 | 测试 | ✅ 200用例 | `tests/` Phase C 全量扩容后通过 [修订 2026-04-13] |
 
-**已完成任务：** TASK-0021(A契约+H0~H7全批次锁回), TASK-0024(部署审查), TASK-0050(C0-1), TASK-0051(C0-3), TASK-0052(CG1), TASK-0053(C0-2), TASK-0054(CB5), TASK-0055(CG2), TASK-0056(CA2'), TASK-0057(CB2'), TASK-0058(CG3), TASK-0059(CA6), TASK-0060(CA3), TASK-0061(CA4), TASK-0062(CB3), TASK-0063(CF2), TASK-0069(CB1), TASK-0070(CB4), TASK-0071(CB6), TASK-0072(CB7), TASK-0073(CB8), TASK-0074(CB9+CA1+CA5前端), TASK-0075(CA7), TASK-0076(CS1+路由注册), TASK-0079(看板3页扩容+Navbar), TASK-0080(Phase C全闭环审核), TASK-0083(LLM Pipeline+Factor Sync+Bug Fix Atlas复核通过), TASK-0084(CK2/CK3因子双地同步+缺失通知), TASK-0025(SimNow备用方案-仅平仓) [修订 2026-04-13]
-**剩余缺口：** 无（Phase C 全闭环）
-**当前活跃：** 无活跃任务，decision 服务进入维护态 [修订 2026-04-13]
+**已完成任务：** TASK-0021(A契约+H0~H7全批次锁回), TASK-0024(部署审查), TASK-0050(C0-1), TASK-0051(C0-3), TASK-0052(CG1), TASK-0053(C0-2), TASK-0054(CB5), TASK-0055(CG2), TASK-0056(CA2'), TASK-0057(CB2'), TASK-0058(CG3), TASK-0059(CA6), TASK-0060(CA3), TASK-0061(CA4), TASK-0062(CB3), TASK-0063(CF2), TASK-0069(CB1), TASK-0070(CB4), TASK-0071(CB6), TASK-0072(CB7), TASK-0073(CB8), TASK-0074(CB9+CA1+CA5前端), TASK-0075(CA7), TASK-0076(CS1+路由注册), TASK-0079(看板3页扩容+Navbar), TASK-0080(Phase C全闭环审核), TASK-0083(LLM Pipeline+Factor Sync+Bug Fix Atlas复核通过), TASK-0084(CK2/CK3因子双地同步+缺失通知), TASK-0025(SimNow备用方案-仅平仓), TASK-0104-D2(LLM上下文注入 locked) [修订 2026-04-15]
+**剩余缺口：** 无（Phase C 全闭环 + D2 上下文注入已追加）
+**当前活跃：** 无活跃任务，decision 服务维护态；D2 待 Studio 重启生效 [修订 2026-04-15]
 
 ### 2.3 数据 data — 100% [修订 2026-04-12 Round 1 收口完成]
 
@@ -711,16 +712,14 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
   1. **deepcoder:14b**：策略开发 / 因子挖掘 / 研究结果结构化转译。
   2. **phi4-reasoning:14b**：盘中门控 / 快速分析 / 读取 Mini 投喂数据与 Alienware 研究报告。
   3. 不再把 `qwen3:14b` 记为 Studio 本地常驻模型。
-- **Alienware 定位：** Windows 交易端 + 情报研究员节点（192.168.31.224）；当前只保留一个本地模型 `qwen3:14b`，不再在 Alienware 上记录 deepcoder / phi4。
-- **Mini 定位：** 数据源 + 情报落库存储 + 快速投喂节点；负责采集、预读、存放研究员报告和投喂包，并向 Studio 与 Alienware 提供同源数据。
+- **Alienware 定位：** 交易执行 + 情报研究员节点（192.168.31.224）；sim-trading:8101 已正式部署（TASK-0107，2026-04-15）；本地模型 `qwen3:14b`，不再记录 deepcoder / phi4。
+- **Mini 定位：** 纯数据采集节点；仅负责采集与数据供数（data:8105），不再承载 sim-trading 或研究投喂存储职责。
 - **Alienware 承担：**
-  1. 读取 Mini 的采集 / 预读 / 研究投喂数据，生成两份格式化研究报告：一份给 Studio，一份给 Jay.S。
-  2. 承载期货公司官方 Windows 交易软件，作为 24h 在线主机。
-- **关键过渡事实：**
-  1. 当前 JBT 已部署的 sim-trading 容器/API 仍在 Mini，这是现网事实。
-  2. Alienware 上的 Windows 交易端是新的目标架构与交易软件承载面，但不等于 JBT 的 sim-trading 服务已经迁移完成。
-  3. 任何把交易执行正式切换到 Alienware 的服务级改造，都必须后续单独建任务、预审、白名单、Token，不得把本次规划同步误读为代码已切换。
-- **实施阶段：** 当前仅冻结治理与规划口径；后续若需调整 decision 本地模型装载、研究路由或交易执行承载面，均需独立任务。
+  1. 运行 sim-trading:8101 API，承接 CTP 交易执行（光大期货）。
+  2. 读取 Mini 的采集数据，生成两份格式化研究报告：一份给 Studio，一份给 Jay.S。
+  3. 承载期货公司官方 Windows 交易软件，作为 24h 在线主机。
+- **[修订 2026-04-15] TASK-0107 已完成**：sim-trading 服务已迁移至 Alienware 并验证通过，原过渡说明不再适用。Docker 化部署待 BIOS 虚拟化开启后另行完成。
+- **实施阶段：** 基础迁移已完成；后续若需调整 decision 本地模型装载、研究路由，均需独立任务。
 
 ### 5.7 数据端预读投喂决策端 [修订 2026-04-14]
 
@@ -765,8 +764,8 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
   - D3 Alienware 研究报告模板与排除项增强
   - D4 Studio 消费双报告 + Jay.S 报告通知
   - D5 健康检查与 SLA 告警
-- **当前状态：** A0 建档完成，待 Architect 预审 → Token 签发 → D1 实施
-- **实施阶段：** Phase D（Phase C 看板全部 locked 后启动）
+- **当前状态：** ✅ D1+D2 全部完成（2026-04-15）。D1 commit 802c1f7（tok-d8f23d88 locked），D2 commit d356511（tok-6f298133 locked）。Mini 已同步（D1 今晚 21:00 preread 自动首次运行），Studio 已同步（D2 待重启生效）。
+- **实施阶段：** Phase D — D1/D2 已闭环；D3~D5 后续按需推进
 
 ---
 
