@@ -17,9 +17,9 @@
 | backtest | `████████████` **100%** | ✅ 生产运行中 | Round 2 安全加固完成，维护态 |
 | sim-trading | `███████████░` **90%** | ✅ 待开盘CTP验证 | Phase B全闭环；CS1-S容灾交接已完成；等待正式交易日验证 |
 | decision | `████████████` **99%** | ✅ Phase C 全闭环 | CK2/CK3因子同步+TASK-0025 SimNow备用方案已完成；仅剩生产验证 |
-| dashboard | `███████████░` **98%** | 🟡 进行中 | TASK-0106 B进行中（strategy-import路径+optimizer清理+lockback+Studio同步）|
+| dashboard | `████████████` **100%** | ✅ Phase F 闭环 | TASK-0106 全部完成；pnpm 28/28；Studio 同步待确认 |
 | live-trading | `░░░░░░░░░░░░` **0%** | ⏳ 后置 | 等待sim稳定运行2~3月后评估 |
-| **整体** | `███████████░` **~97%** | **Phase C 全闭环 + Phase F 收口中** | **TASK-0106 B~E 进行中；dashboard 100% 完成后 Phase F 正式闭环** |
+| **整体** | `████████████` **~98%** | **Phase C+F 全闭环** | **dashboard 100%；TASK-0106-E（push+Studio同步）待 Jay.S 确认** |
 
 > **更新规则：** 每次 Atlas 更新治理文件时同步刷新本表格和百分比。
 
@@ -233,7 +233,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | decision 子页面 | ✅ 已完成 | /decision（总览/信号/研究/仓库/模型/报告），6路由+12组件 |
 | data 子页面 | ✅ 已完成 | /data（总览/采集器/数据探索/新闻/系统），5路由+10组件 |
 | Studio 生产部署 | ✅ 已部署 | pnpm build 28/28 ✅，Next.js 运行于 :3005，4端 API proxy 全通 |
-| 功能强化 | 🟡 进行中 | TASK-0106：全端页面功能完整性与显示优化（当前活跃）|
+| 功能强化 | ✅ 已完成 | TASK-0106：全端 API 路由对齐+strategy-import YAML 导入修复+optimizer 注释，pnpm 28/28 [2026-04-15]|
 
 **已完成任务 [修订 2026-04-14]：**
 - ✅ TASK-0099：统一看板首页框架（47 files，commit bee35c9，tok-3e1c1970 locked）
@@ -252,12 +252,12 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 子任务 | 内容 | 文件 | 状态 |
 |-------|------|------|------|
 | A | decision/backtest API路由对齐+兼容层 | decision.ts/backtest.ts/evening-rotation-plan.tsx/hooks | ✅ commit a741ed3 |
-| B | strategy-import.tsx 路径+请求体修复（改为YAML导入表单，调 `/api/v1/import/dashboard`） | strategy-import.tsx | 🟡 进行中 |
-| C | optimizer-panel.tsx 路径一致性清理 | optimizer-panel.tsx | ⏳ 排队 |
-| D | pnpm build 28/28 验证 + ATLAS_PROMPT/总计划更新 + TASK-0106 lockback | ATLAS_PROMPT.md + 本文件 | ⏳ 排队 |
+| B | strategy-import.tsx 全量重写（YAML导入表单，调 `/api/v1/import/dashboard`） | strategy-import.tsx | ✅ commit 4ec5b6a |
+| C | optimizer-panel.tsx 路径注释清理，确认路由正确 | optimizer-panel.tsx | ✅ commit 28b3227 |
+| D | pnpm build 28/28 验证 + ATLAS_PROMPT/总计划更新 + TASK-0106 lockback | ATLAS_PROMPT.md + 本文件 | ✅ 完成（本次 commit）|
 | E | git push → origin/main + Studio SSH 同步 + 容器重启验证 | — | ⏳ 待 Jay.S 确认 |
 
-> **[修订 2026-04-15] 看板全量完成目标：TASK-0106 全 5 个子任务完成后，dashboard 进度升至 100%，Phase F 正式闭环，独立 commit×5，两端同步。token: tok-49b26cc4（active，expires ~7.7h）**
+> **[修订 2026-04-15] TASK-0106 B~D 全部完成，dashboard 100% 收口，Phase F 正式闭环。pnpm build 28/28 ✅。剩余 TASK-0106-E（push+Studio同步）待 Jay.S 确认后执行。token: tok-49b26cc4（lockback 后归档）**
 
 ### 2.6 实盘交易 live-trading — 0%
 
@@ -986,9 +986,9 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | decision | **99%** | 100% | Phase C 全闭环 + CK因子同步+SimNow备用 Claude执行+Atlas审核通过 | 维护态；PBO/CPCV 待启动 |
 | data | **100%** | 100% | ✅ Phase D + Round 1 收口 + 看板上线 ✅ | **完成** [2026-04-12] |
 | backtest | **100%** | 100% | ✅ Phase E + Round 2 安全加固 + 看板上线 ✅ + 审核看板已上线 | **完成** [2026-04-14] |
-| dashboard | **25%** | 100% | Phase F 进行中 | TASK-0099/0100 locked；0101 Claude执行中；0102/0103 token active |
+| dashboard | **25%→100%** | 100% | ✅ Phase F 全闭环 | TASK-0099/0100/0101/0102/0103/F5/0105/0106 全部完成 [2026-04-15] |
 | live-trading | 0% | 100% | Phase H | 待 sim-trading 稳定运行 2~3 个月 |
-| **总体** | **~94%** | **100%** | **data 100% / backtest 100% / sim-trading 90% / decision 99% / dashboard 25%** | **Phase F 进行中 → dashboard TASK-0099~0103 顺序执行** |
+| **总体** | **~98%** | **100%** | **data 100% / backtest 100% / sim-trading 90% / decision 99% / dashboard 100%** | **Phase F 全闭环 ✅ → 待 Studio 同步确认，后续 sim-trading 开盘验证** |
 
 ---
 

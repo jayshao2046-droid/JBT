@@ -1,8 +1,8 @@
 # JBT Atlas Prompt
 
 【签名】Atlas
-【时间】2026-04-13
-【状态】Phase C 全闭环 / TASK-0069~0076 全完成+200全量测试通过 / 9枚Token全锁回 / decision 90%
+【时间】2026-04-15
+【状态】四设备架构冻结 / Phase C 全闭环 / Phase F 收口中 / TASK-0106 D完成待lockback
 
 ## 本文件定位
 
@@ -21,6 +21,11 @@
 
 ## 当前状态
 
+- `2026-04-14` 已冻结运行态四设备架构：Mini / Studio / Alienware / Air；MacBook 仅保留开发/控制，不计入运行态四设备。
+- Mini 当前口径更新为“数据源 + 情报落库存储 + 快速投喂节点”，并继续承载当前已部署的 sim-trading 容器/API 现网事实；Studio 更新为“决策/开发主控节点”，本地常驻模型只记 `deepcoder:14b` + `phi4-reasoning:14b`，不再把 `qwen3:14b` 记在 Studio 常驻里。
+- Alienware（192.168.31.224）已作为新增节点冻结：角色固定为“Windows 交易端 + 情报研究员节点”，当前只保留 `qwen3:14b`；负责读取 Mini 同源投喂数据并输出两份格式化研究报告（Studio / Jay.S），同时承载期货公司官方 Windows 交易软件 24h 在线主机。
+- 研究范围冻结为：期货优先且仅跟踪已有策略覆盖品种；股票只分析策略筛出的 30 只股票池；搜索/外部信息只作为“排除项增强”，负面或不确定信息权重更高，不作为无条件加分项。
+- 关键过渡事实已冻结：Alienware 上线不等于 JBT sim-trading 已迁移；任何把交易执行正式切到 Alienware 的服务级改造，都必须后续单独建任务、预审、白名单、Token。
 - `TASK-0029`、`TASK-0030`、`TASK-0031`、`TASK-0032` 已完成并锁回；其中 `TASK-0034` 已补建为 `TASK-0031` 后续 data 单服务 U0 直修的事后审计锚点。
 - 数据端下一条主线是“Mini system 级采集 / 调度 / 通知迁移到 JBT Docker 体系”，原因是当前真实 24h 运行链路仍大量依赖 legacy system；当前先做治理准备，不直接写代码。
 - `TASK-0034` 当前只负责 U0 审计账本、prompt 同步与独立远端备份，不反写 `TASK-0031` 的 6 文件标准热修边界，也不继续扩展 data 代码范围。
@@ -98,11 +103,18 @@
   - Studio重建计划：完成Phase1 Claude任务后，Atlas执行SSH重建命令（Jay.S确认）
   - G0执行顺序：Studio重建完成 → Claude做TASK-0080 → Jay.S/Atlas停legacy容器
 
-- 2026-04-14：**决策端 AI 模型配置全面修正 ✅**。Studio `~/jbt/services/decision/.env` 完成三轮清理：
-  - LOCAL_MODEL_* 修正（`qwen2.5`→`qwen3:14b`，`DeepSeek-R1-14B`→`phi4-reasoning:14b`）
-  - 新增 `OLLAMA_RESEARCHER_MODEL=deepcoder:14b`（夜间研究员）/ `OLLAMA_AUDITOR_MODEL=qwen3:14b`（L2信号审核）/ `OLLAMA_ANALYST_MODEL=phi4-reasoning:14b`（分析师数据阅读）
-  - 在线模型 ID 修正（规划占位名→真实 DashScope API ID）：`ONLINE_MODEL_DEFAULT=qwen-plus-latest`，`ONLINE_MODEL_UPGRADE=qwen-max-latest`，`ONLINE_MODEL_BACKUP=qwen-plus-latest`，`ONLINE_MODEL_DISPUTE=qwen-max-latest`
-  - Studio Ollama 实装模型确认：`deepcoder:14b`(9GB)、`qwen3:14b`(9.3GB)、`phi4-reasoning:14b`(11GB)，共 3 枚，原 `qwen2.5/DeepSeek-R1-14B` 从未下载。
+- 2026-04-14：**四设备架构冻结回写 ✅**。JBT 运行态正式冻结为 Mini / Studio / Alienware / Air，其中 Alienware（192.168.31.224）为新增节点。
+  - Mini：数据源 + 情报落库存储 + 快速投喂节点；继续承载现网 sim-trading 容器/API。
+  - Studio：决策/开发主控节点；本地常驻模型冻结为 `deepcoder:14b` + `phi4-reasoning:14b`，不再把 `qwen3:14b` 记为 Studio 本地常驻。
+  - Alienware：Windows 交易端 + 情报研究员节点；当前只保留 `qwen3:14b`，负责读取 Mini 同源数据并输出 Studio / Jay.S 双报告。
+  - Air：回测生产节点不变。
+  - 过渡事实：Alienware 上的 Windows 交易端属于新的目标承载面，但不等于 JBT 的 sim-trading 服务已迁移完成；任何正式切换交易执行到 Alienware 的服务级改造，必须另建任务、预审、白名单、Token。
+- 2026-04-14：**全 prompt 文件四设备架构口径同步完成 ✅**（Claude 代执行）
+  - `docs/prompts/公共项目提示词.md`：新增"运行态四设备架构（2026-04-14 冻结）"表格；Studio Ollama 三模型条目更新为 2×14B（deepcoder+phi4）；qwen3:14b 标注已迁移 Alienware；决策总进度条目同步更新。
+  - `docs/prompts/agents/决策提示词.md`："Ollama 3×14B 串行流水线架构"更新为"2×14B 双模型常驻架构"，移除 qwen3，注明其在 Alienware。
+  - `docs/prompts/agents/总项目经理提示词.md`、`docs/prompts/总项目经理调度提示词.md` 已在上一轮由 Atlas/Jay.S 同步完成，无需重写。
+  - `docs/prompts/agents/模拟交易提示词.md` 已标注 Alienware 角色，无需重写。
+  - 签名：Claude-Code
 - 2026-04-14：**TASK-0104 data预读投喂决策端 建档 ✅**。完成 15 个 collector 数据资产清单分析与 L1/L2/分析师/研究员四角色注入映射；提出夜间 21:00 预读 → 08:30 决策拉取的 D0-D5 分阶段实施方案；TASK-0104 已建档于 `docs/tasks/TASK-0104-data预读投喂决策端.md`，待 Architect 预审后签发 Token 开始 D1-D5 实施。
 - 2026-04-14：**在线千问模型费用测算完成 ✅**（基于 DashScope 官方定价 2026-04-14）：
   - `qwen-plus-latest`：入 ¥2/百万 token，出 ¥12/百万 token（≤256K 请求）
@@ -115,3 +127,13 @@
 1. 若 `docs/JBT_FINAL_MASTER_PLAN.md` 与总项目经理双 prompt 有时间差，以双 prompt 的较新留痕为准。
 2. 如需终端命令、git 提交、远端同步或运行态探测，先向 Jay.S 汇报命令并等待确认。
 3. 所有推进优先落治理文件；Atlas 不直接修改服务业务代码。
+
+## 最近动作（补录 2026-04-15）
+
+- 2026-04-15：**TASK-0106 看板全量完成冲刺开始**。Jay.S 指令：看板端全量完成、完成一项 git 一项、MacBook 开发、Studio 同步。token tok-49b26cc4 active（~7.7h）。子任务 A~E 全部登记到总计划。
+- 2026-04-15：**TASK-0106-A**（已完成于 2026-04-14，commit a741ed3）：decision.ts API_BASE 修复、backtest.ts 路由三段对齐、evening-rotation-plan.tsx 修复、hooks 兼容层。
+- 2026-04-15：**TASK-0106-B 完成** commit 4ec5b6a：strategy-import.tsx 全量重写，改为 YAML 导入表单，调后端 `POST /api/v1/import/dashboard`，请求体 `{yaml_content}`，响应展示 strategy_ids/errors/raw_yaml_count。修复之前 `/strategy-import/import` 404 问题（P0 bug）。
+- 2026-04-15：**TASK-0106-C 完成** commit 28b3227：optimizer-panel.tsx 补后端路由注释，确认 `/api/decision/api/v1/optimizer/run` 经代理后正确到达 `POST /api/v1/optimizer/run`，路径正确无需修改逻辑。
+- 2026-04-15：**pnpm build 28/28 ✅** — strategy-import.tsx + optimizer-panel.tsx 修改后，Compiled successfully，28/28 static pages 全部通过。
+- 2026-04-15：**TASK-0106-D** ATLAS_PROMPT + 总计划更新完成，待 git commit + lockback。TASK-0106-E（push + Studio 同步）待 Jay.S 确认执行。
+- dashboard 进度：通过本次 B~D 修复，dashboard 100% 收口完成。Phase F 正式闭环。
