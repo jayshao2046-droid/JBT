@@ -495,6 +495,44 @@ cd services/dashboard/dashboard_web && pnpm build
 
 ---
 
+## 搜索/情报补充方案最终选型（2026-04-15 冻结）
+
+**最终选型：方案 C（混合路由，搜索在 data 层缓存，不直连 Ollama）**
+
+### 三方案对比与排除理由
+
+| 方案 | 核心机制 | 结论 |
+|------|---------|------|
+| A：Ollama Tool Calling | qwen3:14b 挂 web_search function，LLM 决定调用 | ❌ 排除 |
+| B：qwen-plus 原生联网 | DashScope `enable_search: true` | ❌ 排除 |
+| C：混合路由（搜索在 data 层） | 爬虫采集 → staging → 注入 context | ✅ 采纳 |
+
+**方案 A 排除**：
+- TASK-0110 B 批双模式爬虫引擎（`crawler/engine.py`）已实现等价采集能力，无需额外 tool calling 层
+- Ollama tool calling 稳定性不如定时爬虫 + staging 结构化注入
+- 让 LLM "决定是否搜索"与已冻结的"搜索只作排除项增强"口径不符（搜索需要可控、确定性触发）
+
+**方案 B 排除**：
+- 违背 `总项目经理调度提示词.md` 冻结口径："Alienware 只保留 `qwen3:14b`"，不得引入 DashScope 在线模型
+- 期货持仓/成交等敏感数据不得过境阿里云
+- 搜索结果 context 增加 30~50% token 量且不可控
+
+**方案 C 采纳**：
+- 与 TASK-0110 已批准架构完全一致：B 批 `crawler/` 模块本身就是 SearchCollector 角色
+- 数据流：爬虫采集（B 批）→ staging 暂存区（A 批）→ summarizer prompt 注入（A 批 `summarizer.py`）→ qwen3:14b 生成报告
+- 盘中 Studio 侧 phi4/deepcoder 不联网，只读当期报告 JSON，搜索信息已被研究员预消化
+- 完全本地控制，Alienware GPU 推理，零额外云费用
+
+### 实现约束（硬冻结）
+
+1. **搜索结果只作排除项增强**，不得作为无条件加分信号
+2. **爬虫采集结果以结构化 JSON 缓存进 staging 暂存区**，不直连 Ollama tool calling
+3. **不引入任何在线模型**（DashScope/Tavily/Brave 付费 API 均不引入）
+4. 爬虫采集时段：**夜间/盘前**为主，盘中仅被动读缓存，不实时爬取（保护 Alienware 盘中交易资源）
+5. 爬虫失败时研究报告**静默降级**（只用 Mini 数据分析），不因爬虫出错中断四段报告
+
+---
+
 ## 后续关联任务提示
 
 TASK-0110 完成后，需建立 TASK-0111（决策端对接）：

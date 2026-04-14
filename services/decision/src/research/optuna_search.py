@@ -49,3 +49,39 @@ class OptunaSearch:
         study = optuna.create_study(direction="minimize")
         study.optimize(objective, n_trials=n_trials, timeout=timeout)
         return dict(study.best_params)
+
+    def schedule_nightly(
+        self,
+        trainer: Any,
+        X: np.ndarray,
+        y: np.ndarray,
+        symbol: str = "all",
+        n_trials: int = 80,
+        timeout: Optional[int] = 3600,
+    ) -> dict[str, Any]:
+        """夜间批量参数调优入口（TASK-0112-C）。
+
+        由 deepcoder:14b 在非交易时段触发，搜索最优 XGBoost 参数。
+        返回 best_params + 调优摘要，不自动写入注册表（由调用方决定是否注册）。
+
+        Args:
+            trainer: XGBoostTrainer 实例
+            X: 特征矩阵
+            y: 标签
+            symbol: 品种代码或 'all'
+            n_trials: Optuna trials 数量
+            timeout: 最大运行秒数（None = 不限）
+
+        Returns:
+            {"symbol": ..., "best_params": ..., "best_sharpe": ..., "n_trials": ...}
+        """
+        best_params = self.run_search(trainer, X, y, n_trials=n_trials, timeout=timeout)
+        # 用最优参数做一次验证，获取 sharpe 估算
+        cv_result = trainer.cross_validate(X, y, best_params)
+        return {
+            "symbol": symbol,
+            "best_params": best_params,
+            "best_sharpe": cv_result["sharpe"],
+            "best_accuracy": cv_result["accuracy"],
+            "n_trials": n_trials,
+        }

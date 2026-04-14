@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections import Counter
 from datetime import datetime
 from typing import Optional
@@ -105,7 +106,32 @@ def runtime_snapshot() -> dict:
                 "source": "signal review runtime profile",
             },
         ],
-        "online_models": [],
+        "online_models": [
+            {
+                "model_id": "online-default",
+                "name": os.getenv("ONLINE_MODEL_DEFAULT", "qwen-plus"),
+                "type": "online",
+                "status": "configured",
+            },
+            {
+                "model_id": "online-upgrade",
+                "name": os.getenv("ONLINE_MODEL_UPGRADE", "qwen-max"),
+                "type": "online",
+                "status": "configured",
+            },
+            {
+                "model_id": "online-backup",
+                "name": os.getenv("ONLINE_MODEL_BACKUP", "deepseek-chat"),
+                "type": "online",
+                "status": "configured",
+            },
+            {
+                "model_id": "online-dispute",
+                "name": os.getenv("ONLINE_MODEL_DISPUTE", "deepseek-reasoner"),
+                "type": "online",
+                "status": "configured",
+            },
+        ],
         "factor_sync": {
             "aligned": factor_sync.get("aligned", 0),
             "mismatch": factor_sync.get("mismatch", 0),

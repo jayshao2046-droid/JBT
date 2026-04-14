@@ -11,25 +11,22 @@ from ...model.router import route
 from ...notifier.dispatcher import get_dispatcher
 from ...publish.gate import PublishGate
 from ...reporting.daily import get_daily_reporter
+from ...persistence.state_store import get_state_store
 
 router = APIRouter(prefix="/signals", tags=["signal"])
 
-_decisions: dict[str, dict] = {}
-# NOTE: _decisions 为纯内存存储，服务重启后会丢失。
-# 如需持久化，可考虑接入 state_store 或独立 JSON 文件。
-
 _L1_MODEL_PROFILE = {
-    "profile_id": "local-l1-qwen2.5-series",
-    "model_name": "Qwen2.5",
+    "profile_id": "local-l1-phi4-reasoning",
+    "model_name": "phi4-reasoning:14b",
     "deployment_class": "local",
-    "route_role": "gate_review",
+    "route_role": "L1_gate_review",
 }
 
 _L2_MODEL_PROFILE = {
-    "profile_id": "local-primary-qwen3-14b",
-    "model_name": "Qwen3 14B",
+    "profile_id": "local-l2-phi4-reasoning",
+    "model_name": "phi4-reasoning:14b",
     "deployment_class": "local",
-    "route_role": "primary_local_review",
+    "route_role": "L2_deep_review",
 }
 
 
@@ -85,8 +82,11 @@ class DecisionRequest(BaseModel):
 
 
 def _sorted_decisions() -> list[dict]:
+    """从 state_store 读取所有决策记录并按时间排序。"""
+    store = get_state_store()
+    decisions = store.get("decisions", {})
     return sorted(
-        _decisions.values(),
+        decisions.values(),
         key=lambda item: item.get("generated_at") or "",
         reverse=True,
     )
@@ -162,8 +162,14 @@ def get_signal_overview() -> dict:
 
 
 @router.post("/review", status_code=status.HTTP_201_CREATED)
-def review_signal(req: DecisionRequest) -> dict:
+async def review_signal(req: DecisionRequest) -> dict:
+    """信号审查端点：资格门禁 + phi4 L1/L2 门控 + 发布流程判断。
+
+    TASK-0112 Batch A: 接入真实 phi4-reasoning:14b L1/L2 门控。
+    """
     decision_id = f"dd-{uuid.uuid4().hex[:12]}"
+
+    # 前置资格门禁（model_router + PublishGate）
     router_result = route(
         strategy_id=req.strategy_id,
         backtest_certificate_id=req.backtest_certificate_id,
@@ -175,6 +181,7 @@ def review_signal(req: DecisionRequest) -> dict:
         publish_result.reasons,
     )
 
+    # live-trading 锁定可见路径（不进入 LLM 审查）
     if req.requested_target == "live-trading":
         action = "hold"
         confidence = 0.0
@@ -185,23 +192,9 @@ def review_signal(req: DecisionRequest) -> dict:
         reasoning_summary = "当前发布目标为 live-trading，第一阶段仅锁定可见，不进入发布流程。"
         if reasons:
             reasoning_summary = f"{reasoning_summary} 详情: {'; '.join(reasons)}"
-    elif router_result["allowed"] and publish_result.eligible and req.signal != 0:
-        action = "approve"
-        confidence = _clamp_confidence(req.signal_strength)
-        layer = "L2_local_review"
-        model_profile = dict(_L2_MODEL_PROFILE)
-        eligibility_status = "eligible"
-        publish_workflow_status = "ready_for_publish"
-        reasoning_summary = "研究快照、回测证明与发布门禁均通过，当前允许进入模拟交易发布流程。"
-    elif router_result["allowed"] and publish_result.eligible:
-        action = "hold"
-        confidence = 0.0
-        layer = "L1_rules"
-        model_profile = dict(_L1_MODEL_PROFILE)
-        eligibility_status = "eligible"
-        publish_workflow_status = "none"
-        reasoning_summary = "研究快照、回测证明与发布门禁均通过，但当前信号为 0，保持观望，不进入发布流程。"
-    else:
+
+    # 资格门禁阻塞路径（不进入 LLM 审查）
+    elif not router_result["allowed"] or not publish_result.eligible:
         action = "hold"
         confidence = 0.0 if req.signal == 0 else min(_clamp_confidence(req.signal_strength), 0.49)
         layer = "L1_rules"
@@ -212,6 +205,146 @@ def review_signal(req: DecisionRequest) -> dict:
             "资格门禁未通过，当前暂不进入发布流程。"
             f" 详情: {'; '.join(reasons) if reasons else 'gate evaluation failed'}"
         )
+
+    # signal=0 观望路径（不进入 LLM 审查）
+    elif req.signal == 0:
+        action = "hold"
+        confidence = 0.0
+        layer = "L1_rules"
+        model_profile = dict(_L1_MODEL_PROFILE)
+        eligibility_status = "eligible"
+        publish_workflow_status = "none"
+        reasoning_summary = "研究快照、回测证明与发布门禁均通过，但当前信号为 0，保持观望，不进入发布流程。"
+
+    # 进入真实 LLM 门控审查路径
+    else:
+        from ...llm.gate_reviewer import GateReviewer
+        from ...llm.context_loader import get_l1_context, get_l2_context
+
+        gate_reviewer = GateReviewer()
+
+        # L1 快审
+        l1_context, l1_missing = await get_l1_context(req.symbol)
+        l1_result = await gate_reviewer.l1_quick_review(
+            strategy_id=req.strategy_id,
+            symbol=req.symbol,
+            signal=req.signal,
+            signal_strength=req.signal_strength,
+            factors=[f.model_dump() for f in req.factors],
+            context=l1_context,
+            missing_sources=l1_missing if l1_missing else None,
+        )
+
+        # L1 拒绝路径
+        if not l1_result.get("pass", False):
+            action = "hold"
+            confidence = l1_result.get("confidence", 0.0)
+            layer = "L1_gate_review"
+            model_profile = dict(_L1_MODEL_PROFILE)
+            eligibility_status = "eligible"
+            publish_workflow_status = "none"
+            reasoning_summary = f"L1 快审未通过: {l1_result.get('reasoning', 'unknown')}"
+            if l1_result.get("degraded"):
+                reasoning_summary += " [数据降级模式]"
+
+        # L1 通过 → L2 深审
+        else:
+            l2_context, l2_missing = await get_l2_context(req.symbol)
+            l2_result = await gate_reviewer.l2_deep_review(
+                strategy_id=req.strategy_id,
+                symbol=req.symbol,
+                signal=req.signal,
+                signal_strength=req.signal_strength,
+                factors=[f.model_dump() for f in req.factors],
+                market_context=req.market_context.model_dump(),
+                l1_result=l1_result,
+                context=l2_context,
+                missing_sources=l2_missing if l2_missing else None,
+            )
+
+            # L2 批准 → 检查是否需要 L3 在线确认
+            if l2_result.get("approve", False):
+                from ...llm.online_confirmer import OnlineConfirmer
+
+                online_confirmer = OnlineConfirmer()
+
+                # 判断是否触发 L3
+                should_trigger = online_confirmer.should_trigger_l3(
+                    signal_strength=req.signal_strength,
+                    l1_confidence=l1_result.get("confidence", 0.0),
+                    l2_confidence=l2_result.get("confidence", 0.0),
+                    risk_assessment=l2_result.get("risk_assessment", "unknown"),
+                )
+
+                if should_trigger:
+                    # 调用 L3 在线确认
+                    decision_context = {
+                        "strategy_id": req.strategy_id,
+                        "symbol": req.symbol,
+                        "signal": req.signal,
+                        "signal_strength": req.signal_strength,
+                        "l1_result": l1_result,
+                        "l2_result": l2_result,
+                    }
+                    l3_result = await online_confirmer.confirm(decision_context)
+
+                    # L3 确认通过
+                    if l3_result.get("confirmed", False):
+                        action = "approve"
+                        confidence = l2_result.get("confidence", 0.0)
+                        layer = "L3_online_confirm"
+                        model_profile = {
+                            "profile_id": "online-l3-confirm",
+                            "model_name": l3_result.get("model_used", "online"),
+                            "deployment_class": "online",
+                            "route_role": "L3_online_confirm",
+                        }
+                        eligibility_status = "eligible"
+                        publish_workflow_status = "ready_for_publish"
+                        reasoning_summary = f"L3 在线确认通过: {l3_result.get('reasoning', 'confirmed')}"
+                        if l3_result.get("degraded"):
+                            reasoning_summary += " [L3 降级为 L2]"
+
+                    # L3 拒绝
+                    else:
+                        action = "hold"
+                        confidence = l2_result.get("confidence", 0.0)
+                        layer = "L3_online_reject" if not l3_result.get("degraded") else "L2_local_review_l3_degraded"
+                        model_profile = {
+                            "profile_id": "online-l3-reject",
+                            "model_name": l3_result.get("model_used", "online"),
+                            "deployment_class": "online",
+                            "route_role": "L3_online_reject",
+                        }
+                        eligibility_status = "eligible"
+                        publish_workflow_status = "none"
+                        reasoning_summary = f"L3 在线确认未通过: {l3_result.get('reasoning', 'rejected')}"
+                        if l3_result.get("degraded"):
+                            reasoning_summary += " [L3 降级为 L2]"
+
+                else:
+                    # 不触发 L3，直接采用 L2 结论
+                    action = "approve"
+                    confidence = l2_result.get("confidence", 0.0)
+                    layer = "L2_deep_review"
+                    model_profile = dict(_L2_MODEL_PROFILE)
+                    eligibility_status = "eligible"
+                    publish_workflow_status = "ready_for_publish"
+                    reasoning_summary = f"L1/L2 门控通过（未触发 L3）: {l2_result.get('reasoning', 'approved')}"
+                    if l2_result.get("degraded"):
+                        reasoning_summary += " [数据降级模式]"
+
+            # L2 拒绝路径
+            else:
+                action = "hold"
+                confidence = l2_result.get("confidence", 0.0)
+                layer = "L2_deep_review"
+                model_profile = dict(_L2_MODEL_PROFILE)
+                eligibility_status = "eligible"
+                publish_workflow_status = "none"
+                reasoning_summary = f"L2 深审未通过: {l2_result.get('reasoning', 'rejected')}"
+                if l2_result.get("degraded"):
+                    reasoning_summary += " [数据降级模式]"
 
     result = {
         "decision_id": decision_id,
@@ -245,7 +378,13 @@ def review_signal(req: DecisionRequest) -> dict:
         "notification_event_id": None,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
-    _decisions[decision_id] = result
+
+    # 写入 state_store
+    store = get_state_store()
+    decisions = store.get("decisions", {})
+    decisions[decision_id] = result
+    store.set("decisions", decisions)
+
     return result
 
 
@@ -256,7 +395,9 @@ def list_decisions() -> list[dict]:
 
 @router.get("/{decision_id}")
 def get_decision(decision_id: str) -> dict:
-    result = _decisions.get(decision_id)
+    store = get_state_store()
+    decisions = store.get("decisions", {})
+    result = decisions.get(decision_id)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Decision {decision_id} not found")
     return result

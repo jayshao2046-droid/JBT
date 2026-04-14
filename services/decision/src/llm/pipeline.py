@@ -30,7 +30,7 @@ class LLMPipeline:
         """
         self.client = client or OllamaClient()
         self.researcher_model = os.getenv("OLLAMA_RESEARCHER_MODEL", "deepcoder:14b")
-        self.auditor_model = os.getenv("OLLAMA_AUDITOR_MODEL", "qwen3:14b")
+        self.auditor_model = os.getenv("OLLAMA_AUDITOR_MODEL", "phi4-reasoning:14b")
         self.analyst_model = os.getenv("OLLAMA_ANALYST_MODEL", "phi4-reasoning:14b")
 
     async def research(self, intent: str) -> Dict[str, Any]:
@@ -284,28 +284,38 @@ class LLMPipeline:
             "duration_seconds": duration,
         }
 
-    async def full_pipeline(self, intent: str, performance_data: Optional[Dict[str, Any]] = None, auto_backtest: bool = False) -> Dict[str, Any]:
+    async def full_pipeline(
+        self,
+        intent: str,
+        performance_data: Optional[Dict[str, Any]] = None,
+        auto_backtest: bool = False,
+        optuna_X_y: Optional[tuple] = None,
+    ) -> Dict[str, Any]:
         """
-        Execute full pipeline: research → audit → analyze.
+        Execute full pipeline: research → audit → [optuna → backtest] → analyze.
 
         TASK-0083: 增加可选的自动沙箱回测步骤。
+        TASK-0112-C: 审核通过后先做 Optuna 参数优化，再用最优参数运行沙箱回测。
 
         Args:
             intent: Strategy intent description
             performance_data: Optional performance data for analysis step
             auto_backtest: If True, automatically run sandbox backtest after audit passes
+            optuna_X_y: Optional (X, y) numpy arrays for Optuna hyperparameter search.
+                        If None, Optuna step is skipped even when auto_backtest=True.
 
         Returns:
             Dict containing:
                 - research_result: Research step result
                 - audit_result: Audit step result
-                - analysis_result: Analysis step result (if audit passed)
+                - optuna_params: Best params from Optuna (if optuna_X_y provided)
                 - backtest_result: Backtest result (if auto_backtest=True and audit passed)
+                - analysis_result: Analysis step result (if audit passed)
                 - total_duration_seconds: Total execution time
                 - error: Error message if any step failed
         """
         total_start = time.time()
-        result = {}
+        result: Dict[str, Any] = {}
 
         # Step 1: Research
         logger.info("Starting research step")
@@ -327,11 +337,48 @@ class LLMPipeline:
             result["total_duration_seconds"] = time.time() - total_start
             return result
 
-        # Step 2.5: Auto backtest (TASK-0083)
+        # Step 2.5: Optuna + Auto backtest (TASK-0083 / TASK-0112-C)
         if auto_backtest and audit_result.get("passed", False):
+            best_params: Dict[str, Any] = {}
+
+            # 2.5a: Optuna 参数优化（audit 通过后，有训练数据时执行）
+            if optuna_X_y is not None:
+                logger.info("Starting Optuna hyperparameter search")
+                try:
+                    import numpy as _np  # noqa: PLC0415
+
+                    from ..research.optuna_search import OptunaSearch  # noqa: PLC0415
+                    from ..research.trainer import XGBoostTrainer  # noqa: PLC0415
+
+                    X_opt, y_opt = optuna_X_y
+                    if not isinstance(X_opt, _np.ndarray) or not isinstance(y_opt, _np.ndarray):
+                        raise TypeError("optuna_X_y must be a tuple of (np.ndarray, np.ndarray)")
+
+                    searcher = OptunaSearch()
+                    trainer_instance = XGBoostTrainer()
+                    optuna_summary = searcher.schedule_nightly(
+                        trainer=trainer_instance,
+                        X=X_opt,
+                        y=y_opt,
+                        symbol="pipeline",
+                        n_trials=30,  # pipeline 内快速搜索（完整夜间调优用 schedule_nightly 直调）
+                        timeout=120,
+                    )
+                    best_params = optuna_summary.get("best_params", {})
+                    result["optuna_params"] = optuna_summary
+                    logger.info(f"Optuna search done: best_sharpe={optuna_summary.get('best_sharpe'):.3f}")
+                except Exception as exc:
+                    logger.warning(f"Optuna step skipped due to error: {exc}")
+                    result["optuna_params"] = {"error": str(exc), "skipped": True}
+            else:
+                result["optuna_params"] = {"skipped": True, "reason": "No optuna_X_y provided"}
+
+            # 2.5b: 沙箱回测（用最优参数）
             logger.info("Starting auto backtest step")
             try:
-                backtest_result = await self._run_sandbox_backtest(research_result["code"])
+                backtest_result = await self._run_sandbox_backtest(
+                    research_result["code"], params=best_params
+                )
                 result["backtest_result"] = backtest_result
             except Exception as exc:
                 logger.error(f"Auto backtest failed: {exc}")
@@ -424,12 +471,13 @@ class LLMPipeline:
             data = response.json()
             return data.get("bars", [])
 
-    async def _run_sandbox_backtest(self, code: str) -> Dict[str, Any]:
-        """运行沙箱回测（调用 SandboxEngine）。"""
+    async def _run_sandbox_backtest(self, code: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """运行沙箱回测（调用 SandboxEngine）。TASK-0112-C: 支持传入 Optuna 最优参数。"""
         # TODO: 实现沙箱回测调用逻辑
         # 这里返回一个占位结果
         logger.warning("沙箱回测功能尚未完全实现，返回占位结果")
         return {
             "status": "not_implemented",
             "message": "Sandbox backtest feature is under development",
+            "params_used": params or {},
         }

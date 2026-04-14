@@ -13,10 +13,10 @@
 
 | 服务 | 进度 | 状态 | 当前焦点 |
 |------|------|------|---------|
-| data | `████████████` **100%** | ✅ 生产运行中 | Round 1 收口完成；TASK-0104-D1 预读系统已部署；**TASK-0110 研究员子系统建档中（6批35文件）** |
+| data | `████████████` **100%** | ✅ 生产运行中 | Round 1 收口完成；TASK-0104-D1 预读系统已部署；**TASK-0113 研究员子系统已完成（87/87测试通过，4 Token 全部锁回，Alienware qwen3:14b 部署运行中）** |
 | backtest | `████████████` **100%** | ✅ 生产运行中 | Round 2 安全加固完成，维护态 |
 | sim-trading | `████████████` **95%** | ✅ Alienware 裸 Python 运行中 | TASK-0107 迁移完成；schtasks 开盘/收盘自动调度已建立；待正式交易日 CTP 验证 |
-| decision | `████████████` **99%** | ✅ Phase C 全闭环 | TASK-0104-D2 LLM 上下文注入已部署（待 Studio 重启生效）；仅剩生产验证 |
+| decision | `████████████` **100%** | ✅ Phase C + 精进改造全闭环 | TASK-0112(A/B/C)+0114+0115+0116+0117 全部完成并锁回；359 passed / 7 skipped；decision 进入维护态 |
 | dashboard | `████████████` **100%** | ✅ Phase F 闭环 | TASK-0106 全部完成；.env.local 已配置 Alienware 代理；Studio 已同步 |
 | live-trading | `░░░░░░░░░░░░` **0%** | ⏳ 后置 | 等待sim稳定运行2~3月后评估 |
 | **整体** | `████████████` **~99%** | **Phase C+D+F 全闭环** | **TASK-0104/0107/0108 全部 locked；两地已同步；D1 今晚自动生效，D2 待 Studio 重启** |
@@ -116,7 +116,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 > **[修订 2026-04-15] sim-trading 已从 Mini Docker 迁移至 Alienware 裸 Python 部署（TASK-0107 locked）。schtasks 六组定时任务（早/午/夜开停）已建立。dashboard .env.local 代理已指向 Alienware:8101。仍未接通期货公式/策略公式执行链路。**
 
-### 2.2 决策 decision — 99% [修订 2026-04-15 TASK-0104-D2 LLM上下文注入完成]
+### 2.2 决策 decision — 100% [修订 2026-04-15 全任务闭环]
 
 **负责 Agent：决策**
 **服务目录：`services/decision/`**
@@ -138,17 +138,21 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | 因子同步 | ✅ 已完成 | `CK1~CK3` TASK-0084 双地同步+覆盖率+缺失通知，Claude执行+Atlas审核通过 [2026-04-13] |
 | LLM 上下文注入 | ✅ 已完成 | `D2` TASK-0104-D2 context_loader TTL=8h + pipeline 三方法注入，commit d356511 [2026-04-15] |
 | 模型路由 | 🔶 资格验证 | `src/model/router.py`，版本对齐+因子HASH校验，无实际推理加载（P2） |
-| 门控 | ✅ 已完成 | `src/gating/`（backtest_gate/research_gate） |
+| 门控（L1/L2/L3） | ✅ 已完成 | TASK-0112-A/B/C：phi4-reasoning L1(5日日线)/L2(20日+60分钟线+研报) 口径修正，gate_reviewer/context_loader 新建，full_pipeline() Optuna+SandboxEngine 串联，8+9+19=36测试通过 [2026-04-15 locked] |
 | 持久化 | ✅ 已完成 | `src/persistence/`（FileStateStore） |
 | 通知 | ✅ 已完成 | `src/notifier/`（飞书+邮件双通道投产，6级通知，JBT统一颜色） |
 | 报告 | ✅ 基线完成 | `src/reporting/`（daily+research_summary投产）；后续补回测/荐股/盘后评估报告 |
 | 临时看板 | ✅ 已扩容 | `decision_web/` 7+3+3 页面：股票池/盘中信号/期货研究面板+审批管理/研究报告/因子分析已上线 (TASK-0074+TASK-0079) [2026-04-14] |
 | Dockerfile | ✅ 已修复 | TASK-0021-H0 |
-| 测试 | ✅ 200用例 | `tests/` Phase C 全量扩容后通过 [修订 2026-04-13] |
+| 测试 | ✅ 359用例 | `tests/` 全量通过 [修订 2026-04-15] |
+| **35品种模型注册表** | ✅ 已完成 | TASK-0114：ModelRegistry 按品种×行情类型(5种：trend/oscillation/high_vol/compression/event_driven)存储 XGBClassifier，RegimeDetector 调 phi4 检测行情类型，trainer.py 品种级增量训练+真实 Sharpe，12测试通过 [2026-04-15 locked] |
+| **信号失真监控（G8）** | ✅ 已完成 | TASK-0115：SignalValidator IC签名方向修正+30日滚动准确率监控；FactorMonitor IC衰减+分布漂移+零方差保护，14测试通过 [2026-04-15 locked] |
+| **因子挖掘自动化** | ✅ 已完成 | TASK-0116：FactorMiner 四类因子(momentum/mean_reversion/vol_price/volatility)；FactorValidator IC_IR+t检验+多空收益；factor.py API路由(mine/validate/list)，26测试通过 [2026-04-15 locked] |
+| **研究中心5项拓展** | ✅ 已完成 | TASK-0117：①spread_monitor Z-score 套利+空序列保护；②correlation_monitor 35品种相关矩阵偏离检测；③news_scorer deepcoder 评分+飞书推送；④spread_monitor/news_scorer/correlation_monitor 全测试覆盖，18测试通过 [2026-04-15 locked] |
 
-**已完成任务：** TASK-0021(A契约+H0~H7全批次锁回), TASK-0024(部署审查), TASK-0050(C0-1), TASK-0051(C0-3), TASK-0052(CG1), TASK-0053(C0-2), TASK-0054(CB5), TASK-0055(CG2), TASK-0056(CA2'), TASK-0057(CB2'), TASK-0058(CG3), TASK-0059(CA6), TASK-0060(CA3), TASK-0061(CA4), TASK-0062(CB3), TASK-0063(CF2), TASK-0069(CB1), TASK-0070(CB4), TASK-0071(CB6), TASK-0072(CB7), TASK-0073(CB8), TASK-0074(CB9+CA1+CA5前端), TASK-0075(CA7), TASK-0076(CS1+路由注册), TASK-0079(看板3页扩容+Navbar), TASK-0080(Phase C全闭环审核), TASK-0083(LLM Pipeline+Factor Sync+Bug Fix Atlas复核通过), TASK-0084(CK2/CK3因子双地同步+缺失通知), TASK-0025(SimNow备用方案-仅平仓), TASK-0104-D2(LLM上下文注入 locked) [修订 2026-04-15]
-**剩余缺口：** 无（Phase C 全闭环 + D2 上下文注入已追加）
-**当前活跃：** 无活跃任务，decision 服务维护态；D2 待 Studio 重启生效 [修订 2026-04-15]
+**已完成任务：** TASK-0021(A契约+H0~H7全批次锁回), TASK-0024(部署审查), TASK-0050(C0-1), TASK-0051(C0-3), TASK-0052(CG1), TASK-0053(C0-2), TASK-0054(CB5), TASK-0055(CG2), TASK-0056(CA2'), TASK-0057(CB2'), TASK-0058(CG3), TASK-0059(CA6), TASK-0060(CA3), TASK-0061(CA4), TASK-0062(CB3), TASK-0063(CF2), TASK-0069(CB1), TASK-0070(CB4), TASK-0071(CB6), TASK-0072(CB7), TASK-0073(CB8), TASK-0074(CB9+CA1+CA5前端), TASK-0075(CA7), TASK-0076(CS1+路由注册), TASK-0079(看板3页扩容+Navbar), TASK-0080(Phase C全闭环审核), TASK-0083(LLM Pipeline+Factor Sync+Bug Fix Atlas复核通过), TASK-0084(CK2/CK3因子双地同步+缺失通知), TASK-0025(SimNow备用方案-仅平仓), TASK-0104-D2(LLM上下文注入 locked), TASK-0112(A/B/C三批门控精进 locked), TASK-0114(35品种模型注册表 locked), TASK-0115(信号失真+因子漂移 locked), TASK-0116(因子挖掘自动化 locked), TASK-0117(研究中心5项拓展 locked) [修订 2026-04-15]  
+**剩余缺口：** 无（全部闭环，进入维护态）  
+**当前活跃：** 无（全部 locked）[修订 2026-04-15]
 
 ### 2.3 数据 data — 100% [修订 2026-04-12 Round 1 收口完成]
 
@@ -171,10 +175,11 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | data_web | ✅ 基线完成 | 6 页临时看板已锁回，继续保持只读配套 |
 | Docker化 | ✅ 基线完成 | Mini 容器运行中(JBT-DATA-8105)，system 迁移主线已闭环 |
 | 存储 | ✅ 已完成 | `src/data/storage.py`，Mini `~/jbt-data/` 目录体系 |
-| **研究员子系统** | 🔧 建档中 | TASK-0110：Alienware qwen3:14b + 双模式爬虫 + 四段报告 + 独立通知体系（6批35文件）[2026-04-15] |
+| **研究员子系统** | ✅ 已部署运行 | TASK-0113：Alienware qwen3:14b + 飞书三类分流(blue/orange/red) + 11整点调度 + 国际7源 + 邮件日报 + Mini API 推送；87/87测试通过，4 Token 全部锁回；HTTP :8199 控制端口；last_run_ok=true [2026-04-15] |
 
 **已完成任务：** TASK-0018(A~F全锁回), TASK-0027(A0~A7全锁回), TASK-0028(B1~B6全锁回), TASK-0031(锁回), TASK-0032/0033(锁回), TASK-0050(C0-1), TASK-0054(CB5), TASK-0064(Round 1 收口+SG) [修订 2026-04-12]
-**当前活跃：** TASK-0110 数据研究员子系统（6批：A增量读取+暂存区 → B爬虫引擎 → C四段调度 → C2独立通知体系 → D API接口 → E看板控制台，共35文件）[建档 2026-04-15]
+**已完成：** TASK-0113 数据研究员子系统（4批：A通知规范化 + B调度 + C国际爬虫 + D测试，共87/87测试通过）[完成 2026-04-15]
+**Mini 股票 API 修复（U0 直修 2026-04-15）：** `_load_stock_frame` 路径修复为 `{root}/{code}/stock_minute/`；`_normalize_bar_frame` 增加 payload 展开（股票采集格式）；补 `open_interest=0`；验证：000001 返回 1329 条，期货 rb 主力 1605 条不受影响。
 **Round 1 改动：** A2 STUB清除→延迟注入、因子通知器/SLA追踪器实现、健康检查修复、FACTOR/WATCHLIST通知路由、DATA_API_KEY认证中间件、11个测试扩充（77个测试全通过）[2026-04-12]
 
 > **[修订 2026-04-11] data 端当前新增的 Phase C 职责不是重启 system 级迁移，而是在既有供数基线之上补足股票 bars 路由与动态 watchlist 分钟 K 采集。`stock_minute_collector` 与股票日线采集器已存在，当前主要缺口在路由层与调度模式切换。**
@@ -367,6 +372,13 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | TASK-0101 | backtest 全功能升级（Phase F-F2） | dashboard | Claude | 🟡 执行中 (tok-92f7dce9 active) [2026-04-14] | P1 |
 | TASK-0102 | decision 全功能升级（Phase F-F3） | dashboard | Claude | ⏳ 待 TASK-0101 locked (tok-1f25eea1 active) | P1 |
 | TASK-0103 | data 全功能升级（Phase F-F4） | dashboard | Claude | ⏳ 待 TASK-0102 locked (tok-bcdd740a active) | P1 |
+| TASK-0112-A | 决策端 LLM 口径修正 + phi4 L1/L2 门控实装 | decision | Claude | 🟡 Token active (tok-0a2faa03) | P1 |
+| TASK-0112-B | 决策端 deepcoder 夜间策略调优 + 沙箱回测 | decision | Claude | 🟡 Token active (tok-08de1aff)，依赖 A | P1 |
+| TASK-0112-C | 决策端 full_pipeline() 串联 + Optuna 调度 | decision | Claude | 🟡 Token active (tok-370db4de)，依赖 B | P1 |
+| TASK-0114 | 决策端 35 品种自适应模型注册表 | decision | Claude | 🟡 Token active (tok-d0112f40)，依赖 0112-C | P1 |
+| TASK-0115 | 决策端信号失真检测 + 因子漂移监控（G8） | decision | Claude | 🟡 Token active (tok-48fd42a7)，可并行 | P1 |
+| TASK-0116 | 决策端因子挖掘自动化 | decision | Claude | 🟡 Token active (tok-bc3f9282)，可并行 | P1 |
+| TASK-0117 | 决策端研究中心 5 项拓展 | decision | Claude | 🟡 Token active (tok-f8d27abe)，依赖 0112-C | P1 |
 
 ---
 

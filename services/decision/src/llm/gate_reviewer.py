@@ -1,0 +1,261 @@
+"""Gate Reviewer for phi4-reasoning L1/L2 signal review.
+
+TASK-0112 Batch A: phi4-reasoning:14b L1 快审 + L2 深审封装。
+"""
+
+import json
+import logging
+from typing import Any, Dict, List, Optional
+
+from .client import OllamaClient
+from ..notifier.dispatcher import DecisionEvent, NotifyLevel, get_dispatcher
+
+logger = logging.getLogger(__name__)
+
+
+class GateReviewer:
+    """phi4-reasoning:14b L1/L2 门控审查器。"""
+
+    MODEL = "phi4-reasoning:14b"
+    L1_TIMEOUT = 30.0  # L1 快审超时 30s
+    L2_TIMEOUT = 60.0  # L2 深审超时 60s
+
+    def __init__(self, client: Optional[OllamaClient] = None):
+        """初始化门控审查器。
+
+        Args:
+            client: OllamaClient 实例，默认创建新实例
+        """
+        self.client = client or OllamaClient()
+
+    async def l1_quick_review(
+        self,
+        strategy_id: str,
+        symbol: str,
+        signal: int,
+        signal_strength: float,
+        factors: List[Dict[str, Any]],
+        context: str,
+        missing_sources: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """L1 快审：5日日线K线 + 简洁判断信号方向是否与近期趋势严重矛盾。
+
+        Args:
+            strategy_id: 策略 ID
+            symbol: 交易标的
+            signal: 信号方向 (1=多, -1=空, 0=观望)
+            signal_strength: 信号强度 [0, 1]
+            factors: 因子列表
+            context: L1 上下文（5日日线K线）
+            missing_sources: 缺失的数据源列表
+
+        Returns:
+            Dict containing:
+                - pass: bool, 是否通过
+                - risk_flag: str, 风险标记
+                - confidence: float, 置信度
+                - reasoning: str, 推理过程
+                - degraded: bool, 是否降级模式
+        """
+        # 数据缺失报警
+        if missing_sources:
+            await self._send_data_missing_alert(
+                "L1_QUICK_REVIEW",
+                strategy_id,
+                symbol,
+                missing_sources,
+            )
+
+        # 构造 L1 prompt
+        factor_summary = ", ".join([f"{f['name']}={f['value']:.3f}" for f in factors[:5]])
+        signal_desc = "做多" if signal == 1 else "做空" if signal == -1 else "观望"
+
+        system_prompt = """你是 phi4-reasoning 门控审查员，负责 L1 快速审查。
+任务：判断信号方向是否与近期趋势严重矛盾。
+输出格式：严格 JSON，包含 pass(bool), risk_flag(str), confidence(float), reasoning(str)。"""
+
+        user_prompt = f"""策略: {strategy_id}
+标的: {symbol}
+信号: {signal_desc} (强度 {signal_strength:.2f})
+因子摘要: {factor_summary}
+
+{context}
+
+请判断该信号是否与近期趋势严重矛盾，输出 JSON。"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        result = await self.client.chat(self.MODEL, messages, timeout=self.L1_TIMEOUT)
+
+        if "error" in result:
+            logger.error(f"L1 快审失败: {result['error']}")
+            return {
+                "pass": False,
+                "risk_flag": "llm_error",
+                "confidence": 0.0,
+                "reasoning": f"L1 LLM 调用失败: {result['error']}",
+                "degraded": bool(missing_sources),
+            }
+
+        # 解析 JSON 响应
+        try:
+            content = result.get("content", "")
+            parsed = json.loads(content)
+            return {
+                "pass": parsed.get("pass", False),
+                "risk_flag": parsed.get("risk_flag", "unknown"),
+                "confidence": max(0.0, min(1.0, parsed.get("confidence", 0.0))),
+                "reasoning": parsed.get("reasoning", ""),
+                "degraded": bool(missing_sources),
+            }
+        except json.JSONDecodeError:
+            logger.warning(f"L1 快审 JSON 解析失败: {content}")
+            return {
+                "pass": False,
+                "risk_flag": "json_parse_error",
+                "confidence": 0.0,
+                "reasoning": f"JSON 解析失败，原始响应: {content[:200]}",
+                "degraded": bool(missing_sources),
+            }
+
+    async def l2_deep_review(
+        self,
+        strategy_id: str,
+        symbol: str,
+        signal: int,
+        signal_strength: float,
+        factors: List[Dict[str, Any]],
+        market_context: Dict[str, Any],
+        l1_result: Dict[str, Any],
+        context: str,
+        missing_sources: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """L2 深审：20日日线 + 60根分钟线 + 研报摘要 + 综合评估。
+
+        Args:
+            strategy_id: 策略 ID
+            symbol: 交易标的
+            signal: 信号方向
+            signal_strength: 信号强度
+            factors: 因子列表
+            market_context: 市场上下文
+            l1_result: L1 审查结果
+            context: L2 上下文（20日日线 + 60根分钟线 + 研报）
+            missing_sources: 缺失的数据源列表
+
+        Returns:
+            Dict containing:
+                - approve: bool, 是否批准
+                - reasoning: str, 推理过程
+                - confidence: float, 置信度
+                - risk_assessment: str, 风险评估
+                - degraded: bool, 是否降级模式
+        """
+        # 数据缺失报警
+        if missing_sources:
+            await self._send_data_missing_alert(
+                "L2_DEEP_REVIEW",
+                strategy_id,
+                symbol,
+                missing_sources,
+            )
+
+        # 构造 L2 prompt
+        factor_detail = "\n".join([f"  {f['name']}: {f['value']:.4f}" for f in factors[:10]])
+        signal_desc = "做多" if signal == 1 else "做空" if signal == -1 else "观望"
+
+        system_prompt = """你是 phi4-reasoning 门控审查员，负责 L2 深度审查。
+任务：综合评估策略可执行性、风险水平、市场环境匹配度。
+输出格式：严格 JSON，包含 approve(bool), reasoning(str), confidence(float), risk_assessment(str)。"""
+
+        user_prompt = f"""策略: {strategy_id}
+标的: {symbol}
+信号: {signal_desc} (强度 {signal_strength:.2f})
+
+因子详情:
+{factor_detail}
+
+市场上下文:
+  市场时段: {market_context.get('market_session', 'unknown')}
+  波动率状态: {market_context.get('volatility_regime', 'unknown')}
+  流动性状态: {market_context.get('liquidity_regime', 'unknown')}
+  头条风险: {market_context.get('headline_risk_level', 'unknown')}
+
+L1 快审结果:
+  通过: {l1_result.get('pass')}
+  风险标记: {l1_result.get('risk_flag')}
+  置信度: {l1_result.get('confidence'):.2f}
+
+{context}
+
+请综合评估该策略是否可执行，输出 JSON。"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        result = await self.client.chat(self.MODEL, messages, timeout=self.L2_TIMEOUT)
+
+        if "error" in result:
+            logger.error(f"L2 深审失败: {result['error']}")
+            return {
+                "approve": False,
+                "reasoning": f"L2 LLM 调用失败: {result['error']}",
+                "confidence": 0.0,
+                "risk_assessment": "llm_error",
+                "degraded": bool(missing_sources),
+            }
+
+        # 解析 JSON 响应
+        try:
+            content = result.get("content", "")
+            parsed = json.loads(content)
+            return {
+                "approve": parsed.get("approve", False),
+                "reasoning": parsed.get("reasoning", ""),
+                "confidence": max(0.0, min(1.0, parsed.get("confidence", 0.0))),
+                "risk_assessment": parsed.get("risk_assessment", "unknown"),
+                "degraded": bool(missing_sources),
+            }
+        except json.JSONDecodeError:
+            logger.warning(f"L2 深审 JSON 解析失败: {content}")
+            return {
+                "approve": False,
+                "reasoning": f"JSON 解析失败，原始响应: {content[:200]}",
+                "confidence": 0.0,
+                "risk_assessment": "json_parse_error",
+                "degraded": bool(missing_sources),
+            }
+
+    async def _send_data_missing_alert(
+        self,
+        review_layer: str,
+        strategy_id: str,
+        symbol: str,
+        missing_sources: List[str],
+    ) -> None:
+        """发送数据缺失 P1 报警到飞书。
+
+        Args:
+            review_layer: 审查层级 (L1_QUICK_REVIEW / L2_DEEP_REVIEW)
+            strategy_id: 策略 ID
+            symbol: 交易标的
+            missing_sources: 缺失的数据源列表
+        """
+        event = DecisionEvent(
+            event_type="SYSTEM",
+            event_code="DATA_MISSING_DEGRADED",
+            title=f"{review_layer} 数据缺失降级",
+            body=f"策略 {strategy_id} 标的 {symbol} 门控审查时检测到数据缺失，已降级继续。\n缺失数据源: {', '.join(missing_sources)}",
+            notify_level=NotifyLevel.P1,
+            strategy_id=strategy_id,
+        )
+        dispatcher = get_dispatcher()
+        await dispatcher.dispatch(event)
+        logger.warning(
+            f"{review_layer} 数据缺失报警已发送: strategy={strategy_id} symbol={symbol} missing={missing_sources}"
+        )

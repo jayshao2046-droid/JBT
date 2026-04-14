@@ -26,6 +26,8 @@ from .routes.pbo import router as pbo_router
 from .routes.local_sim import router as local_sim_router
 # Decision Web routes
 from .routes.decision_web import router as decision_web_router
+# TASK-0116: 因子挖掘与验证路由
+from .routes.factor import router as factor_router
 
 _DECISION_API_KEY = os.environ.get("DECISION_API_KEY", "")
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -75,6 +77,7 @@ def create_app() -> FastAPI:
     app.include_router(llm_router)
     # Decision Web routes
     app.include_router(decision_web_router)
+    app.include_router(factor_router)
 
     return app
 

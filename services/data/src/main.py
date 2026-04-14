@@ -349,7 +349,7 @@ def _parse_stock_symbol(raw_symbol: str) -> str:
 
 
 def _load_stock_frame(stock_code: str) -> pd.DataFrame:
-    stock_dir = _stock_minute_root() / stock_code
+    stock_dir = _storage_root() / stock_code / "stock_minute"
     if not stock_dir.is_dir():
         raise HTTPException(
             status_code=404,
@@ -510,6 +510,17 @@ def _load_symbol_frame(symbol_dir: Path) -> pd.DataFrame:
 
 
 def _normalize_bar_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    # 展开调度器 payload 格式（股票分钟采集器内部格式）：{source_type, timestamp, payload(dict)}
+    if "payload" in frame.columns:
+        import json as _json
+        rows = [r if isinstance(r, dict) else _json.loads(r) for r in frame["payload"]]
+        expanded = pd.json_normalize(rows)
+        if "timestamp" in frame.columns and "timestamp" not in expanded.columns:
+            expanded["timestamp"] = frame["timestamp"].values
+        frame = expanded
+        if 'open_interest' not in frame.columns:
+            frame = frame.copy()
+            frame['open_interest'] = 0.0
     rename_map = {
         source: target
         for source, target in COLUMN_ALIASES.items()

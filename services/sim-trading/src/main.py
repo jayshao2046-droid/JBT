@@ -183,6 +183,18 @@ async def _ctp_connection_guardian():
         (dtime(15, 5), "下午盘"),
         (dtime(23, 5), "夜盘"),
     ]
+    # 开盘前 5 分钟检查点（check_time, open_time, label）
+    _PREOPEN_CHECKS = [
+        (dtime(8, 55),  dtime(9, 0),  "上午盘"),
+        (dtime(12, 55), dtime(13, 0), "下午盘"),
+        (dtime(20, 55), dtime(21, 0), "夜盘"),
+    ]
+    # 开盘通知时间点
+    _SESSION_OPENS = [
+        (dtime(9, 0),  "上午盘"),
+        (dtime(13, 0), "下午盘"),
+        (dtime(21, 0), "夜盘"),
+    ]
     FAST_INTERVAL = 30          # 交易时段检查间隔（秒）
     PRE_INTERVAL = 60           # 盘前窗口检查间隔（秒）
     IDLE_INTERVAL = 300         # 非交易时段休眠间隔（秒）
@@ -192,6 +204,8 @@ async def _ctp_connection_guardian():
     _last_checkpoint = None     # 避免同一检查点重复通知
     _last_account_refresh = 0.0
     _last_summary_sent = None   # 避免同一收盘总结重复推送
+    _last_preopen_sent = None   # 避免同一开盘前检查重复触发
+    _last_open_sent = None      # 避免同一开盘通知重复推送
 
     def _in_pre_session():
         """工作日盘前窗口判定"""
@@ -222,6 +236,30 @@ async def _ctp_connection_guardian():
             now_min = now_t.hour * 60 + now_t.minute
             if abs(now_min - close_min) <= 2:
                 return (close_time, label)
+        return None
+
+    def _check_preopen():
+        """返回匹配的开盘前5分钟检查点 (check_time, open_time, label) 或 None"""
+        if datetime.now().weekday() >= 5:
+            return None
+        now_t = datetime.now().time()
+        for check_t, open_t, label in _PREOPEN_CHECKS:
+            check_min = check_t.hour * 60 + check_t.minute
+            now_min = now_t.hour * 60 + now_t.minute
+            if abs(now_min - check_min) <= 2:
+                return (check_t, open_t, label)
+        return None
+
+    def _check_open():
+        """返回匹配的开盘时间点 (open_time, label) 或 None"""
+        if datetime.now().weekday() >= 5:
+            return None
+        now_t = datetime.now().time()
+        for open_t, label in _SESSION_OPENS:
+            open_min = open_t.hour * 60 + open_t.minute
+            now_min = now_t.hour * 60 + now_t.minute
+            if abs(now_min - open_min) <= 2:
+                return (open_t, label)
         return None
 
     def _send_guardian_alert(level: str, code: str, reason: str, category: str = ""):
@@ -270,6 +308,68 @@ async def _ctp_connection_guardian():
             logger.info("[guardian] session summary sent: %s", reason)
         except Exception as exc:
             logger.warning("[guardian] session summary error: %s", exc)
+
+    def _send_preopen_check(label: str):
+        """开盘前5分钟：检查 CTP 登录 + 账户数据回传；未就绪发 P0 告警。"""
+        try:
+            from src.api.router import _get_gateway
+            gw = _get_gateway()
+            if gw is None:
+                _send_guardian_alert(
+                    "P0", "PREOPEN_CTP_NOT_READY",
+                    f"⚠️ {label}开盘前5分钟：CTP 网关未启动，请立即检查！", "SYSTEM"
+                )
+                return
+            st = gw.status
+            md_ok = st.get("md_connected", False)
+            td_ok = st.get("td_connected", False)
+            # 检查账户数据是否已回传
+            has_account = False
+            try:
+                from src.ledger.service import get_ledger
+                summary = get_ledger().get_account_summary()
+                has_account = bool(summary and summary.get("balance") is not None)
+            except Exception:
+                pass
+            if not td_ok or not md_ok:
+                _send_guardian_alert(
+                    "P0", "PREOPEN_CTP_NOT_READY",
+                    f"⚠️ {label}开盘前5分钟：CTP 未登录（md={md_ok}, td={td_ok}），请立即处理！", "SYSTEM"
+                )
+            elif not has_account:
+                _send_guardian_alert(
+                    "P1", "PREOPEN_ACCOUNT_NOT_READY",
+                    f"⚠️ {label}开盘前5分钟：CTP 已连接但账户数据未回传，请检查", "SYSTEM"
+                )
+            else:
+                _send_guardian_alert(
+                    "P2", "PREOPEN_READY",
+                    f"✅ {label}开盘前5分钟检查通过：CTP 已登录，账户数据就绪", "交易"
+                )
+                logger.info("[guardian] preopen check OK: %s", label)
+        except Exception as exc:
+            logger.warning("[guardian] preopen check error: %s", exc)
+            _send_guardian_alert(
+                "P1", "PREOPEN_CHECK_ERROR",
+                f"{label}开盘前5分钟检查异常: {exc}", "SYSTEM"
+            )
+
+    def _send_open_notification(label: str):
+        """开盘时推送开盘飞书通知。"""
+        try:
+            from src.api.router import _get_gateway
+            gw = _get_gateway()
+            st = gw.status if gw else {}
+            md_ok = st.get("md_connected", False)
+            td_ok = st.get("td_connected", False)
+            status_str = "CTP 已连接" if (md_ok and td_ok) else f"CTP 异常（md={md_ok}, td={td_ok}）"
+            _send_guardian_alert(
+                "P2", "SESSION_OPEN",
+                f"🔔 {label}开盘 — {status_str}", "交易"
+            )
+            logger.info("[guardian] open notification sent: %s", label)
+        except Exception as exc:
+            logger.warning("[guardian] open notification error: %s", exc)
 
     async def _try_connect(silent: bool = True):
         """尝试 CTP 建连，返回 (md_ok, td_ok)"""
@@ -355,6 +455,18 @@ async def _ctp_connection_guardian():
                     _send_guardian_alert("P1", "CTP_TD_DOWN", f"盘前检查({cp_str})：交易通道断开")
                 if md_ok and td_ok:
                     logger.info("[guardian] checkpoint %s: all OK", cp_str)
+
+            # --- 开盘前 5 分钟预检（09:00/13:00/21:00 前 5 分钟）---
+            po = _check_preopen()
+            if po is not None and po[0] != _last_preopen_sent:
+                _last_preopen_sent = po[0]
+                _send_preopen_check(po[2])
+
+            # --- 开盘通知（09:00/13:00/21:00）---
+            op = _check_open()
+            if op is not None and op[0] != _last_open_sent:
+                _last_open_sent = op[0]
+                _send_open_notification(op[1])
 
             # --- 收盘总结检查 ---
             sc = _check_session_close()

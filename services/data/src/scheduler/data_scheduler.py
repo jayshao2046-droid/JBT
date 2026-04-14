@@ -1299,6 +1299,66 @@ def job_daily_reset(config: dict[str, Any]) -> None:
         logger.info("✅ 每日采集计数器已重置")
 
 
+# ── 研究员四段调度（Alienware qwen3:14b）──────────────────────────────
+
+
+def job_researcher_premarket(config: dict[str, Any]) -> None:
+    """研究员盘前研究 — 08:30"""
+    _run_researcher_segment("盘前")
+
+
+def job_researcher_midday(config: dict[str, Any]) -> None:
+    """研究员午间研究 — 11:35"""
+    _run_researcher_segment("午间")
+
+
+def job_researcher_postmarket(config: dict[str, Any]) -> None:
+    """研究员盘后研究 — 15:20"""
+    _run_researcher_segment("盘后")
+
+
+def job_researcher_night(config: dict[str, Any]) -> None:
+    """研究员夜盘研究 — 23:10"""
+    _run_researcher_segment("夜盘")
+
+
+def _run_researcher_segment(segment: str) -> None:
+    """执行研究员单个时段的研究"""
+    try:
+        logger.info("▶ 开始执行: 研究员-%s", segment)
+        import asyncio
+        from src.researcher.scheduler import ResearcherScheduler
+        from src.researcher.notify.feishu_sender import ResearcherFeishuSender
+        from src.researcher.notify.email_sender import ResearcherEmailSender
+        from src.researcher.notify.card_templates import build_report_card, build_failure_card
+
+        scheduler = ResearcherScheduler()
+        result = asyncio.run(scheduler.execute_segment(segment))
+
+        # 发送通知（使用独立通知体系）
+        feishu_sender = ResearcherFeishuSender()
+        email_sender = ResearcherEmailSender()
+
+        if result["success"]:
+            # 成功：发送报告卡片
+            from src.researcher.reporter import Reporter
+            reporter = Reporter()
+            latest_report = reporter.get_latest_report()
+            if latest_report:
+                card = build_report_card(latest_report.dict())
+                asyncio.run(feishu_sender.send_card(card))
+            logger.info("✅ 研究员-%s 完成: %s", segment, result.get("report_id"))
+        else:
+            # 失败：发送告警
+            error = result.get("error", "Unknown error")
+            card = build_failure_card(segment, error)
+            asyncio.run(feishu_sender.send_card(card))
+            logger.error("❌ 研究员-%s 失败: %s", segment, error)
+
+    except Exception:
+        logger.error("❌ 研究员-%s 异常:\n%s", segment, traceback.format_exc())
+
+
 def job_daily_email_report(config: dict[str, Any]) -> None:
     """每日邮件日报 — 09:30 + 16:30，发送完整数据端健康报告。"""
     try:
@@ -1630,6 +1690,23 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
     scheduler.add_job(
         job_preread_daily, CronTrigger(hour=21, minute=0),
         args=[config], id="preread_daily", name="夜间预读投喂",
+    )
+    # ── 研究员四段调度（Alienware qwen3:14b）──────────────────
+    scheduler.add_job(
+        job_researcher_premarket, CronTrigger(hour=8, minute=30, day_of_week="mon-fri"),
+        args=[config], id="researcher_premarket", name="研究员-盘前",
+    )
+    scheduler.add_job(
+        job_researcher_midday, CronTrigger(hour=11, minute=35, day_of_week="mon-fri"),
+        args=[config], id="researcher_midday", name="研究员-午间",
+    )
+    scheduler.add_job(
+        job_researcher_postmarket, CronTrigger(hour=15, minute=20, day_of_week="mon-fri"),
+        args=[config], id="researcher_postmarket", name="研究员-盘后",
+    )
+    scheduler.add_job(
+        job_researcher_night, CronTrigger(hour=23, minute=10, day_of_week="mon-fri"),
+        args=[config], id="researcher_night", name="研究员-夜盘",
     )
 
     logger.info("=" * 60)
