@@ -32,7 +32,7 @@ _logger = logging.getLogger(__name__)
 
 def _build_storage(config: dict[str, Any]) -> HDF5Storage:
     storage_cfg = config.get("storage", {})
-    base_path = storage_cfg.get("base_path")
+    base_path = os.environ.get("DATA_STORAGE_ROOT") or storage_cfg.get("base_path")
     return HDF5Storage(base_dir=base_path)
 
 
