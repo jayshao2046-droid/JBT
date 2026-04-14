@@ -116,18 +116,28 @@ def test_front_disconnected_event_dispatches_p1():
 
 
 def test_is_trading_session_filters_non_session_noise():
-    """非交易时段与周末不应被判定为交易时段。"""
+    """交易时段精确匹配：9:00-11:30 / 13:00-15:00 / 21:00-23:00，其余全部 False。"""
     from src.gateway.simnow import is_trading_session
 
     # 工作日交易时段 → True
-    assert is_trading_session(datetime(2026, 4, 14, 9, 30)) is True    # Tue 9:30
-    assert is_trading_session(datetime(2026, 4, 14, 21, 30)) is True   # Tue 21:30 夜盘
-    assert is_trading_session(datetime(2026, 4, 15, 1, 0)) is True     # Wed 01:00 夜盘凌晨
+    assert is_trading_session(datetime(2026, 4, 14, 9, 0)) is True     # Tue 09:00 开盘
+    assert is_trading_session(datetime(2026, 4, 14, 9, 30)) is True    # Tue 09:30
+    assert is_trading_session(datetime(2026, 4, 14, 11, 29)) is True   # Tue 11:29 即将收盘
+    assert is_trading_session(datetime(2026, 4, 14, 13, 0)) is True    # Tue 13:00 午盘开
+    assert is_trading_session(datetime(2026, 4, 14, 14, 59)) is True   # Tue 14:59
+    assert is_trading_session(datetime(2026, 4, 14, 21, 0)) is True    # Tue 21:00 夜盘开
+    assert is_trading_session(datetime(2026, 4, 14, 22, 59)) is True   # Tue 22:59
 
     # 工作日非交易时段 → False
+    assert is_trading_session(datetime(2026, 4, 14, 8, 55)) is False   # Tue 08:55 盘前
+    assert is_trading_session(datetime(2026, 4, 14, 11, 30)) is False  # Tue 11:30 收盘
+    assert is_trading_session(datetime(2026, 4, 14, 12, 0)) is False   # Tue 12:00 午休
+    assert is_trading_session(datetime(2026, 4, 14, 15, 0)) is False   # Tue 15:00 收盘
     assert is_trading_session(datetime(2026, 4, 14, 16, 0)) is False   # Tue 16:00
+    assert is_trading_session(datetime(2026, 4, 14, 20, 55)) is False  # Tue 20:55 盘前
+    assert is_trading_session(datetime(2026, 4, 14, 23, 0)) is False   # Tue 23:00 收盘
     assert is_trading_session(datetime(2026, 4, 14, 6, 0)) is False    # Tue 06:00
-    assert is_trading_session(datetime(2026, 4, 13, 1, 0)) is False    # Mon 01:00（周一凌晨无夜盘）
+    assert is_trading_session(datetime(2026, 4, 15, 1, 0)) is False    # Wed 01:00 无凌晨盘
 
     # 周末完全静默 → False
     assert is_trading_session(datetime(2026, 4, 18, 9, 30)) is False   # Sat 09:30

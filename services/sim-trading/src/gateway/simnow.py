@@ -95,13 +95,12 @@ def _select_tradeable_contract(
 
 
 def is_trading_session(current_dt=None) -> bool:
-    """返回当前是否处于交易时段（含盘前缓冲）。
+    """返回当前是否处于交易时段。
 
-    周末完全返回 False；工作日覆盖：
-    - 日盘前准备 + 日盘：08:55 - 11:35
-    - 午盘：13:00 - 15:05
-    - 夜盘：20:55 - 23:59
-    - 夜盘凌晨段：00:00 - 02:35（仅周二~周五凌晨，即周一晚不含）
+    周末完全返回 False；工作日覆盖（SimNow 实际交易时间）：
+    - 上午盘：09:00 - 11:30
+    - 下午盘：13:00 - 15:00（部分品种 13:30，取最早）
+    - 夜盘：  21:00 - 23:00
     """
     from datetime import datetime, time as dtime
 
@@ -113,18 +112,12 @@ def is_trading_session(current_dt=None) -> bool:
     if weekday >= 5:
         return False
 
-    # 夜盘凌晨段：仅周二~周五凌晨（前一晚的夜盘延续）
-    overnight_end = dtime(2, 35)
-    if current_time < overnight_end and weekday in {1, 2, 3, 4}:
-        return True
-
-    # 日盘 + 夜盘开盘段
-    daytime_sessions = (
-        (dtime(8, 55), dtime(11, 35)),
-        (dtime(13, 0), dtime(15, 5)),
-        (dtime(20, 55), dtime(23, 59, 59, 999999)),
+    sessions = (
+        (dtime(9, 0), dtime(11, 30)),
+        (dtime(13, 0), dtime(15, 0)),
+        (dtime(21, 0), dtime(23, 0)),
     )
-    return any(start <= current_time < end for start, end in daytime_sessions)
+    return any(start <= current_time < end for start, end in sessions)
 
 
 def _make_md_spi_class():
@@ -140,11 +133,6 @@ def _make_md_spi_class():
         def OnFrontConnected(self):
             logger.info("[mdapi] connected, login")
             self._on_status("md_connected")
-            try:
-                from src.risk.guards import emit_alert
-                emit_alert("P2", "CTP 行情前置已连接", {"event_code": "CTP_FRONT_CONNECTED", "source": "simnow_md"})
-            except Exception:
-                pass
             req = _mdmod.CThostFtdcReqUserLoginField()
             req.BrokerID = self._api._broker_id
             req.UserID = self._api._user_id
@@ -232,11 +220,6 @@ def _make_td_spi_class():
         def OnFrontConnected(self):
             logger.info("[traderapi] connected, auth")
             self._on_status("td_connected")
-            try:
-                from src.risk.guards import emit_alert
-                emit_alert("P2", "CTP 交易前置已连接", {"event_code": "CTP_FRONT_CONNECTED", "source": "simnow_td"})
-            except Exception:
-                pass
             req = _tdmod.CThostFtdcReqAuthenticateField()
             req.BrokerID = self._api._broker_id
             req.UserID = self._api._user_id
@@ -366,6 +349,19 @@ def _make_td_spi_class():
                 pass
             logger.info("[traderapi] trade: %s %s@%.2f vol=%d",
                         pTrade.InstrumentID, pTrade.TradeID.strip(), pTrade.Price, pTrade.Volume)
+            # 成交通知（交易时段内）
+            if is_trading_session():
+                direction_str = "买" if getattr(pTrade, "Direction", "") == "0" else "卖"
+                offset_str = {"0": "开仓", "1": "平仓", "3": "平今", "4": "平昨"}.get(
+                    getattr(pTrade, "OffsetFlag", ""), "未知")
+                try:
+                    from src.risk.guards import emit_alert
+                    emit_alert("P2", f"{direction_str}{offset_str} {pTrade.InstrumentID} {pTrade.Volume}手@{pTrade.Price:.2f}",
+                               {"event_code": "TRADE_EXECUTED", "source": "simnow_td",
+                                "instrument": pTrade.InstrumentID, "trade_id": pTrade.TradeID.strip(),
+                                "category": "交易"})
+                except Exception:
+                    pass
 
         def OnRtnOrder(self, pOrder):
             if not pOrder:

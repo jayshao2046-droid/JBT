@@ -536,9 +536,7 @@ def ctp_connect(silent: bool = False):
     if not silent:
         try:
             from src.risk.guards import emit_alert
-            if st["md_connected"] or st["td_connected"]:
-                emit_alert("P2", "行情/交易接口连接成功", {"event_code": "CTP_CONNECTED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
-            else:
+            if not (st["md_connected"] or st["td_connected"]):
                 emit_alert("P1", "CTP 连接超时，行情与交易接口均未就绪", {"event_code": "CTP_CONNECT_FAILED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
         except Exception:
             pass
@@ -563,11 +561,7 @@ def ctp_disconnect():
             _gateway = None
         _system_state["ctp_md_connected"] = False
         _system_state["ctp_td_connected"] = False
-    try:
-        from src.risk.guards import emit_alert
-        emit_alert("P2", "CTP 接口主动断开连接", {"event_code": "CTP_DISCONNECTED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
-    except Exception:
-        pass
+    return {"result": "disconnected"}
     return {"result": "disconnected", "state": _safe_state()}
 
 
@@ -1047,17 +1041,11 @@ async def get_risk_alerts():
     import asyncio
 
     async def event_generator():
-        """SSE 事件生成器"""
+        """SSE 事件生成器。当前仅保活，避免伪造 P1 告警数据。"""
+        yield ": keepalive\n\n"
         while True:
-            # 这里应该从告警队列中获取实时告警
-            # 当前简化实现，返回模拟数据
-            alert = {
-                "level": "P1",
-                "message": "保证金率超过 70%",
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-            }
-            yield f"data: {alert}\n\n"
-            await asyncio.sleep(5)  # 每 5 秒推送一次
+            await asyncio.sleep(15)
+            yield ": keepalive\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

@@ -112,12 +112,8 @@ async def start_report_scheduler():
 
 @app.on_event("shutdown")
 def on_shutdown():
-    """服务关闭时发送系统关闭事件。"""
-    try:
-        from src.risk.guards import emit_alert
-        emit_alert("P2", "模拟交易服务正在关闭", {"event_code": "SYSTEM_SHUTDOWN", "source": "sim-trading"})
-    except Exception:
-        pass
+    """服务关闭时清理资源。"""
+    logger.info("sim-trading shutting down")
 
 
 async def _report_scheduler():
@@ -155,9 +151,10 @@ async def _report_scheduler():
 async def _ctp_connection_guardian():
     """
     后台守护协程 — 单一时段真相源：
-    - 交易时段：快速监控（30s）+ 断线重连 + 飞书告警
+    - 交易时段（9:00-11:30 / 13:00-15:00 / 21:00-23:00）：快速监控 + 断线重连 + 告警
     - 盘前窗口：主动建连 + 检查点通知
-    - 非交易时段（含周末）：完全静默，不连接、不监控、不告警
+    - 收盘后 5 分钟（11:35 / 15:05 / 23:05）：推送 Session 交易总结
+    - 非交易时段（含周末）：完全静默
     """
     import asyncio
     from datetime import datetime, time as dtime
@@ -171,14 +168,20 @@ async def _ctp_connection_guardian():
     # --- 盘前检查点（仅工作日触发）---
     CHECKPOINTS = [
         dtime(8, 30), dtime(8, 50),
-        dtime(13, 0), dtime(13, 10),
+        dtime(12, 40), dtime(12, 50),
         dtime(20, 30), dtime(20, 50),
     ]
-    # 盘前窗口：覆盖检查点时段，用于提前建连（交易时段之外的准备期）
+    # 盘前窗口：检查点时段 + 盘前准备
     _PRE_SESSION_WINDOWS = [
-        (dtime(8, 25), dtime(8, 55)),
-        (dtime(12, 55), dtime(13, 0)),
-        (dtime(20, 25), dtime(20, 55)),
+        (dtime(8, 25), dtime(9, 0)),
+        (dtime(12, 35), dtime(13, 0)),
+        (dtime(20, 25), dtime(21, 0)),
+    ]
+    # 收盘总结时间点（收盘后 5 分钟）
+    _SESSION_CLOSE_SUMMARIES = [
+        (dtime(11, 35), "上午盘"),
+        (dtime(15, 5), "下午盘"),
+        (dtime(23, 5), "夜盘"),
     ]
     FAST_INTERVAL = 30          # 交易时段检查间隔（秒）
     PRE_INTERVAL = 60           # 盘前窗口检查间隔（秒）
@@ -188,9 +191,10 @@ async def _ctp_connection_guardian():
     _fail_count = 0
     _last_checkpoint = None     # 避免同一检查点重复通知
     _last_account_refresh = 0.0
+    _last_summary_sent = None   # 避免同一收盘总结重复推送
 
     def _in_pre_session():
-        """工作日盘前窗口判定（交易时段之前的准备期）"""
+        """工作日盘前窗口判定"""
         if datetime.now().weekday() >= 5:
             return False
         now_t = datetime.now().time()
@@ -208,7 +212,19 @@ async def _ctp_connection_guardian():
                 return cp
         return None
 
-    def _send_guardian_alert(level: str, code: str, reason: str):
+    def _check_session_close():
+        """返回匹配的收盘总结 (time, label) 或 None"""
+        if datetime.now().weekday() >= 5:
+            return None
+        now_t = datetime.now().time()
+        for close_time, label in _SESSION_CLOSE_SUMMARIES:
+            close_min = close_time.hour * 60 + close_time.minute
+            now_min = now_t.hour * 60 + now_t.minute
+            if abs(now_min - close_min) <= 2:
+                return (close_time, label)
+        return None
+
+    def _send_guardian_alert(level: str, code: str, reason: str, category: str = ""):
         """通过 dispatcher 发送飞书/邮件通知"""
         try:
             from src.notifier.dispatcher import get_dispatcher, RiskEvent
@@ -226,10 +242,34 @@ async def _ctp_connection_guardian():
                 trace_id="",
                 event_code=code,
                 reason=reason,
+                category=category,
             )
             dp.dispatch(evt)
         except Exception as exc:
             logger.warning("[guardian] alert dispatch error: %s", exc)
+
+    def _send_session_summary(label: str):
+        """推送收盘 Session 交易总结"""
+        try:
+            from src.ledger.service import get_ledger
+            ledger = get_ledger()
+            summary = ledger.get_account_summary()
+            trades = summary.get("trades", [])
+            trade_count = summary.get("trade_count", 0)
+            total_pnl = summary.get("total_pnl", 0.0)
+            win_count = summary.get("win_count", 0)
+
+            if trade_count == 0:
+                reason = f"📊 {label}收盘总结：无成交"
+            else:
+                win_rate = (win_count / trade_count * 100) if trade_count > 0 else 0.0
+                reason = (f"📊 {label}收盘总结：{trade_count}笔成交，"
+                          f"盈亏 {total_pnl:+.2f}，胜率 {win_rate:.0f}%")
+
+            _send_guardian_alert("P2", "SESSION_CLOSE_SUMMARY", reason, category="交易")
+            logger.info("[guardian] session summary sent: %s", reason)
+        except Exception as exc:
+            logger.warning("[guardian] session summary error: %s", exc)
 
     async def _try_connect(silent: bool = True):
         """尝试 CTP 建连，返回 (md_ok, td_ok)"""
@@ -269,7 +309,11 @@ async def _ctp_connection_guardian():
         elif in_pre:
             await asyncio.sleep(PRE_INTERVAL)
         else:
-            # 非交易 + 非盘前 → 完全静默
+            # 非交易 + 非盘前 → 检查是否有收盘总结要发
+            sc = _check_session_close()
+            if sc is not None and sc[0] != _last_summary_sent:
+                _last_summary_sent = sc[0]
+                _send_session_summary(sc[1])
             await asyncio.sleep(IDLE_INTERVAL)
             continue
 
@@ -302,7 +346,6 @@ async def _ctp_connection_guardian():
             if cp is not None and cp != _last_checkpoint:
                 _last_checkpoint = cp
                 cp_str = f"{cp.hour:02d}:{cp.minute:02d}"
-                # 若未连接，先尝试建连再判断
                 if not md_ok or not td_ok:
                     logger.info("[guardian] checkpoint %s: not fully connected, attempting connect", cp_str)
                     md_ok, td_ok = await _try_connect(silent=True)
@@ -312,6 +355,12 @@ async def _ctp_connection_guardian():
                     _send_guardian_alert("P1", "CTP_TD_DOWN", f"盘前检查({cp_str})：交易通道断开")
                 if md_ok and td_ok:
                     logger.info("[guardian] checkpoint %s: all OK", cp_str)
+
+            # --- 收盘总结检查 ---
+            sc = _check_session_close()
+            if sc is not None and sc[0] != _last_summary_sent:
+                _last_summary_sent = sc[0]
+                _send_session_summary(sc[1])
 
             # --- 交易时段：连续监控 + 重连 ---
             if in_session:
