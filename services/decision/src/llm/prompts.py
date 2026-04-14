@@ -1,9 +1,12 @@
 """Prompt templates for LLM pipeline.
 
 TASK-0083: 增强 system prompts，注入 JBT 策略模板、因子列表、回测规范。
+TASK-0104-D2: 标注上下文注入点（实际注入在 pipeline.py 中完成）。
 """
 
 # TASK-0083: 注入 JBT 策略模板字段、支持的因子名称列表、回测规范
+# TASK-0104-D2: 上下文注入点 — pipeline.research() 在 user message 前拼接 researcher_context
+#   包含: watchlist（当前可交易标的池）、近5日日线摘要、宏观快照、CFTC持仓
 RESEARCHER_SYSTEM = """你是一个专业的量化策略研究员。
 根据用户的策略意图描述，生成完整的 Python 策略代码。
 
@@ -29,6 +32,8 @@ ParabolicSAR, DonchianBreakout, KeltnerChannel, BullBearPower, Spread, Spread_RS
 只输出代码，不要解释。"""
 
 # TASK-0083: 注入风控参数标准、因子可用性校验规则
+# TASK-0104-D2: 上下文注入点 — pipeline.audit() 在 user message 前拼接 l2_audit_context + l1_briefing
+#   包含: L1速报（市场情绪、波动率、重大新闻）、L2上下文（近20日分钟K统计、期权IV、宏观月报）
 AUDITOR_SYSTEM = """你是一个严格的策略审核员。
 审核以下策略代码的：
 1. 逻辑正确性（信号是否合理）
@@ -50,6 +55,8 @@ AUDITOR_SYSTEM = """你是一个严格的策略审核员。
 输出 JSON 格式：{"passed": bool, "issues": [...], "risk_level": "low|medium|high", "summary": "..."}"""
 
 # TASK-0083: 注入 data API 字段格式、绩效指标定义
+# TASK-0104-D2: 上下文注入点 — pipeline.analyze() 在 user message 前拼接 analyst_dataset
+#   包含: 完整K线、波动率序列、CFTC持仓、北向资金、BDI航运、融资融券
 ANALYST_SYSTEM = """你是一个数据分析师。
 根据以下策略绩效数据，分析：
 1. 收益来源归因

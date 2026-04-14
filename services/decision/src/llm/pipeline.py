@@ -1,6 +1,7 @@
 """LLM Pipeline for serial model execution.
 
 TASK-0083: 集成数据和研究中心，支持自动拉取 K 线、沙箱回测。
+TASK-0104-D2: 注入夜间预读上下文到三个角色 prompt。
 """
 
 import logging
@@ -11,6 +12,7 @@ from typing import Any, Dict, Optional
 import httpx
 
 from .client import OllamaClient
+from .context_loader import get_daily_context
 from .prompts import ANALYST_SYSTEM, AUDITOR_SYSTEM, RESEARCHER_SYSTEM
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,8 @@ class LLMPipeline:
         """
         Call deepcoder to generate strategy code.
 
+        TASK-0104-D2: 注入 researcher_context 到 user message 前。
+
         Args:
             intent: Strategy intent description
 
@@ -46,9 +50,37 @@ class LLMPipeline:
                 - error: Error message if failed
         """
         start_time = time.time()
+
+        # TASK-0104-D2: 尝试加载今日预读上下文
+        ctx = get_daily_context()
+        context_block = ""
+        if ctx:
+            researcher_ctx = ctx.get("researcher_context", {})
+            if researcher_ctx:
+                # 格式化研究员上下文为可读文本
+                watchlist = researcher_ctx.get("watchlist", [])
+                daily_summary = researcher_ctx.get("daily_summary", [])
+                macro_snapshot = researcher_ctx.get("macro_snapshot", {})
+
+                context_parts = ["[今日市场预读]"]
+                if watchlist:
+                    context_parts.append(f"当前可交易标的池: {', '.join(watchlist[:10])}")
+                if daily_summary:
+                    context_parts.append("近5日市场概况:")
+                    for item in daily_summary[:3]:
+                        context_parts.append(f"  {item.get('symbol')}: 平均涨跌 {item.get('avg_change_pct')}%")
+                if macro_snapshot:
+                    context_parts.append(f"宏观环境: {', '.join([f'{k}={v}' for k, v in list(macro_snapshot.items())[:5]])}")
+
+                context_block = "\n".join(context_parts) + "\n\n"
+                logger.info("已注入研究员上下文到 research() prompt")
+
+        # 将上下文拼接到 intent 前
+        user_content = context_block + intent
+
         messages = [
             {"role": "system", "content": RESEARCHER_SYSTEM},
-            {"role": "user", "content": intent},
+            {"role": "user", "content": user_content},
         ]
 
         result = await self.client.chat(self.researcher_model, messages)
@@ -73,6 +105,8 @@ class LLMPipeline:
         """
         Call qwen3 to audit strategy code.
 
+        TASK-0104-D2: 注入 l2_audit_context + l1_briefing 到 user message 前。
+
         Args:
             code: Strategy code to audit
 
@@ -87,9 +121,42 @@ class LLMPipeline:
                 - error: Error message if failed
         """
         start_time = time.time()
+
+        # TASK-0104-D2: 尝试加载今日预读上下文
+        ctx = get_daily_context()
+        context_block = ""
+        if ctx:
+            l1_brief = ctx.get("l1_briefing", {})
+            audit_ctx = ctx.get("l2_audit_context", {})
+
+            if l1_brief or audit_ctx:
+                context_parts = ["[今日审核参考]"]
+
+                # L1 速报
+                if l1_brief:
+                    sentiment = l1_brief.get("sentiment_summary", {})
+                    volatility = l1_brief.get("volatility_snapshot", {})
+                    news_count = len(l1_brief.get("news_titles", []))
+                    context_parts.append(f"L1速报: 市场情绪 {sentiment}, 波动率 {volatility}, 重大新闻 {news_count} 条")
+
+                # L2 上下文
+                if audit_ctx:
+                    minute_stats = audit_ctx.get("minute_stats", [])
+                    iv_snapshot = audit_ctx.get("iv_snapshot", {})
+                    if minute_stats:
+                        context_parts.append(f"L2上下文: 近20日分钟K统计 {len(minute_stats)} 只标的")
+                    if iv_snapshot:
+                        context_parts.append(f"期权IV: {', '.join([f'{k}={v}' for k, v in list(iv_snapshot.items())[:3]])}")
+
+                context_block = "\n".join(context_parts) + "\n\n"
+                logger.info("已注入审核上下文到 audit() prompt")
+
+        # 将上下文拼接到 code 前
+        user_content = context_block + code
+
         messages = [
             {"role": "system", "content": AUDITOR_SYSTEM},
-            {"role": "user", "content": code},
+            {"role": "user", "content": user_content},
         ]
 
         result = await self.client.chat(self.auditor_model, messages)
@@ -137,6 +204,7 @@ class LLMPipeline:
         Call phi4-reasoning to analyze performance data.
 
         TASK-0083: 增加自动从 data 服务拉取 K 线数据能力。
+        TASK-0104-D2: 注入 analyst_dataset 到 user message 前。
 
         Args:
             performance_data: Strategy performance metrics
@@ -162,8 +230,34 @@ class LLMPipeline:
             except Exception as exc:
                 logger.warning(f"拉取 K 线数据失败: {exc}")
 
+        # TASK-0104-D2: 尝试加载今日预读上下文
+        ctx = get_daily_context()
+        context_block = ""
+        if ctx:
+            analyst_data = ctx.get("analyst_dataset", {})
+            if analyst_data:
+                context_parts = ["[今日分析师数据集]"]
+
+                # 波动率序列
+                vol_series = analyst_data.get("volatility_series", [])
+                if vol_series:
+                    context_parts.append(f"波动率序列: {len(vol_series)} 条记录")
+
+                # 北向资金
+                north_flow = analyst_data.get("north_flow_series", [])
+                if north_flow:
+                    context_parts.append(f"北向资金: {len(north_flow)} 条记录")
+
+                # 融资融券
+                margin_series = analyst_data.get("margin_series", [])
+                if margin_series:
+                    context_parts.append(f"融资融券: {len(margin_series)} 条记录")
+
+                context_block = "\n".join(context_parts) + "\n\n"
+                logger.info("已注入分析师数据集到 analyze() prompt")
+
         # Format performance data as text
-        perf_text = "\n".join([f"{k}: {v}" for k, v in performance_data.items()])
+        perf_text = context_block + "\n".join([f"{k}: {v}" for k, v in performance_data.items()])
         if kline_data:
             perf_text += f"\n\nK 线数据样本（最近 5 条）:\n{kline_data[:5]}"
 
