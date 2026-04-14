@@ -49,8 +49,26 @@ export function useDashboardData() {
         }))
         setSignals(adapted)
       }).catch(() => setSignals([])),
-      dataApi.getCollectors().then(setCollectors).catch(() => setCollectors([])),
-      dataApi.getNews().then(setNews).catch(() => setNews([])),
+      dataApi.getCollectors().then((data) => {
+        const adapted = data.collectors.map((c) => ({
+          name: c.name,
+          status: (c.status === 'success' ? 'running' : c.status === 'failed' ? 'error' : 'stopped') as 'running' | 'stopped' | 'error',
+          last_update: c.last_run_time || c.age_str,
+          data_count: 0,
+        }))
+        setCollectors(adapted)
+      }).catch(() => setCollectors([])),
+      dataApi.getNews().then((data) => {
+        const adapted = data.items.map((item, idx) => ({
+          id: item.id || `news-${idx}`,
+          title: item.title,
+          source: item.source,
+          timestamp: item.publish_time,
+          url: undefined,
+          summary: item.summary,
+        }))
+        setNews(adapted)
+      }).catch(() => setNews([])),
     ])
       .then((results) => {
         const failed = results.filter((r) => r.status === "rejected")

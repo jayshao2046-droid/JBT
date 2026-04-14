@@ -2,10 +2,28 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useSignals } from "@/hooks/use-signals"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
+import { useEffect, useState } from "react"
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ChartComponents = Record<string, any>
 
 export function SignalDistributionChart() {
   const { overview, loading, error } = useSignals()
+  const [Chart, setChart] = useState<ChartComponents | null>(null)
+
+  useEffect(() => {
+    import("recharts").then((mod) => {
+      setChart({
+        BarChart: mod.BarChart,
+        Bar: mod.Bar,
+        XAxis: mod.XAxis,
+        YAxis: mod.YAxis,
+        CartesianGrid: mod.CartesianGrid,
+        Tooltip: mod.Tooltip,
+        ResponsiveContainer: mod.ResponsiveContainer,
+      })
+    })
+  }, [])
 
   if (loading) {
     return <div className="text-muted-foreground">加载中...</div>
@@ -30,15 +48,21 @@ export function SignalDistributionChart() {
         <CardTitle>信号分布</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="count" fill="hsl(var(--primary))" />
-          </BarChart>
-        </ResponsiveContainer>
+        {Chart ? (
+          <Chart.ResponsiveContainer width="100%" height={300}>
+            <Chart.BarChart data={chartData}>
+              <Chart.CartesianGrid strokeDasharray="3 3" />
+              <Chart.XAxis dataKey="name" />
+              <Chart.YAxis />
+              <Chart.Tooltip />
+              <Chart.Bar dataKey="count" fill="hsl(var(--primary))" />
+            </Chart.BarChart>
+          </Chart.ResponsiveContainer>
+        ) : (
+          <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+            加载图表中...
+          </div>
+        )}
 
         <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
           {overview.stage_counts.map((item) => (
