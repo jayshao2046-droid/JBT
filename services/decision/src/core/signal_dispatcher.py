@@ -40,11 +40,12 @@ class SignalDispatcher:
     async def dispatch(self, request: SignalDispatchRequest) -> SignalDispatchResponse:
         now = datetime.now(timezone.utc).isoformat()
 
-        # 0. FIFO 淘汰逻辑（防止内存泄漏）
+        # 0. FIFO 淘汰逻辑（防止内存泄漏）- 安全修复：P1-1
         if len(self._dispatched) > self.max_history:
+            # 使用稳定的时间戳排序，避免空字符串导致排序不稳定
             oldest_keys = sorted(
                 self._dispatched.keys(),
-                key=lambda k: self._dispatched[k].get("dispatched_at", ""),
+                key=lambda k: self._dispatched[k].get("dispatched_at", "1970-01-01T00:00:00Z"),
             )[: len(self._dispatched) - self.max_history]
             for key in oldest_keys:
                 del self._dispatched[key]

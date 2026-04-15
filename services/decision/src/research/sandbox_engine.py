@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import math
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -39,7 +40,9 @@ class SandboxEngine:
 
     def __init__(self, data_service_url: str = "http://localhost:8105") -> None:
         self.data_service_url = data_service_url.rstrip("/")
+        # 安全修复：P2-5 - 添加并发锁保护缓存
         self._cache: dict[str, list[dict]] = {}
+        self._cache_lock = asyncio.Lock()
 
     async def run_backtest(
         self,
@@ -139,8 +142,11 @@ class SandboxEngine:
         asset_type: str,
     ) -> list[dict]:
         cache_key = f"{asset_type}:{symbol}:{start}:{end}"
-        if cache_key in self._cache:
-            return self._cache[cache_key]
+
+        # 安全修复：P2-5 - 使用锁保护缓存访问
+        async with self._cache_lock:
+            if cache_key in self._cache:
+                return self._cache[cache_key]
 
         if asset_type == "stock":
             url = f"{self.data_service_url}/api/v1/stocks/bars"
@@ -155,7 +161,9 @@ class SandboxEngine:
 
         data = resp.json()
         bars: list[dict] = data if isinstance(data, list) else data.get("bars", data.get("data", []))
-        self._cache[cache_key] = bars
+
+        async with self._cache_lock:
+            self._cache[cache_key] = bars
         return bars
 
     # ------------------------------------------------------------------

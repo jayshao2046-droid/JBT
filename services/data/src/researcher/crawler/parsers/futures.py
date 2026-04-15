@@ -1,4 +1,9 @@
-"""期货专用解析器 — 东财/金十/新浪/各交易所公告"""
+"""期货专用解析器 — 东财/金十/新浪/各交易所公告
+
+安全说明：
+- 所有 XPath 表达式均为硬编码，不支持动态配置（安全修复：P1-5）
+- 如需新增解析规则，必须在代码中硬编码，不得从外部输入
+"""
 
 from typing import Dict, Any, Optional
 from datetime import datetime

@@ -134,6 +134,10 @@ class FactorLoader:
         if jbt_factors:
             logger.info(f"共享因子注册表已加载，包含 {len(jbt_factors)} 个因子")
 
+        # 安全修复：P2-2 - 验证 strategy_id 格式
+        if not re.match(r'^[a-zA-Z0-9_-]+$', strategy_id):
+            raise ValueError(f"Invalid strategy_id format: {strategy_id}")
+
         symbol = self._resolve_data_symbol(strategy_id)
         bars = self._fetch_bars(
             symbol=symbol,
@@ -149,6 +153,11 @@ class FactorLoader:
         return X, y
 
     def _resolve_data_symbol(self, strategy_id: str) -> str:
+        # 安全修复：P2-2 - 验证 strategy_id 格式
+        import re
+        if not re.match(r'^[a-zA-Z0-9_-]+$', strategy_id):
+            raise ValueError(f"Invalid strategy_id format: {strategy_id}")
+
         cert = get_backtest_gate().get_cert(strategy_id)
         candidates = [
             cert.executed_data_symbol if cert is not None else "",

@@ -156,7 +156,10 @@ class FileStateStore:
             json.dumps(state, ensure_ascii=True, indent=2, sort_keys=True),
             encoding="utf-8",
         )
+        # 安全修复：P1-3 - 设置严格文件权限（仅所有者可读写）
+        tmp_path.chmod(0o600)
         tmp_path.replace(self._file_path)
+        self._file_path.chmod(0o600)
 
 
 _state_store: Optional[FileStateStore] = None

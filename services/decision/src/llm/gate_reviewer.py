@@ -5,6 +5,8 @@ TASK-0112 Batch A: phi4-reasoning:14b L1 快审 + L2 深审封装。
 
 import json
 import logging
+import os
+import re
 from typing import Any, Dict, List, Optional
 
 from .client import OllamaClient
@@ -17,8 +19,9 @@ class GateReviewer:
     """phi4-reasoning:14b L1/L2 门控审查器。"""
 
     MODEL = "phi4-reasoning:14b"
-    L1_TIMEOUT = 30.0  # L1 快审超时 30s
-    L2_TIMEOUT = 60.0  # L2 深审超时 60s
+    # 安全修复：P2-3 - 从环境变量读取超时配置
+    L1_TIMEOUT = float(os.environ.get("GATE_L1_TIMEOUT", "30.0"))  # L1 快审超时
+    L2_TIMEOUT = float(os.environ.get("GATE_L2_TIMEOUT", "60.0"))  # L2 深审超时
 
     def __init__(self, client: Optional[OllamaClient] = None):
         """初始化门控审查器。
@@ -27,6 +30,37 @@ class GateReviewer:
             client: OllamaClient 实例，默认创建新实例
         """
         self.client = client or OllamaClient()
+
+    @staticmethod
+    def _sanitize_context(context: str) -> str:
+        """清理 context 防止 prompt 注入（安全修复：P0-3）。
+
+        Args:
+            context: 原始上下文字符串
+
+        Returns:
+            清理后的上下文字符串
+        """
+        if not context:
+            return ""
+
+        # 移除可能的 prompt 注入关键词
+        dangerous_patterns = [
+            r'(?i)ignore\s+(all\s+)?(previous\s+)?(instructions?|prompts?|rules?)',
+            r'(?i)system\s+(prompt|message|instruction)',
+            r'(?i)forget\s+(everything|all|previous)',
+            r'(?i)you\s+are\s+now',
+            r'(?i)new\s+(instruction|prompt|role)',
+            r'(?i)disregard\s+(previous|above)',
+            r'(?i)override\s+(instruction|prompt)',
+        ]
+
+        cleaned = context
+        for pattern in dangerous_patterns:
+            cleaned = re.sub(pattern, '[FILTERED]', cleaned)
+
+        # 限制长度防止过长输入
+        return cleaned[:2000]
 
     async def l1_quick_review(
         self,
@@ -70,6 +104,9 @@ class GateReviewer:
         factor_summary = ", ".join([f"{f['name']}={f['value']:.3f}" for f in factors[:5]])
         signal_desc = "做多" if signal == 1 else "做空" if signal == -1 else "观望"
 
+        # 清理 context 防止 prompt 注入（安全修复：P0-3）
+        context = self._sanitize_context(context)
+
         system_prompt = """你是 phi4-reasoning 门控审查员，负责 L1 快速审查。
 任务：判断信号方向是否与近期趋势严重矛盾。
 输出格式：严格 JSON，包含 pass(bool), risk_flag(str), confidence(float), reasoning(str)。"""
@@ -112,7 +149,8 @@ class GateReviewer:
                 "degraded": bool(missing_sources),
             }
         except json.JSONDecodeError:
-            logger.warning(f"L1 快审 JSON 解析失败: {content}")
+            # 安全修复：P1-6 - 不记录完整内容，仅记录长度
+            logger.warning(f"L1 快审 JSON 解析失败，内容长度: {len(content)}")
             return {
                 "pass": False,
                 "risk_flag": "json_parse_error",
@@ -222,10 +260,11 @@ L1 快审结果:
                 "degraded": bool(missing_sources),
             }
         except json.JSONDecodeError:
-            logger.warning(f"L2 深审 JSON 解析失败: {content}")
+            # 安全修复：P1-6 - 不记录完整内容，仅记录长度
+            logger.warning(f"L2 深审 JSON 解析失败，内容长度: {len(content)}")
             return {
                 "approve": False,
-                "reasoning": f"JSON 解析失败，原始响应: {content[:200]}",
+                "reasoning": "JSON 解析失败",
                 "confidence": 0.0,
                 "risk_assessment": "json_parse_error",
                 "degraded": bool(missing_sources),

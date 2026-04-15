@@ -45,15 +45,10 @@ class TushareFullCollector(BaseCollector):
         super().__init__(name="tushare_full", **kwargs)
         data_sources = self.config.get("data_sources", {})
         self.token = str(data_sources.get("tushare", {}).get("token", "") or "")
-        # Try .env fallback
+        # 仅从环境变量读取（安全修复：P1-7）
+        # 不再从 .env 文件读取，避免文件权限问题和版本控制泄露风险
         if not self.token:
             self.token = os.environ.get("TUSHARE_TOKEN", "")
-        if not self.token:
-            env_path = Path(__file__).resolve().parents[3] / ".env"
-            if env_path.exists():
-                for line in env_path.read_text().splitlines():
-                    if line.startswith("TUSHARE_TOKEN="):
-                        self.token = line.split("=", 1)[1].strip()
         self._pro = None
         # Storage base
         storage_cfg = self.config.get("storage", {})

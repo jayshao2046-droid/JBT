@@ -2,6 +2,7 @@
 DecisionEmailNotifier — TASK-0021 F batch
 SMTP HTML 邮件通知，遵循 JBT 统一 Card 邮件结构。
 """
+import html
 import logging
 import os
 import smtplib
@@ -133,9 +134,12 @@ class DecisionEmailNotifier:
 
         body_plain = event.body.replace("\n", " ")[:200]
 
-        html = _HTML_TEMPLATE.format(
-            color=color, icon=icon, level=level_str, title=event.title,
-            event_code=event.event_code, body_plain=body_plain,
+        # 安全修复：P1-2 - HTML 转义防止注入
+        html_content = _HTML_TEMPLATE.format(
+            color=color, icon=icon, level=level_str,
+            title=html.escape(event.title),
+            event_code=html.escape(event.event_code),
+            body_plain=html.escape(body_plain),
             track_rows=track_rows, ts=ts,
         )
 
@@ -143,7 +147,7 @@ class DecisionEmailNotifier:
         msg["Subject"] = f"[DECISION-{level_str}] {event.title}"
         msg["From"] = self._from_addr
         msg["To"] = self._to_addr
-        msg.attach(MIMEText(html, "html", "utf-8"))
+        msg.attach(MIMEText(html_content, "html", "utf-8"))
 
         try:
             with smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=15) as server:

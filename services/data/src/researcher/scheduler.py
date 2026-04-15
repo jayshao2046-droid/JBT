@@ -1,6 +1,7 @@
 """每小时调度器 — 11个整点 + 早晚报邮件 + 突发检测 + Mini推送"""
 
 import asyncio
+import os
 import time
 from datetime import datetime
 from typing import Optional, Dict, Any, List
@@ -18,6 +19,7 @@ from .staging import StagingManager
 from .summarizer import Summarizer
 from .reporter import Reporter
 from .notifier import ResearcherNotifier
+from .report_reviewer import ReportReviewer
 from .notify import DailyDigest, ResearcherEmailSender, build_morning_report_html, build_evening_report_html
 from .crawler.engine import CodeCrawler, BrowserCrawler
 from .crawler.source_registry import SourceRegistry
@@ -40,6 +42,24 @@ class ResearcherScheduler:
         )
         self.daily_digest = DailyDigest()
         self.email_sender = ResearcherEmailSender()
+        self.reviewer = ReportReviewer(
+            feishu_webhook=self.notifier.feishu_webhook,
+            stats_tracker=self.reporter.stats_tracker,
+        )
+        # 服务启动时记录到当日统计
+        self.reporter.stats_tracker.record_startup()
+
+        # 尝试注册 2h 健康度飞书报告
+        try:
+            from .researcher_health import ResearcherHealth
+            self.health_reporter = ResearcherHealth(
+                feishu_webhook=self.notifier.feishu_webhook,
+                stats_tracker=self.reporter.stats_tracker,
+            )
+        except Exception as e:
+            # 安全修复：P2-1 - 记录异常详情
+            logger.error(f"Failed to initialize health reporter: {e}", exc_info=True)
+            self.health_reporter = None
 
     async def execute_hourly(self, hour: int) -> Dict[str, Any]:
         """
@@ -101,6 +121,9 @@ class ResearcherScheduler:
             # 6. 推送飞书卡片
             await self.notifier.notify_report_done(report)
 
+            # 6b. 决策端置信度评审 + 飞书评级通知
+            await self.reviewer.review_and_notify(report)
+
             # 7. 推送到 Mini data API
             await self._push_to_data_api(report)
 
@@ -110,7 +133,31 @@ class ResearcherScheduler:
             elif hour == ResearcherConfig.EMAIL_EVENING_TRIGGER_HOUR:
                 await self._send_evening_report(date)
 
+            # 9. 研究员健康度报告（每 HEALTH_INTERVAL_HOURS 整点触发）
+            if self.health_reporter and hour % ResearcherConfig.HEALTH_INTERVAL_HOURS == 0:
+                try:
+                    await self.health_reporter.send_health_card()
+                except Exception as e:
+                    # 安全修复：P2-1 - 记录异常详情
+                    logger.warning(f"Health report push failed: {e}")
+                    pass  # 健康度推送失败不影响主流程
+
             elapsed = time.time() - start_time
+
+            # 记录每日统计（成功路径）
+            safe_seg = f"{hour:02d}-00"
+            _json_path = os.path.join(
+                ResearcherConfig.REPORTS_DIR,
+                date,
+                f"{safe_seg}.json",
+            )
+            self.reporter.stats_tracker.record_report(
+                hour=hour,
+                report_id=report.report_id,
+                json_path=_json_path,
+                elapsed_s=elapsed,
+                success=True,
+            )
 
             return {
                 "success": True,
@@ -125,6 +172,14 @@ class ResearcherScheduler:
         except Exception as e:
             error_msg = str(e)
             await self.notifier.notify_report_fail(f"{hour:02d}", error_msg)
+            # 记录每日统计（失败路径）
+            self.reporter.stats_tracker.record_report(
+                hour=hour,
+                report_id="",
+                json_path="",
+                elapsed_s=time.time() - start_time,
+                success=False,
+            )
             return {
                 "success": False,
                 "error": error_msg,
@@ -178,7 +233,9 @@ class ResearcherScheduler:
 
             return True
 
-        except Exception:
+        except Exception as e:
+            # 安全修复：P2-1 - 记录异常详情
+            logger.error(f"Health check failed: {e}", exc_info=True)
             # 检查失败，保守起见暂停
             return False
 
@@ -186,10 +243,12 @@ class ResearcherScheduler:
         """检查 sim-trading 延迟（毫秒）"""
         try:
             start = time.time()
-            resp = httpx.get(f"{ResearcherConfig.DATA_API_URL}/api/v1/health", timeout=5.0)
+            resp = httpx.get(f"{ResearcherConfig.DATA_API_URL}/api/v1/health", timeout=ResearcherConfig.HTTP_TIMEOUT_SHORT)
             latency_ms = (time.time() - start) * 1000
             return latency_ms if resp.status_code == 200 else 999.0
-        except Exception:
+        except Exception as e:
+            # 安全修复：P2-1 - 记录异常详情
+            logger.warning(f"Latency check failed: {e}")
             return 999.0
 
     @staticmethod
@@ -288,7 +347,9 @@ class ResearcherScheduler:
                 else:
                     failed_sources.append(source.source_id)
 
-            except Exception:
+            except Exception as e:
+                # 安全修复：P2-1 - 记录异常详情
+                logger.error(f"Crawl failed for {source.source_id}: {e}", exc_info=True)
                 failed_sources.append(source.source_id)
 
         return {
@@ -317,7 +378,8 @@ class ResearcherScheduler:
 
     async def _push_to_data_api(self, report) -> bool:
         """
-        推送报告到 Mini data API，供决策端消费
+        推送报告到 Mini data API，供决策端消费。
+        推送成功且 PUSH_RETENTION_LOCAL=False 时删除 Alienware 本地文件。
 
         Args:
             report: ResearchReport
@@ -330,11 +392,25 @@ class ResearcherScheduler:
                 resp = await client.post(
                     ResearcherConfig.DATA_API_PUSH_URL,
                     json=report.dict(),
-                    timeout=10.0
+                    timeout=10.0,
                 )
-                return resp.status_code == 200
+                success = resp.status_code in (200, 201)
+
+            if success and not ResearcherConfig.PUSH_RETENTION_LOCAL:
+                # 推送成功后删除本地 JSON/MD 文件
+                safe_segment = report.segment.replace(":", "-")
+                date_dir = os.path.join(ResearcherConfig.REPORTS_DIR, report.date)
+                for ext in (".json", ".md"):
+                    local_path = os.path.join(date_dir, f"{safe_segment}{ext}")
+                    try:
+                        if os.path.exists(local_path):
+                            os.remove(local_path)
+                    except Exception:
+                        pass  # 删除失败不影响主流程
+
+            return success
         except Exception:
-            # 推送失败不影响主流程
+            # 推送失败不影响主流程，本地文件保留
             return False
 
     async def _send_morning_report(self, date: str):

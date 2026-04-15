@@ -16,6 +16,7 @@ from typing import Any, NamedTuple, Optional
 import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException, Header, Query, Request
 from fastapi.security import APIKeyHeader
+from pydantic import BaseModel
 
 try:
     import yaml
@@ -185,14 +186,21 @@ _FRESHNESS_THRESHOLDS = {
 _DATA_API_KEY = os.environ.get("DATA_API_KEY", "")
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-_PUBLIC_PATHS = {"/health", "/api/v1/health", "/api/v1/version"}
+_PUBLIC_PATHS = {
+    "/health",
+    "/api/v1/health",
+    "/api/v1/version",
+    "/api/v1/researcher/reports",
+    "/api/v1/researcher/report/latest",
+    "/api/v1/researcher/reports",
+}
 
 
 async def _verify_api_key(request: Request, api_key: Optional[str] = Depends(_api_key_header)) -> None:
-    if not _DATA_API_KEY:
-        return
     if request.url.path in _PUBLIC_PATHS:
         return
+    if not _DATA_API_KEY:
+        raise HTTPException(status_code=503, detail="API key not configured")
     if not api_key or not hmac.compare_digest(api_key, _DATA_API_KEY):
         raise HTTPException(status_code=403, detail="invalid or missing API key")
 
@@ -1418,12 +1426,16 @@ def _verify_ops_token(token: Optional[str]) -> None:
 def ops_restart_collector(
     collector: str = Query(..., min_length=1),
     x_ops_token: Optional[str] = Header(None, alias="X-Ops-Token"),
+    request: Request = None,
 ) -> dict[str, Any]:
     """重启指定采集器（通过 launchctl 重新加载 plist）。
 
     由飞书 P0 按钮触发或命令行手动调用。
     """
     _verify_ops_token(x_ops_token)
+    # 安全修复：P2-6 - 添加审计日志
+    client_host = request.client.host if request and request.client else "unknown"
+    logger.info(f"OPS: restart_collector called by {client_host}, collector={collector}")
 
     # 安全白名单
     _PLIST_MAP = {
@@ -1446,21 +1458,35 @@ def ops_restart_collector(
     if not plist_id:
         raise HTTPException(status_code=422, detail=f"unknown collector: {collector}")
 
+    # 严格验证 plist_id 格式（防止命令注入）
+    import re
+    if not re.match(r'^[a-zA-Z0-9._-]+$', plist_id):
+        logger.error(f"Invalid plist_id format: {plist_id}")
+        raise HTTPException(status_code=400, detail="invalid plist_id format")
+
     plist_path = Path.home() / "Library" / "LaunchAgents" / f"{plist_id}.plist"
-    if not plist_path.exists():
+    if not plist_path.exists() or not plist_path.is_file():
         raise HTTPException(status_code=404, detail=f"plist not found: {plist_id}")
+
+    # 验证路径安全（防止路径遍历）
+    if not str(plist_path).startswith(str(Path.home() / "Library" / "LaunchAgents")):
+        logger.error(f"Invalid plist path: {plist_path}")
+        raise HTTPException(status_code=403, detail="invalid plist path")
 
     # kickstart = unload + load
     try:
+        logger.info(f"OPS: restart_collector called, collector={collector}, plist={plist_id}")
         subprocess.run(
             ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{plist_id}"],
             capture_output=True, text=True, timeout=15,
         )
         return {"status": "ok", "collector": collector, "plist": plist_id, "action": "restart"}
     except subprocess.TimeoutExpired:
+        logger.error(f"Restart collector timeout: {collector}")
         raise HTTPException(status_code=504, detail="restart timed out")
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.error(f"Restart collector failed: {collector}, error: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Operation failed")
 
 
 @app.post("/api/v1/ops/auto-remediate")
@@ -1476,6 +1502,7 @@ def ops_auto_remediate(
 
     try:
         import sys
+        logger.info(f"OPS: auto_remediate called")
         result = subprocess.run(
             [sys.executable, str(remediate_script)],
             capture_output=True, text=True, timeout=120,
@@ -1487,9 +1514,60 @@ def ops_auto_remediate(
             "stderr": result.stderr[-200:],
         }
     except subprocess.TimeoutExpired:
+        logger.error("Auto remediate timeout")
         raise HTTPException(status_code=504, detail="remediation timed out")
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.error(f"Auto remediate failed: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Operation failed")
+
+
+# ── 研究员研报存档 API ────────────────────────────────────────────────────
+try:
+    import researcher_store as _rs
+    _RS_AVAILABLE = True
+except Exception:
+    _RS_AVAILABLE = False
+
+
+class _ResearchReportPayload(BaseModel):
+    report_id: str = ""
+    date: str = ""
+    segment: str = ""
+    hour: str = ""
+    market_overview: str = ""
+    symbols: dict = {}
+    futures_summary: dict = {}
+    confidence: float = 0.0
+    confidence_reason: str = ""
+
+
+@app.post("/api/v1/researcher/reports")
+def post_researcher_report(payload: _ResearchReportPayload):
+    """Alienware 推送研报 → Mini 存档"""
+    if not _RS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="researcher_store not available")
+    data = payload.model_dump()
+    result = _rs.save(data)
+    return {"status": "ok", **result}
+
+
+@app.get("/api/v1/researcher/report/latest")
+def get_latest_researcher_report(date: Optional[str] = None):
+    """返回最新一份完整研报"""
+    if not _RS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="researcher_store not available")
+    data = _rs.get_latest(date)
+    if data is None:
+        raise HTTPException(status_code=404, detail="no report found")
+    return data
+
+
+@app.get("/api/v1/researcher/reports")
+def list_researcher_reports(date: Optional[str] = None, limit: int = 24):
+    """返回指定日期研报摘要列表"""
+    if not _RS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="researcher_store not available")
+    return _rs.list_reports(date, limit)
 
 
 if __name__ == "__main__":
