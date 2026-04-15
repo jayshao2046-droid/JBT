@@ -293,10 +293,20 @@ def get_bars(
     symbol: str = Query(..., min_length=1),
     timeframe_minutes: int = Query(1, ge=1),
     start: str = Query(..., min_length=1),
-    end: str = Query(..., min_length=1),
+    end: Optional[str] = Query(None),
+    limit: Optional[int] = Query(None, ge=1),
 ) -> dict[str, Any]:
     parsed_start = _parse_requested_time(start, field_name="start", is_end=False)
-    parsed_end = _parse_requested_time(end, field_name="end", is_end=True)
+
+    # 如果没有提供 end，使用当前时间
+    if end is None:
+        parsed_end = ParsedTimeRange(
+            timestamp=datetime.now(),
+            date_only=False
+        )
+    else:
+        parsed_end = _parse_requested_time(end, field_name="end", is_end=True)
+
     if parsed_end.timestamp < parsed_start.timestamp:
         raise HTTPException(status_code=422, detail="end must be greater than or equal to start")
 
@@ -308,6 +318,10 @@ def get_bars(
 
     if timeframe_minutes > 1 and not filtered.empty:
         filtered = _resample_bars(filtered, timeframe_minutes)
+
+    # 如果指定了 limit，只返回最新的 N 条
+    if limit is not None and not filtered.empty:
+        filtered = filtered.tail(limit)
 
     bars = _serialize_bars(filtered)
     return {
