@@ -45,7 +45,7 @@ class TushareFullCollector(BaseCollector):
         super().__init__(name="tushare_full", **kwargs)
         data_sources = self.config.get("data_sources", {})
         self.token = str(data_sources.get("tushare", {}).get("token", "") or "")
-        # 仅从环境变量读取（安全修复：P1-7）
+        # P1-7 修复：仅从环境变量读取（安全修复）
         # 不再从 .env 文件读取，避免文件权限问题和版本控制泄露风险
         if not self.token:
             self.token = os.environ.get("TUSHARE_TOKEN", "")

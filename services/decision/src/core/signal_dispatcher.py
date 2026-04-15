@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -30,7 +31,8 @@ class SignalDispatcher:
 
     def __init__(self, sim_trading_url: str = "http://localhost:8101") -> None:
         self.sim_trading_url = sim_trading_url.rstrip("/")
-        self._dispatched: dict[str, dict] = {}  # signal_id -> status record
+        # 安全修复：P1-1 - 使用 OrderedDict 替代普通 dict，自动维护插入顺序
+        self._dispatched: OrderedDict[str, dict] = OrderedDict()
         self.max_history = 10000
 
     # ------------------------------------------------------------------
@@ -41,14 +43,11 @@ class SignalDispatcher:
         now = datetime.now(timezone.utc).isoformat()
 
         # 0. FIFO 淘汰逻辑（防止内存泄漏）- 安全修复：P1-1
-        if len(self._dispatched) > self.max_history:
-            # 使用稳定的时间戳排序，避免空字符串导致排序不稳定
-            oldest_keys = sorted(
-                self._dispatched.keys(),
-                key=lambda k: self._dispatched[k].get("dispatched_at", "1970-01-01T00:00:00Z"),
-            )[: len(self._dispatched) - self.max_history]
-            for key in oldest_keys:
-                del self._dispatched[key]
+        # OrderedDict 自动维护插入顺序，直接删除最旧的记录，O(1) 复杂度
+        if len(self._dispatched) >= self.max_history:
+            num_to_remove = len(self._dispatched) - self.max_history + 1
+            for _ in range(num_to_remove):
+                self._dispatched.popitem(last=False)  # FIFO: 删除最早插入的项
 
         # 1. 幂等检查
         if request.signal_id in self._dispatched:

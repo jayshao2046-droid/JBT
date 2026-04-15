@@ -48,7 +48,22 @@ REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def ssh_exec(cmd: str, timeout: int = 60) -> str:
-    """SSH 执行远程 Python 命令"""
+    """
+    SSH 执行远程 Python 命令
+
+    P0-4 修复：添加命令验证，防止命令注入
+    注意：当前仅用于执行硬编码的 Python 脚本，不接受用户输入
+    """
+    # P0-4 安全检查：命令长度限制
+    if not isinstance(cmd, str) or len(cmd) > 10000:
+        logger.error(f"Invalid command: length={len(cmd) if isinstance(cmd, str) else 'N/A'}")
+        return ""
+
+    # P0-4 安全检查：命令必须以 python3 -c 开头（硬编码脚本模式）
+    if not cmd.startswith('python3 -c'):
+        logger.error(f"Invalid command format: must start with 'python3 -c'")
+        return ""
+
     try:
         result = subprocess.run(
             ["ssh", "-o", "ConnectTimeout=10", MINI_SSH, cmd],
@@ -143,7 +158,8 @@ for d in sorted(os.listdir(root)):
             'change_pct': round(chg_pct, 2),
             'total_bars': len(df),
         })
-    except: pass
+    except Exception as e:
+        logger.warning(f"Error processing symbol {sym}: {e}")
 print(json.dumps(summaries, ensure_ascii=False))
 "'''
     raw = ssh_exec(script, timeout=120)
@@ -187,7 +203,8 @@ for news_dir in ('news_collected', 'news_rss', 'news_api', 'rss_news'):
                             items.extend(d[-10:])
                         elif isinstance(d, dict):
                             items.append(d)
-            except: pass
+            except Exception as e:
+                logger.warning(f"Error reading news file {fp}: {e}")
     results[news_dir] = {'count': len(items), 'latest': items[-20:] if items else []}
 # sentiment
 sd = os.path.join(root, 'sentiment')
@@ -200,7 +217,8 @@ if os.path.isdir(sd):
                 if f.endswith('.json'):
                     with open(fp,'r',encoding='utf-8') as fh:
                         sfiles.append(json.load(fh))
-            except: pass
+            except Exception as e:
+                logger.warning(f"Error reading sentiment file {fp}: {e}")
     results['sentiment'] = {'count':len(sfiles), 'latest':sfiles[-5:]}
 print(json.dumps(results, ensure_ascii=False, default=str))
 "'''
@@ -242,7 +260,8 @@ for d in sorted(macro_dirs):
                     import pyarrow.parquet as pq
                     t = pq.read_table(fp)
                     files.append({'rows': t.num_rows, 'columns': t.column_names})
-            except: pass
+            except Exception as e:
+                logger.warning(f"Error reading macro file {fp}: {e}")
     results[d] = {'files_count': len(files), 'latest': files[-1] if files else None}
 print(json.dumps(results, ensure_ascii=False, default=str))
 "'''

@@ -3,6 +3,7 @@
 import asyncio
 import os
 import time
+import logging
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 import httpx
@@ -25,6 +26,8 @@ from .crawler.engine import CodeCrawler, BrowserCrawler
 from .crawler.source_registry import SourceRegistry
 from .crawler.parsers import get_parser
 from .models import SymbolResearch
+
+logger = logging.getLogger(__name__)
 
 
 class ResearcherScheduler:
@@ -56,8 +59,12 @@ class ResearcherScheduler:
                 feishu_webhook=self.notifier.feishu_webhook,
                 stats_tracker=self.reporter.stats_tracker,
             )
-        except Exception as e:
-            # 安全修复：P2-1 - 记录异常详情
+        except ImportError as e:
+            # Bug-2 修复：捕获具体的导入错误
+            logger.warning(f"ResearcherHealth module not available: {e}")
+            self.health_reporter = None
+        except (AttributeError, TypeError) as e:
+            # Bug-2 修复：捕获初始化错误
             logger.error(f"Failed to initialize health reporter: {e}", exc_info=True)
             self.health_reporter = None
 
@@ -137,10 +144,12 @@ class ResearcherScheduler:
             if self.health_reporter and hour % ResearcherConfig.HEALTH_INTERVAL_HOURS == 0:
                 try:
                     await self.health_reporter.send_health_card()
+                except (httpx.HTTPError, asyncio.TimeoutError) as e:
+                    # Bug-2 修复：捕获具体的网络错误
+                    logger.warning(f"Health report push failed (network): {e}")
                 except Exception as e:
-                    # 安全修复：P2-1 - 记录异常详情
-                    logger.warning(f"Health report push failed: {e}")
-                    pass  # 健康度推送失败不影响主流程
+                    # Bug-2 修复：捕获其他异常并记录详情
+                    logger.error(f"Health report push failed (unexpected): {e}", exc_info=True)
 
             elapsed = time.time() - start_time
 
@@ -392,7 +401,7 @@ class ResearcherScheduler:
                 resp = await client.post(
                     ResearcherConfig.DATA_API_PUSH_URL,
                     json=report.dict(),
-                    timeout=10.0,
+                    timeout=ResearcherConfig.HTTP_TIMEOUT_MEDIUM,
                 )
                 success = resp.status_code in (200, 201)
 

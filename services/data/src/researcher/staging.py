@@ -4,6 +4,7 @@ import os
 import json
 import sqlite3
 import hashlib
+import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 import httpx
@@ -22,27 +23,27 @@ class StagingManager:
 
     def _init_db(self):
         """初始化 SQLite 数据库"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS staging_records (
-                symbol TEXT PRIMARY KEY,
-                last_read_ts TEXT NOT NULL,
-                data_count INTEGER DEFAULT 0,
-                data_hash TEXT,
-                updated_at TEXT NOT NULL
-            )
-        """)
-        conn.commit()
-        conn.close()
+        # P1-1 修复：使用 with 语句确保连接自动关闭
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS staging_records (
+                    symbol TEXT PRIMARY KEY,
+                    last_read_ts TEXT NOT NULL,
+                    data_count INTEGER DEFAULT 0,
+                    data_hash TEXT,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+            conn.commit()
 
     def get_last_read_ts(self, symbol: str) -> Optional[datetime]:
         """获取品种最后读取时间戳"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT last_read_ts FROM staging_records WHERE symbol = ?", (symbol,))
-        row = cursor.fetchone()
-        conn.close()
+        # P1-1 修复：使用 with 语句确保连接自动关闭
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT last_read_ts FROM staging_records WHERE symbol = ?", (symbol,))
+            row = cursor.fetchone()
 
         if row:
             return datetime.fromisoformat(row[0])
@@ -50,20 +51,20 @@ class StagingManager:
 
     def update_record(self, record: StagingRecord):
         """更新暂存区记录"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT OR REPLACE INTO staging_records (symbol, last_read_ts, data_count, data_hash, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            record.symbol,
-            record.last_read_ts.isoformat(),
-            record.data_count,
-            record.data_hash,
-            record.updated_at.isoformat()
-        ))
-        conn.commit()
-        conn.close()
+        # P1-1 修复：使用 with 语句确保连接自动关闭
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO staging_records (symbol, last_read_ts, data_count, data_hash, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                record.symbol,
+                record.last_read_ts.isoformat(),
+                record.data_count,
+                record.data_hash,
+                record.updated_at.isoformat()
+            ))
+            conn.commit()
 
     def get_incremental(self, symbols: List[str], lookback_hours: int = 24) -> Dict[str, List[Dict[str, Any]]]:
         """
@@ -119,7 +120,7 @@ class StagingManager:
                 "limit": 1000
             }
 
-            resp = httpx.get(url, params=params, timeout=15.0)
+            resp = httpx.get(url, params=params, timeout=ResearcherConfig.HTTP_TIMEOUT_LONG)
             if resp.status_code == 200:
                 return resp.json().get("bars", [])
             else:
@@ -156,12 +157,28 @@ class StagingManager:
             prev_date = date
             prev_segment = segment_order[current_idx - 1]
 
+        # 安全修复：P0-3 + P1-4 - 验证 prev_date 格式防止路径遍历
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', prev_date):
+            raise ValueError(f"Invalid date format: {prev_date}")
+
+        # P1-4 修复：验证 prev_segment 在白名单内
+        valid_segments = ["盘前", "早盘", "午盘", "夜盘"]
+        if prev_segment not in valid_segments:
+            raise ValueError(f"Invalid segment: {prev_segment}")
+
         # 读取上期报告
         report_path = os.path.join(
             ResearcherConfig.REPORTS_DIR,
             prev_date,
             f"{prev_segment}.json"
         )
+
+        # 安全修复：P0-3 - 验证路径在允许的目录内（在构建之前验证）
+        from pathlib import Path
+        reports_dir_resolved = Path(ResearcherConfig.REPORTS_DIR).resolve()
+        report_path_resolved = Path(report_path).resolve()
+        if not str(report_path_resolved).startswith(str(reports_dir_resolved)):
+            raise ValueError(f"Path traversal detected: {report_path}")
 
         if os.path.exists(report_path):
             with open(report_path, "r", encoding="utf-8") as f:

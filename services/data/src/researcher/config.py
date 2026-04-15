@@ -12,37 +12,31 @@ class ResearcherConfig:
     OLLAMA_MODEL = "qwen3:14b"
     OLLAMA_TEMPERATURE = 0.3
     OLLAMA_NUM_CTX = 8192
-    OLLAMA_TIMEOUT = 120.0
+    # 安全修复：P2-3 - 从环境变量读取超时配置
+    OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "120.0"))
 
     # Mini data API 配置
     DATA_API_URL = os.getenv("DATA_API_URL", "http://192.168.31.76:8105")
 
-    # 期货品种列表 — Mini 主力连续合约（KQ.m@ 格式，Mini API 内部解析为 KQ_m_ 格式）
+    # 期货品种列表 — Jay.S 2026-04-15 确认的 35 个有4年以上连续数据品种
+    # （KQ.m@ 格式，Mini API 内部解析为 KQ_m_ 格式）
+    # SHFE(10): rb hc cu al zn au ag ru ss sp
+    # DCE(15): i m pp v l c jd y p a jm j eb pg lh
+    # CZCE(10): TA MA CF SR OI RM FG SA PF UR
     FUTURES_SYMBOLS = [
-        # 上期所 SHFE
+        # 上期所 SHFE (10)
         "KQ.m@SHFE.rb", "KQ.m@SHFE.hc", "KQ.m@SHFE.cu", "KQ.m@SHFE.al",
-        "KQ.m@SHFE.zn", "KQ.m@SHFE.pb", "KQ.m@SHFE.ni", "KQ.m@SHFE.sn",
-        "KQ.m@SHFE.au", "KQ.m@SHFE.ag", "KQ.m@SHFE.ru", "KQ.m@SHFE.bu",
-        "KQ.m@SHFE.sp", "KQ.m@SHFE.fu", "KQ.m@SHFE.ss",
-        # 大商所 DCE
-        "KQ.m@DCE.i", "KQ.m@DCE.j", "KQ.m@DCE.jm", "KQ.m@DCE.a",
-        "KQ.m@DCE.m", "KQ.m@DCE.y", "KQ.m@DCE.p", "KQ.m@DCE.c",
-        "KQ.m@DCE.cs", "KQ.m@DCE.pp", "KQ.m@DCE.v", "KQ.m@DCE.l",
-        "KQ.m@DCE.eg", "KQ.m@DCE.eb", "KQ.m@DCE.pg", "KQ.m@DCE.rr",
-        "KQ.m@DCE.lh", "KQ.m@DCE.jd",
-        # 郑商所 CZCE
-        "KQ.m@CZCE.TA", "KQ.m@CZCE.MA", "KQ.m@CZCE.SR", "KQ.m@CZCE.CF",
-        "KQ.m@CZCE.RM", "KQ.m@CZCE.OI", "KQ.m@CZCE.FG", "KQ.m@CZCE.SA",
-        "KQ.m@CZCE.AP", "KQ.m@CZCE.PF", "KQ.m@CZCE.PK", "KQ.m@CZCE.SM",
-        "KQ.m@CZCE.SF", "KQ.m@CZCE.ZC", "KQ.m@CZCE.WH", "KQ.m@CZCE.UR",
-        "KQ.m@CZCE.CJ",
-        # 中金所 CFFEX
-        "KQ.m@CFFEX.IF", "KQ.m@CFFEX.IH", "KQ.m@CFFEX.IC", "KQ.m@CFFEX.IM",
-        "KQ.m@CFFEX.T", "KQ.m@CFFEX.TF", "KQ.m@CFFEX.TL", "KQ.m@CFFEX.TS",
-        # 上期能源 INE
-        "KQ.m@INE.sc", "KQ.m@INE.lu", "KQ.m@INE.nr", "KQ.m@INE.bc",
-        # 广期所 GFEX
-        "KQ.m@GFEX.si", "KQ.m@GFEX.lc",
+        "KQ.m@SHFE.zn", "KQ.m@SHFE.au", "KQ.m@SHFE.ag", "KQ.m@SHFE.ru",
+        "KQ.m@SHFE.ss", "KQ.m@SHFE.sp",
+        # 大商所 DCE (15)
+        "KQ.m@DCE.i", "KQ.m@DCE.m", "KQ.m@DCE.pp", "KQ.m@DCE.v",
+        "KQ.m@DCE.l", "KQ.m@DCE.c", "KQ.m@DCE.jd", "KQ.m@DCE.y",
+        "KQ.m@DCE.p", "KQ.m@DCE.a", "KQ.m@DCE.jm", "KQ.m@DCE.j",
+        "KQ.m@DCE.eb", "KQ.m@DCE.pg", "KQ.m@DCE.lh",
+        # 郑商所 CZCE (10)
+        "KQ.m@CZCE.TA", "KQ.m@CZCE.MA", "KQ.m@CZCE.CF", "KQ.m@CZCE.SR",
+        "KQ.m@CZCE.OI", "KQ.m@CZCE.RM", "KQ.m@CZCE.FG", "KQ.m@CZCE.SA",
+        "KQ.m@CZCE.PF", "KQ.m@CZCE.UR",
     ]
 
     # 股票：Mini stocks API 路径待修复，暂不从 API 拉取
@@ -123,8 +117,35 @@ class ResearcherConfig:
     # 报告存储配置
     REPORTS_DIR = os.path.join(os.getcwd(), "runtime", "researcher", "reports")
 
+    # 日志目录（scheduler.log / daily_stats_*.json 共用）
+    LOGS_DIR = os.path.join(os.getcwd(), "runtime", "researcher", "logs")
+
     # 报告索引数据库（减量化索引，复用 staging.db）
     REPORTS_DB = STAGING_DB
+
+    # ── 决策端研报置信度评分标准 ──────────────────────────────────────────
+    # 三维加权评分，由决策端计算后通过 POST /review/{report_id} 回写
+    # 综合置信度 = Σ(维度得分 × weight)
+    DECISION_CONFIDENCE_CRITERIA: Dict[str, Any] = {
+        "news_relevance": {
+            "weight": 0.30,
+            "desc": "新闻相关性：爬取文章中含该品种/上下游关键词的比例",
+            "scoring": "0=无相关新闻, 0.5=有相关新闻, 1=高质量相关新闻≥3条",
+        },
+        "trend_alignment": {
+            "weight": 0.40,
+            "desc": "趋势吻合度：qwen3 判断趋势与K线技术指标（MA/RSI/ATR）的一致性",
+            "scoring": "0=完全相反, 0.5=中性/不确定, 1=完全吻合",
+        },
+        "cross_consistency": {
+            "weight": 0.30,
+            "desc": "板块一致性：同板块/上下游相关品种间逻辑一致程度",
+            "scoring": "0=板块内明显矛盾, 0.5=部分一致, 1=高度一致",
+        },
+    }
+    DECISION_CONFIDENCE_THRESHOLD_ACCEPT: float = 0.65  # ≥0.65 可直接采信
+    DECISION_CONFIDENCE_THRESHOLD_WARN: float   = 0.40  # 0.40-0.64 建议人工复核
+    # < 0.40 置信度过低，建议忽略
 
     # 执行超时保护
     EXECUTION_TIMEOUT = 15 * 60  # 单次执行 ≤15 分钟
@@ -138,3 +159,24 @@ class ResearcherConfig:
         """确保必要目录存在"""
         os.makedirs(cls.STAGING_DIR, exist_ok=True)
         os.makedirs(cls.REPORTS_DIR, exist_ok=True)
+        os.makedirs(cls.LOGS_DIR, exist_ok=True)
+
+    # ── Studio phi4 评级配置 ─────────────────────────────────────────────
+    PHI4_API_URL: str = os.getenv("PHI4_API_URL", "http://192.168.31.142:11434/api/generate")
+    PHI4_MODEL: str = "phi4-reasoning:14b"
+    # 安全修复：P2-3 - 从环境变量读取超时配置
+    PHI4_TIMEOUT: float = float(os.getenv("PHI4_TIMEOUT", "30.0"))  # 超时后 fallback 到数学算法
+
+    # ── 网络请求超时配置（安全修复：P2-3）──────────────────────────────────
+    HTTP_TIMEOUT_SHORT: float = float(os.getenv("HTTP_TIMEOUT_SHORT", "5.0"))    # 健康检查等快速请求
+    HTTP_TIMEOUT_MEDIUM: float = float(os.getenv("HTTP_TIMEOUT_MEDIUM", "10.0"))  # 飞书推送等中等请求
+    HTTP_TIMEOUT_LONG: float = float(os.getenv("HTTP_TIMEOUT_LONG", "15.0"))     # 数据拉取等长请求
+    HTTP_TIMEOUT_TRANSLATE: float = float(os.getenv("HTTP_TIMEOUT_TRANSLATE", "20.0"))  # 翻译请求
+    SMTP_TIMEOUT: float = float(os.getenv("SMTP_TIMEOUT", "30.0"))               # SMTP 连接超时
+
+    # ── 推送策略 ──────────────────────────────────────────────────────────
+    # False = 推送 Mini 成功后删除 Alienware 本地 JSON/MD
+    PUSH_RETENTION_LOCAL: bool = False
+
+    # ── 研究员健康度报告间隔 ──────────────────────────────────────────────
+    HEALTH_INTERVAL_HOURS: int = 2

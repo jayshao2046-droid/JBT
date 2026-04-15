@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import platform
 import re
@@ -18,6 +19,10 @@ import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
+
+# 配置日志
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -154,7 +159,10 @@ def get_cpu_info() -> dict:
             idle = vals[3] if len(vals) > 3 else 0
             total = sum(vals)
             usage = round((1 - idle / max(total, 1)) * 100, 1)
-    except Exception:
+    except subprocess.TimeoutExpired:
+        usage = -1
+    except (subprocess.SubprocessError, ValueError, IndexError) as e:
+        logger.warning(f"Failed to get CPU info: {e}")
         usage = -1
     return {"cores": cores, "usage_percent": usage}
 
@@ -168,7 +176,10 @@ def get_memory_info() -> dict:
         used_mb = (m.total - m.available) // (1024 * 1024)
         pct = round(used_mb / max(total_mb, 1) * 100, 1)
         return {"total_mb": total_mb, "used_mb": used_mb, "used_percent": pct}
-    except Exception:
+    except ImportError:
+        return {"total_mb": 0, "used_mb": 0, "used_percent": 0.0}
+    except Exception as e:
+        logger.warning(f"Failed to get memory info: {e}")
         return {"total_mb": 0, "used_mb": 0, "used_percent": 0.0}
 
 
@@ -196,8 +207,10 @@ def get_disk_info() -> list[dict]:
                     "avail": avail,
                     "used_percent": pct,
                 })
-    except Exception:
+    except subprocess.TimeoutExpired:
         pass
+    except (subprocess.SubprocessError, ValueError) as e:
+        logger.warning(f"Failed to get disk info: {e}")
     return disks
 
 
@@ -230,8 +243,10 @@ def get_gpu_info() -> list[dict]:
                         "util_percent": float(parts[1]),
                         "temp_c": int(parts[2]),
                     })
-    except Exception:
+    except subprocess.TimeoutExpired:
         pass
+    except (subprocess.SubprocessError, FileNotFoundError, ValueError) as e:
+        logger.warning(f"Failed to get GPU info: {e}")
     return gpus
 
 
@@ -264,8 +279,10 @@ def get_high_mem_processes(top_n: int = 5) -> list[dict]:
                 "mem_mb": rss_kb // 1024,
                 "cpu_percent": cpu_pct,
             })
-    except Exception:
+    except subprocess.TimeoutExpired:
         pass
+    except (subprocess.SubprocessError, ValueError) as e:
+        logger.warning(f"Failed to get high memory processes: {e}")
     return procs
 
 
@@ -282,8 +299,11 @@ def get_service_status() -> dict:
                 capture_output=True, text=True, timeout=15,
             )
             services["vpn"] = "正常" if p.returncode == 0 else "异常"
-        except Exception:
+        except subprocess.TimeoutExpired:
             services["vpn"] = "超时"
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            logger.warning(f"Failed to check VPN status: {e}")
+            services["vpn"] = "检测失败"
     else:
         services["vpn"] = "未部署"
 
@@ -300,8 +320,11 @@ def get_service_status() -> dict:
                 services["mihomo"] = f"正常 ({auto.get('now', '未知节点')})"
             else:
                 services["mihomo"] = "不可达"
-        except Exception:
-            services["mihomo"] = "不可达"
+        except subprocess.TimeoutExpired:
+            services["mihomo"] = "超时"
+        except (subprocess.SubprocessError, json.JSONDecodeError) as e:
+            logger.warning(f"Failed to check mihomo status: {e}")
+            services["mihomo"] = "检测失败"
     else:
         services["mihomo"] = "未部署"
 
@@ -324,8 +347,13 @@ def get_service_status() -> dict:
             else:
                 services["proxy_overseas"] = "代理离线"
                 services["_proxy_detail"] = []
-        except Exception as exc:
-            services["proxy_overseas"] = f"检测异常: {exc}"
+        except ImportError as e:
+            logger.warning(f"Failed to import proxy module: {e}")
+            services["proxy_overseas"] = f"模块缺失: {e}"
+            services["_proxy_detail"] = []
+        except Exception as e:
+            logger.error(f"Failed to check proxy overseas: {e}", exc_info=True)
+            services["proxy_overseas"] = f"检测异常: {e}"
             services["_proxy_detail"] = []
     else:
         services["proxy_overseas"] = "未部署"
@@ -338,8 +366,10 @@ def get_service_status() -> dict:
             if "python" in line and ("collect" in line or "scheduler" in line):
                 if "health_check" not in line and "aggregate" not in line:
                     collector_count += 1
-    except Exception:
+    except subprocess.TimeoutExpired:
         pass
+    except (subprocess.SubprocessError, ValueError) as e:
+        logger.warning(f"Failed to count collector processes: {e}")
     services["collectors"] = collector_count
 
     return services
@@ -358,8 +388,8 @@ def get_parquet_status() -> dict:
         try:
             t = fp.stat().st_mtime
             latest.append((t, str(fp.relative_to(parquet_dir))))
-        except Exception:
-            pass
+        except (OSError, ValueError) as e:
+            logger.warning(f"Failed to stat parquet file {fp}: {e}")
     latest.sort(reverse=True)
     info["recent_files"] = [
         {"path": p, "mtime": datetime.fromtimestamp(t, tz=CN_TZ).strftime("%m-%d %H:%M")}
@@ -370,7 +400,10 @@ def get_parquet_status() -> dict:
     try:
         out = subprocess.check_output(["du", "-sh", str(parquet_dir)], text=True, timeout=10)
         info["size"] = out.split()[0]
-    except Exception:
+    except subprocess.TimeoutExpired:
+        info["size"] = "超时"
+    except (subprocess.SubprocessError, IndexError) as e:
+        logger.warning(f"Failed to get parquet directory size: {e}")
         info["size"] = "未知"
 
     return info
@@ -443,8 +476,8 @@ def get_collector_freshness() -> list[dict[str, Any]]:
                         sd = d / subdir_key
                         if sd.exists():
                             existing_dirs.append(sd)
-            except OSError:
-                pass
+            except OSError as e:
+                logger.warning(f"Failed to scan futures directories: {e}")
 
         if not existing_dirs:
             results.append({

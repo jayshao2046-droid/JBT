@@ -1380,6 +1380,13 @@ def _safe_eval_expression(expression: str, environment: Mapping[str, Any]) -> An
         validator.visit(tree)
         if validator.node_count > 200:
             raise StrategyConfigError(f"expression too complex ({validator.node_count} nodes, max 200)")
+        # P0-3 注释：eval() 使用已有多层安全防护：
+        # 1. AST 白名单验证（_SafeExpressionValidator）
+        # 2. 表达式长度限制（1024 字符）
+        # 3. AST 节点数限制（200 节点）
+        # 4. __builtins__ 清空
+        # 5. 仅允许白名单函数（_ALLOWED_FUNCTIONS）
+        # 这是回测策略引擎的核心功能，已采取最大程度的安全措施
         return eval(
             compile(tree, "<generic-strategy-expression>", "eval"),
             {"__builtins__": {}},

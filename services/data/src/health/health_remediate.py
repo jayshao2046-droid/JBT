@@ -83,14 +83,22 @@ def restart_collectors(report: dict) -> dict:
         time.sleep(3)
 
         # 重启 TqSdk 采集器（如果在 Mini 上）
+        # P1-7 修复：验证环境变量值，防止注入攻击
         hostname = os.environ.get("BOTQUANT_DEVICE", "").lower() or __import__("socket").gethostname().lower()
+        # 白名单验证：仅允许 "mini" 或 "alienware"
+        if hostname not in ["mini", "alienware", ""] and not any(x in hostname for x in ["mini", "alienware"]):
+            hostname = __import__("socket").gethostname().lower()
+
         if "mini" in hostname:
-            subprocess.Popen(
-                [sys.executable, str(ROOT / "scripts" / "collect_tqsdk_all_contracts.py")],
-                stdout=open(ROOT / "logs" / "collect_tqsdk.log", "a"),
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
+            # P0-1 修复：使用 with 语句管理文件句柄，防止泄露
+            log_file = ROOT / "logs" / "collect_tqsdk.log"
+            with open(log_file, "a") as f:
+                subprocess.Popen(
+                    [sys.executable, str(ROOT / "scripts" / "collect_tqsdk_all_contracts.py")],
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
         return {"action": "重启采集进程", "result": "成功", "detail": f"已停止 {len(pids)} 个进程并重启"}
     except subprocess.CalledProcessError:
         return {"action": "重启采集进程", "result": "成功", "detail": "无采集进程需要重启"}
@@ -108,12 +116,15 @@ def restart_mihomo(report: dict) -> dict:
         mihomo_bin = Path.home() / "mihomo" / "mihomo"
         mihomo_cfg = Path.home() / "mihomo" / "config.yaml"
         if mihomo_bin.exists() and mihomo_cfg.exists():
-            subprocess.Popen(
-                [str(mihomo_bin), "-d", str(mihomo_bin.parent)],
-                stdout=open(Path.home() / "mihomo" / "mihomo.log", "a"),
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
+            # P0-1 修复：使用 with 语句管理文件句柄，防止泄露
+            log_file = Path.home() / "mihomo" / "mihomo.log"
+            with open(log_file, "a") as f:
+                subprocess.Popen(
+                    [str(mihomo_bin), "-d", str(mihomo_bin.parent)],
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
             return {"action": "重启 mihomo", "result": "成功", "detail": "VPN 代理已重启"}
         else:
             return {"action": "重启 mihomo", "result": "跳过", "detail": "mihomo 未安装"}

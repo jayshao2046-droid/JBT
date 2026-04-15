@@ -15,7 +15,7 @@
 |------|------|------|---------|
 | data | `████████████` **100%** | ✅ 生产运行中 | Round 1 收口完成；TASK-0104-D1 预读系统已部署；**TASK-0113 研究员子系统已完成（87/87测试通过，4 Token 全部锁回，Alienware qwen3:14b 部署运行中）** |
 | backtest | `████████████` **100%** | ✅ 生产运行中 | Round 2 安全加固完成，维护态 |
-| sim-trading | `████████████` **95%** | ✅ Alienware 裸 Python 运行中 | TASK-0107 迁移完成；schtasks 开盘/收盘自动调度已建立；待正式交易日 CTP 验证 |
+| sim-trading | `████████████` **97%** | ✅ Alienware 裸 Python 运行中 + CTP 已连通 | CTP md_logged_in+td_ready ✅；6计划任务自动启停 ✅；watchdog 5min ✅；电源不休眠 ✅；待开盘实盘证据 |
 | decision | `████████████` **100%** | ✅ Phase C + 精进改造全闭环 | TASK-0112(A/B/C)+0114+0115+0116+0117 全部完成并锁回；359 passed / 7 skipped；decision 进入维护态 |
 | dashboard | `████████████` **100%** | ✅ Phase F 闭环 | TASK-0106 全部完成；.env.local 已配置 Alienware 代理；Studio 已同步 |
 | live-trading | `░░░░░░░░░░░░` **0%** | ⏳ 后置 | 等待sim稳定运行2~3月后评估 |
@@ -989,18 +989,18 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 
 ---
 
-## 七、总进度仪表盘 [修订 2026-04-14]
+## 七、总进度仪表盘 [修订 2026-04-15]
 
 | 模块 | 完成 | 目标 | 当前Phase | 下一里程碑 |
 |------|------|------|----------|----------|
 | 治理 | 100% | 100% | ✅ 完成 | 维护 |
-| sim-trading | 90% | 100% | Phase B ✅ + v1.0.0 安全收口 + SG API认证 ✅ + CS1-S 已完成 | 开盘验证CTP（周一）|  
+| sim-trading | **97%** | 100% | Phase B ✅ + Alienware 迁移 ✅ + CTP 连通 ✅ + watchdog ✅ | 开盘实盘验证（开仓/撤单/平仓截图证据链）|  
 | decision | **99%** | 100% | Phase C 全闭环 + CK因子同步+SimNow备用 Claude执行+Atlas审核通过 | 维护态；PBO/CPCV 待启动 |
 | data | **100%** | 100% | ✅ Phase D + Round 1 收口 + 看板上线 ✅ | **完成** [2026-04-12] |
 | backtest | **100%** | 100% | ✅ Phase E + Round 2 安全加固 + 看板上线 ✅ + 审核看板已上线 | **完成** [2026-04-14] |
-| dashboard | **25%→100%** | 100% | ✅ Phase F 全闭环 | TASK-0099/0100/0101/0102/0103/F5/0105/0106 全部完成 [2026-04-15] |
+| dashboard | **100%** | 100% | ✅ Phase F 全闭环 | TASK-0099/0100/0101/0102/0103/F5/0105/0106 全部完成 [2026-04-15] |
 | live-trading | 0% | 100% | Phase H | 待 sim-trading 稳定运行 2~3 个月 |
-| **总体** | **~98%** | **100%** | **data 100% / backtest 100% / sim-trading 90% / decision 99% / dashboard 100%** | **Phase F 全闭环 ✅ → 待 Studio 同步确认，后续 sim-trading 开盘验证** |
+| **总体** | **~99%** | **100%** | **data 100% / backtest 100% / sim-trading 97% / decision 99% / dashboard 100%** | **sim-trading 开盘实盘验证** |
 
 ---
 

@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import List, Optional
 from pathlib import Path
 
+from ..config import ResearcherConfig
+
 
 class ResearcherEmailSender:
     """研究员独立邮件发送器"""
@@ -49,7 +51,7 @@ class ResearcherEmailSender:
             msg.attach(html_part)
 
             # SSL/TLS 加密
-            with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=30) as server:
+            with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=ResearcherConfig.SMTP_TIMEOUT) as server:
                 server.login(self.sender, self.password)
                 server.sendmail(self.sender, self.recipients, msg.as_string())
 

@@ -285,10 +285,18 @@ def _make_td_spi_class():
             logger.info("[traderapi] settlement confirmed, ready")
             self._on_status("td_ready")
             # 结算确认后：查账户 + 查可用合约 + 查持仓
+            # P1-3 修复：保存 Timer 引用以便后续清理
             import threading
-            threading.Timer(1.0, self._api._query_account).start()
-            threading.Timer(2.0, self._api._query_instruments).start()
-            threading.Timer(3.0, self._api._query_positions).start()
+            t1 = threading.Timer(1.0, self._api._query_account)
+            t2 = threading.Timer(2.0, self._api._query_instruments)
+            t3 = threading.Timer(3.0, self._api._query_positions)
+            # 将 Timer 保存到 API 实例以便在 disconnect 时清理
+            if not hasattr(self._api, '_active_timers'):
+                self._api._active_timers = []
+            self._api._active_timers.extend([t1, t2, t3])
+            t1.start()
+            t2.start()
+            t3.start()
 
         def OnRspQryInstrument(self, p, pRspInfo, nRequestID, bIsLast):
             if p:
@@ -523,7 +531,11 @@ def _make_td_spi_class():
 class SimNowGateway:
     def __init__(self, broker_id, user_id, password, md_front, td_front,
                  instruments=None, app_id="client_jbtsim_1.0.0",
-                 auth_code="QN76PPIPR9EKM4QK"):
+                 auth_code=None):
+        # P0-4 修复：移除硬编码的 auth_code，改为必须从环境变量或配置传入
+        if auth_code is None:
+            raise ValueError("auth_code must be provided (not hardcoded)")
+
         self._broker_id = broker_id
         self._user_id = user_id
         self._password = password
@@ -854,7 +866,7 @@ class SimNowGateway:
             self._shutdown = False
         import tempfile
         d = tempfile.mkdtemp(prefix="ctp_md_")
-        self._md_api = _mdmod.CThostFtdcMdApi.CreateFtdcMdApi(d + "/")
+        self._md_api = _mdmod.CThostFtdcMdApi.CreateFtdcMdApi(d + "/", False, False, False)
         self._md_spi = _make_md_spi_class()(self, self._on_tick, self._on_md_status)
         self._md_api.RegisterSpi(self._md_spi)
         self._md_api.RegisterFront(self._md_front)
@@ -866,7 +878,7 @@ class SimNowGateway:
             self._shutdown = False
         import tempfile
         d = tempfile.mkdtemp(prefix="ctp_td_")
-        self._td_api = _tdmod.CThostFtdcTraderApi.CreateFtdcTraderApi(d + "/")
+        self._td_api = _tdmod.CThostFtdcTraderApi.CreateFtdcTraderApi(d + "/", False)
         self._td_spi = _make_td_spi_class()(self, self._on_td_status)
         self._td_api.RegisterSpi(self._td_spi)
         self._td_api.RegisterFront(self._td_front)
@@ -990,6 +1002,14 @@ class SimNowGateway:
     def disconnect(self):
         with self._lock:
             self._shutdown = True
+        # P1-3 修复：取消所有活跃的 Timer 以防止资源泄漏
+        if hasattr(self, '_active_timers'):
+            for timer in self._active_timers:
+                try:
+                    timer.cancel()
+                except Exception:
+                    pass
+            self._active_timers.clear()
         for attr in ("_md_api", "_td_api"):
             api = getattr(self, attr, None)
             if api:

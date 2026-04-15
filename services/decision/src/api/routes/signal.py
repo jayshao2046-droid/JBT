@@ -84,7 +84,8 @@ class DecisionRequest(BaseModel):
 def _sorted_decisions() -> list[dict]:
     """从 state_store 读取所有决策记录并按时间排序。"""
     store = get_state_store()
-    decisions = store.get("decisions", {})
+    state = store.read_state()
+    decisions = state.get("decisions", {})
     return sorted(
         decisions.values(),
         key=lambda item: item.get("generated_at") or "",

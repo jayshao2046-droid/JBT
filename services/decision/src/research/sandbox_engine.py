@@ -143,28 +143,28 @@ class SandboxEngine:
     ) -> list[dict]:
         cache_key = f"{asset_type}:{symbol}:{start}:{end}"
 
-        # 安全修复：P2-5 - 使用锁保护缓存访问
+        # 安全修复：P1-2 - 在锁内完成检查和获取，避免 TOCTOU 竞态条件
         async with self._cache_lock:
             if cache_key in self._cache:
                 return self._cache[cache_key]
 
-        if asset_type == "stock":
-            url = f"{self.data_service_url}/api/v1/stocks/bars"
-        else:
-            url = f"{self.data_service_url}/api/v1/bars"
+            # 在锁内执行 HTTP 请求，确保同一 cache_key 不会并发请求
+            if asset_type == "stock":
+                url = f"{self.data_service_url}/api/v1/stocks/bars"
+            else:
+                url = f"{self.data_service_url}/api/v1/bars"
 
-        params = {"symbol": symbol, "start": start, "end": end}
+            params = {"symbol": symbol, "start": start, "end": end}
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(url, params=params)
-            resp.raise_for_status()
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
 
-        data = resp.json()
-        bars: list[dict] = data if isinstance(data, list) else data.get("bars", data.get("data", []))
+            data = resp.json()
+            bars: list[dict] = data if isinstance(data, list) else data.get("bars", data.get("data", []))
 
-        async with self._cache_lock:
             self._cache[cache_key] = bars
-        return bars
+            return bars
 
     # ------------------------------------------------------------------
     # Strategy execution (simple moving-average crossover)
@@ -201,6 +201,10 @@ class SandboxEngine:
             sma_long = sum(closes[i - long_window : i]) / long_window
             price = closes[i]
 
+            # Bug-5 修复：边界条件检查 - 跳过无效价格
+            if price <= 0 or sma_short <= 0 or sma_long <= 0:
+                continue
+
             # Stock: skip bar if price hits limit-up / limit-down
             if is_stock and i > 0:
                 prev_close = closes[i - 1]
@@ -209,7 +213,7 @@ class SandboxEngine:
 
             # Buy signal: short MA crosses above long MA
             if sma_short > sma_long and position == 0.0:
-                qty = (capital * position_size) / price if price > 0 else 0
+                qty = (capital * position_size) / price
                 if qty > 0:
                     position = qty
                     entry_price = price
@@ -247,17 +251,25 @@ class SandboxEngine:
                     continue
 
         # Close any remaining position at last bar
+        # Bug-5 修复：边界条件检查 - 验证最后价格有效性
         if position > 0 and closes:
             last_price = closes[-1]
-            pnl = (last_price - entry_price) * position
-            capital += pnl
-            trades.append({
-                "type": "sell",
-                "price": last_price,
-                "qty": round(position, 4),
-                "pnl": round(pnl, 2),
-                "bar_index": len(closes) - 1,
-            })
+            if last_price > 0 and entry_price > 0:
+                pnl = (last_price - entry_price) * position
+                capital += pnl
+                trades.append({
+                    "type": "sell",
+                    "price": last_price,
+                    "qty": round(position, 4),
+                    "pnl": round(pnl, 2),
+                    "bar_index": len(closes) - 1,
+                })
+            else:
+                # 价格无效，强制平仓但不计算盈亏
+                logger.warning(
+                    f"Invalid last_price={last_price} or entry_price={entry_price}, "
+                    f"force closing position without PnL calculation"
+                )
 
         return {"final_capital": capital, "trades": trades}
 

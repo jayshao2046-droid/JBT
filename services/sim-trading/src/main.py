@@ -62,11 +62,21 @@ _PUBLIC_PATHS = {"/health", "/api/v1/health", "/api/v1/version"}
 
 
 async def _verify_api_key(request: Request, api_key: Optional[str] = Depends(_api_key_header)) -> None:
-    """全局 API Key 认证中间件，与 data/backtest/decision 三端保持一致。"""
-    if not _SIM_API_KEY:
-        return
+    """全局 API Key 认证中间件（P1-1 修复：生产环境强制验证）。"""
     if request.url.path in _PUBLIC_PATHS:
         return
+
+    # P1-1 修复：生产环境必须配置 API Key
+    env = os.environ.get("JBT_ENV", "development").lower()
+    if not _SIM_API_KEY:
+        if env == "production":
+            raise HTTPException(
+                status_code=503,
+                detail="SIM_API_KEY not configured in production environment"
+            )
+        # 开发环境允许未配置 API Key
+        return
+
     if not api_key or not hmac.compare_digest(api_key, _SIM_API_KEY):
         raise HTTPException(status_code=403, detail="invalid or missing API key")
 
@@ -200,12 +210,14 @@ async def _ctp_connection_guardian():
     IDLE_INTERVAL = 300         # 非交易时段休眠间隔（秒）
     ACCOUNT_REFRESH = 120       # 账户刷新间隔（秒）
     MAX_FAST_RETRIES = 3
+    RECONNECT_ALERT_COOLDOWN = 180
     _fail_count = 0
     _last_checkpoint = None     # 避免同一检查点重复通知
     _last_account_refresh = 0.0
     _last_summary_sent = None   # 避免同一收盘总结重复推送
     _last_preopen_sent = None   # 避免同一开盘前检查重复触发
     _last_open_sent = None      # 避免同一开盘通知重复推送
+    _last_reconnect_alert_ts = 0.0
 
     def _in_pre_session():
         """工作日盘前窗口判定"""
@@ -499,8 +511,17 @@ async def _ctp_connection_guardian():
                     except Exception:
                         pass
                 elif _fail_count >= MAX_FAST_RETRIES:
-                    _send_guardian_alert("P0", "CTP_RECONNECT_FAIL",
-                                         f"交易时段连续{_fail_count}次重连失败")
+                    import time as _time
+                    now_ts = _time.time()
+                    if now_ts - _last_reconnect_alert_ts >= RECONNECT_ALERT_COOLDOWN:
+                        # 发送 P0 前再做一次状态确认，避免短抖动恢复后的误报
+                        st2 = gw.status if gw else {}
+                        md_still_down = not st2.get("md_connected", False)
+                        td_still_down = not st2.get("td_connected", False)
+                        if md_still_down and td_still_down:
+                            _send_guardian_alert("P0", "CTP_RECONNECT_FAIL",
+                                                 f"交易时段连续{_fail_count}次重连失败")
+                            _last_reconnect_alert_ts = now_ts
 
         except Exception as exc:
             _fail_count += 1

@@ -26,6 +26,12 @@ from .international import (
     parse_reuters_commodities,
 )
 
+from .sentiment import (
+    parse_eastmoney_guba,
+    parse_xueqiu_sentiment,
+    parse_cls_telegraph,
+)
+
 # 解析器注册表
 PARSER_REGISTRY = {
     # 通用解析器
@@ -50,6 +56,11 @@ PARSER_REGISTRY = {
     "investing_commodities": parse_investing_commodities,
     "fed_releases": parse_fed_releases,
     "reuters_commodities": parse_reuters_commodities,
+
+    # 情绪解析器（3 个）
+    "eastmoney_guba": parse_eastmoney_guba,
+    "xueqiu_sentiment": parse_xueqiu_sentiment,
+    "cls_telegraph": parse_cls_telegraph,
 }
 
 

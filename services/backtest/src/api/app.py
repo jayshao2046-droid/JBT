@@ -39,10 +39,21 @@ _PUBLIC_PATHS = {"/api/health", "/api/v1/health", "/api/v1/version"}
 async def _verify_api_key(
     request: Request, api_key: Optional[str] = Depends(_api_key_header)
 ) -> None:
-    if not _BACKTEST_API_KEY:
-        return
+    """验证 API Key（P1-1 修复：生产环境强制验证）。"""
     if request.url.path in _PUBLIC_PATHS:
         return
+
+    # P1-1 修复：生产环境必须配置 API Key
+    env = os.environ.get("JBT_ENV", "development").lower()
+    if not _BACKTEST_API_KEY:
+        if env == "production":
+            raise HTTPException(
+                status_code=503,
+                detail="BACKTEST_API_KEY not configured in production environment"
+            )
+        # 开发环境允许未配置 API Key
+        return
+
     if not api_key or not hmac.compare_digest(api_key, _BACKTEST_API_KEY):
         raise HTTPException(status_code=403, detail="invalid or missing API key")
 
@@ -57,12 +68,13 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
         dependencies=[Depends(_verify_api_key)],
     )
+    # P1-2 修复：收紧 CORS 配置，明确指定允许的方法和头部
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins or ["http://localhost:3001"],
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "X-API-Key"],
     )
     ensure_compat_state(app)
     app.include_router(health_router)

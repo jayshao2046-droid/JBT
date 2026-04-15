@@ -88,12 +88,12 @@ class DecisionEmailNotifier:
     def __init__(self) -> None:
         raw = os.environ.get("NOTIFY_EMAIL_ENABLED", "false").strip().lower()
         self._enabled = raw == "true"
-        self._smtp_host: str = os.environ.get("ALERT_EMAIL_SMTP_HOST", "")
-        self._smtp_port: int = int(os.environ.get("ALERT_EMAIL_SMTP_PORT", "587"))
-        self._smtp_user: str = os.environ.get("ALERT_EMAIL_SMTP_USER", "")
-        self._smtp_password: str = os.environ.get("ALERT_EMAIL_SMTP_PASSWORD", "")
-        self._from_addr: str = os.environ.get("ALERT_EMAIL_FROM", "")
-        self._to_addr: str = os.environ.get("ALERT_EMAIL_TO", "")
+        self._smtp_host: str = os.environ.get("EMAIL_SMTP_HOST", "")
+        self._smtp_port: int = int(os.environ.get("EMAIL_SMTP_PORT", "587"))
+        self._smtp_user: str = os.environ.get("EMAIL_SMTP_USER", "")
+        self._smtp_password: str = os.environ.get("EMAIL_SMTP_PASSWORD", "")
+        self._from_addr: str = os.environ.get("EMAIL_FROM", "")
+        self._to_addr: str = os.environ.get("EMAIL_TO", "")
 
     def send(self, event: "DecisionEvent") -> bool:
         if not self._enabled:
@@ -103,11 +103,11 @@ class DecisionEmailNotifier:
         missing = [
             name
             for name, val in [
-                ("ALERT_EMAIL_SMTP_HOST", self._smtp_host),
-                ("ALERT_EMAIL_SMTP_USER", self._smtp_user),
-                ("ALERT_EMAIL_SMTP_PASSWORD", self._smtp_password),
-                ("ALERT_EMAIL_FROM", self._from_addr),
-                ("ALERT_EMAIL_TO", self._to_addr),
+                ("EMAIL_SMTP_HOST", self._smtp_host),
+                ("EMAIL_SMTP_USER", self._smtp_user),
+                ("EMAIL_SMTP_PASSWORD", self._smtp_password),
+                ("EMAIL_FROM", self._from_addr),
+                ("EMAIL_TO", self._to_addr),
             ]
             if not val
         ]

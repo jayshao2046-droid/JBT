@@ -127,8 +127,9 @@ class DeviceHealthReporter:
                 ("数据 API",     "src.main"),
             ]:
                 procs.append({"label": label, "ok": keyword in ps_out, "uptime": ""})
-        except Exception:
-            pass
+        except Exception as e:
+            # P2-1 修复：记录异常详情
+            logger.warning(f"Failed to check process status: {e}")
 
         # 网络延迟
         latency_ms = 0
@@ -138,7 +139,12 @@ class DeviceHealthReporter:
             s = socket.create_connection(("open.feishu.cn", 443), timeout=5)
             s.close()
             latency_ms = int((time.time() - t0) * 1000)
-        except Exception:
+        except (socket.timeout, socket.error, OSError) as e:
+            # P2-1 修复：记录网络错误类型
+            logger.debug(f"Network latency check failed: {e}")
+            latency_ms = -1
+        except Exception as e:
+            logger.warning(f"Unexpected error in latency check: {e}")
             latency_ms = -1
 
         webhook = (

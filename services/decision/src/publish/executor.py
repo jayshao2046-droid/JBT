@@ -158,6 +158,12 @@ class PublishExecutor:
         message: str,
         is_gate_rejection: bool = False,
     ) -> None:
+        """
+        策略发布通知
+
+        发送策略发布到目标系统（sim-trading/live-trading）的状态通知。
+        成功时为 NOTIFY 级别，门禁拒绝为 P1，其他失败为 P2。
+        """
         level = NotifyLevel.NOTIFY if success else (NotifyLevel.P1 if is_gate_rejection else NotifyLevel.P2)
         status_label = "✅ 发布成功" if success else ("🚫 门禁拒绝" if is_gate_rejection else "❌ 推送失败")
         event = DecisionEvent(

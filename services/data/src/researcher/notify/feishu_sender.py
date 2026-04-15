@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 from pathlib import Path
 
+from ..config import ResearcherConfig
+
 
 class ResearcherFeishuSender:
     """研究员独立飞书发送器"""
@@ -35,7 +37,7 @@ class ResearcherFeishuSender:
                 resp = await client.post(
                     self.webhook_url,
                     json=card,
-                    timeout=10.0
+                    timeout=ResearcherConfig.HTTP_TIMEOUT_MEDIUM
                 )
 
                 if resp.status_code == 200:

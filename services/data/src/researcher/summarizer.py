@@ -34,6 +34,10 @@ class Summarizer:
             previous_summary: 上期摘要（用于变化对比）
             news_items: 相关新闻
 
+                # 翻译英文新闻标题为中文（全中文化）
+                if news_items:
+                    news_items = self._translate_news_to_chinese(news_items)
+
         Returns:
             SymbolResearch
         """
@@ -164,6 +168,52 @@ class Summarizer:
                 news_highlights=[],
                 position_change=None
             )
+
+    # ── 中文化翻译 ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _is_english(text: str) -> bool:
+        """简单判断文本是否含有大量英文字符（>20% ASCII 字母）"""
+        if not text:
+            return False
+        ascii_alpha = sum(1 for c in text if c.isascii() and c.isalpha())
+        return ascii_alpha / len(text) > 0.20
+
+    def _translate_news_to_chinese(self, news_items: List[str]) -> List[str]:
+        """
+        将列表中的英文新闻标题逐条翻译为中文，失败时保留原文。
+        只翻译 ASCII 字母占比 > 20% 的条目，最多处理 10 条。
+        """
+        to_translate_indices = [
+            i for i, t in enumerate(news_items[:10]) if self._is_english(t)
+        ]
+        if not to_translate_indices:
+            return news_items
+
+        items_to_translate = [news_items[i] for i in to_translate_indices]
+        prompt = (
+            "请将以下英文标题逐条翻译为中文，仅输出中文列表，不附解释，每行一条：\n"
+            + "\n".join(items_to_translate)
+        )
+        try:
+            translated_text = self._call_ollama_simple(prompt, timeout=ResearcherConfig.OLLAMA_TIMEOUT)
+            translated = [l.strip() for l in translated_text.strip().split("\n") if l.strip()]
+            if len(translated) == len(items_to_translate):
+                result = list(news_items)
+                for idx, orig_i in enumerate(to_translate_indices):
+                    result[orig_i] = translated[idx]
+                return result
+        except Exception:
+            pass
+        return news_items
+
+    def _call_ollama_simple(self, prompt: str, timeout: float = 20.0) -> str:
+        """简化版 Ollama 调用，不加 options，用于翻译等辅助任务"""
+        url = f"{self.ollama_url}/api/generate"
+        payload = {"model": self.model, "prompt": prompt, "stream": False}
+        resp = httpx.post(url, json=payload, timeout=timeout)
+        resp.raise_for_status()
+        return resp.json().get("response", "")
 
     def summarize_market_overview(
         self,

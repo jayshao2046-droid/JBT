@@ -233,12 +233,12 @@ def alert_p0_with_buttons(
     if ops_base_url:
         actions: list[dict[str, Any]] = []
         if source_name:
-            # 移除 URL 中的 token 参数（安全修复：P1-4）
-            # TODO: 后续改为 POST 请求，token 放在请求头中
+            # P1-4 修复：移除 URL 中的 token 参数（安全修复）
+            # 操作按钮通过 X-Ops-Token 请求头传递认证信息
             actions.append({
                 "tag": "button",
                 "text": {"tag": "plain_text", "content": "🔄 重启采集器"},
-                "url": f"{ops_base_url}/api/v1/ops/restart-collector?source={source_name}",
+                "url": f"{ops_base_url}/api/v1/ops/restart-collector?collector={source_name}",
                 "type": "danger",
             })
         actions.append({

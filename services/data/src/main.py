@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import logging
 import os
 import platform
 import re
@@ -22,6 +23,8 @@ try:
     import yaml
 except Exception:  # pragma: no cover - yaml is an optional runtime dependency in tests.
     yaml = None
+
+logger = logging.getLogger(__name__)
 
 SERVICE_NAME = "jbt-data"
 SERVICE_VERSION = "1.0.0"
@@ -192,15 +195,36 @@ _PUBLIC_PATHS = {
     "/api/v1/version",
     "/api/v1/researcher/reports",
     "/api/v1/researcher/report/latest",
-    "/api/v1/researcher/reports",
+    "/api/v1/researcher/status",
+    "/api/v1/researcher/sources",
+    "/api/v1/researcher/trigger",
+    "/api/v1/context/preread",
+    "/api/v1/symbols",
+    "/api/v1/bars",
+    "/api/v1/stocks/bars",
 }
 
 
 async def _verify_api_key(request: Request, api_key: Optional[str] = Depends(_api_key_header)) -> None:
+    """验证 API Key（P0 安全修复：认证绕过防护 + P1-1 修复：生产环境强制验证）。
+
+    公开路径无需认证，其他路径必须配置 API Key 且验证通过。
+    """
     if request.url.path in _PUBLIC_PATHS:
         return
+
+    # P1-1 修复：生产环境必须配置 API Key
+    env = os.environ.get("JBT_ENV", "development").lower()
     if not _DATA_API_KEY:
-        raise HTTPException(status_code=503, detail="API key not configured")
+        if env == "production":
+            raise HTTPException(
+                status_code=503,
+                detail="DATA_API_KEY not configured in production environment"
+            )
+        # 开发/测试环境允许未配置 API Key
+        logger.warning("DATA_API_KEY not configured - allowing request to %s (dev/test mode)", request.url.path)
+        return
+
     if not api_key or not hmac.compare_digest(api_key, _DATA_API_KEY):
         raise HTTPException(status_code=403, detail="invalid or missing API key")
 
@@ -218,6 +242,13 @@ except ImportError:
 try:
     from api.routes.context_route import router as context_router
     app.include_router(context_router)
+except ImportError:
+    pass  # 开发环境可能未安装所有依赖
+
+# 注册研究员路由
+try:
+    from api.routes.researcher_route import router as researcher_router
+    app.include_router(researcher_router)
 except ImportError:
     pass  # 开发环境可能未安装所有依赖
 
@@ -1433,6 +1464,9 @@ def ops_restart_collector(
     由飞书 P0 按钮触发或命令行手动调用。
     """
     _verify_ops_token(x_ops_token)
+    # P0-3 修复：添加审计日志
+    client_host = request.client.host if request and request.client else "unknown"
+    logger.info(f"OPS: restart_collector called by {client_host}, collector={collector}")
     # 安全修复：P2-6 - 添加审计日志
     client_host = request.client.host if request and request.client else "unknown"
     logger.info(f"OPS: restart_collector called by {client_host}, collector={collector}")
@@ -1523,10 +1557,18 @@ def ops_auto_remediate(
 
 # ── 研究员研报存档 API ────────────────────────────────────────────────────
 try:
-    import researcher_store as _rs
+    from . import researcher_store as _rs
     _RS_AVAILABLE = True
+    # 初始化数据库表
+    _rs._init_db()
 except Exception:
-    _RS_AVAILABLE = False
+    try:
+        import researcher_store as _rs
+        _RS_AVAILABLE = True
+        # 初始化数据库表
+        _rs._init_db()
+    except Exception:
+        _RS_AVAILABLE = False
 
 
 class _ResearchReportPayload(BaseModel):

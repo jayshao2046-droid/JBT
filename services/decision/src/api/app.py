@@ -1,5 +1,7 @@
 import hmac
 import os
+import time
+from collections import defaultdict
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -33,14 +35,61 @@ _DECISION_API_KEY = os.environ.get("DECISION_API_KEY", "")
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 _PUBLIC_PATHS = {"/health", "/ready"}
 
+# P2-4 安全修复：速率限制（简单滑动窗口）
+_rate_limit_window = 60  # 秒
+_rate_limit_max_requests = int(os.environ.get("DECISION_RATE_LIMIT", "100"))
+_rate_limit_store: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_rate_limit(client_id: str) -> bool:
+    """检查速率限制（简单滑动窗口实现）。
+
+    Args:
+        client_id: 客户端标识（IP 或 API Key）
+
+    Returns:
+        True 表示未超限，False 表示超限
+    """
+    now = time.time()
+    window_start = now - _rate_limit_window
+
+    # 清理过期记录
+    _rate_limit_store[client_id] = [
+        ts for ts in _rate_limit_store[client_id] if ts > window_start
+    ]
+
+    # 检查是否超限
+    if len(_rate_limit_store[client_id]) >= _rate_limit_max_requests:
+        return False
+
+    # 记录本次请求
+    _rate_limit_store[client_id].append(now)
+    return True
+
 
 async def _verify_api_key(
     request: Request, api_key: Optional[str] = Depends(_api_key_header)
 ) -> None:
-    if not _DECISION_API_KEY:
-        return
+    """验证 API Key（P1-1 修复：生产环境强制验证）。"""
     if request.url.path in _PUBLIC_PATHS:
         return
+
+    # P1-1 修复：生产环境必须配置 API Key
+    env = os.environ.get("JBT_ENV", "development").lower()
+    if not _DECISION_API_KEY:
+        if env == "production":
+            raise HTTPException(
+                status_code=503,
+                detail="DECISION_API_KEY not configured in production environment"
+            )
+        # 开发环境允许未配置 API Key
+        return
+
+    # P2-4 修复：速率限制检查
+    client_id = api_key or request.client.host if request.client else "unknown"
+    if not _check_rate_limit(client_id):
+        raise HTTPException(status_code=429, detail="rate limit exceeded")
+
     if not api_key or not hmac.compare_digest(api_key, _DECISION_API_KEY):
         raise HTTPException(status_code=403, detail="invalid or missing API key")
 

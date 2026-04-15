@@ -4,8 +4,13 @@ import os
 import httpx
 from typing import Dict, Any
 from datetime import datetime
+import logging
 
 from .models import ResearchReport
+from .config import ResearcherConfig
+
+
+logger = logging.getLogger(__name__)
 
 
 class ResearcherNotifier:
@@ -14,6 +19,34 @@ class ResearcherNotifier:
     def __init__(self):
         self.feishu_webhook = os.getenv("FEISHU_WEBHOOK_URL", "")
         self.data_api_url = os.getenv("DATA_API_URL", "http://192.168.31.76:8105")
+
+    async def _post_feishu(self, payload: Dict[str, Any], timeout: float = 10.0, retries: int = 2) -> bool:
+        """发送飞书消息并校验业务返回码。"""
+        if not self.feishu_webhook:
+            logger.warning("FEISHU_WEBHOOK_URL is empty, skip sending")
+            return False
+
+        last_error = ""
+        for attempt in range(retries + 1):
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(self.feishu_webhook, json=payload, timeout=timeout)
+                if resp.status_code != 200:
+                    last_error = f"http={resp.status_code} body={resp.text[:300]}"
+                else:
+                    body = resp.json()
+                    code = body.get("code", -1)
+                    if code == 0:
+                        return True
+                    last_error = f"code={code} msg={body.get('msg', '')}"
+            except Exception as e:
+                last_error = str(e)
+
+            if attempt < retries:
+                logger.warning("Feishu send failed, retry=%s/%s, reason=%s", attempt + 1, retries, last_error)
+
+        logger.error("Feishu send failed after retries: %s", last_error)
+        return False
 
     async def notify_report_done(self, report: ResearchReport):
         """
@@ -129,7 +162,7 @@ class ResearcherNotifier:
                         "elements": [
                             {
                                 "tag": "plain_text",
-                                "content": f"JBT 数据研究员 | {hour}:{minute} | 采集{sources_count}源{articles_count}篇 | Alienware"
+                                "content": f"BotQuant 资讯 | JBT 数据研究员 | {hour}:{minute} | 采集{sources_count}源{articles_count}篇 | Alienware"
                             }
                         ]
                     }
@@ -138,10 +171,9 @@ class ResearcherNotifier:
         }
 
         try:
-            async with httpx.AsyncClient() as client:
-                await client.post(self.feishu_webhook, json=card, timeout=10.0)
+            await self._post_feishu(card, timeout=ResearcherConfig.HTTP_TIMEOUT_MEDIUM)
         except Exception:
-            pass  # 发送失败不影响主流程
+            logger.exception("Unexpected error when sending report card")
 
     def _build_futures_brief(self, futures_summary: Dict[str, Any]) -> str:
         """构建精炼的期货研判（按偏多/偏空/震荡分组）"""
@@ -228,7 +260,7 @@ class ResearcherNotifier:
                         "elements": [
                             {
                                 "tag": "plain_text",
-                                "content": f"JBT 数据研究员 | {timestamp} | Alienware"
+                                "content": f"BotQuant 资讯 | JBT 数据研究员 | {timestamp} | Alienware"
                             }
                         ]
                     }
@@ -237,10 +269,9 @@ class ResearcherNotifier:
         }
 
         try:
-            async with httpx.AsyncClient() as client:
-                await client.post(self.feishu_webhook, json=card, timeout=10.0)
+            await self._post_feishu(card, timeout=10.0)
         except Exception:
-            pass
+            logger.exception("Unexpected error when sending alert card")
 
     async def _send_feishu_urgent(self, headline: str, source: str, url: str):
         """发送突发紧急卡片（red 模板 P0 报警）"""
@@ -278,7 +309,7 @@ class ResearcherNotifier:
                         "elements": [
                             {
                                 "tag": "plain_text",
-                                "content": f"JBT 数据研究员 | 突发紧急 | Alienware"
+                                "content": f"BotQuant 资讯 | JBT 数据研究员 | 突发紧急 | Alienware"
                             }
                         ]
                     }
@@ -287,7 +318,6 @@ class ResearcherNotifier:
         }
 
         try:
-            async with httpx.AsyncClient() as client:
-                await client.post(self.feishu_webhook, json=card, timeout=10.0)
+            await self._post_feishu(card, timeout=10.0)
         except Exception:
-            pass
+            logger.exception("Unexpected error when sending urgent card")

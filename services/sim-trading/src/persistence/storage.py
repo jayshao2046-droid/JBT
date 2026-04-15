@@ -3,11 +3,14 @@
 使用 JSON 文件存储权益曲线、KPI 快照等历史数据
 """
 import json
+import logging
 import os
 from pathlib import Path
 from datetime import date, datetime, timedelta
 from threading import Lock
 from typing import List, Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class PersistenceStorage:
@@ -147,12 +150,33 @@ class PersistenceStorage:
             return default
 
     def _save_json(self, filepath: Path, data):
-        """保存 JSON 文件"""
+        """
+        保存 JSON 文件，带完整错误处理和原子性写入
+
+        Bug-3 修复：使用 logger 替代 print，添加原子性写入和文件权限设置
+        """
         try:
-            with open(filepath, "w", encoding="utf-8") as f:
+            # 创建临时文件，原子性写入
+            tmp_path = filepath.with_suffix(f"{filepath.suffix}.tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+
+            # 原子性重命名
+            tmp_path.replace(filepath)
+
+            # 设置文件权限（仅所有者可读写）
+            filepath.chmod(0o600)
+
+            logger.debug(f"Successfully saved JSON to {filepath}")
         except IOError as e:
-            print(f"Failed to save {filepath}: {e}")
+            logger.error(f"Failed to save JSON to {filepath}: {e}", exc_info=True)
+            # 清理临时文件
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except Exception:
+                pass
+            raise
 
 
 # 全局单例

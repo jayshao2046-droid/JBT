@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 from .config import ResearcherConfig
+from .daily_stats import DailyStatsTracker
 from .models import ResearchReport, SymbolResearch
 
 
@@ -15,31 +16,45 @@ class Reporter:
 
     def __init__(self):
         ResearcherConfig.ensure_dirs()
+        self.stats_tracker = DailyStatsTracker(ResearcherConfig.LOGS_DIR)
         self._init_report_index()
 
     def _init_report_index(self):
         """初始化报告索引表（减量化，只存可检索字段）"""
-        conn = sqlite3.connect(ResearcherConfig.REPORTS_DB)
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS report_index (
-                report_id     TEXT PRIMARY KEY,
-                date          TEXT NOT NULL,
-                hour          INTEGER NOT NULL,
-                segment       TEXT,
-                symbols       TEXT,
-                market_view   TEXT,
-                sources_count INTEGER DEFAULT 0,
-                articles_count INTEGER DEFAULT 0,
-                model         TEXT,
-                json_path     TEXT NOT NULL,
-                created_at    TEXT NOT NULL
-            )
-        """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_report_date ON report_index(date, hour)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_report_symbol ON report_index(date, symbols)")
-        conn.commit()
-        conn.close()
+        # P1-2 修复：使用 with 语句确保连接自动关闭
+        with sqlite3.connect(ResearcherConfig.REPORTS_DB) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS report_index (
+                    report_id              TEXT PRIMARY KEY,
+                    date                   TEXT NOT NULL,
+                    hour                   INTEGER NOT NULL,
+                    segment                TEXT,
+                    symbols                TEXT,
+                    market_view            TEXT,
+                    sources_count          INTEGER DEFAULT 0,
+                    articles_count         INTEGER DEFAULT 0,
+                    model                  TEXT,
+                    json_path              TEXT NOT NULL,
+                    created_at             TEXT NOT NULL,
+                    decision_confidence    REAL DEFAULT NULL,
+                    decision_reviewed_at   TEXT DEFAULT NULL,
+                    decision_reason        TEXT DEFAULT NULL
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_report_date ON report_index(date, hour)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_report_symbol ON report_index(date, symbols)")
+            # 迁移：为已存在的旧表补充 decision 列
+            for col_def in [
+                "ADD COLUMN decision_confidence  REAL DEFAULT NULL",
+                "ADD COLUMN decision_reviewed_at TEXT DEFAULT NULL",
+                "ADD COLUMN decision_reason      TEXT DEFAULT NULL",
+            ]:
+                try:
+                    cursor.execute(f"ALTER TABLE report_index {col_def}")
+                except Exception:
+                    pass  # 列已存在
+            conn.commit()
 
     def generate_report(
         self,
@@ -101,15 +116,19 @@ class Reporter:
         return report
 
     def _generate_report_id(self, date: str, segment: str) -> str:
-        """生成报告ID"""
+        """生成报告ID（segment 保留原始格式如 '12:00'，文件名中用 '-' 替换 ':'）"""
         date_str = date.replace("-", "")
-        # 查找当天该时段的序号
+        safe_segment = segment.replace(":", "-")  # Windows 文件名不允许 ':'
         report_dir = os.path.join(ResearcherConfig.REPORTS_DIR, date)
+        seq = 1
         if os.path.exists(report_dir):
-            existing = [f for f in os.listdir(report_dir) if f.startswith(f"{segment}-")]
-            seq = len(existing) + 1
-        else:
-            seq = 1
+            # 按安全文件名计数已存在的同时段报告
+            existing = [
+                f for f in os.listdir(report_dir)
+                if f.startswith(safe_segment) and f.endswith(".json")
+            ]
+            if existing:
+                seq = len(existing) + 1
 
         return f"RPT-{date_str}-{segment}-{seq:03d}"
 
@@ -210,18 +229,20 @@ class Reporter:
         return changes[:10]  # 最多 10 条
 
     def _save_report(self, report: ResearchReport):
-        """保存报告到文件"""
+        """保存报告到文件（safe_segment 避免 Windows 路径中 ':' 非法字符）"""
+        safe_segment = report.segment.replace(":", "-")  # e.g. "12:00" → "12-00"
+
         # 创建日期目录
         date_dir = os.path.join(ResearcherConfig.REPORTS_DIR, report.date)
         os.makedirs(date_dir, exist_ok=True)
 
         # 保存 JSON 决策版
-        json_path = os.path.join(date_dir, f"{report.segment}.json")
+        json_path = os.path.join(date_dir, f"{safe_segment}.json")
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(report.dict(), f, ensure_ascii=False, indent=2, default=str)
 
         # 保存 Markdown Jay 版
-        md_path = os.path.join(date_dir, f"{report.segment}.md")
+        md_path = os.path.join(date_dir, f"{safe_segment}.md")
         md_content = self._generate_markdown(report)
         with open(md_path, "w", encoding="utf-8") as f:
             f.write(md_content)
@@ -244,28 +265,28 @@ class Reporter:
             hour = report.generated_at.hour
 
         try:
-            conn = sqlite3.connect(ResearcherConfig.REPORTS_DB)
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT OR REPLACE INTO report_index
-                    (report_id, date, hour, segment, symbols, market_view,
-                     sources_count, articles_count, model, json_path, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                report.report_id,
-                report.date,
-                hour,
-                report.segment,
-                symbols_json,
-                market_view,
-                sources_count,
-                articles_count,
-                report.model,
-                json_path,
-                report.generated_at.isoformat(),
-            ))
-            conn.commit()
-            conn.close()
+            # P1-2 修复：使用 with 语句确保连接自动关闭
+            with sqlite3.connect(ResearcherConfig.REPORTS_DB) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT OR REPLACE INTO report_index
+                        (report_id, date, hour, segment, symbols, market_view,
+                         sources_count, articles_count, model, json_path, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    report.report_id,
+                    report.date,
+                    hour,
+                    report.segment,
+                    symbols_json,
+                    market_view,
+                    sources_count,
+                    articles_count,
+                    report.model,
+                    json_path,
+                    report.generated_at.isoformat(),
+                ))
+                conn.commit()
         except Exception:
             pass  # 索引写入失败不阻断主流程
 

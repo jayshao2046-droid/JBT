@@ -1,24 +1,24 @@
 {
   "device": "076256daffea",
   "device_label": "076256daffea",
-  "ts": "2026-04-13T21:43:54.633597+08:00",
-  "ts_display": "2026-04-13 21:43",
+  "ts": "2026-04-15T18:22:27.694136+08:00",
+  "ts_display": "2026-04-15 18:22",
   "cpu": {
     "cores": 10,
-    "usage_percent": 15.9
+    "usage_percent": 13.5
   },
   "memory": {
     "total_mb": 7836,
-    "used_mb": 557,
-    "used_percent": 7.1
+    "used_mb": 581,
+    "used_percent": 7.4
   },
   "disk": [
     {
       "mount": "/",
       "total": "453G",
-      "used": "30G",
-      "avail": "400G",
-      "used_percent": 7.0
+      "used": "33G",
+      "avail": "397G",
+      "used_percent": 8.0
     }
   ],
   "gpu": [],

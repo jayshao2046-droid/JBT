@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import re
 
 import os
 
@@ -40,7 +41,7 @@ class ParquetStorage:
 
     def _build_file_path(self, data_type: str, symbol: str) -> Path:
         file_dir = self.base_dir / symbol / data_type
-        file_dir.mkdir(parents=True, exist_ok=True)
+        file_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         return file_dir / "records.parquet"
 
     def write_records(
@@ -145,12 +146,31 @@ class ParquetStorage:
             return self.read_records(data_type=data_type, symbol=symbol, columns=columns, limit=limit)
 
         try:
+            # P1-1 修复：增强列名验证，防止 SQL 注入
+            if columns:
+                for col in columns:
+                    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', col):
+                        raise StorageError(f"Invalid column name: {col}")
+
             selected = ", ".join(columns) if columns else "*"
             sql = f"SELECT {selected} FROM read_parquet('{file_path.as_posix()}')"  # nosec B608 — file_path is a Path object, not user input
+
+            # 安全修复：P0-1 - 验证 sql_where 和 order_by 防止 SQL 注入
             if sql_where:
+                # 白名单验证：仅允许安全字符（字母、数字、空格、比较运算符、括号）
+                if not re.match(r'^[a-zA-Z0-9_\s<>=!().\'"AND OR NOT-]+$', sql_where, re.IGNORECASE):
+                    raise StorageError(f"Invalid WHERE clause: contains unsafe characters")
                 sql += f" WHERE {sql_where}"
+
             if order_by:
+                # P1-1 修复：增强 ORDER BY 验证，支持多列和方向
+                order_parts = [part.strip() for part in order_by.split(',')]
+                for part in order_parts:
+                    # 每个部分应该是 "column_name" 或 "column_name ASC/DESC"
+                    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*(\s+(ASC|DESC))?$', part, re.IGNORECASE):
+                        raise StorageError(f"Invalid ORDER BY clause: {part}")
                 sql += f" ORDER BY {order_by}"
+
             if limit is not None and limit >= 0:
                 sql += f" LIMIT {int(limit)}"
 

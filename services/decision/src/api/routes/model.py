@@ -47,8 +47,9 @@ def runtime_snapshot() -> dict:
     state_store = get_state_store()
     dispatcher_snapshot = get_dispatcher().runtime_snapshot(recent_limit=10)
 
-    from .signal import _L1_MODEL_PROFILE, _L2_MODEL_PROFILE, _decisions
+    from .signal import _L1_MODEL_PROFILE, _L2_MODEL_PROFILE, _sorted_decisions
 
+    decisions = _sorted_decisions()
     factor_sync = Counter(item.factor_sync_status for item in strategies)
     router_eligible = 0
     router_blocked = 0
@@ -73,7 +74,7 @@ def runtime_snapshot() -> dict:
             "approvals_total": len(state_store.list_records("approvals")),
             "backtest_certs_total": len(state_store.list_records("backtest_certs")),
             "research_snapshots_total": len(state_store.list_records("research_snapshots")),
-            "decision_records_total": len(_decisions),
+            "decision_records_total": len(decisions),
             "dispatcher_state": dispatcher_snapshot["dispatcher_state"],
         },
         "execution_gate": {
