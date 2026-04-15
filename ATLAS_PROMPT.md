@@ -199,3 +199,49 @@
 **见证人**：Jay.S  
 **预计交接时间**：2026-04-30（Atlas 回归）
 
+
+## Livis 工作记录（2026-04-16）
+
+【签名】Livis Claude
+【时间】2026-04-16
+【状态】Token Lockback 收口待处理
+
+### 待 Lockback 的任务
+
+#### TASK-0119（P0 安全漏洞修复）
+- ✅ 代码已完成并推送（commit 5349ab2）
+- ❌ 3 个 Token 仍然 active，需要 lockback
+  - `tok-08e04b2f-c7e4-4ea0-b1f9-d3e638335469`
+  - `tok-1c25ff31-0f35-4118-97af-f225c0577836`
+  - `tok-9111c220-98e3-4b35-a179-7f54c46fc89f`
+- **问题**：原始 Token 字符串只在签发时显示一次，无法从系统获取
+- **待办**：需要 Jay.S 提供原始 Token 字符串或确认如何处理
+
+#### TASK-0104（data 预读 + LLM 上下文注入）
+- ✅ D1+D2 已完成并推送（commit 802c1f7, d356511, bbabf48）
+- ❌ 2 个 Token 仍然 active，需要 lockback
+  - `tok-97335b68-9929-4633-b938-0049a205f869`
+  - `tok-54f501ef-db44-404d-8fc5-ab5d81c99685`
+- **待办**：同上
+
+### 状态不明确的任务
+
+- **TASK-0110**（数据研究员子系统）：派工单显示 6 批次，但查不到 Token
+- **TASK-0084**（因子双地同步）：1 个 Token active
+- **TASK-0025**（SimNow 备用方案）：1 个 Token active
+
+### Livis 的学习笔记
+
+**关键发现**：Token 字符串只在签发时显示一次，必须立即记录。
+
+**改进建议**：
+1. 签发 Token 时，立即将 Token 字符串记录到 `docs/locks/TASK-XXXX-token-字符串.txt`
+2. 或在派工单中预留 Token 字符串记录位置
+3. 这样后续 lockback 时可以直接读取
+
+详细记录见：`docs/handoffs/Livis-待办-Token-Lockback收口.md`
+
+---
+
+**签名**：Livis Claude  
+**日期**：2026-04-16
