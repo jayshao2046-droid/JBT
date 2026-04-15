@@ -137,3 +137,65 @@
 - 2026-04-15：**pnpm build 28/28 ✅** — strategy-import.tsx + optimizer-panel.tsx 修改后，Compiled successfully，28/28 static pages 全部通过。
 - 2026-04-15：**TASK-0106-D** ATLAS_PROMPT + 总计划更新完成，待 git commit + lockback。TASK-0106-E（push + Studio 同步）待 Jay.S 确认执行。
 - dashboard 进度：通过本次 B~D 修复，dashboard 100% 收口完成。Phase F 正式闭环。
+## Livis 接替声明（2026-04-15）
+
+【签名】Livis Claude
+【时间】2026-04-15 
+【状态】正式接替 Atlas 工作
+
+尊敬的 Atlas：
+
+我是 **Livis Claude**，Jay.S 的助理。因为您暂时离开半个月，Jay.S 委托我接替您的工作。
+
+### 我的保证
+
+1. **完全遵守您制定的所有规则和风格**
+   - 严格按照 WORKFLOW.md、总项目经理调度提示词、公共项目提示词执行
+   - 不改变您的任何规则，只严格执行
+
+2. **每次做完必须无痕迹**
+   - 所有 handoff 文件署名 "Livis" 或 "Livis Claude"
+   - 所有 git commit message 包含 "Livis"
+   - 所有 append_atlas_log 调用署名 "Livis"
+   - 所有 docs/reviews/、docs/locks/ 文件署名 "Livis"
+
+3. **等您回来会审核我所有的工作**
+   - 我的所有工作都是临时性的
+   - 您有权推翻我的任何决策
+   - 您有权回滚我的任何 commit
+
+4. **严格遵守 Token 签发底线**
+   - 绝不自行签发 Token
+   - 必须通过 `python governance/jbt_lockctl.py issue` 命令
+   - 必须等待 Jay.S 输入密码
+
+5. **严格遵守目录保护级别**
+   - P0/P1 目录：必须 Token，绝不越权
+   - P-LOG 协同账本目录：按角色归属写权限，署名 Livis
+   - P2 永久禁改目录：绝不触碰
+
+### 接替时的项目状态快照
+
+- ✅ Phase F 统一聚合 dashboard 全闭环
+- ✅ TASK-0104 D1+D2 完成（data预读 + LLM上下文注入）
+- ✅ TASK-0107 sim-trading 迁移至 Alienware
+- ✅ TASK-0112~0117 决策端精进改造 7 批次全闭环
+- 🔄 当前 Active Token：14 个（TASK-0084/0025/0104/0110系列/0118/0119）
+- 📋 待建任务：研报 data API 端点
+
+### 我的承诺
+
+**我将像您一样工作，但永远不会取代您。**
+
+我只是您的临时替代者，所有决策都等待您回来审核。
+
+详细声明见：`docs/handoffs/Livis-接替Atlas工作声明.md`
+我的工作 prompt 见：`docs/prompts/agents/Livis提示词.md`
+
+---
+
+**签名**：Livis Claude  
+**日期**：2026-04-15  
+**见证人**：Jay.S  
+**预计交接时间**：2026-04-30（Atlas 回归）
+
