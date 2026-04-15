@@ -1,11 +1,12 @@
 import os
+import hmac
 import uuid
 from collections import deque
 from datetime import datetime, timedelta
 from threading import Lock as _ThreadLock
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 # ---------- API Key 认证 ----------
@@ -27,6 +28,39 @@ def _get_gateway():
 
 # ---------- CTP 连接锁（防止并发 connect 调用造成 _gateway 竞态）----------
 _connect_lock = _ThreadLock()
+
+
+def _require_write_api_key(request: Request) -> None:
+    """关键写操作强制鉴权：未配置 SIM_API_KEY 时默认锁定写操作。"""
+    expected = (os.getenv("SIM_API_KEY", "") or "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="SIM_API_KEY not configured; write operations are locked",
+        )
+    provided = (request.headers.get("X-API-Key", "") or "").strip()
+    if not provided or not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=403, detail="invalid or missing API key")
+
+
+def _is_local_manual_request(request: Request) -> bool:
+    """仅允许本机手动请求在声明 manual 时免 key。"""
+    manual_flag = (request.headers.get("X-Manual-Op", "") or "").strip().lower()
+    if manual_flag not in {"1", "true", "yes", "manual"}:
+        return False
+    host = request.client.host if request.client else ""
+    return host in {"127.0.0.1", "::1", "localhost"}
+
+
+def _require_trade_api_key(request: Request) -> None:
+    """
+    下单/平仓相关指令鉴权策略：
+    - 自动交易必须带 key（严格）
+    - 手动操作仅允许本机 + X-Manual-Op 显式声明时免 key
+    """
+    if _is_local_manual_request(request):
+        return
+    _require_write_api_key(request)
 
 # ---------- 内存状态（从环境变量初始化，重启后 CTP 凭证自动恢复）----------
 _system_state: Dict[str, Any] = {
@@ -291,7 +325,7 @@ def get_orders():
     return {"orders": gw.get_orders()}
 
 @router.post("/orders")
-def create_order(req: OrderRequest):
+def create_order(req: OrderRequest, request: Request):
     """
     下单 API —— 含光大穿透式合规所需的全部前置校验：
     1. 交易暂停检查（暂停交易功能）
@@ -303,6 +337,7 @@ def create_order(req: OrderRequest):
     通过后发送到 CTP，交易所错误通过回调异步返回。
     """
     import math
+    _require_trade_api_key(request)
 
     # ── 1. 暂停交易检查 ──
     if not _system_state.get("trading_enabled", True):
@@ -376,8 +411,9 @@ def create_order(req: OrderRequest):
 
 
 @router.post("/orders/cancel")
-def cancel_order(req: CancelOrderRequest):
+def cancel_order(req: CancelOrderRequest, request: Request):
     """撤单 API"""
+    _require_trade_api_key(request)
     gw = _get_gateway()
     if gw is None:
         raise HTTPException(status_code=503, detail="CTP 未连接")
@@ -421,7 +457,8 @@ def get_system_state():
     return safe
 
 @router.post("/system/pause")
-def pause_trading(req: PauseRequest):
+def pause_trading(req: PauseRequest, request: Request):
+    _require_write_api_key(request)
     _system_state["trading_enabled"] = False
     _system_state["paused_reason"] = req.reason
     try:
@@ -432,7 +469,8 @@ def pause_trading(req: PauseRequest):
     return {"result": "paused", "state": _safe_state()}
 
 @router.post("/system/resume")
-def resume_trading():
+def resume_trading(request: Request):
+    _require_write_api_key(request)
     _system_state["trading_enabled"] = True
     _system_state["paused_reason"] = None
     try:
@@ -443,7 +481,8 @@ def resume_trading():
     return {"result": "resumed", "state": _safe_state()}
 
 @router.post("/system/preset")
-def set_preset(body: dict):
+def set_preset(body: dict, request: Request):
+    _require_write_api_key(request)
     preset = body.get("preset", "sim_50w")
     _system_state["active_preset"] = preset
     return {"result": "preset updated", "active_preset": preset}
@@ -462,7 +501,8 @@ def get_ctp_config():
     }
 
 @router.post("/ctp/config")
-def save_ctp_config(req: CtpConfigRequest):
+def save_ctp_config(req: CtpConfigRequest, request: Request):
+    _require_write_api_key(request)
     _system_state["ctp_broker_id"] = req.broker_id
     _system_state["ctp_user_id"] = req.user_id
     _system_state["ctp_password"] = req.password
@@ -472,7 +512,6 @@ def save_ctp_config(req: CtpConfigRequest):
     _system_state["ctp_auth_code"] = req.auth_code
     return {"result": "ctp config saved"}
 
-@router.post("/ctp/connect")
 def ctp_connect(silent: bool = False):
     global _gateway
     import logging
@@ -549,8 +588,15 @@ def ctp_connect(silent: bool = False):
         "td_connected": st["td_connected"],
     }
 
+
+@router.post("/ctp/connect")
+def ctp_connect_api(request: Request, silent: bool = False):
+    _require_write_api_key(request)
+    return ctp_connect(silent=silent)
+
 @router.post("/ctp/disconnect")
-def ctp_disconnect():
+def ctp_disconnect(request: Request):
+    _require_write_api_key(request)
     global _gateway
     with _connect_lock:
         if _gateway is not None:
@@ -596,7 +642,8 @@ def get_risk_presets():
     return {"presets": _risk_presets}
 
 @router.post("/risk-presets")
-def update_risk_preset(req: RiskPresetUpdateRequest):
+def update_risk_preset(req: RiskPresetUpdateRequest, request: Request):
+    _require_write_api_key(request)
     if req.symbol not in _risk_presets:
         _risk_presets[req.symbol] = {"name": req.symbol}
     _risk_presets[req.symbol].update({
@@ -639,11 +686,14 @@ def get_account():
 
 # ---------- 信号接收端点 ----------
 @router.post("/signals/receive")
-def receive_signal(req: SignalReceiveRequest):
+def receive_signal(req: SignalReceiveRequest, request: Request):
     """
     接收来自决策服务的交易信号。
     验证参数 → 幂等检查 → 生成 execution_id → 暂存队列 → 返回确认。
     """
+    # 自动交易入口：必须带 key，不允许手动豁免
+    _require_write_api_key(request)
+
     errors = []
     if not req.signal_id or not req.signal_id.strip():
         errors.append("signal_id is required")
@@ -936,8 +986,9 @@ class UpdateStopLossRequest(BaseModel):
 
 
 @router.patch("/positions/{position_id}/stop_loss")
-def update_position_stop_loss(position_id: str, req: UpdateStopLossRequest):
+def update_position_stop_loss(position_id: str, req: UpdateStopLossRequest, request: Request):
     """修改持仓止损（P0-3）"""
+    _require_trade_api_key(request)
     from src.ledger.service import get_ledger
 
     ledger = get_ledger()
@@ -1010,8 +1061,9 @@ class BatchCloseRequest(BaseModel):
 
 
 @router.post("/positions/batch_close")
-def batch_close_positions(req: BatchCloseRequest):
+def batch_close_positions(req: BatchCloseRequest, request: Request):
     """批量平仓（P1-3）"""
+    _require_trade_api_key(request)
     from src.execution.service import ExecutionService
 
     results = []
