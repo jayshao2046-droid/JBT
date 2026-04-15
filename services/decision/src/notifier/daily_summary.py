@@ -129,43 +129,41 @@ class DailyGateSummary:
     def to_email_body(self) -> str:
         """生成邮件正文（Markdown格式）"""
         lines = [
-            f"# {self.date} 决策服务门控日报",
-            "",
-            "## 📊 L1/L2/L3 总量与通过率",
-            "",
-            f"**L1 快速门控**",
-            f"- 总量: {self.l1_total}",
-            f"- 通过: {self.l1_passed}",
-            f"- 通过率: {self.get_pass_rate(self.l1_passed, self.l1_total):.1f}%",
-            "",
-            f"**L2 深审**",
-            f"- 总量: {self.l2_total}",
-            f"- 通过: {self.l2_passed}",
-            f"- 通过率: {self.get_pass_rate(self.l2_passed, self.l2_total):.1f}%",
-            "",
-            f"**L3 在线确认**",
-            f"- 总量: {self.l3_total}",
-            f"- 确认: {self.l3_confirmed}",
-            f"- 拒绝: {self.l3_rejected}",
-            f"- 超时: {self.l3_timeout}",
-            f"- 确认率: {self.get_pass_rate(self.l3_confirmed, self.l3_total):.1f}%",
+            f"## 📊 L1/L2/L3 总量与通过率",
             "",
         ]
 
+        # 使用表格展示统计数据
+        lines.extend([
+            "| 门控阶段 | 总量 | 通过 | 通过率 |",
+            "|---------|------|------|--------|",
+            f"| L1 快速门控 | {self.l1_total} | {self.l1_passed} | {self.get_pass_rate(self.l1_passed, self.l1_total):.1f}% |",
+            f"| L2 深审 | {self.l2_total} | {self.l2_passed} | {self.get_pass_rate(self.l2_passed, self.l2_total):.1f}% |",
+            f"| L3 在线确认 | {self.l3_total} | {self.l3_confirmed} | {self.get_pass_rate(self.l3_confirmed, self.l3_total):.1f}% |",
+            "",
+        ])
+
+        # L3 详细统计
+        if self.l3_total > 0:
+            lines.extend([
+                f"**L3 详细**: 确认 {self.l3_confirmed} · 拒绝 {self.l3_rejected} · 超时 {self.l3_timeout}",
+                "",
+            ])
+
         # 品种分析
         lines.extend([
-            "## 📈 按品种命中率 Top 10",
+            "## 📈 品种命中率 Top 10",
             "",
         ])
 
         top_symbols = self.get_top_symbols(10)
         if top_symbols:
-            for symbol, stats in top_symbols:
+            for i, (symbol, stats) in enumerate(top_symbols, 1):
                 l1_rate = self.get_pass_rate(stats["l1_passed"], stats["l1_total"])
                 l2_rate = self.get_pass_rate(stats["l2_passed"], stats["l2_total"])
                 lines.append(
-                    f"**{symbol}**: L1 {stats['l1_total']}次({l1_rate:.0f}%), "
-                    f"L2 {stats['l2_total']}次({l2_rate:.0f}%), "
+                    f"**{i}. {symbol}** · L1 {stats['l1_total']}次({l1_rate:.0f}%) · "
+                    f"L2 {stats['l2_total']}次({l2_rate:.0f}%) · "
                     f"L3确认 {stats['l3_confirmed']}次"
                 )
         else:
@@ -174,39 +172,39 @@ class DailyGateSummary:
         lines.append("")
 
         # 拒绝原因 TopN
-        lines.extend([
-            "## 🚫 拒绝原因 Top 5",
-            "",
-        ])
+        has_reject_reasons = self.l1_reject_reasons or self.l2_reject_reasons or self.l3_reject_reasons
 
-        if self.l1_reject_reasons:
-            lines.append("**L1 拒绝原因**:")
-            for reason, count in self.l1_reject_reasons.most_common(5):
-                lines.append(f"- {reason}: {count}次")
-            lines.append("")
+        if has_reject_reasons:
+            lines.extend([
+                "## 🚫 拒绝原因 Top 5",
+                "",
+            ])
 
-        if self.l2_reject_reasons:
-            lines.append("**L2 拒绝原因**:")
-            for reason, count in self.l2_reject_reasons.most_common(5):
-                lines.append(f"- {reason}: {count}次")
-            lines.append("")
+            if self.l1_reject_reasons:
+                lines.append("**L1 拒绝原因**")
+                for i, (reason, count) in enumerate(self.l1_reject_reasons.most_common(5), 1):
+                    lines.append(f"{i}. {reason} ({count}次)")
+                lines.append("")
 
-        if self.l3_reject_reasons:
-            lines.append("**L3 拒绝原因**:")
-            for reason, count in self.l3_reject_reasons.most_common(5):
-                lines.append(f"- {reason}: {count}次")
-            lines.append("")
+            if self.l2_reject_reasons:
+                lines.append("**L2 拒绝原因**")
+                for i, (reason, count) in enumerate(self.l2_reject_reasons.most_common(5), 1):
+                    lines.append(f"{i}. {reason} ({count}次)")
+                lines.append("")
+
+            if self.l3_reject_reasons:
+                lines.append("**L3 拒绝原因**")
+                for i, (reason, count) in enumerate(self.l3_reject_reasons.most_common(5), 1):
+                    lines.append(f"{i}. {reason} ({count}次)")
+                lines.append("")
 
         # 失败通知统计
         total_failures = self.feishu_failures + self.email_failures + self.both_failures
         if total_failures > 0:
             lines.extend([
-                "## ⚠️ 失败通知统计",
+                "## ⚠️ 通知失败统计",
                 "",
-                f"- 飞书失败: {self.feishu_failures}次",
-                f"- 邮件失败: {self.email_failures}次",
-                f"- 双通道失败: {self.both_failures}次",
-                f"- **总计**: {total_failures}次",
+                f"飞书失败 {self.feishu_failures}次 · 邮件失败 {self.email_failures}次 · 双通道失败 {self.both_failures}次",
                 "",
             ])
 
@@ -222,15 +220,15 @@ class DailyGateSummary:
             warning_events = [e for e in self.risk_events if e["severity"] == "warning"]
 
             if critical_events:
-                lines.append("**严重风险**:")
-                for event in critical_events[:5]:
-                    lines.append(f"- [{event['type']}] {event['description']}")
+                lines.append("**严重风险**")
+                for i, event in enumerate(critical_events[:5], 1):
+                    lines.append(f"{i}. [{event['type']}] {event['description']}")
                 lines.append("")
 
             if warning_events:
-                lines.append("**警告**:")
-                for event in warning_events[:5]:
-                    lines.append(f"- [{event['type']}] {event['description']}")
+                lines.append("**警告**")
+                for i, event in enumerate(warning_events[:5], 1):
+                    lines.append(f"{i}. [{event['type']}] {event['description']}")
                 lines.append("")
 
         return "\n".join(lines)

@@ -244,25 +244,42 @@ class HealthMonitor:
             return
 
         # 构建通知
-        status_emoji = {
-            HealthStatus.HEALTHY: "✅",
-            HealthStatus.DEGRADED: "⚠️",
-            HealthStatus.CRITICAL: "🔴",
+        status_config = {
+            HealthStatus.HEALTHY: {"emoji": "✅", "text": "健康", "color": "green"},
+            HealthStatus.DEGRADED: {"emoji": "⚠️", "text": "降级", "color": "orange"},
+            HealthStatus.CRITICAL: {"emoji": "🔴", "text": "严重", "color": "red"},
         }
 
-        emoji = status_emoji[overall_status]
-        title = f"{emoji} 决策服务健康快照 - {overall_status.value.upper()}"
+        config = status_config[overall_status]
+        title = f"决策服务健康快照"
 
-        body_parts = []
+        # 构建卡片内容
+        body_parts = [f"### {config['emoji']} 整体状态: {config['text']}", ""]
+
+        # 组件状态
+        healthy_comps = []
+        problem_comps = []
+
         for name, comp_data in snapshot["components"].items():
             comp_status = HealthStatus(comp_data["status"])
-            if comp_status != HealthStatus.HEALTHY:
-                comp_emoji = status_emoji[comp_status]
-                body_parts.append(
-                    f"{comp_emoji} **{comp_data['name']}**: {comp_data['message']}"
+            comp_config = status_config[comp_status]
+
+            if comp_status == HealthStatus.HEALTHY:
+                healthy_comps.append(f"{comp_config['emoji']} {comp_data['name']}")
+            else:
+                problem_comps.append(
+                    f"{comp_config['emoji']} **{comp_data['name']}**: {comp_data['message']}"
                 )
 
-        body = "\n".join(body_parts) if body_parts else "所有组件正常"
+        if problem_comps:
+            body_parts.append("**异常组件**:")
+            body_parts.extend(problem_comps)
+            body_parts.append("")
+
+        if healthy_comps:
+            body_parts.append("**正常组件**: " + " · ".join(healthy_comps))
+
+        body = "\n".join(body_parts)
 
         level = NotifyLevel.P0 if overall_status == HealthStatus.CRITICAL else NotifyLevel.P1
 
