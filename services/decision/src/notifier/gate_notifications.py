@@ -94,15 +94,15 @@ def notify_l1_result(
     title = f"L1 快速门控 {status}"
 
     body_parts = [
-        f"### {symbol} · {direction_text}",
+        f"**{symbol} · {direction_text}**",
         "",
-        f"**风险标记** {risk_flag} · **置信度** {confidence:.2f}",
+        f"风险标记 {risk_flag} · 置信度 {confidence:.2f}",
     ]
 
     if degraded:
         body_parts.append("⚠️ 降级模式：数据缺失，已降级继续")
 
-    body_parts.extend(["", "**推理过程**", reasoning[:200]])
+    body_parts.extend(["", "推理过程:", reasoning[:200]])
 
     body = "\n".join(body_parts)
 
@@ -164,15 +164,15 @@ def notify_l2_result(
     title = f"L2 深度审查 {status}"
 
     body_parts = [
-        f"### {symbol} · {direction_text}",
+        f"**{symbol} · {direction_text}**",
         "",
-        f"**风险等级** {risk_level} · **置信度** {confidence:.2f}",
+        f"风险等级 {risk_level} · 置信度 {confidence:.2f}",
     ]
 
     if degraded:
         body_parts.append("⚠️ 降级模式：数据缺失，已降级继续")
 
-    body_parts.extend(["", "**深度分析**", reasoning[:300]])
+    body_parts.extend(["", "深度分析:", reasoning[:300]])
 
     body = "\n".join(body_parts)
 
@@ -235,10 +235,10 @@ def notify_l3_result(
     title = f"L3 在线确认 {status_text}"
 
     body = "\n".join([
-        f"### {symbol} · {direction_text}",
+        f"**{symbol} · {direction_text}**",
         "",
-        f"**确认状态** {status_text}",
-        f"**原因** {reason}",
+        f"确认状态 {status_text}",
+        f"原因: {reason}",
     ])
 
     event = DecisionEvent(
@@ -285,13 +285,13 @@ def notify_strategy_tune(
 
     title = f"策略调优 {status}"
 
-    body_parts = [f"### {strategy_id}", ""]
+    body_parts = [f"**{strategy_id}**", ""]
 
     if success:
         # 成功：展示性能指标
         metrics_parts = []
         if "sharpe" in metrics:
-            metrics_parts.append(f"Sharpe {metrics['sharpe']:.2f}")
+            metrics_parts.append(f"夏普 {metrics['sharpe']:.2f}")
         if "max_drawdown" in metrics:
             metrics_parts.append(f"回撤 {metrics['max_drawdown']:.2%}")
         if "win_rate" in metrics:
@@ -303,9 +303,9 @@ def notify_strategy_tune(
     else:
         # 失败：展示回滚点和建议
         if rollback_point:
-            body_parts.append(f"**回滚点** {rollback_point}")
+            body_parts.append(f"回滚点: {rollback_point}")
         if next_steps:
-            body_parts.append(f"**建议** {next_steps}")
+            body_parts.append(f"建议: {next_steps}")
         body_parts.append("")
 
     body_parts.append(message)

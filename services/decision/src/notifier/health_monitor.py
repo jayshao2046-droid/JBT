@@ -254,7 +254,7 @@ class HealthMonitor:
         title = f"决策服务健康快照"
 
         # 构建卡片内容
-        body_parts = [f"### {config['emoji']} 整体状态: {config['text']}", ""]
+        body_parts = [f"**{config['emoji']} 整体状态: {config['text']}**", ""]
 
         # 组件状态
         healthy_comps = []
@@ -268,16 +268,16 @@ class HealthMonitor:
                 healthy_comps.append(f"{comp_config['emoji']} {comp_data['name']}")
             else:
                 problem_comps.append(
-                    f"{comp_config['emoji']} **{comp_data['name']}**: {comp_data['message']}"
+                    f"{comp_config['emoji']} {comp_data['name']}: {comp_data['message']}"
                 )
 
         if problem_comps:
-            body_parts.append("**异常组件**:")
+            body_parts.append("异常组件:")
             body_parts.extend(problem_comps)
             body_parts.append("")
 
         if healthy_comps:
-            body_parts.append("**正常组件**: " + " · ".join(healthy_comps))
+            body_parts.append("正常组件: " + " · ".join(healthy_comps))
 
         body = "\n".join(body_parts)
 

@@ -129,7 +129,7 @@ class DailyGateSummary:
     def to_email_body(self) -> str:
         """生成邮件正文（Markdown格式）"""
         lines = [
-            f"## 📊 L1/L2/L3 总量与通过率",
+            f"L1/L2/L3 总量与通过率",
             "",
         ]
 
@@ -146,13 +146,13 @@ class DailyGateSummary:
         # L3 详细统计
         if self.l3_total > 0:
             lines.extend([
-                f"**L3 详细**: 确认 {self.l3_confirmed} · 拒绝 {self.l3_rejected} · 超时 {self.l3_timeout}",
+                f"L3 详细: 确认 {self.l3_confirmed} · 拒绝 {self.l3_rejected} · 超时 {self.l3_timeout}",
                 "",
             ])
 
         # 品种分析
         lines.extend([
-            "## 📈 品种命中率 Top 10",
+            "品种命中率 Top 10",
             "",
         ])
 
@@ -162,7 +162,7 @@ class DailyGateSummary:
                 l1_rate = self.get_pass_rate(stats["l1_passed"], stats["l1_total"])
                 l2_rate = self.get_pass_rate(stats["l2_passed"], stats["l2_total"])
                 lines.append(
-                    f"**{i}. {symbol}** · L1 {stats['l1_total']}次({l1_rate:.0f}%) · "
+                    f"{i}. {symbol} · L1 {stats['l1_total']}次({l1_rate:.0f}%) · "
                     f"L2 {stats['l2_total']}次({l2_rate:.0f}%) · "
                     f"L3确认 {stats['l3_confirmed']}次"
                 )
@@ -176,24 +176,24 @@ class DailyGateSummary:
 
         if has_reject_reasons:
             lines.extend([
-                "## 🚫 拒绝原因 Top 5",
+                "拒绝原因 Top 5",
                 "",
             ])
 
             if self.l1_reject_reasons:
-                lines.append("**L1 拒绝原因**")
+                lines.append("L1 拒绝原因")
                 for i, (reason, count) in enumerate(self.l1_reject_reasons.most_common(5), 1):
                     lines.append(f"{i}. {reason} ({count}次)")
                 lines.append("")
 
             if self.l2_reject_reasons:
-                lines.append("**L2 拒绝原因**")
+                lines.append("L2 拒绝原因")
                 for i, (reason, count) in enumerate(self.l2_reject_reasons.most_common(5), 1):
                     lines.append(f"{i}. {reason} ({count}次)")
                 lines.append("")
 
             if self.l3_reject_reasons:
-                lines.append("**L3 拒绝原因**")
+                lines.append("L3 拒绝原因")
                 for i, (reason, count) in enumerate(self.l3_reject_reasons.most_common(5), 1):
                     lines.append(f"{i}. {reason} ({count}次)")
                 lines.append("")
@@ -202,7 +202,7 @@ class DailyGateSummary:
         total_failures = self.feishu_failures + self.email_failures + self.both_failures
         if total_failures > 0:
             lines.extend([
-                "## ⚠️ 通知失败统计",
+                "通知失败统计",
                 "",
                 f"飞书失败 {self.feishu_failures}次 · 邮件失败 {self.email_failures}次 · 双通道失败 {self.both_failures}次",
                 "",
@@ -211,7 +211,7 @@ class DailyGateSummary:
         # 风险摘要
         if self.risk_events:
             lines.extend([
-                "## 🔴 风险摘要",
+                "风险摘要",
                 "",
             ])
 
@@ -220,13 +220,13 @@ class DailyGateSummary:
             warning_events = [e for e in self.risk_events if e["severity"] == "warning"]
 
             if critical_events:
-                lines.append("**严重风险**")
+                lines.append("严重风险")
                 for i, event in enumerate(critical_events[:5], 1):
                     lines.append(f"{i}. [{event['type']}] {event['description']}")
                 lines.append("")
 
             if warning_events:
-                lines.append("**警告**")
+                lines.append("警告")
                 for i, event in enumerate(warning_events[:5], 1):
                     lines.append(f"{i}. [{event['type']}] {event['description']}")
                 lines.append("")
