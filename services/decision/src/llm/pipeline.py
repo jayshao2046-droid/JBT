@@ -2,6 +2,7 @@
 
 TASK-0083: 集成数据和研究中心，支持自动拉取 K 线、沙箱回测。
 TASK-0104-D2: 注入夜间预读上下文到三个角色 prompt。
+TASK-0121-D1: 集成研究员报告到决策流程。
 """
 
 import logging
@@ -14,6 +15,8 @@ import httpx
 from .client import OllamaClient
 from .context_loader import get_daily_context
 from .prompts import ANALYST_SYSTEM, AUDITOR_SYSTEM, RESEARCHER_SYSTEM
+from .researcher_loader import ResearcherLoader
+from .researcher_scorer import ResearcherScorer
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +35,11 @@ class LLMPipeline:
         self.researcher_model = os.getenv("OLLAMA_RESEARCHER_MODEL", "deepcoder:14b")
         self.auditor_model = os.getenv("OLLAMA_AUDITOR_MODEL", "phi4-reasoning:14b")
         self.analyst_model = os.getenv("OLLAMA_ANALYST_MODEL", "phi4-reasoning:14b")
+
+        # TASK-0121-D1: 初始化研究员报告加载器和评分器
+        data_service_url = os.getenv("DATA_SERVICE_URL", "http://192.168.31.76:8105")
+        self.researcher_loader = ResearcherLoader(data_service_url)
+        self.researcher_scorer = ResearcherScorer()
 
     async def research(self, intent: str) -> Dict[str, Any]:
         """

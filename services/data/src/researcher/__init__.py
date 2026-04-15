@@ -1,22 +1,26 @@
-"""数据研究员子系统 — Alienware qwen3:14b + 双模式爬虫 + 四段报告
+"""研究员模块 - 24/7 持续运行的数据研究员
 
-运行在 Alienware (192.168.31.224)，通过 qwen3:14b 对 Mini 采集的全量数据做增量预读归纳，
-同时通过双模式爬虫采集期货/股票相关资讯，最终生成四段制双格式报告推送给决策端和 Jay.S。
+主要组件：
+- ProcessManager: 多进程管理器
+- KlineMonitor: K线监控器
+- NewsCrawler: 新闻爬虫
+- FundamentalCrawler: 基本面爬虫
+- LLMAnalyzer: LLM分析器
+- ReportGenerator: 报告生成器
 """
 
-from .config import ResearcherConfig
-from .models import ResearchReport, StagingRecord, SourceConfig, SymbolResearch
-from .staging import StagingManager
-from .summarizer import Summarizer
-from .reporter import Reporter
+from .process_manager import ProcessManager
+from .kline_monitor import KlineMonitor
+from .news_crawler import NewsCrawler
+from .fundamental_crawler import FundamentalCrawler
+from .llm_analyzer import LLMAnalyzer
+from .report_generator import ReportGenerator
 
 __all__ = [
-    "ResearcherConfig",
-    "ResearchReport",
-    "StagingRecord",
-    "SourceConfig",
-    "SymbolResearch",
-    "StagingManager",
-    "Summarizer",
-    "Reporter",
+    "ProcessManager",
+    "KlineMonitor",
+    "NewsCrawler",
+    "FundamentalCrawler",
+    "LLMAnalyzer",
+    "ReportGenerator"
 ]
