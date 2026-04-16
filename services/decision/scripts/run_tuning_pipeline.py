@@ -40,6 +40,29 @@ sys.path.insert(0, str(_BASE))
 
 from src.research.yaml_signal_executor import YAMLSignalExecutor
 from src.research.strategy_param_optimizer import StrategyParamOptimizer
+from src.research.strategy_evaluator import StrategyEvaluator
+
+# 硬性约束：策略 YAML 必须满足，否则跳过优化直接标记 BLOCKED
+_HARD_CONSTRAINTS = [
+    ("risk.force_close_day", lambda r: r.get("force_close_day", "") == "14:55",
+     "force_close_day 必须为 14:55"),
+    ("risk.daily_loss_limit_yuan", lambda r: r.get("daily_loss_limit_yuan", 99999) <= 2000,
+     "daily_loss_limit_yuan 必须 ≤ 2000 元"),
+    ("risk.per_symbol_fuse_yuan", lambda r: r.get("per_symbol_fuse_yuan", 99999) <= 1000,
+     "per_symbol_fuse_yuan（单笔止损）必须 ≤ 1000 元"),
+    ("risk.no_overnight", lambda r: bool(r.get("no_overnight", False)),
+     "no_overnight 必须为 true，禁止隔夜"),
+]
+
+
+def _check_hard_constraints(strategy: dict) -> list[str]:
+    """返回所有不满足的硬性约束描述列表。空列表表示全部通过。"""
+    risk = strategy.get("risk", {})
+    violations = []
+    for _key, check_fn, msg in _HARD_CONSTRAINTS:
+        if not check_fn(risk):
+            violations.append(msg)
+    return violations
 
 logging.basicConfig(
     level=logging.INFO,
@@ -172,13 +195,14 @@ async def process_one_strategy(
     yaml_path: Path,
     executor: YAMLSignalExecutor,
     optimizer: StrategyParamOptimizer,
+    evaluator: StrategyEvaluator,
     start_date: str,
     end_date: str,
     feishu_webhook: str,
     idx: int,
     total: int,
 ) -> dict[str, Any]:
-    """处理单个策略：基线 + 优化 + 报告 + 通知。"""
+    """处理单个策略：硬性约束预检 + 基线 + 优化 + 评级 + 报告 + 通知。"""
     strategy_id = yaml_path.stem
     logger.info("\n═══ [%d/%d] 开始处理: %s ═══", idx, total, strategy_id)
 
@@ -190,6 +214,19 @@ async def process_one_strategy(
         "yaml_path": str(yaml_path),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+    # ── 0. 硬性约束预检 ──
+    violations = _check_hard_constraints(strategy)
+    if violations:
+        logger.warning("  ⛔ 硬性约束不满足，跳过优化: %s", violations)
+        result["error"] = "硬性约束违规: " + " | ".join(violations)
+        result["hard_constraint_violations"] = violations
+        result["passed_oos"] = False
+        result["oos_verdict"] = {}
+        result["grade"] = "BLOCKED"
+        _save_report(strategy_id, result)
+        await send_feishu(feishu_webhook, strategy_id, result)
+        return result
 
     # ── 1. 基线回测（全量数据）──
     logger.info("  [1/2] 基线回测 %s ...", strategy_id)
@@ -246,10 +283,28 @@ async def process_one_strategy(
             for reason in result["oos_verdict"].get("fail_reasons", []):
                 logger.warning("    OOS 未通过原因: %s", reason)
 
-    # ── 3. 保存报告 ──
+    # ── 3. StrategyEvaluator 完整评级 ──
+    try:
+        eval_report = await evaluator.evaluate_strategy(str(yaml_path), start_date, end_date)
+        result["eval_score"] = eval_report.get("final_score", 0)
+        result["eval_grade"] = eval_report.get("grade", "?")
+        result["eval_breakdown"] = eval_report.get("breakdown", {})
+        result["eval_conclusion"] = eval_report.get("conclusion", {})
+        logger.info(
+            "  📊 评估结果 — 得分: %d/100 | 等级: %s | 可上线: %s",
+            result["eval_score"],
+            result["eval_grade"],
+            "✅" if eval_report.get("conclusion", {}).get("can_deploy") else "❌",
+        )
+    except Exception as e:
+        logger.warning("  评估器异常（不影响主流程）: %s", e)
+        result["eval_score"] = None
+        result["eval_grade"] = "?"
+
+    # ── 4. 保存报告 ──
     _save_report(strategy_id, result)
 
-    # ── 4. 飞书通知 ──
+    # ── 5. 飞书通知 ──
     await send_feishu(feishu_webhook, strategy_id, result)
 
     return result
@@ -272,28 +327,37 @@ def print_summary(results: list[dict[str, Any]]) -> None:
     logger.info("\n\n╔══════════════════════════════════════════════════════════════╗")
     logger.info("║                     调优流水线汇总报告                        ║")
     logger.info("╚══════════════════════════════════════════════════════════════╝")
-    logger.info("%-40s %-10s %-10s %-10s %-8s", "策略 ID", "基线Sharpe", "IS Sharpe", "OOS Sharpe", "OOS通过")
-    logger.info("-" * 80)
+    logger.info("%-38s %-10s %-10s %-10s %-8s %-8s %-6s",
+                "策略 ID", "基线Sharpe", "IS Sharpe", "OOS Sharpe", "OOS通过", "评分", "等级")
+    logger.info("-" * 92)
 
     passed = 0
     failed = 0
+    blocked = 0
     for r in results:
         sid = r.get("strategy_id", "?")
         baseline_s = r.get("baseline", {}).get("sharpe_ratio", 0) or 0
         is_s = r.get("oos_verdict", {}).get("is_sharpe", 0) or 0
         oos_s = r.get("oos_verdict", {}).get("oos_sharpe", 0) or 0
         ok = r.get("passed_oos", False)
-        if ok:
+        grade = r.get("eval_grade", r.get("grade", "?"))
+        score = r.get("eval_score", "-")
+        if grade == "BLOCKED":
+            blocked += 1
+        elif ok:
             passed += 1
         else:
             failed += 1
         logger.info(
-            "%-40s %-10.4f %-10.4f %-10.4f %-8s",
-            sid[:40], baseline_s, is_s, oos_s, "✅" if ok else "❌",
+            "%-38s %-10.4f %-10.4f %-10.4f %-8s %-8s %-6s",
+            sid[:38], baseline_s, is_s, oos_s,
+            "✅" if ok else ("⛔" if grade == "BLOCKED" else "❌"),
+            str(score), grade,
         )
 
-    logger.info("-" * 80)
-    logger.info("总计 %d 个策略：%d 通过 OOS ✅ | %d 未通过 ❌", len(results), passed, failed)
+    logger.info("-" * 92)
+    logger.info("总计 %d 个策略：%d 通过 OOS ✅ | %d 未通过 ❌ | %d 硬约束阻断 ⛔",
+                len(results), passed, failed, blocked)
     logger.info("通过率：%.1f%%", passed / len(results) * 100 if results else 0)
 
     # 保存汇总 JSON
@@ -368,12 +432,16 @@ async def main() -> None:
     for i, f in enumerate(yaml_files, 1):
         logger.info("  [%02d] %s", i, f.name)
 
-    # 初始化执行器和优化器
+    # 初始化执行器、优化器和评估器
     executor = YAMLSignalExecutor(
         data_service_url=args.data_url,
         ollama_url=args.ollama_url,
     )
     optimizer = StrategyParamOptimizer(executor=executor, n_trials=args.n_trials)
+    evaluator = StrategyEvaluator(
+        data_service_url=args.data_url,
+        ollama_url=args.ollama_url,
+    )
 
     # 串行处理
     all_results: list[dict[str, Any]] = []
@@ -383,6 +451,7 @@ async def main() -> None:
                 yaml_path=yaml_path,
                 executor=executor,
                 optimizer=optimizer,
+                evaluator=evaluator,
                 start_date=args.start,
                 end_date=args.end,
                 feishu_webhook=args.feishu_webhook,

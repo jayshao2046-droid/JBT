@@ -29,11 +29,13 @@ optuna.logging.set_verbosity(optuna.logging.WARNING)
 class StrategyParamOptimizer:
     """Optuna 驱动的策略参数优化器。"""
 
-    # OOS 验收硬标准
-    OOS_MIN_SHARPE: float = 0.8
-    OOS_MAX_IS_OOS_RATIO: float = 2.0
-    OOS_MIN_TRADES: int = 20
-    IS_RATIO: float = 0.80        # 前 80% 作为 IS
+    # OOS 验收硬标准（对齐最新评估方案）
+    OOS_MIN_SHARPE: float = 1.5          # OOS Sharpe ≥ 1.5
+    OOS_MAX_IS_OOS_RATIO: float = 2.0    # 过拟合防护
+    OOS_MIN_TRADES: int = 20             # OOS 最少交易次数
+    OOS_MIN_WIN_RATE: float = 0.50       # OOS 胜率 ≥ 50%
+    OOS_MAX_DRAWDOWN: float = 0.02       # OOS 最大回撤 ≤ 2%
+    IS_RATIO: float = 0.80               # 前 80% 作为 IS
 
     def __init__(
         self,
@@ -217,6 +219,8 @@ class StrategyParamOptimizer:
         """OOS 硬性验收，无降级。全部条件必须满足。"""
         oos_sharpe_ok = oos_result.sharpe_ratio >= self.OOS_MIN_SHARPE
         oos_trades_ok = oos_result.trades_count >= self.OOS_MIN_TRADES
+        oos_win_rate_ok = oos_result.win_rate >= self.OOS_MIN_WIN_RATE
+        oos_drawdown_ok = oos_result.max_drawdown <= self.OOS_MAX_DRAWDOWN
 
         is_oos_ratio_ok = True
         is_oos_ratio: Optional[float] = None
@@ -224,7 +228,7 @@ class StrategyParamOptimizer:
             is_oos_ratio = round(is_result.sharpe_ratio / oos_result.sharpe_ratio, 3)
             is_oos_ratio_ok = is_oos_ratio <= self.OOS_MAX_IS_OOS_RATIO
 
-        passed = oos_sharpe_ok and oos_trades_ok and is_oos_ratio_ok
+        passed = oos_sharpe_ok and oos_trades_ok and oos_win_rate_ok and oos_drawdown_ok and is_oos_ratio_ok
 
         verdict: dict[str, Any] = {
             "passed": passed,
@@ -234,6 +238,12 @@ class StrategyParamOptimizer:
             "oos_trades": oos_result.trades_count,
             "oos_trades_ok": oos_trades_ok,
             "oos_trades_threshold": self.OOS_MIN_TRADES,
+            "oos_win_rate": round(oos_result.win_rate, 4),
+            "oos_win_rate_ok": oos_win_rate_ok,
+            "oos_win_rate_threshold": self.OOS_MIN_WIN_RATE,
+            "oos_max_drawdown": round(oos_result.max_drawdown, 4),
+            "oos_drawdown_ok": oos_drawdown_ok,
+            "oos_drawdown_threshold": self.OOS_MAX_DRAWDOWN,
             "is_oos_ratio": is_oos_ratio,
             "is_oos_ratio_ok": is_oos_ratio_ok,
             "is_oos_ratio_threshold": self.OOS_MAX_IS_OOS_RATIO,
@@ -247,6 +257,10 @@ class StrategyParamOptimizer:
                 reasons.append(f"OOS Sharpe {oos_result.sharpe_ratio:.4f} < {self.OOS_MIN_SHARPE}")
             if not oos_trades_ok:
                 reasons.append(f"OOS 交易次数 {oos_result.trades_count} < {self.OOS_MIN_TRADES}")
+            if not oos_win_rate_ok:
+                reasons.append(f"OOS 胜率 {oos_result.win_rate:.2%} < {self.OOS_MIN_WIN_RATE:.0%}")
+            if not oos_drawdown_ok:
+                reasons.append(f"OOS 最大回撤 {oos_result.max_drawdown:.2%} > {self.OOS_MAX_DRAWDOWN:.0%}")
             if not is_oos_ratio_ok:
                 reasons.append(f"IS/OOS Sharpe 比 {is_oos_ratio} > {self.OOS_MAX_IS_OOS_RATIO}（过拟合）")
             verdict["fail_reasons"] = reasons
