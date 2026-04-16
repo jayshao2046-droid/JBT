@@ -1,0 +1,56 @@
+name: "FC-54_black_bear_trend_rb2605_60m"
+description: "黑色系下降趋势：MA空头排列(5/10/20) + MACD死叉 + ADX > 25 + 放量跌破前低"
+version: "1.0"
+category: "trend_mid"
+
+factors:
+  - factor_name: "EMA"
+    weight: 0.25
+    params:
+      period: 10
+  - factor_name: "MACD"
+    weight: 0.30
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+  - factor_name: "ADX"
+    weight: 0.20
+    params:
+      period: 14
+  - factor_name: "VolumeRatio"
+    weight: 0.25
+    params:
+      period: 20
+
+signal:
+  long_threshold: -0.58
+  short_threshold: -0.58
+  ema_periods: 2
+  confirm_bars: 1
+
+timeframe_minutes: 60
+
+position_fraction: 0.09
+
+symbols:
+  - "SHFE.rb2605"  # 螺纹钢
+  - "SHFE.hc2605"  # 热卷
+  - "DCE.i2605"    # 铁矿石
+  - "DCE.j2605"    # 焦炭
+  - "DCE.jm2605"   # 焦煤
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 180
+  max_drawdown_pct: 0.009
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["blackmetal", "bear_trend", "ema_macd_adx_volumeratio", "60m"]
+
+ 特别设计：
+使用 5/10/20 MA（黑色系趋势快，需更灵敏）
+要求 放量跌破前20日低点（N=20）才确认空头启动
+若 ADX > 40，自动提升 position_fraction 至 0.11（强趋势加仓）

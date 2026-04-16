@@ -1,0 +1,47 @@
+name: "FC-41_oil_oscillating_y2605_60m"
+description: "油脂油料组震荡区间：BollingerBands + RSI超买超卖 + KDJ确认"
+version: "1.0"
+category: "oscillation"
+
+factors:
+  - factor_name: "BollingerBands"
+    weight: 
+    params:
+      period: 20
+      std_dev: 2.0
+  - factor_name: "RSI"
+    weight: 0.35
+    params:
+      period: 14
+  - factor_name: "KDJ"
+    weight: 0.25
+    params:
+      n: 9
+      m1: 3
+      m2: 3
+
+signal:
+  long_threshold: 0.65
+  short_threshold: -0.65
+  ema_periods: 3
+  confirm_bars: 2
+
+timeframe_minutes: 60
+
+position_fraction: 0.06
+
+symbols:
+  - "DCE.y2605" # 豆油
+  - "DCE.p2605" # 棕榈油
+  - "CZCE.OI605" # 菜油
+  - "DCE.m2605" # 豆粕
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 120
+  max_drawdown_pct: 0.006
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["oilseed", "oscillation", "bollinger_rsi_kdj", "60m"]

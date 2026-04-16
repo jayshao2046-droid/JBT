@@ -1,0 +1,47 @@
+name: STRAT_hc_breakout_33m_001
+description: "热卷趋势跟踪：MA多头排列(5/10/20) + MACD金叉(12/26/9) + ADX > 25 + 放量突破"
+version: "1.0"
+category: "trend_up"
+
+factors:
+  - factor_name: "EMA"
+    weight: 0.25
+    params:
+      period: 10
+  - factor_name: "MACD"
+    weight: 0.30
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+  - factor_name: "ADX"
+    weight: 0.20
+    params:
+      period: 14
+  - factor_name: "VolumeRatio"
+    weight: 0.25
+    params:
+      period: 20
+
+signal:
+  long_threshold: 0.55
+  short_threshold: -0.55
+  ema_periods: 2
+  confirm_bars: 1
+
+timeframe_minutes: 60
+
+position_fraction: 0.09
+
+symbols:
+  - "SHFE.hc2605"
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 180
+  max_drawdown_pct: 0.009
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["blackmetal", "hot_rolled_coil", "trend_up", "ma_macd_adx_volumeratio", "60m"]

@@ -1,0 +1,45 @@
+name: "FC-44_chem_oscillating_ta605_60m"
+description: "化工组震荡区间：BollingerBands + RSI + 量比缩量回调确认"
+version: "1.0"
+category: "oscillation"
+
+factors:
+  - factor_name: "BollingerBands"
+    weight: 0.40
+    params:
+      period: 20
+      std_dev: 2.0
+  - factor_name: "RSI"
+    weight: 0.35
+    params:
+      period: 14
+  - factor_name: "VolumeRatio"
+    weight: 0.25
+    params:
+      period: 20
+
+signal:
+  long_threshold: 0.60
+  short_threshold: -0.60
+  ema_periods: 3
+  confirm_bars: 2
+
+timeframe_minutes: 60
+
+position_fraction: 0.05
+
+symbols:
+  - "DCE.v2605" # PVC
+  - "DCE.l2605" # 塑料
+  - "CZCE.TA605" # PTA
+  - "CZCE.MA605" # 甲醇
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 100
+  max_drawdown_pct: 0.005
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["chemical", "oscillation", "bollinger_rsi_volumeratio", "60m"]

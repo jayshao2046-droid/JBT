@@ -1,0 +1,51 @@
+name: STRAT_i_trend_33m_004
+description: "极简空头策略：ADX > 25 + SMA空头排列 + MACD死叉"
+version: "3.0"
+category: "trend_down"
+
+factors:
+  - factor_name: "ADX"
+    weight: 0.50
+    params:
+      period: 14
+  - factor_name: "SMA"
+    weight: 0.30
+    params:
+      period: 20
+  - factor_name: "MACD"
+    weight: 0.20
+    params:
+      fast: 6
+      slow: 13
+      signal: 5
+
+market_filter:
+  enabled: true
+  condition: "adx > 25"
+
+signal:
+  long_condition: "sma_slope > 0 and macd_hist > 0"
+  short_condition: "sma_slope < 0 and macd_hist < 0"
+  confirm_bars: 1
+
+timeframe_minutes: 60
+
+position_fraction: 0.07
+position_adjustment:
+  method: "atr_scaling"
+  base_position: 0.07
+  atr_period: 14
+  atr_multiplier: 1.5
+
+symbols:
+  - "DCE.l2605"
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 140
+  max_drawdown_pct: 0.007
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["v3", "chemical", "polyethylene", "trend_down", "60m"]

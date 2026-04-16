@@ -1,0 +1,80 @@
+{\rtf1\ansi\ansicpg936\cocoartf2869
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fnil\fcharset0 .SFNS-Regular_wdth_opsz110000_GRAD_wght2580000;\f2\fnil\fcharset0 HelveticaNeue;
+}
+{\colortbl;\red255\green255\blue255;\red13\green14\blue17;\red255\green255\blue255;}
+{\*\expandedcolortbl;;\cssrgb\c5882\c6667\c8235;\cssrgb\c100000\c100000\c100000;}
+{\*\listtable{\list\listtemplateid1\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat0\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid1\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid1}}
+{\*\listoverridetable{\listoverride\listid1\listoverridecount0\ls1}}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 name: "FC-27_chemical_reversal_60m"\
+description: "\uc0\u21270 \u24037 \u32452 \u37327 \u20215 \u21453 \u36716 \u31574 \u30053 \u65306 RSI\u36229 \u20080 \u36229 \u21334 +KDJ\u37329 \u21449 \u27515 \u21449 \u25429 \u25417 \u21453 \u36716 \u65292 OBV\u32972 \u31163 \u30830 \u35748 \u65292 VolumeRatio\u32553 \u37327 \u36807 \u28388 \u12290 "\
+version: "1.0"\
+category: "reversal"\
+\
+factors:\
+  - factor_name: "RSI"\
+    weight: 0.35\
+    params:\
+      period: 14\
+  - factor_name: "KDJ"\
+    weight: 0.30\
+    params:\
+      n: 9\
+      m1: 3\
+      m2: 3\
+  - factor_name: "OBV"\
+    weight: 0.20\
+    params: \{\}\
+  - factor_name: "VolumeRatio"\
+    weight: 0.15\
+    params:\
+      period: 20\
+\
+signal:\
+  long_threshold: 0.45\
+  short_threshold: -0.45\
+  ema_periods: 2\
+  confirm_bars: 1\
+\
+timeframe_minutes: 60\
+\
+position_fraction: 0.10\
+\
+symbols:\
+  - "DCE.v2605"       # PVC\
+  - "DCE.l2605"       # \uc0\u22609 \u26009 \
+  - "CZCE.TA605"      # PTA\
+  - "CZCE.MA605"      # \uc0\u30002 \u37255 \
+\
+risk:\
+  daily_loss_limit_yuan: 600\
+  per_symbol_fuse_yuan: 150\
+  max_drawdown_pct: 0.010\
+  force_close_day: "14:55"\
+  force_close_night: "22:55"\
+  no_overnight: true\
+\
+tags: ["reversal", "oscillation", "chemical", "60m"]\
+\
+\pard\pardeftab720\sa320\partightenfactor0
+
+\f1\b\fs32 \cf2 \cb3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 \uc0\u31574 \u30053 \u36923 \u36753 \u35828 \u26126 
+\f2\b0 \
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls1\ilvl0\cf2 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 RSI\uc0\u65288 14\u65289 \u36229 \u20080 \u65288 >70\u65289 \u25110 \u36229 \u21334 \u65288 <30\u65289 \u32467 \u21512  KDJ\u65288 9,3,3\u65289 \u37329 \u21449 /\u27515 \u21449 \u65292 \u25429 \u25417 \u20215 \u26684 \u26497 \u31471 \u21518 \u30340 \u21453 \u36716 \u26426 \u20250 \u12290 \cb1 \
+\ls1\ilvl0\cb3 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 OBV \uc0\u32972 \u31163 \u65288 \u20215 \u26684 \u21019 \u26032 \u39640 /\u20302 \u32780  OBV \u26410 \u21516 \u27493 \u65289 \u20316 \u20026 \u21453 \u21521 \u30830 \u35748 \u65292 VolumeRatio < 0.6 \u26102 \u20449 \u21495 \u26377 \u25928 \u65288 \u32553 \u37327 \u22238 \u35843 /\u21453 \u24377 \u65289 \u12290 \cb1 \
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls1\ilvl0
+\f1\b \cf2 \cb3 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 \uc0\u36866 \u29992 \u34892 \u24773 
+\f2\b0 \uc0\u65306 \u38663 \u33633 \u24066 \u20013 \u30340 \u21453 \u36716 \u34892 \u24773 \u65292 \u19978 \u28072 /\u19979 \u36300 \u22343 \u21487 \u65292 \u36866 \u21512 \u21270 \u24037 \u32452 \u39640 \u27874 \u21160 \u12289 \u26085 \u20869 \u21453 \u22797 \u30340 \u29305 \u28857 \u12290 \cb1 \
+\ls1\ilvl0
+\f1\b \cb3 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 \uc0\u21442 \u25968 \u36866 \u37197 
+\f2\b0 \uc0\u65306 \u20449 \u21495 \u38408 \u20540 \u36739 \u20302 \u65288 0.45\u65289 \u65292 \u30830 \u35748 \u21608 \u26399 \u30701 \u65288 1 \u26681 \u65289 \u65292 \u24555 \u36827 \u24555 \u20986 \cb1 \
+}

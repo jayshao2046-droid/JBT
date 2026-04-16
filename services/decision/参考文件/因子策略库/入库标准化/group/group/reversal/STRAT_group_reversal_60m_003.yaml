@@ -1,0 +1,64 @@
+name: "FC-143_v2_ml_chem_reversal_v2605_60m"
+description: "使用 ML 模型预测反转，L3 三审决策的PVC反转策略"
+version: "2.0"
+category: "reversal"
+
+advanced_ai_integration:
+  enabled: true
+  l2_model:
+    enabled: true
+    model_type: "xgboost"
+    model_path: "/path/to/l2_models/chem_reversal_v_model.pkl"
+    feature_names: ["rsi", "kdj_j", "obv_slope", "atr", "volume_ratio"]
+    prediction_type: "probability"
+    confidence_threshold: 0.65
+  l3_risk_check:
+    enabled: true
+    quality_check:
+      min_confidence: 0.65
+      max_single_factor_dependency: 0.8
+    portfolio_check:
+      max_position_fraction: 0.04
+      check_account_risk: true
+    liquidity_check:
+      enabled: true
+      min_bid_ask_volume: 100
+
+factors:
+  - factor_name: "RSI"
+    weight: 0.40
+    params:
+      period: 14
+  - factor_name: "KDJ"
+    weight: 0.35
+    params:
+      n: 9
+      m1: 3
+      m2: 3
+  - factor_name: "OBV"
+    weight: 0.25
+    params: {}
+
+signal:
+  ai_long_threshold: 0.68
+  ai_short_threshold: -0.68
+  rule_filter_enabled: false
+  ema_periods: 3
+  confirm_bars: 2
+
+timeframe_minutes: 60
+
+position_fraction: 0.04
+
+symbols:
+  - "DCE.v2605"
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 80
+  max_drawdown_pct: 0.004
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["ml_enhanced", "chemical", "pvc", "reversal", "60m"]

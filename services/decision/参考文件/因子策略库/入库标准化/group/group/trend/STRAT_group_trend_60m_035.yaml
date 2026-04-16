@@ -1,0 +1,75 @@
+name: "FC-29_momentum_volume_ratio_macd_obv_60m"
+description: "MACD 动量 + OBV 资金流向 + VolumeRatio 量能放大确认策略"
+version: "1.0"
+category: "trend_mid"
+
+factors:
+  - factor_name: "MACD"
+    weight: 0.40
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+  - factor_name: "OBV"
+    weight: 0.35
+    params: {}
+  - factor_name: "VolumeRatio"
+    weight: 0.25
+    params:
+      period: 20
+
+signal:
+  long_threshold: 0.50
+  short_threshold: -0.50
+  ema_periods: 2
+  confirm_bars: 1
+
+timeframe_minutes: 60
+position_fraction: 0.13
+
+symbols:
+  - "KQ.m@SHFE.rb"
+  - "KQ.m@SHFE.hc"
+  - "KQ.m@DCE.i"
+  - "KQ.m@DCE.j"
+  - "KQ.m@DCE.jm"
+  - "KQ.m@SHFE.cu"
+  - "KQ.m@SHFE.al"
+  - "KQ.m@SHFE.zn"
+  - "KQ.m@SHFE.ni"
+  - "KQ.m@SHFE.ss"
+  - "KQ.m@SHFE.au"
+  - "KQ.m@SHFE.ag"
+  - "KQ.m@INE.sc"
+  - "KQ.m@SHFE.fu"
+  - "KQ.m@SHFE.bu"
+  - "KQ.m@SHFE.ru"
+  - "KQ.m@SHFE.sp"
+  - "KQ.m@CZCE.ap"
+  - "KQ.m@CZCE.cf"
+  - "KQ.m@CZCE.sr"
+  - "KQ.m@CZCE.ma"
+  - "KQ.m@CZCE.ta"
+  - "KQ.m@DCE.eg"
+  - "KQ.m@DCE.pp"
+  - "KQ.m@DCE.l"
+  - "KQ.m@DCE.v"
+  - "KQ.m@DCE.eb"
+  - "KQ.m@DCE.pg"
+  - "KQ.m@DCE.lh"
+  - "KQ.m@DCE.p"
+  - "KQ.m@DCE.y"
+  - "KQ.m@DCE.a"
+  - "KQ.m@DCE.c"
+  - "KQ.m@DCE.cs"
+  - "KQ.m@DCE.m"
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 200
+  max_drawdown_pct: 0.010
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["momentum", "volume", "macd", "obv", "volume_ratio", "60m", "universe35"]

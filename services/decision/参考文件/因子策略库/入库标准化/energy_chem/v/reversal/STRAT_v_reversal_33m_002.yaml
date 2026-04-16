@@ -1,0 +1,51 @@
+name: STRAT_v_reversal_33m_002
+description: "极简反转策略：ADX < 20 + RSI超买超卖 + KDJ背离确认"
+version: "3.0"
+category: "reversal"
+
+factors:
+  - factor_name: "ADX"
+    weight: 0.50
+    params:
+      period: 14
+  - factor_name: "RSI"
+    weight: 0.30
+    params:
+      period: 14
+  - factor_name: "KDJ"
+    weight: 0.20
+    params:
+      n: 9
+      m1: 3
+      m2: 3
+
+market_filter:
+  enabled: true
+  condition: "adx < 20"
+
+signal:
+  long_condition: "rsi < 30 and kdj_j < 20"
+  short_condition: "rsi > 70 and kdj_j > 80"
+  confirm_bars: 1
+
+timeframe_minutes: 60
+
+position_fraction: 0.04
+position_adjustment:
+  method: "atr_scaling"
+  base_position: 0.04
+  atr_period: 14
+  atr_multiplier: 1.5
+
+symbols:
+  - "DCE.v2605"
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 80
+  max_drawdown_pct: 0.004
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["v3", "chemical", "pvc", "reversal", "60m"]

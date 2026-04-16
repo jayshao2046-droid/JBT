@@ -1,0 +1,61 @@
+name: STRAT_p_trend_60m_003
+description: 棕榈油60分钟双均线+ADX趋势策略(V7.0)，移除不兼容因子，确保信号触发，宽止损博取大趋势
+version: '7.0'
+category: trend_following
+symbols:
+- DCE.p2605
+timeframe_minutes: 60
+factors:
+- factor_name: EMA_Cross
+  weight: 0.5
+  params:
+    fast_period: 20
+    slow_period: 60
+- factor_name: ADX
+  weight: 0.3
+  params:
+    period: 14
+- factor_name: ATR
+  weight: 0.2
+  params:
+    period: 14
+market_filter:
+  enabled: true
+  conditions:
+  - atr > 0.002 * close
+signal:
+  long_condition: ema_cross > 0 and adx > 20
+  short_condition: ema_cross < 0 and adx > 20
+  confirm_bars: 2
+  long_threshold: 0.55
+  short_threshold: -0.55
+  ema_periods: 2
+position_fraction: 0.1
+transaction_costs:
+  slippage_per_unit: 1
+  commission_per_lot_round_turn: 5
+risk:
+  daily_loss_limit: 0.05
+  max_drawdown: 0.15
+  force_close_day: '14:50'
+  force_close_night: '22:50'
+  no_overnight: true
+  stop_loss:
+    atr_multiplier: 2.5
+    type: atr
+  take_profit:
+    atr_multiplier: 4.0
+    type: atr
+  daily_loss_limit_yuan: 1500
+  per_symbol_fuse_yuan: 180
+  max_drawdown_pct: 0.008
+tags:
+- v7.0
+- ema_adx_final
+- 60m
+- DCE
+- palm_oil
+- intraday
+- prod_ready
+- oilseed
+- task0120

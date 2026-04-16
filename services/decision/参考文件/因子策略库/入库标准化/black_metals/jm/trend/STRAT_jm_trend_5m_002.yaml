@@ -1,0 +1,53 @@
+name: STRAT_jm_trend_5m_002
+description: "5分钟极简空头策略：MACD死叉 + RSI趋势 + 量比确认"
+version: "3.0"
+category: "intraday_momentum"
+
+factors:
+  - factor_name: "MACD"
+    weight: 0.40
+    params:
+      fast: 6
+      slow: 13
+      signal: 5
+  - factor_name: "RSI"
+    weight: 0.35
+    params:
+      period: 14
+  - factor_name: "VolumeRatio"
+    weight: 0.25
+    params:
+      period: 10
+
+market_filter:
+  enabled: true
+  conditions:
+    - "atr > 0.005 * close"
+    - "adx > 20"
+
+signal:
+  long_condition: "macd_hist > 0 and rsi_slope > 0 and volume_ratio > 1.2"
+  short_condition: "macd_hist < 0 and rsi_slope < 0 and volume_ratio > 1.2"
+  confirm_bars: 1
+
+timeframe_minutes: 5
+
+position_fraction: 0.09
+position_adjustment:
+  method: "atr_scaling"
+  base_position: 0.09
+  atr_period: 14
+  atr_multiplier: 1.0
+
+symbols:
+  - "DCE.jm2605"
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 180
+  max_drawdown_pct: 0.009
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["v3", "intraday", "momentum", "5m", "filtered", "coking_coal"]

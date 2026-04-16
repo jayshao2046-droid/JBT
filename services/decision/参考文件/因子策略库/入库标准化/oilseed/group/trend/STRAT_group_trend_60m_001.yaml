@@ -1,0 +1,50 @@
+name: "FC-40_oil_trend_rb2605_60m"
+description: "油脂油料组趋势跟踪：MA多头排列 + MACD金叉 + ADX > 25"
+version: "1.0"
+category: "trend_mid"
+
+factors:
+  - factor_name: "EMA"
+    weight: 0.30
+    params:
+      period: 20
+  - factor_name: "MACD"
+    weight: 0.35
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+  - factor_name: "ADX"
+    weight: 0.20
+    params:
+      period: 14
+  - factor_name: "ATR"
+    weight: 0.15
+    params:
+      period: 14
+
+signal:
+  long_threshold: 0.50
+  short_threshold: -0.50
+  ema_periods: 2
+  confirm_bars: 1
+
+timeframe_minutes: 60
+
+position_fraction: 0.08
+
+symbols:
+  - "DCE.y2605" # 豆油
+  - "DCE.p2605" # 棕榈油
+  - "CZCE.OI605" # 菜油
+  - "DCE.m2605" # 豆粕
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 160
+  max_drawdown_pct: 0.008
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["oilseed", "trend", "ma_macd_adx", "60m"]

@@ -1,0 +1,68 @@
+name: "FC-157_v2_ml_black_bear_i2605_60m"
+description: "使用 ML 模型预测趋势，L3 三审决策的铁矿石空头趋势策略"
+version: "2.0"
+category: "trend_down"
+
+advanced_ai_integration:
+  enabled: true
+  l2_model:
+    enabled: true
+    model_type: "xgboost"
+    model_path: "/path/to/l2_models/black_trend_down_i_model.pkl"
+    feature_names: ["ema_slope", "macd_hist", "adx", "volume_ratio", "bb_position"]
+    prediction_type: "probability"
+    confidence_threshold: 0.65
+  l3_risk_check:
+    enabled: true
+    quality_check:
+      min_confidence: 0.65
+      max_single_factor_dependency: 0.8
+    portfolio_check:
+      max_position_fraction: 0.09
+      check_account_risk: true
+    liquidity_check:
+      enabled: true
+      min_bid_ask_volume: 200
+
+factors:
+  - factor_name: "EMA"
+    weight: 0.25
+    params:
+      period: 10
+  - factor_name: "MACD"
+    weight: 0.30
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+  - factor_name: "ADX"
+    weight: 0.20
+    params:
+      period: 14
+  - factor_name: "VolumeRatio"
+    weight: 0.25
+    params:
+      period: 20
+
+signal:
+  ai_long_threshold: -0.5_short_threshold: -0.55
+  rule_filter_enabled: false
+  ema_periods: 2
+  confirm_bars: 1
+
+timeframe_minutes: 60
+
+position_fraction: 0.09
+
+symbols:
+  - "DCE.i2605"
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 180
+  max_drawdown_pct: 0.009
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["ml_enhanced", "blackmetal", "iron_ore", "trend_down", "60m"]

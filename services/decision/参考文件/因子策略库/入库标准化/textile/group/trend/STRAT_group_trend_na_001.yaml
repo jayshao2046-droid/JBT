@@ -1,0 +1,45 @@
+name: "FC-55_tex_bear_trend_cf605_60m"
+description: "纺织组下降趋势：MA空头排列 + MACD死叉 + RSI < 40 + 仓单比率 > 60%"
+version: "1.0"
+category: "trend_mid"
+
+factors:
+  - factor_name: "EMA"
+    weight: 0.35
+    params:
+      period: 20
+  - factor_name: "MACD"
+    weight: 0.35
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+  - factor_name: "RSI"
+    weight: 0.20
+    params:
+      period: 14
+  - factor_name: "OpenInterest"
+    weight: 0.10
+    params: {}
+
+signal:
+  long_threshold: -0.52
+  short_threshold: -0.5a_periods: 2
+  confirm_bars: timeframe_minutes: 60
+
+position_fraction: 0.07
+
+symbols:
+  - "CZCE.CF605"  # 棉花
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 140
+  max_drawdown_pct: 0.007
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["textile", "bear_trend", "ema_macd_rsi_oi", "60m"]
+
+🌟 亮点：加入 OpenInterest 作为辅助——当持仓集中度高（>60%）且价格下跌时，大概率是主力砸盘，空头胜率大幅提升。

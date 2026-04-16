@@ -1,0 +1,48 @@
+name: STRAT_j_oscillation_240m_001
+description: "240分钟极简震荡策略：RSI超买超卖 + BB触底反弹 (每日止损2000元)"
+version: "3.0"
+category: "intraday_oscillation"
+
+factors:
+  - factor_name: "RSI"
+    weight: 0.50
+    params:
+      period: 28
+  - factor_name: "BollingerBands"
+    weight: 0.50
+    params:
+      period: 40
+      std_dev: 2.0
+
+market_filter:
+  enabled: true
+  conditions:
+    - "atr > 0.006 * close"
+    - "adx < 25"
+
+signal:
+  long_condition: "rsi < 30 and bb_position == 'lower_band'"
+  short_condition: "rsi > 70 and bb_position == 'upper_band'"
+  confirm_bars: 1
+
+timeframe_minutes: 240
+
+position_fraction: 0.06
+position_adjustment:
+  method: "atr_scaling"
+  base_position: 0.06
+  atr_period: 14
+  atr_multiplier: 1.5
+
+symbols:
+  - "DCE.j2605"
+
+risk:
+  daily_loss_limit_yuan: 2000 # 每日止损 2000 元
+  per_symbol_fuse_yuan: 120
+  max_drawdown_pct: 0.006
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["v3", "intraday", "oscillation", "240m", "filtered", "daily_stop_2000", "coke"]

@@ -1,0 +1,55 @@
+name: STRAT_oi_trend_d1_001
+description: "菜籽油日线趋势跟踪策略，双向交易，过滤噪音"
+version: "1.0"
+category: "trend_following"
+symbols:
+  - "CZCE.OI2609"
+timeframe_minutes: 1440
+factors:
+  - factor_name: "EMA_Cross"
+    weight: 0.35
+    params:
+      fast_period: 10
+      slow_period: 30
+  - factor_name: "MACD"
+    weight: 0.35
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+  - factor_name: "ADX"
+    weight: 0.15
+    params:
+      period: 14
+  - factor_name: "ATR"
+    weight: 0.15
+    params:
+      period: 14
+market_filter:
+  enabled: true
+  conditions:
+    - "atr > 0.015 * close"
+    - "adx > 25"
+signal:
+  long_condition: "macd_hist > 0 and ema_cross > 0 and adx > 25"
+  short_condition: "macd_hist < 0 and ema_cross < 0 and adx > 25"
+confirm_bars: 1
+position_fraction: 0.10
+transaction_costs:
+  slippage_per_unit: 1
+  commission_per_lot_round_turn: 6
+risk:
+  daily_loss_limit: 0.08
+  max_drawdown: 0.12
+  stop_loss:
+    atr_multiplier: 2.0
+    type: "atr"
+  take_profit:
+    atr_multiplier: 4.0
+    type: "atr"
+tags:
+  - "v1"
+  - "trend_both"
+  - "daily"
+  - "CZCE"
+  - "rapeseed_oil"

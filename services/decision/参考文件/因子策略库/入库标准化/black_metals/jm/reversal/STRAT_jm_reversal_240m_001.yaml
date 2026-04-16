@@ -1,0 +1,47 @@
+name: STRAT_jm_reversal_240m_001
+description: "240分钟极简反转策略：RSI超买超卖 + WR背离确认 (每日止损2000元)"
+version: "3.0"
+category: "intraday_reversal"
+
+factors:
+  - factor_name: "RSI"
+    weight: 0.50
+    params:
+      period: 28
+  - factor_name: "WilliamsR"
+    weight: 0.50
+    params:
+      period: 28
+
+market_filter:
+  enabled: true
+  conditions:
+    - "atr > 0.006 * close"
+    - "adx < 25"
+
+signal:
+  long_condition: "rsi < 20 and williams_r < -80"
+  short_condition: "rsi > 80 and williams_r > -20"
+  confirm_bars: 1
+
+timeframe_minutes: 240
+
+position_fraction: 0.05
+position_adjustment:
+  method: "atr_scaling"
+  base_position: 0.05
+  atr_period: 14
+  atr_multiplier: 1.5
+
+symbols:
+  - "DCE.jm2605"
+
+risk:
+  daily_loss_limit_yuan: 2000 # 每日止损 2000 元
+  per_symbol_fuse_yuan: 100
+  max_drawdown_pct: 0.005
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["v3", "intraday", "reversal", "240m", "filtered", "daily_stop_2000", "coking_coal"]

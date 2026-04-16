@@ -1,0 +1,44 @@
+name: "FC-50_tex_oscillating_cf2605_60m"
+description: "纺织组震荡区间：BollingerBands + RSI + KDJ确认"
+version: "1.0"
+category: "oscillation"
+
+factors:
+  - factor_name: "BollingerBands"
+    weight: 0.40
+    params:
+      period: 20
+      std_dev: 2.0
+  - factor_name: "RSI"
+    weight: 0.35
+    params:
+      period: 14
+  - factor_name: "KDJ"
+    weight: 0.25
+    params:
+      n: 9
+      m1: 3
+      m2: 3
+
+signal:
+  long_threshold: 0.65
+  short_threshold: -0.65
+  ema_periods: 3
+  confirm_bars: 2
+
+timeframe_minutes: 60
+
+position_fraction: 0.06
+
+symbols:
+  - "CZCE.CF605" # 棉花
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 120
+  max_drawdown_pct: 0.006
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["textile", "oscillation", "bollinger_rsi_kdj", "60m"]

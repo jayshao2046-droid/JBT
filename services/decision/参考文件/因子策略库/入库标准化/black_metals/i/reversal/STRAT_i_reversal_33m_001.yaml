@@ -1,0 +1,42 @@
+name: STRAT_i_reversal_33m_001
+description: "塑料反转：RSI超买超卖(14) + KDJ(9,3,3)背离 + 成交量萎缩确认"
+version: "1.0"
+category: "reversal"
+
+factors:
+  - factor_name: "RSI"
+    weight: 0.40
+    params:
+      period: 14
+  - factor_name: "KDJ"
+    weight: 0.35
+    params:
+      n: 9
+      m1: 3
+      m2: 3
+  - factor_name: "OBV"
+    weight: 0.25
+    params: {}
+
+signal:
+  long_threshold: 0.68
+  short_threshold: -0.68
+  ema_periods: 3
+  confirm_bars: 2
+
+timeframe_minutes: 60
+
+position_fraction: 0.04
+
+symbols:
+  - "DCE.l2605"
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 80
+  max_drawdown_pct: 0.004
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["chemical", "polyethylene", "reversal", "rsi_kdj_obv", "60m"]

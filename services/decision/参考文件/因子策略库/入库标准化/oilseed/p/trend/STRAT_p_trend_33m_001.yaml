@@ -1,0 +1,47 @@
+name: STRAT_p_trend_33m_001
+description: 棕榈油空头趋势：MA空头排列(15/30/60) + MACD死叉(12/26/9) + ADX > 25 + 放量确认
+version: '1.0'
+category: trend_down
+factors:
+- factor_name: EMA
+  weight: 0.3
+  params:
+    period: 30
+- factor_name: MACD
+  weight: 0.35
+  params:
+    fast: 12
+    slow: 26
+    signal: 9
+- factor_name: ADX
+  weight: 0.2
+  params:
+    period: 14
+- factor_name: VolumeRatio
+  weight: 0.15
+  params:
+    period: 20
+signal:
+  long_threshold: 0.55
+  short_threshold: -0.55
+  ema_periods: 2
+  confirm_bars: 2
+timeframe_minutes: 60
+position_fraction: 0.08
+symbols:
+- DCE.p2605
+risk:
+  daily_loss_limit_yuan: 1500
+  per_symbol_fuse_yuan: 160
+  max_drawdown_pct: 0.008
+  force_close_day: '14:55'
+  force_close_night: '22:55'
+  no_overnight: true
+tags:
+- oilseed
+- palm_oil
+- trend_down
+- ma_macd_adx_volumeratio
+- 60m
+- prod_ready
+- task0120

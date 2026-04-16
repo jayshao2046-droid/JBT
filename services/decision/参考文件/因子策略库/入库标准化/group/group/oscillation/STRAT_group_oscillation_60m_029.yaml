@@ -1,0 +1,72 @@
+# Generated on: 2026-03-27
+name: "FC-126_v2.1_ml_petrochem_oscillation_TA01_60m"
+description: "使用 ML 模型预测震荡，L3 三审决策的PTA震荡区间策略 (v2.1 - 优化版)"
+version: "2.1"
+category: "oscillation"
+advanced_ai_integration:
+  enabled: true
+  l2_model:
+    enabled: true
+    model_type: "xgboost"
+    model_path: "/path/to/l2_models/v2.1/petrochem_oscillation_TA_model.pkl"
+    feature_names: [
+      "rsi",
+      "kdj_j",
+      "bb_position",
+      "atr",
+      "volume_ratio"
+    ]
+    prediction_type: "probability"
+    confidence_threshold: 0.70
+  l3_risk_check:
+    enabled: true
+    quality_check:
+      min_confidence: 0.70
+    portfolio_check:
+      max_position_fraction: 0.06
+      check_account_risk: true
+    liquidity_check:
+      enabled: true
+      min_bid_ask_volume: 70
+factors:
+  - factor_name: "BollingerBands"
+    weight: 0.40
+    params:
+      period: 20
+      std_dev: 2.0
+  - factor_name: "RSI"
+    weight: 0.35
+    params:
+      period: 14
+  - factor_name: "KDJ"
+    weight: 0.25
+    params:
+      n: 9
+      m1: 3
+      m2: 3
+signal:
+  ai_long_threshold: 0.70
+  ai_short_threshold: -0.70
+  rule_filter_enabled: false
+  ema_periods: 3
+  confirm_bars: 2
+timeframe_minutes: 60
+position_fraction: 0.06
+symbols:
+  - "ZCE.TA01"
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 120
+  max_drawdown_pct: 0.006
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+tags:
+  - "ml_enhanced"
+  - "petrochemical"
+  - "pta"
+  - "oscillation"
+  - "mean_reversion"
+  - "60m"
+  - "v2.1"
+  - "chem_group"

@@ -1,0 +1,78 @@
+name: "FC-26_mixed_adx_rsi_ema_atr_60m"
+description: "ADX 趋势强度 + RSI 超买超卖 + EMA 位置 + ATR 波动率自适应策略"
+version: "1.0"
+category: "mixed"
+
+factors:
+  - factor_name: "ADX"
+    weight: 0.30
+    params:
+      period: 14
+  - factor_name: "RSI"
+    weight: 0.25
+    params:
+      period: 14
+  - factor_name: "EMA"
+    weight: 0.25
+    params:
+      period: 20
+  - factor_name: "ATR"
+    weight: 0.20
+    params:
+      period: 14
+
+signal:
+  long_threshold: 0.40
+  short_threshold: -0.40
+  ema_periods: 3
+  confirm_bars: 2
+
+timeframe_minutes: 60
+position_fraction: 0.11
+
+symbols:
+  - "KQ.m@SHFE.rb"
+  - "KQ.m@SHFE.hc"
+  - "KQ.m@DCE.i"
+  - "KQ.m@DCE.j"
+  - "KQ.m@DCE.jm"
+  - "KQ.m@SHFE.cu"
+  - "KQ.m@SHFE.al"
+  - "KQ.m@SHFE.zn"
+  - "KQ.m@SHFE.ni"
+  - "KQ.m@SHFE.ss"
+  - "KQ.m@SHFE.au"
+  - "KQ.m@SHFE.ag"
+  - "KQ.m@INE.sc"
+  - "KQ.m@SHFE.fu"
+  - "KQ.m@SHFE.bu"
+  - "KQ.m@SHFE.ru"
+  - "KQ.m@SHFE.sp"
+  - "KQ.m@CZCE.ap"
+  - "KQ.m@CZCE.cf"
+  - "KQ.m@CZCE.sr"
+  - "KQ.m@CZCE.ma"
+  - "KQ.m@CZCE.ta"
+  - "KQ.m@DCE.eg"
+  - "KQ.m@DCE.pp"
+  - "KQ.m@DCE.l"
+  - "KQ.m@DCE.v"
+  - "KQ.m@DCE.eb"
+  - "KQ.m@DCE.pg"
+  - "KQ.m@DCE.lh"
+  - "KQ.m@DCE.p"
+  - "KQ.m@DCE.y"
+  - "KQ.m@DCE.a"
+  - "KQ.m@DCE.c"
+  - "KQ.m@DCE.cs"
+  - "KQ.m@DCE.m"
+
+risk:
+  daily_loss_limit_yuan: 600
+  per_symbol_fuse_yuan: 150
+  max_drawdown_pct: 0.010
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["mixed", "adx", "rsi", "ema", "atr", "60m", "universe35"]

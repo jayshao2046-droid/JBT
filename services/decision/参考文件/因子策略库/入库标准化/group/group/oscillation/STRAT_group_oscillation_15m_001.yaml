@@ -1,0 +1,76 @@
+name: "FC-30_adx_filter_oscillator_15m"
+description: "ADX 过滤行情状态 + RSI/KDJ 双 oscillator 震荡区间交易策略"
+version: "1.0"
+category: "oscillation"
+
+factors:
+  - factor_name: "ADX"
+    weight: 0.40
+    params:
+      period: 14
+  - factor_name: "RSI"
+    weight: 0.30
+    params:
+      period: 14
+  - factor_name: "KDJ"
+    weight: 0.30
+    params:
+      n: 9
+      m1: 3
+      m2: 3
+
+signal:
+  long_threshold: 0.65
+  short_threshold: -0.65
+  ema_periods: 3
+  confirm_bars: 2
+
+timeframe_minutes: 15
+position_fraction: 0.06
+
+symbols:
+  - "KQ.m@SHFE.rb"
+  - "KQ.m@SHFE.hc"
+  - "KQ.m@DCE.i"
+  - "KQ.m@DCE.j"
+  - "KQ.m@DCE.jm"
+  - "KQ.m@SHFE.cu"
+  - "KQ.m@SHFE.al"
+  - "KQ.m@SHFE.zn"
+  - "KQ.m@SHFE.ni"
+  - "KQ.m@SHFE.ss"
+  - "KQ.m@SHFE.au"
+  - "KQ.m@SHFE.ag"
+  - "KQ.m@INE.sc"
+  - "KQ.m@SHFE.fu"
+  - "KQ.m@SHFE.bu"
+  - "KQ.m@SHFE.ru"
+  - "KQ.m@SHFE.sp"
+  - "KQ.m@CZCE.ap"
+  - "KQ.m@CZCE.cf"
+  - "KQ.m@CZCE.sr"
+  - "KQ.m@CZCE.ma"
+  - "KQ.m@CZCE.ta"
+  - "KQ.m@DCE.eg"
+  - "KQ.m@DCE.pp"
+  - "KQ.m@DCE.l"
+  - "KQ.m@DCE.v"
+  - "KQ.m@DCE.eb"
+  - "KQ.m@DCE.pg"
+  - "KQ.m@DCE.lh"
+  - "KQ.m@DCE.p"
+  - "KQ.m@DCE.y"
+  - "KQ.m@DCE.a"
+  - "KQ.m@DCE.c"
+  - "KQ.m@DCE.cs"
+  - "KQ.m@DCE.m"
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 120
+  max_drawdown_pct: 0.005
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["oscillation", "adx_filter", "rsi", "kdj", "15m", "universe35"]

@@ -1,0 +1,51 @@
+name: STRAT_rb_reversal_d1_001
+description: "螺纹钢日线震荡反转质量版：极端 RSI(30/70) + 高止盈 (2.5ATR)，放弃低频微利，追求单笔厚利"
+version: "Quality_V1"
+category: "mean_reversion"
+symbols:
+  - "SHFE.RB2610"
+timeframe_minutes: 1440
+factors:
+  - factor_name: "RSI"
+    weight: 0.60
+    params:
+      period: 14
+  - factor_name: "BollingerBands"
+    weight: 0.20
+    params:
+      period: 20
+      std_dev: 2.0
+  - factor_name: "ATR"
+    weight: 0.20
+    params:
+      period: 14
+market_filter:
+  enabled: false
+signal:
+  long_condition: "rsi < 30"
+  short_condition: "rsi > 70"
+confirm_bars: 0
+position_fraction: 0.04
+transaction_costs:
+  slippage_per_unit: 1
+  commission_per_lot_round_turn: 6
+risk:
+  daily_loss_limit: 0.05
+  max_drawdown: 0.10
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+  stop_loss:
+    atr_multiplier: 1.0
+    type: "atr"
+  take_profit:
+    atr_multiplier: 2.5
+    type: "atr"
+tags:
+  - "quality"
+  - "mean_reversion"
+  - "daily"
+  - "SHFE"
+  - "rebar"
+  - "intraday_only"
+  - "high_tp_low_freq"

@@ -1,0 +1,46 @@
+name: STRAT_ma_breakout_33m_001
+symbols:
+- "CZCE.MA605"
+timeframe: 60
+factors:
+- name: "MACD"
+params:
+fast: 6
+slow: 13
+signal: 5
+- name: "RSI"
+params:
+period: 14
+- name: "ATR"
+params:
+period: 14
+- name: "ADX"
+params:
+period: 14
+- name: "SMA"
+params:
+period: 20
+signal:
+# === 核心修复 1：放宽趋势过滤（甲醇 ADX 中位数 18）===
+trend_ok: "adx_val > 18"
+# === 核心修复 2：增加日线方向过滤（避免逆势）===
+# 假设 BotQuant 注入 daily_trend: 1=多头, -1=空头, 0=震荡
+daily_trend_ok: "daily_trend == 1"
+# === 核心修复 3：量价配合（避免假突破）===
+volume_ok: "volume_ratio_val > 1.05"
+# === 做多信号（三重确认）===
+long: "(trend_ok) and (daily_trend_ok) and (macd_hist > 0) and (rsi_val > 45) and (volume_ok)"
+# === 做空信号（仅在日线空头趋势中启用）===
+short: "(trend_ok) and (daily_trend == -1) and (macd_hist < 0) and (rsi_val < 55) and (volume_ok)"
+confirm: 1
+risk:
+daily_loss_limit: 2000
+max_drawdown: 0.01
+force_close_day: "14:55"
+force_close_night: "22:55"
+overnight: false
+# === 核心修复 4：动态仓位（基于 ATR）===
+# position_size = 200000 * 0.01 / (ATR * 10)  # 1% 风险 / (ATR * 合约乘数)
+# 示例：ATR=15 → 仓位 = 2000 / (15*10) = 13 手（甲醇合约乘数=10）
+position_base: 0.01   # 风险比例 1%
+atr_multiplier: 1.5   # 止损 = 1.5 * ATR

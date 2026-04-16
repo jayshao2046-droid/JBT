@@ -1,0 +1,53 @@
+name: STRAT_p_trend_33m_004
+description: 极简空头策略：ADX > 25 + EMA空头排列 + MACD死叉
+version: '3.0'
+category: trend_down
+factors:
+- factor_name: ADX
+  weight: 0.5
+  params:
+    period: 14
+- factor_name: EMA
+  weight: 0.3
+  params:
+    period: 30
+- factor_name: MACD
+  weight: 0.2
+  params:
+    fast: 12
+    slow: 26
+    signal: 9
+market_filter:
+  enabled: true
+  condition: adx > 25
+signal:
+  long_condition: ema_slope > 0 and macd_hist > 0
+  short_condition: ema_slope < 0 and macd_hist < 0
+  confirm_bars: 2
+  long_threshold: 0.55
+  short_threshold: -0.55
+  ema_periods: 2
+timeframe_minutes: 60
+position_fraction: 0.08
+position_adjustment:
+  method: atr_scaling
+  base_position: 0.08
+  atr_period: 14
+  atr_multiplier: 1.5
+symbols:
+- DCE.p2605
+risk:
+  daily_loss_limit_yuan: 1500
+  per_symbol_fuse_yuan: 160
+  max_drawdown_pct: 0.008
+  force_close_day: '14:55'
+  force_close_night: '22:55'
+  no_overnight: true
+tags:
+- v3
+- oilseed
+- palm_oil
+- trend_down
+- 60m
+- prod_ready
+- task0120

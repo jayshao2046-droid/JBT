@@ -1,0 +1,51 @@
+name: "FC-53_chem_bear_trend_ta605_60m"
+description: "化工组下降趋势：MA空头排列(10/20/60) + MACD死叉(6/13/5) + ADX > 25 + 缩量反弹失败"
+version: "1.0"
+category: "trend_mid"
+
+factors:
+  - factor_name: "SMA"
+    weight: 0.30
+    params:
+      period: 20
+  - factor_name: "MACD"
+    weight: 0.35
+    params:
+      fast6
+      slow: 13
+      signal: 5
+  - factor_name: "ADX"
+    weight: 0.20
+    params:
+      period: 14
+  - factor_name: "OBV"
+    weight: 0.15
+    params: {}
+
+signal:
+  long_threshold: -0.55
+  short_threshold: -0.55
+  ema_periods: 2
+  confirm_bars: 1
+
+timeframe_minutes: 60
+
+position_fraction: 0.07
+
+symbols:
+  - "CZCE.TA605"  # PTA
+  - "CZCE.MA605"  # 甲醇
+  - "DCE.l2605"   # 塑料
+  - "DCE.v2605"   # PVC
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 140
+  max_drawdown_pct: 0.007
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["chemical", "bear_trend", "sma_macd_adx_obv", "60m"]
+
+⚠️ 关键点：化工品易受原油拖累，当 OBV 在价格反弹时未创新高（背离），是空头加仓信号

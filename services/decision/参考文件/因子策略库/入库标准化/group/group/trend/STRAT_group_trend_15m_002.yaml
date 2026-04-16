@@ -1,0 +1,84 @@
+# Generated on: 2026-03-27
+name: "FC-126_v2.1_ml_iron_trend_I01_15m"
+description: "使用 ML 模型预测趋势，L3 三审决策的铁矿石主连趋势跟踪策略 (v2.1 - 优化版)"
+version: "2.1"
+category: "trend"
+advanced_ai_integration:
+  enabled: true
+  l2_model:
+    enabled: true
+    model_type: "xgboost"
+    model_path: "/path/to/l2_models/v2.1/iron_trend_I_model.pkl"
+    feature_names: [
+      "ma5_slope",         # MA5 斜率 (黑色系快趋势)
+      "macd_histogram",    # MACD 柱状图
+      "adx_strength",      # ADX 强度
+      "volume_ratio",      # 量比
+      "atr_normalized_price_change" # ATR 归一化价格变化
+    ]
+    prediction_type: "classification"
+    confidence_threshold: 0.65
+  l3_risk_check:
+    enabled: true
+    quality_check:
+      min_confidence: 0.65
+    portfolio_check:
+      max_position_fraction: 0.07
+      check_account_risk: true
+      account_risk_percentage: 0.01
+    liquidity_check:
+      enabled: true
+      min_bid_ask_volume: 150
+factors:
+  - factor_name: "MovingAverage"
+    weight: 0.30
+    params:
+      ma_type: "EMA"
+      fast_period: 5
+      slow_period: 10
+  - factor_name: "MACD"
+    weight: 0.25
+    params:
+      fast_period: 6
+      slow_period: 13
+      signal_period: 5
+  - factor_name: "ADX"
+    weight: 0.20
+    params:
+      period: 14
+  - factor_name: "VolumeRatio"
+    weight: 0.15
+    params:
+      base_period: 20
+      threshold: 1.5
+  - factor_name: "ATR"
+    weight: 0.10
+    params:
+      period: 14
+      multiplier: 2.0
+signal:
+  ai_long_threshold: 0.65
+  ai_short_threshold: -0.65
+  rule_filter_enabled: true
+  ema_periods: 3
+  confirm_bars: 1
+timeframe_minutes: 15
+position_fraction: 0.07
+symbols:
+  - "DCE.I01"
+risk:
+  daily_loss_limit_yuan: 2500
+  per_symbol_fuse_yuan: 150
+  max_drawdown_pct: 0.008
+  force_close_day: "14:50"
+  force_close_night: "22:50"
+  no_overnight: true
+tags:
+  - "ml_enhanced"
+  - "metallurgy"
+  - "iron_ore"
+  - "trend_following"
+  - "low_frequency"
+  - "15m"
+  - "v2.1"
+  - "black_series"

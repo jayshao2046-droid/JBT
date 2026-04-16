@@ -1,0 +1,66 @@
+name: STRAT_p_trend_60m_001
+description: Palm Oil 60min strong trend pullback strategy V13, optimized for higher
+  return and Sharpe
+version: '13.0'
+category: trend_following
+symbols:
+- DCE.p2605
+timeframe_minutes: 60
+factors:
+- factor_name: EMA_Cross
+  weight: 0.4
+  params:
+    fast_period: 20
+    slow_period: 60
+- factor_name: ADX
+  weight: 0.4
+  params:
+    period: 14
+- factor_name: ATR
+  weight: 0.2
+  params:
+    period: 14
+market_filter:
+  enabled: true
+  conditions:
+  - atr > 0.0015 * close
+  - adx > 30
+signal:
+  long_condition: ema_cross > 0 and adx > 30 and low <= ema_fast + 0.5 * atr
+  short_condition: ema_cross < 0 and adx > 30 and high >= ema_fast - 0.5 * atr
+  confirm_bars: 2
+  position_fraction: 0.1
+  long_threshold: 0.55
+  short_threshold: -0.55
+  ema_periods: 2
+position_fraction: 0.1
+transaction_costs:
+  slippage_per_unit: 1
+  commission_per_lot_round_turn: 5
+risk:
+  daily_loss_limit: 0.01
+  max_drawdown: 0.15
+  per_symbol_fuse_yuan: 180
+  max_consecutive_losses: 5
+  force_close_day: '14:25'
+  force_close_night: '22:25'
+  no_overnight: true
+  stop_loss:
+    atr_multiplier: 1.5
+    type: atr
+  take_profit:
+    atr_multiplier: 3.0
+    type: atr
+  daily_loss_limit_yuan: 1500
+  max_drawdown_pct: 0.008
+tags:
+- v13.0
+- optimized
+- pullback_entry
+- 60m
+- DCE
+- palm_oil
+- intraday
+- prod_ready
+- oilseed
+- task0120

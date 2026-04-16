@@ -1,0 +1,55 @@
+name: STRAT_i_trend_33m_007
+description: "极简空头策略：ADX > 25 + EMA空头排列 + MACD死叉 + 放量确认"
+version: "3.0"
+category: "trend_down"
+
+factors:
+  - factor_name: "ADX"
+    weight: 0.40
+    params:
+      period: 14
+  - factor_name: "EMA"
+    weight: 0.35
+    params:
+      period: 10
+  - factor_name: "MACD"
+    weight: 0.20
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+  - factor_name: "VolumeRatio"
+    weight: 0.05
+    params:
+      period: 20
+
+market_filter:
+  enabled: true
+  condition: "adx > 25"
+
+signal:
+  long_condition: "ema_slope > 0 and macd_hist > 0 and volume_ratio > 1.5"
+  short_condition: "ema_slope < 0 and macd_hist < 0 and volume_ratio > 1.5"
+  confirm_bars: 1
+
+timeframe_minutes: 60
+
+position_fraction: 0.09
+position_adjustment:
+  method: "atr_scaling"
+  base_position: 0.09
+  atr_period: 14
+  atr_multiplier: 1.5
+
+symbols:
+  - "DCE.i2605"
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 180
+  max_drawdown_pct: 0.009
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["v3", "blackmetal", "iron_ore", "trend_down", "60m"]

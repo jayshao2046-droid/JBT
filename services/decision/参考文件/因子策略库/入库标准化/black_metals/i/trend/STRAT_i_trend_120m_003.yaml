@@ -1,0 +1,53 @@
+name: STRAT_i_trend_120m_003
+description: "120分钟极简动量策略：MACD金叉 + RSI趋势 + 量比确认 (每日止损2000元)"
+version: "3.0"
+category: "intraday_momentum"
+
+factors:
+  - factor_name: "MACD"
+    weight: 0.40
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+  - factor_name: "RSI"
+    weight: 0.35
+    params:
+      period: 14
+  - factor_name: "VolumeRatio"
+    weight: 0.25
+    params:
+      period: 20
+
+market_filter:
+  enabled: true
+  conditions:
+    - "atr > 0.007 * close"
+    - "adx > 25"
+
+signal:
+  long_condition: "macd_hist > 0 and rsi_slope > 0 and volume_ratio > 1.2"
+  short_condition: "macd_hist < 0 and rsi_slope < 0 and volume_ratio > 1.2"
+  confirm_bars: 1
+
+timeframe_minutes: 120
+
+position_fraction: 0.09
+position_adjustment:
+  method: "atr_scaling"
+  base_position: 0.09
+  atr_period: 14
+  atr_multiplier: 1.8
+
+symbols:
+  - "DCE.i2605"
+
+risk:
+  daily_loss_limit_yuan: 2000 # 每日止损 2000 元
+  per_symbol_fuse_yuan: 180
+  max_drawdown_pct: 0.009
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["v3", "intraday", "momentum", "120m", "filtered", "daily_stop_2000", "iron_ore"]

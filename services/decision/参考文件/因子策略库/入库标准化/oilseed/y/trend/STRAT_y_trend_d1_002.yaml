@@ -1,0 +1,59 @@
+name: STRAT_y_trend_d1_002
+description: "豆油日线终极策略V8：允许隔夜捕捉大波段，务实止盈2.5ATR，适度加仓至6%"
+version: "8.0"
+category: "trend_following"
+symbols:
+  - "DCE.Y2609"
+timeframe_minutes: 1440
+factors:
+  - factor_name: "EMA_Cross"
+    weight: 0.40
+    params:
+      fast_period: 10
+      slow_period: 30
+  - factor_name: "MACD"
+    weight: 0.30
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+  - factor_name: "ADX"
+    weight: 0.20
+    params:
+      period: 14
+  - factor_name: "ATR"
+    weight: 0.10
+    params:
+      period: 14
+market_filter:
+  enabled: true
+  conditions:
+    - "ema_cross != 0"
+    - "adx > 20"
+signal:
+  long_condition: "macd_hist > 0 and ema_cross > 0 and adx > 20"
+  short_condition: "macd_hist < 0 and ema_cross < 0 and adx > 20"
+confirm_bars: 1
+position_fraction: 0.06
+transaction_costs:
+  slippage_per_unit: 1
+  commission_per_lot_round_turn: 6
+risk:
+  daily_loss_limit: 0.05
+  max_drawdown: 0.12
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: false
+  stop_loss:
+    atr_multiplier: 1.5
+    type: "atr"
+  take_profit:
+    atr_multiplier: 2.5
+    type: "atr"
+tags:
+  - "v8"
+  - "trend_both"
+  - "daily"
+  - "DCE"
+  - "soybean_oil"
+  - "final_hold_overnight"

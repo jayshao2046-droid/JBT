@@ -1,0 +1,66 @@
+name: STRAT_p_trend_60m_002
+description: 棕榈油60分钟强趋势回调策略(V12-终极版)，放弃滞后金叉，改为强趋势下回调入场，仅限高波动时段，极致保本风控
+version: '12.1'
+category: trend_following
+symbols:
+- DCE.p2605
+timeframe_minutes: 60
+factors:
+- factor_name: EMA_Cross
+  weight: 0.4
+  params:
+    fast_period: 20
+    slow_period: 60
+- factor_name: ADX
+  weight: 0.4
+  params:
+    period: 14
+- factor_name: ATR
+  weight: 0.2
+  params:
+    period: 14
+market_filter:
+  enabled: true
+  conditions:
+  - atr > 0.0025 * close
+  - adx > 40
+signal:
+  long_condition: ema_cross > 0 and adx > 40 and low <= ema_fast
+  short_condition: ema_cross < 0 and adx > 40 and high >= ema_fast
+  confirm_bars: 2
+  position_fraction: 0.02
+  long_threshold: 0.55
+  short_threshold: -0.55
+  ema_periods: 2
+transaction_costs:
+  slippage_per_unit: 1
+  commission_per_lot_round_turn: 5
+risk:
+  daily_loss_limit: 0.002
+  max_drawdown: 0.08
+  per_symbol_fuse_yuan: 180
+  max_consecutive_losses: 5
+  force_close_day: '14:25'
+  force_close_night: '22:25'
+  no_overnight: true
+  stop_loss:
+    atr_multiplier: 1
+    type: atr
+  take_profit:
+    atr_multiplier: 4.0
+    type: atr
+  daily_loss_limit_yuan: 1500
+  max_drawdown_pct: 0.008
+tags:
+- v12.1
+- pullback_entry
+- time_filtered
+- 60m
+- DCE
+- palm_oil
+- intraday
+- breakeven_first
+- prod_ready
+- oilseed
+- task0120
+position_fraction: 0.05

@@ -1,0 +1,51 @@
+name: STRAT_p_reversal_33m_002
+description: ：ADX < 20 + CCI超买超卖 + 量价背离确认
+version: '3.0'
+category: reversal
+factors:
+- factor_name: ADX
+  weight: 0.5
+  params:
+    period: 14
+- factor_name: CCI
+  weight: 0.3
+  params:
+    period: 20
+- factor_name: VolumeRatio
+  weight: 0.2
+  params:
+    period: 20
+market_filter:
+  enabled: true
+  condition: adx < 20
+signal:
+  long_condition: cci < -100 and volume_ratio < 1.0
+  short_condition: cci > 100 and volume_ratio < 1.0
+  confirm_bars: 2
+  long_threshold: 0.62
+  short_threshold: -0.62
+  ema_periods: 2
+timeframe_minutes: 60
+position_fraction: 0.05
+position_adjustment:
+  method: atr_scaling
+  base_position: 0.05
+  atr_period: 14
+  atr_multiplier: 1.5
+symbols:
+- DCE.p2605
+risk:
+  daily_loss_limit_yuan: 1500
+  per_symbol_fuse_yuan: 100
+  max_drawdown_pct: 0.005
+  force_close_day: '14:55'
+  force_close_night: '22:55'
+  no_overnight: true
+tags:
+- v3
+- oilseed
+- palm_oil
+- reversal
+- 60m
+- prod_ready
+- task0120

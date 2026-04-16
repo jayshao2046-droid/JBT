@@ -1,0 +1,49 @@
+name: STRAT_i_reversal_33m_004
+description: "极简反转策略：ADX < 20 + CCI超买超卖 + 量价背离确认"
+version: "3.0"
+category: "reversal"
+
+factors:
+  - factor_name: "ADX"
+    weight: 0.50
+    params:
+      period: 14
+  - factor_name: "CCI"
+    weight: 0.30
+    params:
+      period: 20
+  - factor_name: "VolumeRatio"
+    weight: 0.20
+    params:
+      period: 20
+
+market_filter:
+  enabled: true
+  condition: "adx < 20"
+
+signal:
+  long_condition: "cci < -100 and volume_ratio < 0.8"
+  short_condition: "cci > 100 and volume_ratio < 0.8"
+  confirm_bars: 1
+
+timeframe_minutes: 60
+
+position_fraction: 0.05
+position_adjustment:
+  method: "atr_scaling"
+  base_position: 0.05
+  atr_period: 14
+  atr_multiplier: 1.5
+
+symbols:
+  - "DCE.i2605"
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 100
+  max_drawdown_pct: 0.005
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+tags: ["v3", "blackmetal", "iron_ore", "reversal", "60m"]
