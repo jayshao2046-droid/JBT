@@ -35,6 +35,233 @@ _SAFE_BUILTINS: dict[str, Any] = {
     "print": print,
 }
 
+
+# ──────────────────────────────────────────────────────────────
+# 预置技术指标计算库（纯 Python，供 LLM 生成代码直接调用）
+# ──────────────────────────────────────────────────────────────
+
+def _ta_ema(data: list[float], period: int) -> list[float]:
+    """Exponential Moving Average."""
+    result = [0.0] * len(data)
+    if not data or period < 1:
+        return result
+    k = 2.0 / (period + 1)
+    result[0] = data[0]
+    for i in range(1, len(data)):
+        result[i] = data[i] * k + result[i - 1] * (1 - k)
+    return result
+
+
+def _ta_sma(data: list[float], period: int) -> list[float]:
+    """Simple Moving Average."""
+    n = len(data)
+    result = [0.0] * n
+    if period < 1 or n == 0:
+        return result
+    s = 0.0
+    for i in range(n):
+        s += data[i]
+        if i >= period:
+            s -= data[i - period]
+        if i >= period - 1:
+            result[i] = s / period
+    return result
+
+
+def _ta_rsi(closes: list[float], period: int = 14) -> list[float]:
+    """Relative Strength Index (Wilder smooth)."""
+    n = len(closes)
+    result = [50.0] * n
+    if n < period + 1:
+        return result
+    gains = [0.0] * n
+    losses = [0.0] * n
+    for i in range(1, n):
+        diff = closes[i] - closes[i - 1]
+        gains[i] = diff if diff > 0 else 0.0
+        losses[i] = -diff if diff < 0 else 0.0
+    avg_gain = sum(gains[1:period + 1]) / period
+    avg_loss = sum(losses[1:period + 1]) / period
+    for i in range(period, n):
+        if i > period:
+            avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+            avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+        if avg_loss < 1e-10:
+            result[i] = 100.0
+        else:
+            rs = avg_gain / avg_loss
+            result[i] = 100.0 - 100.0 / (1.0 + rs)
+    return result
+
+
+def _ta_macd(closes: list[float], fast: int = 12, slow: int = 26, signal: int = 9
+             ) -> tuple[list[float], list[float], list[float]]:
+    """MACD → (macd_line, signal_line, histogram)."""
+    fast_ema = _ta_ema(closes, fast)
+    slow_ema = _ta_ema(closes, slow)
+    n = len(closes)
+    macd_line = [fast_ema[i] - slow_ema[i] for i in range(n)]
+    signal_line = _ta_ema(macd_line, signal)
+    histogram = [macd_line[i] - signal_line[i] for i in range(n)]
+    return macd_line, signal_line, histogram
+
+
+def _ta_atr(highs: list[float], lows: list[float], closes: list[float], period: int = 14
+            ) -> list[float]:
+    """Average True Range."""
+    n = len(closes)
+    result = [0.0] * n
+    if n < 2:
+        return result
+    tr = [highs[0] - lows[0]] + [
+        max(highs[i] - lows[i], abs(highs[i] - closes[i - 1]), abs(lows[i] - closes[i - 1]))
+        for i in range(1, n)
+    ]
+    s = sum(tr[:period])
+    for i in range(period - 1, n):
+        if i == period - 1:
+            result[i] = s / period
+        else:
+            result[i] = (result[i - 1] * (period - 1) + tr[i]) / period
+    return result
+
+
+def _ta_adx(highs: list[float], lows: list[float], closes: list[float], period: int = 14
+            ) -> list[float]:
+    """Average Directional Index (simplified)."""
+    n = len(closes)
+    result = [0.0] * n
+    if n < period * 2:
+        return result
+    atr = _ta_atr(highs, lows, closes, period)
+    plus_dm = [0.0] * n
+    minus_dm = [0.0] * n
+    for i in range(1, n):
+        up = highs[i] - highs[i - 1]
+        down = lows[i - 1] - lows[i]
+        plus_dm[i] = up if (up > down and up > 0) else 0.0
+        minus_dm[i] = down if (down > up and down > 0) else 0.0
+    smooth_plus = _ta_ema(plus_dm, period)
+    smooth_minus = _ta_ema(minus_dm, period)
+    for i in range(period, n):
+        if atr[i] < 1e-10:
+            continue
+        plus_di = 100.0 * smooth_plus[i] / atr[i]
+        minus_di = 100.0 * smooth_minus[i] / atr[i]
+        di_sum = plus_di + minus_di
+        if di_sum > 0:
+            dx = 100.0 * abs(plus_di - minus_di) / di_sum
+            if i == period:
+                result[i] = dx
+            else:
+                result[i] = (result[i - 1] * (period - 1) + dx) / period
+    return result
+
+
+def _ta_bollinger(closes: list[float], period: int = 20, std_dev: float = 2.0
+                  ) -> tuple[list[float], list[float], list[float]]:
+    """Bollinger Bands → (upper, middle, lower)."""
+    n = len(closes)
+    upper = [0.0] * n
+    middle = _ta_sma(closes, period)
+    lower = [0.0] * n
+    for i in range(period - 1, n):
+        window = closes[i - period + 1: i + 1]
+        mean = middle[i]
+        variance = sum((x - mean) ** 2 for x in window) / period
+        sd = variance ** 0.5
+        upper[i] = mean + std_dev * sd
+        lower[i] = mean - std_dev * sd
+    return upper, middle, lower
+
+
+def _ta_volume_ratio(volumes: list[float], period: int = 10) -> list[float]:
+    """Volume Ratio: current volume / SMA(volume, period)."""
+    n = len(volumes)
+    result = [1.0] * n
+    avg = _ta_sma(volumes, period)
+    for i in range(period - 1, n):
+        if avg[i] > 0:
+            result[i] = volumes[i] / avg[i]
+    return result
+
+
+def _ta_cci(highs: list[float], lows: list[float], closes: list[float], period: int = 20
+            ) -> list[float]:
+    """Commodity Channel Index."""
+    n = len(closes)
+    result = [0.0] * n
+    tp = [(highs[i] + lows[i] + closes[i]) / 3 for i in range(n)]
+    tp_sma = _ta_sma(tp, period)
+    for i in range(period - 1, n):
+        window = tp[i - period + 1: i + 1]
+        mean_dev = sum(abs(x - tp_sma[i]) for x in window) / period
+        if mean_dev > 1e-10:
+            result[i] = (tp[i] - tp_sma[i]) / (0.015 * mean_dev)
+    return result
+
+
+def _ta_williams_r(highs: list[float], lows: list[float], closes: list[float], period: int = 14
+                   ) -> list[float]:
+    """Williams %R."""
+    n = len(closes)
+    result = [-50.0] * n
+    for i in range(period - 1, n):
+        hh = max(highs[i - period + 1: i + 1])
+        ll = min(lows[i - period + 1: i + 1])
+        if hh - ll > 1e-10:
+            result[i] = -100.0 * (hh - closes[i]) / (hh - ll)
+    return result
+
+
+def _ta_kdj(highs: list[float], lows: list[float], closes: list[float],
+            n_period: int = 9, m1: int = 3, m2: int = 3
+            ) -> tuple[list[float], list[float], list[float]]:
+    """KDJ indicator → (K, D, J)."""
+    n = len(closes)
+    k_vals = [50.0] * n
+    d_vals = [50.0] * n
+    j_vals = [50.0] * n
+    for i in range(n_period - 1, n):
+        hh = max(highs[i - n_period + 1: i + 1])
+        ll = min(lows[i - n_period + 1: i + 1])
+        rsv = 50.0 if (hh - ll) < 1e-10 else 100.0 * (closes[i] - ll) / (hh - ll)
+        k_vals[i] = (k_vals[i - 1] * (m1 - 1) + rsv) / m1 if i > n_period - 1 else rsv
+        d_vals[i] = (d_vals[i - 1] * (m2 - 1) + k_vals[i]) / m2 if i > n_period - 1 else k_vals[i]
+        j_vals[i] = 3 * k_vals[i] - 2 * d_vals[i]
+    return k_vals, d_vals, j_vals
+
+
+def _ta_obv(closes: list[float], volumes: list[float]) -> list[float]:
+    """On Balance Volume."""
+    n = len(closes)
+    result = [0.0] * n
+    for i in range(1, n):
+        if closes[i] > closes[i - 1]:
+            result[i] = result[i - 1] + volumes[i]
+        elif closes[i] < closes[i - 1]:
+            result[i] = result[i - 1] - volumes[i]
+        else:
+            result[i] = result[i - 1]
+    return result
+
+
+# 汇集所有指标函数，注入到 exec 沙箱
+_TA_FUNCTIONS: dict[str, Any] = {
+    "ta_ema": _ta_ema,
+    "ta_sma": _ta_sma,
+    "ta_rsi": _ta_rsi,
+    "ta_macd": _ta_macd,
+    "ta_atr": _ta_atr,
+    "ta_adx": _ta_adx,
+    "ta_bollinger": _ta_bollinger,
+    "ta_volume_ratio": _ta_volume_ratio,
+    "ta_cci": _ta_cci,
+    "ta_williams_r": _ta_williams_r,
+    "ta_kdj": _ta_kdj,
+    "ta_obv": _ta_obv,
+}
+
 # 每天交易分钟数（期货日盘+夜盘合计约10h）
 _TRADING_MINS_PER_DAY = 600
 
@@ -293,6 +520,23 @@ class YAMLSignalExecutor:
   short_entry: {short_cond}
   confirm_bars: {confirm_bars}
 {feedback_block}
+IMPORTANT — You have the following pre-built indicator functions available in scope.
+Call them directly (they are already defined, do NOT re-implement them):
+
+  ta_sma(data: list[float], period: int) -> list[float]           # Simple Moving Average
+  ta_ema(data: list[float], period: int) -> list[float]           # Exponential Moving Average
+  ta_rsi(closes: list[float], period=14) -> list[float]           # Relative Strength Index
+  ta_macd(closes, fast=12, slow=26, signal=9) -> (macd, signal_line, histogram)  # MACD
+  ta_atr(highs, lows, closes, period=14) -> list[float]           # Average True Range
+  ta_adx(highs, lows, closes, period=14) -> list[float]           # Average Directional Index
+  ta_bollinger(closes, period=20, std_dev=2.0) -> (upper, middle, lower)  # Bollinger Bands
+  ta_volume_ratio(volumes, period=10) -> list[float]              # Volume / SMA(volume)
+  ta_cci(highs, lows, closes, period=20) -> list[float]           # CCI
+  ta_williams_r(highs, lows, closes, period=14) -> list[float]    # Williams %R
+  ta_kdj(highs, lows, closes, n=9, m1=3, m2=3) -> (K, D, J)      # KDJ
+  ta_obv(closes, volumes) -> list[float]                           # On Balance Volume
+  math module is also available.
+
 Write this exact Python function:
 
 def compute_signals(bars: list, params: dict) -> list:
@@ -302,24 +546,27 @@ def compute_signals(bars: list, params: dict) -> list:
     Returns: list of int (same length as bars) — 1=long, -1=short, 0=flat
 
     Requirements:
+    - Use the ta_* helper functions listed above for ALL indicator calculations
+    - Do NOT access bars[i]["MACD"] or similar — bars only have OHLCV keys
     - Implement ALL factors: {factor_names}
     - params dict keys match the factor param names exactly
     - Apply market_filter conditions: {filter_conditions}
     - Long entry when: {long_cond}
     - Short entry when: {short_cond}
     - confirm_bars={confirm_bars}: signal must be consistent for N bars before confirming
-    - Use ONLY Python stdlib + math module (NO pandas, NO numpy, NO ta-lib)
-    - Compute all indicator series from scratch using loop arithmetic
+    - Use ONLY the pre-built ta_* functions + Python stdlib + math module (NO pandas, NO numpy, NO ta-lib)
     - Return exactly len(bars) integers
     '''
     n = len(bars)
     if n == 0:
         return []
-    closes = [float(b.get("close", 0)) for b in bars]
-    highs  = [float(b.get("high",  0)) for b in bars]
-    lows   = [float(b.get("low",   0)) for b in bars]
+    closes  = [float(b.get("close",  0)) for b in bars]
+    highs   = [float(b.get("high",   0)) for b in bars]
+    lows    = [float(b.get("low",    0)) for b in bars]
+    volumes = [float(b.get("volume", 0)) for b in bars]
     signals = [0] * n
-    # TODO: implement indicators and signal logic here
+    # Example: macd_line, sig_line, hist = ta_macd(closes, fast=12, slow=26, signal=9)
+    # ... implement signal logic using ta_* functions ...
     return signals
 
 Output ONLY the Python function. No markdown fences. No explanation."""
@@ -338,11 +585,12 @@ Output ONLY the Python function. No markdown fences. No explanation."""
 Generated Python function:
 {code[:3000]}
 
-Audit checklist:
-1. Are all factor indicators actually computed from the bars data?
-2. Do the entry conditions match the long/short conditions above?
-3. Is the function syntactically complete (no missing return, no truncation)?
-4. Does it use only stdlib math (no pandas/numpy imports)?
+Audit checklist (FAIL if ANY item fails):
+1. Does the function ONLY access bars with keys: datetime, open, high, low, close, volume? If it accesses bars["MACD"], data["RSI"], or ANY key other than these 6, FAIL immediately.
+2. Does it use the pre-built ta_* functions (ta_ema, ta_sma, ta_macd, ta_rsi, ta_atr, etc.) for indicator calculations? It must NOT try to import or access non-existent indicator columns.
+3. Do the entry conditions match the long/short conditions above?
+4. Is the function syntactically complete (no missing return, no truncation)?
+5. Does it avoid importing pandas, numpy, ta-lib or any external library?
 
 Reply with EXACTLY one of:
 PASS
@@ -415,7 +663,7 @@ FAIL: <one-line reason>"""
             params.update(params_override)
 
         try:
-            safe_globals = {"__builtins__": _SAFE_BUILTINS, "math": math}
+            safe_globals = {"__builtins__": _SAFE_BUILTINS, "math": math, **_TA_FUNCTIONS}
             local_ns: dict[str, Any] = {}
             exec(compile(code, "<generated_signal>", "exec"), safe_globals, local_ns)  # noqa: S102
             compute_signals = local_ns.get("compute_signals")
