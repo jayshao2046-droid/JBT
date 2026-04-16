@@ -1,0 +1,28 @@
+# 测试策略 D 级 - 宽松风控
+name: test_strategy_d_grade
+description: D 级测试策略，宽松风控参数
+version: "1.0"
+category: test
+
+factors:
+  momentum:
+    weight: 0.4
+  volatility:
+    weight: 0.3
+  volume:
+    weight: 0.3
+
+thresholds:
+  long: 0.6
+  short: -0.6
+
+risk_control:
+  max_position_per_symbol: 0.20
+  daily_loss_limit_yuan: 10000  # 2.0%
+  per_symbol_fuse_yuan: 15000   # 3.0%
+  max_drawdown_pct: 0.05        # 5.0%
+
+symbols:
+  - DCE.p2605
+
+timeframe_minutes: 60

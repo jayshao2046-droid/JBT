@@ -23,7 +23,7 @@
 
 - `2026-04-14` 已冻结运行态四设备架构：Mini / Studio / Alienware / Air；MacBook 仅保留开发/控制，不计入运行态四设备。
 - Mini 当前口径更新为“数据源 + 情报落库存储 + 快速投喂节点”，并继续承载当前已部署的 sim-trading 容器/API 现网事实；Studio 更新为“决策/开发主控节点”，本地常驻模型只记 `deepcoder:14b` + `phi4-reasoning:14b`，不再把 `qwen3:14b` 记在 Studio 常驻里。
-- Alienware（192.168.31.224）已作为新增节点冻结：角色固定为“Windows 交易端 + 情报研究员节点”，当前只保留 `qwen3:14b`；负责读取 Mini 同源投喂数据并输出两份格式化研究报告（Studio / Jay.S），同时承载期货公司官方 Windows 交易软件 24h 在线主机。
+- Alienware（192.168.31.223）已作为新增节点冻结：角色固定为“Windows 交易端 + 情报研究员节点”，当前只保留 `qwen3:14b`；负责读取 Mini 同源投喂数据并输出两份格式化研究报告（Studio / Jay.S），同时承载期货公司官方 Windows 交易软件 24h 在线主机。
 - 研究范围冻结为：期货优先且仅跟踪已有策略覆盖品种；股票只分析策略筛出的 30 只股票池；搜索/外部信息只作为“排除项增强”，负面或不确定信息权重更高，不作为无条件加分项。
 - 关键过渡事实已冻结：Alienware 上线不等于 JBT sim-trading 已迁移；任何把交易执行正式切到 Alienware 的服务级改造，都必须后续单独建任务、预审、白名单、Token。
 - `TASK-0029`、`TASK-0030`、`TASK-0031`、`TASK-0032` 已完成并锁回；其中 `TASK-0034` 已补建为 `TASK-0031` 后续 data 单服务 U0 直修的事后审计锚点。
@@ -103,7 +103,7 @@
   - Studio重建计划：完成Phase1 Claude任务后，Atlas执行SSH重建命令（Jay.S确认）
   - G0执行顺序：Studio重建完成 → Claude做TASK-0080 → Jay.S/Atlas停legacy容器
 
-- 2026-04-14：**四设备架构冻结回写 ✅**。JBT 运行态正式冻结为 Mini / Studio / Alienware / Air，其中 Alienware（192.168.31.224）为新增节点。
+- 2026-04-14：**四设备架构冻结回写 ✅**。JBT 运行态正式冻结为 Mini / Studio / Alienware / Air，其中 Alienware（192.168.31.223）为新增节点。
   - Mini：数据源 + 情报落库存储 + 快速投喂节点；继续承载现网 sim-trading 容器/API。
   - Studio：决策/开发主控节点；本地常驻模型冻结为 `deepcoder:14b` + `phi4-reasoning:14b`，不再把 `qwen3:14b` 记为 Studio 本地常驻。
   - Alienware：Windows 交易端 + 情报研究员节点；当前只保留 `qwen3:14b`，负责读取 Mini 同源数据并输出 Studio / Jay.S 双报告。

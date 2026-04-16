@@ -8,7 +8,7 @@ class ResearcherConfig:
     """研究员配置"""
 
     # Alienware Ollama 配置
-    OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.31.224:11434")
+    OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.31.223:11434")
     OLLAMA_MODEL = "qwen3:14b"
     OLLAMA_TEMPERATURE = 0.3
     OLLAMA_NUM_CTX = 8192

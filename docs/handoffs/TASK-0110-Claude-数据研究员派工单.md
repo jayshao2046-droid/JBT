@@ -12,7 +12,7 @@
 ## 项目背景
 
 在 data 服务内新增"数据研究员"子系统：
-- **设备**：Alienware（192.168.31.224），RTX 2070 8GB，qwen3:14b via Ollama (http://192.168.31.224:11434)
+- **设备**：Alienware（192.168.31.223），RTX 2070 8GB，qwen3:14b via Ollama (http://192.168.31.223:11434)
 - **数据源**：Mini（192.168.31.76:8105）全量采集数据 + 双模式爬虫
 - **产出**：四段制双格式报告（JSON 决策版 + Markdown Jay 版）
 - **消费者**：决策端（Studio 192.168.31.142:8104）通过 `/api/v1/researcher/report/latest` 读取
@@ -22,7 +22,7 @@
 ### Alienware Ollama 调用
 ```python
 import httpx
-OLLAMA_URL = "http://192.168.31.224:11434"
+OLLAMA_URL = "http://192.168.31.223:11434"
 resp = httpx.post(f"{OLLAMA_URL}/api/generate", json={
     "model": "qwen3:14b",
     "prompt": "...",

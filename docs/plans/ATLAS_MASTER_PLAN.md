@@ -14,7 +14,7 @@
 ## 2. 当前总优先级
 
 1. 四设备运行架构已冻结为 Mini / Studio / Alienware / Air；MacBook 仅保留开发/控制，不计入运行态四设备。
-2. Mini 更新为“纯数据采集节点”；Studio 更新为“决策/开发主控节点”，本地常驻模型只记 `deepcoder:14b` + `phi4-reasoning:14b`；Alienware（192.168.31.224）固定为“交易执行 + 情报研究员节点”，正式承载 `sim-trading:8101`，当前只保留 `qwen3:14b`；Air 继续作为回测生产节点。
+2. Mini 更新为“纯数据采集节点”；Studio 更新为“决策/开发主控节点”，本地常驻模型只记 `deepcoder:14b` + `phi4-reasoning:14b`；Alienware（192.168.31.223）固定为“交易执行 + 情报研究员节点”，正式承载 `sim-trading:8101`，当前只保留 `qwen3:14b`；Air 继续作为回测生产节点。
 3. 研究范围冻结：期货优先且只跟踪已有策略覆盖品种；股票只分析策略筛出的 30 只股票池；搜索/外部信息只作为排除项增强。
 4. `TASK-0107` 已完成：sim-trading 已正式迁移至 Alienware 裸 Python 部署；若后续要改为 Docker 化部署，仍需另建任务、预审、白名单与 Token。
 5. 数据端：准备“Mini system 级采集 / 调度 / 通知迁移到 JBT Docker 体系”的治理与切换方案。

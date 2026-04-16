@@ -41,7 +41,7 @@ logger = logging.getLogger("full_scan")
 
 MINI_SSH = "jaybot@192.168.31.76"
 MINI_DATA_ROOT = "/Users/jaybot/jbt/data"
-OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://192.168.31.224:11434")
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://192.168.31.223:11434")
 FEISHU_WEBHOOK = os.environ.get("FEISHU_WEBHOOK_URL", "")
 REPORTS_DIR = Path("runtime/researcher/reports")
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)

@@ -41,7 +41,7 @@ services/data/tests/test_researcher_api.py       新建
 
 | 主机 | IP | 角色 | 关键端口/模型 |
 |------|----|------|--------------|
-| Alienware | 192.168.31.224 | 研究员生成端（Windows） | :8199 researcher, :11434 qwen3:14b |
+| Alienware | 192.168.31.223 | 研究员生成端（Windows） | :8199 researcher, :11434 qwen3:14b |
 | Studio | 192.168.31.142 | phi4 推理端（macOS） | :11434 phi4-reasoning:14b |
 | Mini | 192.168.31.76 | data 存储端（macOS） | :8105 data API |
 | MacBook | 本地 | 开发/代码仓库 | — |
@@ -464,14 +464,14 @@ def test_save_overwrite_same_id():
 
 ```bash
 # Batch A: SCP 到 Alienware
-scp services/data/src/researcher/config.py alienware@192.168.31.224:/Users/17621/jbt/services/data/src/researcher/config.py
-scp services/data/src/researcher/summarizer.py alienware@192.168.31.224:/Users/17621/jbt/services/data/src/researcher/summarizer.py
-scp services/data/src/researcher/reporter.py alienware@192.168.31.224:/Users/17621/jbt/services/data/src/researcher/reporter.py
-scp services/data/src/researcher/report_reviewer.py alienware@192.168.31.224:/Users/17621/jbt/services/data/src/researcher/report_reviewer.py
-scp services/data/src/researcher/scheduler.py alienware@192.168.31.224:/Users/17621/jbt/services/data/src/researcher/scheduler.py
-scp services/data/src/researcher/researcher_health.py alienware@192.168.31.224:/Users/17621/jbt/services/data/src/researcher/researcher_health.py
+scp services/data/src/researcher/config.py alienware@192.168.31.223:/Users/17621/jbt/services/data/src/researcher/config.py
+scp services/data/src/researcher/summarizer.py alienware@192.168.31.223:/Users/17621/jbt/services/data/src/researcher/summarizer.py
+scp services/data/src/researcher/reporter.py alienware@192.168.31.223:/Users/17621/jbt/services/data/src/researcher/reporter.py
+scp services/data/src/researcher/report_reviewer.py alienware@192.168.31.223:/Users/17621/jbt/services/data/src/researcher/report_reviewer.py
+scp services/data/src/researcher/scheduler.py alienware@192.168.31.223:/Users/17621/jbt/services/data/src/researcher/scheduler.py
+scp services/data/src/researcher/researcher_health.py alienware@192.168.31.223:/Users/17621/jbt/services/data/src/researcher/researcher_health.py
 # 重启 Alienware researcher
-ssh alienware@192.168.31.224 "taskkill /F /IM python.exe /FI \"WINDOWTITLE eq researcher\" 2>nul; cd /Users/17621/jbt && start /B python services/data/run_researcher.py"
+ssh alienware@192.168.31.223 "taskkill /F /IM python.exe /FI \"WINDOWTITLE eq researcher\" 2>nul; cd /Users/17621/jbt && start /B python services/data/run_researcher.py"
 
 # Batch B: SCP 到 Mini（data API）
 scp services/data/src/main.py mini@192.168.31.76:~/jbt/services/data/src/main.py

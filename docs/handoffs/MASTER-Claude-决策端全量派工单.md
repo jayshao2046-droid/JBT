@@ -41,7 +41,7 @@
 | Studio | 192.168.31.142 | phi4-reasoning:14b | L1/L2 门控审稿（盘中）|
 | Studio | 192.168.31.142 | deepcoder:14b | 策略调优 + 因子挖掘（夜间）|
 | Studio | 192.168.31.142 | qwen3:14b | 备用 |
-| Alienware | 192.168.31.224 | qwen3:14b | 数据研究员（TASK-0110）|
+| Alienware | 192.168.31.223 | qwen3:14b | 数据研究员（TASK-0110）|
 
 ### DashScope 在线模型
 

@@ -38,7 +38,7 @@
 - 报警后门控行为：**降级继续**（K 线缺失用有的审，研报为空则只看 K 线），不 hold
 - 使用已有 `services/decision/src/notifier/feishu.py` 的 `DecisionFeishuNotifier`
 
-### Alienware (192.168.31.224) 数据研究员
+### Alienware (192.168.31.223) 数据研究员
 | 模型 | 角色 |
 |------|------|
 | qwen3:14b | 预读采集数据 + 写研报（归属 services/data, TASK-0110） |
