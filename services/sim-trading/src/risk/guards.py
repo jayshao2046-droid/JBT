@@ -75,7 +75,7 @@ def emit_alert(level: str, message: str, context: dict = None) -> Optional[Syste
     category = infer_category(event_code)
 
     event = RiskEvent(
-        task_id=_string_value(payload, "task_id", "TASK-0014"),
+        task_id=_string_value(payload, "task_id", "SIM-TRADING"),
         stage_preset=_resolve_stage_preset(payload),
         risk_level=_normalize_level(level),
         account_id=_string_value(payload, "account_id"),
