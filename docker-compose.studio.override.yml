@@ -1,0 +1,20 @@
+# Studio (Alienware) 专用 docker-compose override
+# 用法：docker compose -f docker-compose.dev.yml -f docker-compose.studio.override.yml up -d sim-trading
+# 作用：将 sim-trading 从 host 网络切到 jbt_default，注册 sim-trading DNS 别名，
+#       供 decision FailoverManager 通过 http://sim-trading:8101 访问容灾副本。
+#       SIMNOW_USER_ID 留空 → guardian 自动禁用，平时不连 CTP。
+#
+# 注意：此文件只用于 Studio，不部署到 Alienware（Alienware 跑裸 Python）。
+
+services:
+  sim-trading:
+    network_mode: ""          # 取消 host 网络模式
+    networks:
+      - jbt_default
+    environment:
+      SIMNOW_USER_ID: ""      # 空值 → guardian 禁用，平时不连 CTP
+      SIMNOW_PASSWORD: ""
+
+networks:
+  jbt_default:
+    external: true
