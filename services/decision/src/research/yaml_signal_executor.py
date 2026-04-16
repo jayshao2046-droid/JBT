@@ -77,7 +77,7 @@ class YAMLSignalExecutor:
 
     def __init__(
         self,
-        data_service_url: str = "http://192.168.31.74:8105",
+        data_service_url: str = "http://192.168.31.76:8105",
         ollama_url: str = "http://192.168.31.142:11434",
         researcher_model: str = "deepcoder:14b",
         auditor_model: str = "phi4-reasoning:14b",
