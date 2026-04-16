@@ -22,7 +22,7 @@ class KlineMonitor:
     def __init__(self, queue: mp.Queue, stop_event: mp.Event):
         self.queue = queue
         self.stop_event = stop_event
-        self.mini_api = "http://192.168.31.223:8000/api/v1/bars"
+        self.mini_api = "http://192.168.31.76:8105/api/v1/bars"
 
         # 35 个期货品种
         self.symbols = [

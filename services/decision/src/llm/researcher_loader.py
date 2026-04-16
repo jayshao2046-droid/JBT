@@ -6,7 +6,7 @@
 3. 提供给 LLM pipeline 使用
 """
 import logging
-import requests
+import httpx
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 
@@ -24,26 +24,23 @@ class ResearcherLoader:
         """获取最新报告
 
         Args:
-            segment: 时段筛选（盘前/午间/盘后/夜盘收盘），None 表示最新
+            segment: 时段筛选（如 "15-00"），None 表示最新
 
         Returns:
-            报告字典，包含 summary, analyses, timestamp 等字段
+            报告字典，包含 futures_summary, stocks_summary, crawler_stats 等字段
         """
         try:
-            params = {}
-            if segment:
-                params["segment"] = segment
+            # Alienware API: GET /reports/latest
+            url = f"{self.data_service_url}/reports/latest"
 
-            response = requests.get(
-                self.api_endpoint,
-                params=params,
-                timeout=10
-            )
-            response.raise_for_status()
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(url)
+                response.raise_for_status()
 
-            data = response.json()
-            if data.get("success") and data.get("reports"):
-                return data["reports"][0]  # 返回最新的一份
+                data = response.json()
+                # Alienware API 直接返回报告对象，不是 {success, reports} 格式
+                if data and data.get("report_id"):
+                    return data
 
             return None
 
@@ -61,23 +58,10 @@ class ResearcherLoader:
             报告列表
         """
         try:
-            since_time = datetime.now() - timedelta(hours=hours)
-            params = {
-                "since": since_time.isoformat(),
-                "limit": 100
-            }
-
-            response = requests.get(
-                self.api_endpoint,
-                params=params,
-                timeout=10
-            )
-            response.raise_for_status()
-
-            data = response.json()
-            if data.get("success"):
-                return data.get("reports", [])
-
+            # Alienware API 暂不支持时间范围查询，只返回最新报告
+            latest = self.get_latest_report()
+            if latest:
+                return [latest]
             return []
 
         except Exception as e:
@@ -95,18 +79,31 @@ class ResearcherLoader:
         """
         key_points = []
 
-        # 从摘要中提取
-        summary = report.get("summary", "")
-        if summary:
-            key_points.append(f"市场概况: {summary}")
+        # 期货市场概况
+        futures_summary = report.get("futures_summary", {})
+        if futures_summary.get("symbols_covered", 0) > 0:
+            overview = futures_summary.get("market_overview", "")
+            key_points.append(f"期货市场: {overview}")
 
-        # 从分析列表中提取
-        analyses = report.get("analyses", [])
-        for analysis in analyses[:5]:  # 最多取前 5 条
-            event_type = analysis.get("event_type", "")
-            content = analysis.get("content", "")
-            if content:
-                key_points.append(f"{event_type}: {content[:200]}")
+        # 股票市场概况
+        stocks_summary = report.get("stocks_summary", {})
+        if stocks_summary.get("symbols_covered", 0) > 0:
+            overview = stocks_summary.get("market_overview", "")
+            key_points.append(f"股票市场: {overview}")
+
+            # 强势板块
+            sector_rotation = stocks_summary.get("sector_rotation", {})
+            strong_sectors = sector_rotation.get("强势板块", [])
+            if strong_sectors:
+                key_points.append(f"强势板块: {', '.join(strong_sectors[:3])}")
+
+        # 爬虫新闻
+        crawler_stats = report.get("crawler_stats", {})
+        news_items = crawler_stats.get("news_items", [])
+        for item in news_items[:3]:
+            title = item.get("title", "")
+            if title:
+                key_points.append(f"新闻: {title[:100]}")
 
         return key_points
 
@@ -122,30 +119,46 @@ class ResearcherLoader:
         lines = []
 
         # 标题
-        segment = report.get("segment", "未知时段")
-        timestamp = report.get("timestamp", "")
-        lines.append(f"# 研究员报告 - {segment}")
-        lines.append(f"时间: {timestamp}")
+        report_id = report.get("report_id", "未知")
+        generated_at = report.get("generated_at", "")
+        lines.append(f"# 研究员报告 - {report_id}")
+        lines.append(f"生成时间: {generated_at}")
         lines.append("")
 
-        # 摘要
-        summary = report.get("summary", "")
-        if summary:
-            lines.append("## 市场概况")
-            lines.append(summary)
+        # 期货市场
+        futures_summary = report.get("futures_summary", {})
+        if futures_summary.get("symbols_covered", 0) > 0:
+            lines.append("## 期货市场")
+            lines.append(f"覆盖品种: {futures_summary.get('symbols_covered', 0)}")
+            lines.append(f"市场概况: {futures_summary.get('market_overview', '')}")
             lines.append("")
 
-        # 关键分析
-        analyses = report.get("analyses", [])
-        if analyses:
-            lines.append("## 关键事件")
-            for i, analysis in enumerate(analyses[:10], 1):
-                event_type = analysis.get("event_type", "")
-                symbol = analysis.get("symbol", "")
-                content = analysis.get("content", "")
+        # 股票市场
+        stocks_summary = report.get("stocks_summary", {})
+        if stocks_summary.get("symbols_covered", 0) > 0:
+            lines.append("## 股票市场")
+            lines.append(f"覆盖股票: {stocks_summary.get('symbols_covered', 0)}")
+            lines.append(f"市场概况: {stocks_summary.get('market_overview', '')}")
 
-                lines.append(f"{i}. [{event_type}] {symbol}")
-                lines.append(f"   {content}")
+            # 板块轮动
+            sector_rotation = stocks_summary.get("sector_rotation", {})
+            if sector_rotation:
                 lines.append("")
+                lines.append("### 板块轮动")
+                for category, sectors in sector_rotation.items():
+                    if sectors:
+                        lines.append(f"- {category}: {', '.join(sectors)}")
+            lines.append("")
+
+        # 爬虫新闻
+        crawler_stats = report.get("crawler_stats", {})
+        news_items = crawler_stats.get("news_items", [])
+        if news_items:
+            lines.append("## 重要新闻")
+            for i, item in enumerate(news_items[:10], 1):
+                title = item.get("title", "")
+                source = item.get("source", "")
+                lines.append(f"{i}. [{source}] {title}")
+            lines.append("")
 
         return "\n".join(lines)

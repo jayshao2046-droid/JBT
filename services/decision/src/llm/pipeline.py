@@ -17,6 +17,7 @@ from .context_loader import get_daily_context
 from .prompts import ANALYST_SYSTEM, AUDITOR_SYSTEM, RESEARCHER_SYSTEM
 from .researcher_loader import ResearcherLoader
 from .researcher_scorer import ResearcherScorer
+from .researcher_phi4_scorer import ResearcherPhi4Scorer
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class LLMPipeline:
         data_service_url = os.getenv("DATA_SERVICE_URL", "http://192.168.31.76:8105")
         self.researcher_loader = ResearcherLoader(data_service_url)
         self.researcher_scorer = ResearcherScorer()
+        self.researcher_phi4_scorer = ResearcherPhi4Scorer(client=self.client)
 
     async def research(self, intent: str) -> Dict[str, Any]:
         """
@@ -489,3 +491,175 @@ class LLMPipeline:
             "message": "Sandbox backtest feature is under development",
             "params_used": params or {},
         }
+
+    async def evaluate_researcher_report(self, segment: Optional[str] = None) -> Dict[str, Any]:
+        """
+        评估研究员报告并发送飞书通知。
+
+        Args:
+            segment: 可选的时段过滤（如 "15:00"）
+
+        Returns:
+            Dict containing:
+                - report: 原始报告数据
+                - score: phi4 评分 (0.0-1.0)
+                - confidence: 置信度 (high/medium/low)
+                - reasoning: 评级理由
+                - key_insights: 关键洞察列表
+                - notification_sent: 是否成功发送飞书通知
+                - error: 错误信息（如果有）
+        """
+        start_time = time.time()
+        result = {}
+
+        try:
+            # 1. 从 Alienware 加载最新报告
+            logger.info(f"从 Alienware 加载研究员报告 (segment={segment})")
+            report = self.researcher_loader.get_latest_report(segment=segment)
+
+            if not report:
+                return {
+                    "error": "未找到研究员报告",
+                    "duration_seconds": time.time() - start_time
+                }
+
+            result["report"] = report
+            logger.info(f"已加载报告: {report.get('report_id', 'unknown')}")
+
+            # 2. 使用 phi4 进行评级
+            logger.info("使用 phi4 评估报告")
+            scoring_result = await self.researcher_phi4_scorer.score_report(
+                report=report,
+                context={}  # 可以传入持仓、市场上下文等
+            )
+
+            result.update(scoring_result)
+            logger.info(f"phi4 评分: {scoring_result.get('score')}, 置信度: {scoring_result.get('confidence')}")
+
+            # 3. 发送飞书通知
+            logger.info("发送飞书通知")
+            notification_result = await self._send_feishu_notification(report, scoring_result)
+            result["notification_sent"] = notification_result.get("success", False)
+
+            if not notification_result.get("success"):
+                logger.warning(f"飞书通知发送失败: {notification_result.get('error')}")
+
+            result["duration_seconds"] = time.time() - start_time
+            return result
+
+        except Exception as e:
+            logger.error(f"评估研究员报告失败: {e}", exc_info=True)
+            return {
+                "error": str(e),
+                "duration_seconds": time.time() - start_time
+            }
+
+    async def _send_feishu_notification(self, report: Dict, scoring_result: Dict) -> Dict[str, Any]:
+        """发送飞书通知（使用卡片模式）"""
+        try:
+            import re
+
+            # 构建通知内容
+            report_id = report.get("report_id", "unknown")
+            score = scoring_result.get("score", 0.0)
+            reasoning = scoring_result.get("reasoning", "")
+            improvements = scoring_result.get("improvements", [])
+
+            # 清理 reasoning 中的 <think> 标签
+            reasoning = re.sub(r'<think>.*?</think>', '', reasoning, flags=re.DOTALL).strip()
+
+            # 格式化改进建议
+            improvements_text = "\n".join([f"{i+1}. {item}" for i, item in enumerate(improvements)]) if improvements else "无"
+
+            # 评分颜色
+            if score >= 80:
+                score_color = "green"
+            elif score >= 60:
+                score_color = "blue"
+            elif score >= 40:
+                score_color = "orange"
+            else:
+                score_color = "red"
+
+            # 构建飞书卡片消息
+            card_content = {
+                "config": {
+                    "wide_screen_mode": True
+                },
+                "header": {
+                    "title": {
+                        "tag": "plain_text",
+                        "content": "📊 研究员报告评级"
+                    },
+                    "template": score_color
+                },
+                "elements": [
+                    {
+                        "tag": "div",
+                        "fields": [
+                            {
+                                "is_short": True,
+                                "text": {
+                                    "tag": "lark_md",
+                                    "content": f"**报告ID**\n{report_id}"
+                                }
+                            },
+                            {
+                                "is_short": True,
+                                "text": {
+                                    "tag": "lark_md",
+                                    "content": f"**评分**\n{score:.0f}/100"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "tag": "hr"
+                    },
+                    {
+                        "tag": "div",
+                        "text": {
+                            "tag": "lark_md",
+                            "content": f"**评级理由**\n{reasoning}"
+                        }
+                    },
+                    {
+                        "tag": "hr"
+                    },
+                    {
+                        "tag": "div",
+                        "text": {
+                            "tag": "lark_md",
+                            "content": f"**改进建议**\n{improvements_text}"
+                        }
+                    }
+                ]
+            }
+
+            # 调用飞书 API（需要从 decision 服务获取飞书配置）
+            feishu_webhook = os.getenv("FEISHU_WEBHOOK_URL")
+            if not feishu_webhook:
+                logger.warning("未配置 FEISHU_WEBHOOK_URL，跳过飞书通知")
+                return {"success": False, "error": "未配置飞书 webhook"}
+
+            import httpx
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    feishu_webhook,
+                    json={
+                        "msg_type": "interactive",
+                        "card": card_content
+                    },
+                    timeout=10.0
+                )
+
+                if response.status_code == 200:
+                    logger.info("飞书通知发送成功")
+                    return {"success": True}
+                else:
+                    logger.error(f"飞书通知发送失败: {response.status_code} {response.text}")
+                    return {"success": False, "error": f"HTTP {response.status_code}"}
+
+        except Exception as e:
+            logger.error(f"发送飞书通知异常: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
