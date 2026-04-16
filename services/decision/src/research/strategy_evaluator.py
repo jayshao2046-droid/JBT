@@ -195,6 +195,19 @@ class StrategyEvaluator:
         else:
             report['night_session'] = {'status': 'warn', 'reason': 'force_close_night 未设置，夜盘无强平保障'}
 
+        # ── 硬性约束 3：日盘 14:55 必须强平──
+        force_close_day = risk.get('force_close_day', '')
+        if force_close_day == '14:55':
+            report['force_close_day'] = {'status': 'pass', 'close_at': force_close_day}
+        elif force_close_day:
+            report['force_close_day'] = {
+                'status': 'fail',
+                'close_at': force_close_day,
+                'reason': f'force_close_day 为 {force_close_day}，必须设为 14:55',
+            }
+        else:
+            report['force_close_day'] = {'status': 'fail', 'reason': 'force_close_day 未设置，日盘无 14:55 强平保障'}
+
         return score, report
 
     def _score_backtest_result(self, result: Any) -> tuple[int, dict]:
@@ -591,6 +604,10 @@ class StrategyEvaluator:
         # 未设置禁止隔夜 → -5 分
         if not bool(risk.get('no_overnight', False)):
             penalty += 5
+
+        # force_close_day 不等于 14:55 → -8 分
+        if risk.get('force_close_day', '') != '14:55':
+            penalty += 8
 
         return bonus, penalty
 
