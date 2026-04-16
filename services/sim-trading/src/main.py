@@ -403,13 +403,10 @@ async def _ctp_connection_guardian():
             logger.warning("[guardian] connect failed (attempt %d): %s", _fail_count, exc)
             return False, False
 
-    # --- 首次连接：仅在交易时段或盘前窗口 ---
+    # --- 首次连接：24h 保持连接，无条件建连 ---
     await asyncio.sleep(2)
-    if is_trading_session() or _in_pre_session():
-        logger.info("[guardian] initial connect (in session or pre-session)")
-        await _try_connect(silent=False)
-    else:
-        logger.info("[guardian] skip initial connect (outside trading hours)")
+    logger.info("[guardian] initial connect (24h keepalive mode)")
+    await _try_connect(silent=False)
 
     # --- 守护循环 ---
     while True:
@@ -421,11 +418,26 @@ async def _ctp_connection_guardian():
         elif in_pre:
             await asyncio.sleep(PRE_INTERVAL)
         else:
-            # 非交易 + 非盘前 → 检查是否有收盘总结要发
+            # 非交易 + 非盘前 → 检查收盘总结 + 24h 保持 CTP 连接
             sc = _check_session_close()
             if sc is not None and sc[0] != _last_summary_sent:
                 _last_summary_sent = sc[0]
                 _send_session_summary(sc[1])
+            # 24h 保持连接：非交易时段也检查并重连
+            try:
+                from src.api.router import _get_gateway
+                gw_idle = _get_gateway()
+                if gw_idle is None:
+                    logger.info("[guardian] idle: gateway not created, attempting connect")
+                    await _try_connect(silent=True)
+                else:
+                    st_idle = gw_idle.status
+                    if not st_idle.get("md_connected") or not st_idle.get("td_connected"):
+                        logger.info("[guardian] idle: disconnected (md=%s td=%s), reconnecting",
+                                    st_idle.get("md_connected"), st_idle.get("td_connected"))
+                        await _try_connect(silent=True)
+            except Exception as exc_idle:
+                logger.warning("[guardian] idle reconnect error: %s", exc_idle)
             await asyncio.sleep(IDLE_INTERVAL)
             continue
 
