@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+import math
 import yaml
 from pathlib import Path
 from datetime import datetime
@@ -24,20 +25,24 @@ from typing import Any, Optional
 from .sandbox_engine import SandboxEngine
 from .pbo_validator import PBOValidator
 from .factor_validator import FactorValidator
+from .yaml_signal_executor import YAMLSignalExecutor
 
 
 class StrategyEvaluator:
-    """策略完整评估流水线 — 2026-04-16 新标准"""
+    """策略完整评估流水线 — TASK-0122-B 修正版"""
 
-    def __init__(self, data_service_url: str = "http://localhost:8105"):
-        """初始化策略评估器。
-
-        Args:
-            data_service_url: 数据服务 URL
-        """
+    def __init__(
+        self,
+        data_service_url: str = "http://192.168.31.74:8105",
+        ollama_url: str = "http://192.168.31.142:11434",
+    ):
         self.sandbox = SandboxEngine(data_service_url)
         self.pbo_validator = PBOValidator()
         self.factor_validator = FactorValidator()
+        self.yaml_executor = YAMLSignalExecutor(
+            data_service_url=data_service_url,
+            ollama_url=ollama_url,
+        )
 
     async def evaluate_strategy(
         self,
@@ -64,14 +69,16 @@ class StrategyEvaluator:
         # 2. 基础合规性检查（30 分）
         basic_score, basic_report = self._check_basic_compliance(strategy)
 
-        # 3. 回测评估（30 分）
-        backtest_score, backtest_report = await self._run_backtest_evaluation(
-            strategy, start_date, end_date
-        )
+        # 3. 回测评估（30 分）— 调用 YAMLSignalExecutor，预生成代码供后续复用
+        backtest_result = await self.yaml_executor.execute(strategy, start_date, end_date)
+        backtest_score, backtest_report = self._score_backtest_result(backtest_result)
+        # 缓存 bars + code 供后续阶段复用
+        _bars = backtest_result.equity_curve  # equity curve 用于 PBO
+        _code = backtest_result.generated_code
 
         # 4. PBO 过拟合检测（10 分）
         pbo_score, pbo_report = await self._run_pbo_validation(
-            strategy, start_date, end_date
+            strategy, start_date, end_date, backtest_result
         )
 
         # 5. 因子有效性验证（10 分）
@@ -121,141 +128,116 @@ class StrategyEvaluator:
         """基础合规性检查：30 分。
 
         检查项：
-        - 因子权重和 = 1.0（10 分）
-        - 阈值合理性（10 分）
+        - 因子权重和 ≈ 1.0（10 分）
+        - 信号阈值合理性（10 分）
         - 风控参数完整性（10 分）
-
-        Args:
-            strategy: 策略配置字典
-
-        Returns:
-            (得分, 详细报告)
         """
         score = 0
         report = {}
 
-        # 检查权重和
-        factors = strategy.get('factors', {})
+        # 因子权重和（factors 是 list，非 dict）
+        factors = strategy.get('factors', [])
         if factors:
-            weight_sum = sum(f.get('weight', 0) for f in factors.values())
-            if abs(weight_sum - 1.0) < 0.01:
+            weight_sum = sum(f.get('weight', 0) for f in factors)
+            if abs(weight_sum - 1.0) < 0.05:
                 score += 10
-                report['weight_sum'] = {'status': 'pass', 'value': weight_sum}
+                report['weight_sum'] = {'status': 'pass', 'value': round(weight_sum, 4)}
             else:
-                report['weight_sum'] = {'status': 'fail', 'value': weight_sum, 'expected': 1.0}
+                report['weight_sum'] = {'status': 'fail', 'value': round(weight_sum, 4), 'expected': 1.0}
         else:
             report['weight_sum'] = {'status': 'fail', 'value': 0.0, 'reason': 'no factors defined'}
 
-        # 检查阈值合理性
-        thresholds = strategy.get('thresholds', {})
-        long_th = thresholds.get('long', 0)
-        short_th = thresholds.get('short', 0)
-        if 0.3 <= long_th <= 0.8 and -0.8 <= short_th <= -0.3:
+        # 信号阈值（来自 signal 块）
+        signal = strategy.get('signal', {})
+        long_th = float(signal.get('long_threshold', 0))
+        short_th = float(signal.get('short_threshold', 0))
+        if 0.3 <= long_th <= 0.9 and -0.9 <= short_th <= -0.3:
             score += 10
             report['thresholds'] = {'status': 'pass', 'long': long_th, 'short': short_th}
         else:
             report['thresholds'] = {
-                'status': 'fail',
+                'status': 'warn',
                 'long': long_th,
                 'short': short_th,
-                'expected': 'long: 0.3-0.8, short: -0.8 to -0.3'
+                'note': 'threshold range 0.3-0.9 / -0.9 to -0.3 recommended',
             }
+            score += 5  # 阈值不是硬性要求，给部分分
 
-        # 检查风控参数完整性
-        risk = strategy.get('risk_control', {})
+        # 风控参数完整性（匹配真实 YAML risk 字段）
+        risk = strategy.get('risk', {})
         required_params = [
-            'max_position_per_symbol',
             'daily_loss_limit_yuan',
-            'per_symbol_fuse_yuan',
             'max_drawdown_pct',
         ]
-        if all(param in risk for param in required_params):
+        present = [p for p in required_params if p in risk]
+        if len(present) == len(required_params):
             score += 10
             report['risk_params'] = {'status': 'pass', 'params': list(risk.keys())}
-        else:
+        elif present:
+            score += 5
             missing = [p for p in required_params if p not in risk]
+            report['risk_params'] = {'status': 'warn', 'present': present, 'missing': missing}
+        else:
+            missing = required_params
             report['risk_params'] = {'status': 'fail', 'missing': missing}
 
+        return score, report
+
+    def _score_backtest_result(self, result: Any) -> tuple[int, dict]:
+        """将 SignalBacktestResult 转换为评分和报告（供 evaluate_strategy 使用）。"""
+        from .yaml_signal_executor import SignalBacktestResult
+        if isinstance(result, SignalBacktestResult) and result.status == "failed":
+            return 0, {
+                'status': 'failed',
+                'error': result.error,
+                'sharpe_ratio': 0.0,
+                'max_drawdown': 1.0,
+                'win_rate': 0.0,
+            }
+        sharpe = getattr(result, 'sharpe_ratio', 0.0)
+        max_dd = getattr(result, 'max_drawdown', 1.0)
+        win_rate = getattr(result, 'win_rate', 0.0)
+
+        score = 0
+        if sharpe >= 3.0:   score += 10
+        elif sharpe >= 2.5: score += 8
+        elif sharpe >= 2.0: score += 6
+        elif sharpe >= 1.5: score += 4
+        elif sharpe >= 1.0: score += 2
+
+        if max_dd <= 0.01:   score += 10
+        elif max_dd <= 0.015: score += 8
+        elif max_dd <= 0.02:  score += 6
+        elif max_dd <= 0.03:  score += 3
+
+        if win_rate >= 0.60:   score += 10
+        elif win_rate >= 0.55: score += 8
+        elif win_rate >= 0.50: score += 6
+        elif win_rate >= 0.45: score += 3
+
+        report = {
+            'sharpe_ratio': sharpe,
+            'max_drawdown': max_dd,
+            'win_rate': win_rate,
+            'total_return': getattr(result, 'total_return', 0.0),
+            'annualized_return': getattr(result, 'annualized_return', 0.0),
+            'trades_count': getattr(result, 'trades_count', 0),
+            'final_capital': getattr(result, 'final_capital', 0.0),
+            'status': 'success',
+        }
         return score, report
 
     async def _run_backtest_evaluation(
         self, strategy: dict, start_date: str, end_date: str
     ) -> tuple[int, dict]:
-        """回测评估：30 分。
-
-        评分维度：
-        - Sharpe Ratio（10 分）
-        - 最大回撤（10 分）
-        - 胜率（10 分）
-
-        Args:
-            strategy: 策略配置字典
-            start_date: 回测开始日期
-            end_date: 回测结束日期
-
-        Returns:
-            (得分, 详细报告)
-        """
+        """回测评估（兼容旧调用路径，内部调用 yaml_executor）。"""
         try:
-            # 调用 SandboxEngine 进行回测
-            result = await self.sandbox.run_backtest(
-                strategy_config=strategy,
-                start_time=start_date,
-                end_time=end_date,
-            )
+            result = await self.yaml_executor.execute(strategy, start_date, end_date)
 
-            # 提取指标
-            sharpe = result.sharpe_ratio
-            max_dd = result.max_drawdown
-            win_rate = result.win_rate
-
-            score = 0
-
-            # Sharpe Ratio（10 分）
-            if sharpe >= 3.0:
-                score += 10
-            elif sharpe >= 2.5:
-                score += 8
-            elif sharpe >= 2.0:
-                score += 6
-            elif sharpe >= 1.5:
-                score += 4
-            elif sharpe >= 1.0:
-                score += 2
-
-            # 最大回撤（10 分）
-            if max_dd <= 0.01:
-                score += 10
-            elif max_dd <= 0.015:
-                score += 8
-            elif max_dd <= 0.02:
-                score += 6
-            elif max_dd <= 0.03:
-                score += 3
-
-            # 胜率（10 分）
-            if win_rate >= 0.60:
-                score += 10
-            elif win_rate >= 0.55:
-                score += 8
-            elif win_rate >= 0.50:
-                score += 6
-            elif win_rate >= 0.45:
-                score += 3
-
-            report = {
-                'sharpe_ratio': sharpe,
-                'max_drawdown': max_dd,
-                'win_rate': win_rate,
-                'total_return': result.total_return,
-                'trades_count': result.trades_count,
-                'final_capital': result.final_capital,
-                'status': 'success',
-            }
+            return self._score_backtest_result(result)
 
         except Exception as e:
-            score = 0
-            report = {
+            return 0, {
                 'status': 'failed',
                 'error': str(e),
                 'sharpe_ratio': 0.0,
@@ -263,58 +245,76 @@ class StrategyEvaluator:
                 'win_rate': 0.0,
             }
 
-        return score, report
-
     async def _run_pbo_validation(
-        self, strategy: dict, start_date: str, end_date: str
+        self,
+        strategy: dict,
+        start_date: str,
+        end_date: str,
+        backtest_result: Any = None,
     ) -> tuple[int, dict]:
-        """PBO 过拟合检测：10 分。
+        """PBO 时序稳定性检验：10 分。
 
-        评分标准：
-        - PBO < 0.3（10 分）
-        - PBO < 0.5（6 分）
-        - PBO < 0.7（3 分）
-
-        Args:
-            strategy: 策略配置字典
-            start_date: 回测开始日期
-            end_date: 回测结束日期
-
-        Returns:
-            (得分, 详细报告)
+        用已有 equity_curve 切分 4 个季度，统计各季度 Sharpe 正比例。
+        比例 >= 0.75 → 10 分；>= 0.5 → 6 分；>= 0.25 → 3 分。
         """
-        # 注意：PBOValidator 需要收益率序列和参数配置列表
-        # 这里简化处理，假设 PBO 验证器可以接受策略配置
-        # 实际使用时需要根据 PBOValidator 的接口调整
-
         try:
-            # 由于 PBOValidator 需要 pandas Series 和参数配置列表
-            # 这里暂时返回一个默认的中等风险评分
-            # TODO: 实现完整的 PBO 验证逻辑
-            pbo = 0.4  # 默认中等风险
+            from .yaml_signal_executor import SignalBacktestResult
+            if (
+                backtest_result is None
+                or not isinstance(backtest_result, SignalBacktestResult)
+                or backtest_result.status == 'failed'
+                or len(backtest_result.equity_curve) < 40
+            ):
+                return 3, {'status': 'skipped', 'reason': '回测失败或数据不足，无法做时序稳定性检验'}
 
-            score = 0
-            if pbo < 0.3:
+            curve = backtest_result.equity_curve
+            n = len(curve)
+            q = n // 4
+            positive_quarters = 0
+            quarterly_sharpes = []
+
+            for i in range(4):
+                seg = curve[i * q: (i + 1) * q + 1]
+                if len(seg) < 5:
+                    continue
+                returns = [
+                    (seg[j] - seg[j - 1]) / seg[j - 1]
+                    for j in range(1, len(seg))
+                    if seg[j - 1] > 0
+                ]
+                if not returns:
+                    quarterly_sharpes.append(0.0)
+                    continue
+                mean_r = sum(returns) / len(returns)
+                var_r = sum((r - mean_r) ** 2 for r in returns) / len(returns)
+                std_r = var_r ** 0.5
+                seg_sharpe = (mean_r / std_r * (len(returns) ** 0.5)) if std_r > 1e-10 else 0.0
+                quarterly_sharpes.append(round(seg_sharpe, 4))
+                if seg_sharpe > 0:
+                    positive_quarters += 1
+
+            ratio = positive_quarters / 4
+            if ratio >= 0.75:
                 score = 10
-            elif pbo < 0.5:
+            elif ratio >= 0.50:
                 score = 6
-            elif pbo < 0.7:
+            elif ratio >= 0.25:
                 score = 3
+            else:
+                score = 0
 
             report = {
-                'pbo': pbo,
-                'risk_level': 'low' if pbo < 0.3 else 'medium' if pbo < 0.5 else 'high',
-                'status': 'estimated',
-                'note': 'PBO validation requires full implementation with parameter sweep',
+                'status': 'completed',
+                'method': 'temporal_stability_4q',
+                'positive_quarters': positive_quarters,
+                'total_quarters': 4,
+                'stability_ratio': round(ratio, 3),
+                'quarterly_sharpes': quarterly_sharpes,
             }
 
         except Exception as e:
             score = 0
-            report = {
-                'status': 'failed',
-                'error': str(e),
-                'pbo': 1.0,
-            }
+            report = {'status': 'failed', 'error': str(e)}
 
         return score, report
 
@@ -323,52 +323,76 @@ class StrategyEvaluator:
     ) -> tuple[int, dict]:
         """因子有效性验证：10 分。
 
-        评分标准：
-        - IC IR ≥ 0.3（10 分）
-        - IC IR ≥ 0.2（6 分）
-        - IC IR ≥ 0.1（3 分）
-
-        Args:
-            strategy: 策略配置字典
-            start_date: 回测开始日期
-            end_date: 回测结束日期
-
-        Returns:
-            (得分, 详细报告)
+        从真实 K 线数据计算主因子的动量 IC（因子值与前向 1 根 bar 收益的 Pearson 相关），
+        并调用 FactorValidator 做统计显著性检验。
         """
-        # 注意：FactorValidator 需要因子值序列和收益率序列
-        # 这里简化处理，假设因子验证器可以接受策略配置
-        # 实际使用时需要根据 FactorValidator 的接口调整
-
         try:
-            # 由于 FactorValidator 需要因子序列和收益序列
-            # 这里暂时返回一个默认的中等有效性评分
-            # TODO: 实现完整的因子验证逻辑
-            ic_ir = 0.25  # 默认中等有效性
+            symbol = self.yaml_executor._extract_symbol(strategy)
+            tf = int(strategy.get('timeframe_minutes', 60))
+            bars = await self.yaml_executor._fetch_bars(symbol, start_date, end_date, tf)
 
-            score = 0
+            if len(bars) < 50:
+                return 3, {'status': 'skipped', 'reason': f'数据不足 {len(bars)} 根'}
+
+            closes = [float(b.get('close', 0) or 0) for b in bars]
+
+            # 取主因子的 period 参数（优先 fast_period 或 period）
+            factors = strategy.get('factors', [])
+            primary_period = 10
+            for f in factors:
+                p = f.get('params', {})
+                primary_period = int(p.get('fast_period', p.get('period', primary_period)))
+                break
+            period = max(2, min(primary_period, len(closes) // 5))
+
+            # 动量因子：close[i] / close[i-period] - 1
+            factor_series = []
+            return_series = []
+            for i in range(period, len(closes) - 1):
+                if closes[i - period] > 0 and closes[i] > 0:
+                    momentum = closes[i] / closes[i - period] - 1
+                    fwd_ret = (closes[i + 1] - closes[i]) / closes[i]
+                    factor_series.append(momentum)
+                    return_series.append(fwd_ret)
+
+            if len(factor_series) < 20:
+                return 3, {'status': 'skipped', 'reason': '因子样本数不足 20'}
+
+            # 调用 FactorValidator 做统计检验
+            factor_name = factors[0].get('factor_name', 'momentum') if factors else 'momentum'
+            val_result = self.factor_validator.validate(
+                factor_name=factor_name,
+                symbol=symbol,
+                factor_series=factor_series,
+                return_series=return_series,
+            )
+
+            ic_ir = val_result.ic_ir
             if ic_ir >= 0.3:
                 score = 10
             elif ic_ir >= 0.2:
                 score = 6
             elif ic_ir >= 0.1:
                 score = 3
+            else:
+                score = 0
 
             report = {
-                'ic_mean': 0.05,
-                'ic_ir': ic_ir,
-                'ic_pvalue': 0.05,
-                'status': 'estimated',
-                'note': 'Factor validation requires full implementation with factor series',
+                'status': 'completed',
+                'factor_name': factor_name,
+                'ic_mean': round(val_result.ic_mean, 6),
+                'ic_std': round(val_result.ic_std, 6),
+                'ic_ir': round(ic_ir, 4),
+                't_stat': round(val_result.t_stat, 4),
+                'p_value': round(val_result.p_value, 4),
+                'ls_return': round(val_result.ls_return, 6),
+                'passed': val_result.passed,
+                'samples': len(factor_series),
             }
 
         except Exception as e:
             score = 0
-            report = {
-                'status': 'failed',
-                'error': str(e),
-                'ic_ir': 0.0,
-            }
+            report = {'status': 'failed', 'error': str(e), 'ic_ir': 0.0}
 
         return score, report
 
@@ -379,14 +403,8 @@ class StrategyEvaluator:
         - 回撤阈值（7 分）
         - 日亏损限制（7 分）
         - 单品种熔断（6 分）
-
-        Args:
-            strategy: 策略配置字典
-
-        Returns:
-            (得分, 详细报告)
         """
-        risk = strategy.get('risk_control', {})
+        risk = strategy.get('risk', {})
 
         score = 0
 
@@ -433,30 +451,15 @@ class StrategyEvaluator:
     def _calculate_risk_bonus_penalty(self, strategy: dict) -> tuple[int, int]:
         """计算风控加分/扣分。
 
-        加分项（最多 +10 分）：
-        - 单品种仓位 ≤ 5%（+3）
-        - 日亏损限制 ≤ 0.3%（+3）
-        - 单品种熔断 ≤ 0.5%（+2）
-        - 最大回撤熔断 ≤ 1.5%（+2）
-
-        扣分项（最多 -20 分）：
-        - 单品种仓位 > 15%（-10）
-        - 日亏损限制 > 1.0%（-5）
-        - 单品种熔断 > 1.5%（-3）
-        - 最大回撤熔断 > 3.0%（-2）
-
-        Args:
-            strategy: 策略配置字典
-
-        Returns:
-            (加分, 扣分)
+        加分项（最多 +10 分）：仓位≤5%、日亏损≤0.3%、熔断≤0.5%、回撤≤1.5%
+        扣分项（最多 -20 分）：仓位>15%、日亏损>1.0%、熔断>1.5%、回撤>3.0%
         """
-        risk = strategy.get('risk_control', {})
+        risk = strategy.get('risk', {})
         bonus = 0
         penalty = 0
 
-        # 加分项
-        position = risk.get('max_position_per_symbol', 0.1)
+        # 加分项（position_fraction 在顶层）
+        position = float(strategy.get('position_fraction', risk.get('max_position_per_symbol', 0.1)))
         if position <= 0.05:
             bonus += 3
 

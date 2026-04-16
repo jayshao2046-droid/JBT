@@ -329,3 +329,100 @@ class SandboxEngine:
             "loss_count": len(pnls) - win_count,
             "total_trades": len(pnls),
         }
+
+    def run_with_signal_list(
+        self,
+        bars: list[dict],
+        signals: list[int],
+        initial_capital: float = 500_000.0,
+        position_fraction: float = 0.1,
+        slippage: float = 1.0,
+        commission: float = 5.0,
+    ) -> SandboxResult:
+        """接收预计算信号列表（1=多/-1=空/0=平）直接执行撮合，不重跑信号生成逻辑。
+
+        用于 YAMLSignalExecutor 生成信号后，借用 SandboxEngine 的回测流程做验证对比。
+        signals 长度须与 bars 相同。
+        """
+        import uuid as _uuid
+
+        backtest_id = f"sandbox-sig-{_uuid.uuid4().hex[:10]}"
+        ts_start = datetime.now(timezone.utc).isoformat()
+
+        if len(signals) != len(bars):
+            return SandboxResult(
+                backtest_id=backtest_id,
+                status="failed",
+                start_time=ts_start,
+                end_time=datetime.now(timezone.utc).isoformat(),
+                initial_capital=initial_capital,
+                final_capital=initial_capital,
+                total_return=0.0,
+                sharpe_ratio=0.0,
+                max_drawdown=0.0,
+                win_rate=0.0,
+                trades_count=0,
+                trades=[],
+                performance_metrics={"error": f"signal len {len(signals)} != bars len {len(bars)}"},
+            )
+
+        capital = initial_capital
+        position = 0  # 1=long, -1=short, 0=flat
+        entry_price = 0.0
+        all_trades: list[dict] = []
+
+        for i, bar in enumerate(bars):
+            price = float(bar.get("close", 0))
+            if price <= 0:
+                continue
+            sig = signals[i]
+
+            if position == 1 and sig == -1:
+                qty = (capital * position_fraction) / entry_price if entry_price > 0 else 0
+                pnl = (price - entry_price) * qty - slippage * qty - commission
+                capital += pnl
+                all_trades.append({"type": "close_long", "price": price, "pnl": round(pnl, 2), "bar_index": i})
+                position = 0
+            elif position == -1 and sig == 1:
+                qty = (capital * position_fraction) / entry_price if entry_price > 0 else 0
+                pnl = (entry_price - price) * qty - slippage * qty - commission
+                capital += pnl
+                all_trades.append({"type": "close_short", "price": price, "pnl": round(pnl, 2), "bar_index": i})
+                position = 0
+
+            if position == 0 and sig == 1:
+                position = 1
+                entry_price = price
+                all_trades.append({"type": "open_long", "price": price, "bar_index": i})
+            elif position == 0 and sig == -1:
+                position = -1
+                entry_price = price
+                all_trades.append({"type": "open_short", "price": price, "bar_index": i})
+
+        # 强制平最后持仓
+        if position != 0 and bars:
+            last_price = float(bars[-1].get("close", 0))
+            if last_price > 0 and entry_price > 0:
+                qty = (capital * position_fraction) / entry_price
+                pnl = (last_price - entry_price) * qty * position - slippage * qty - commission
+                capital += pnl
+                all_trades.append({"type": "eod_close", "price": last_price, "pnl": round(pnl, 2), "bar_index": len(bars) - 1})
+
+        total_return = (capital - initial_capital) / initial_capital if initial_capital else 0.0
+        metrics = self._calculate_metrics(all_trades, initial_capital, capital)
+
+        return SandboxResult(
+            backtest_id=backtest_id,
+            status="completed",
+            start_time=ts_start,
+            end_time=datetime.now(timezone.utc).isoformat(),
+            initial_capital=initial_capital,
+            final_capital=round(capital, 2),
+            total_return=round(total_return, 6),
+            sharpe_ratio=metrics["sharpe_ratio"],
+            max_drawdown=metrics["max_drawdown"],
+            win_rate=metrics["win_rate"],
+            trades_count=metrics["total_trades"],
+            trades=all_trades,
+            performance_metrics=metrics,
+        )
