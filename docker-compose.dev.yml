@@ -126,6 +126,7 @@ services:
       JBT_SERVICE_PORT: "8105"
       DATA_STORAGE_ROOT: /data
       JBT_DATA_LOG_DIR: /data/logs
+      RESEARCHER_STORE_ROOT: /data/researcher
     env_file:
       - path: services/data/.env
         required: false

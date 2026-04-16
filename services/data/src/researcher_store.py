@@ -21,10 +21,16 @@ logger = logging.getLogger(__name__)
 
 # 动态确定存储根目录（与 main.py 中 DEFAULT_STORAGE_ROOT 对齐）
 _SERVICE_ROOT = Path(__file__).resolve().parents[2]  # services/data/
+# 优先使用 DATA_STORAGE_ROOT 环境变量（Docker 容器内为 /data），
+# 其次 RESEARCHER_STORE_ROOT 环境变量（测试覆盖用），
+# 最后 fallback 到 _SERVICE_ROOT/runtime/data（开发环境）
+_DATA_STORAGE_ROOT = Path(
+    os.environ.get("DATA_STORAGE_ROOT", str(_SERVICE_ROOT / "runtime" / "data"))
+)
 STORE_ROOT = Path(
     os.environ.get(
         "RESEARCHER_STORE_ROOT",
-        str(_SERVICE_ROOT / "runtime" / "data" / "researcher"),
+        str(_DATA_STORAGE_ROOT / "researcher"),
     )
 )
 DB_PATH = STORE_ROOT / "researcher_reports.db"

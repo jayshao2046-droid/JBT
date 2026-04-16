@@ -114,8 +114,8 @@ class ResearcherConfig:
     STAGING_DIR = os.path.join(os.getcwd(), "runtime", "researcher", "staging")
     STAGING_DB = os.path.join(STAGING_DIR, "staging.db")
 
-    # 报告存储配置
-    REPORTS_DIR = os.path.join(os.getcwd(), "runtime", "researcher", "reports")
+    # 报告存储配置（Alienware D 盘，供 phi4 决策端读取）
+    REPORTS_DIR = os.getenv("REPORTS_DIR", "D:\\researcher_reports")
 
     # 日志目录（scheduler.log / daily_stats_*.json 共用）
     LOGS_DIR = os.path.join(os.getcwd(), "runtime", "researcher", "logs")
@@ -175,8 +175,8 @@ class ResearcherConfig:
     SMTP_TIMEOUT: float = float(os.getenv("SMTP_TIMEOUT", "30.0"))               # SMTP 连接超时
 
     # ── 推送策略 ──────────────────────────────────────────────────────────
-    # False = 推送 Mini 成功后删除 Alienware 本地 JSON/MD
-    PUSH_RETENTION_LOCAL: bool = False
+    # True = 报告持久化到 Alienware D 盘，不推送 Mini（phi4 直接读取）
+    PUSH_RETENTION_LOCAL: bool = True
 
     # ── 研究员健康度报告间隔 ──────────────────────────────────────────────
     HEALTH_INTERVAL_HOURS: int = 2

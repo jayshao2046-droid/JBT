@@ -1,10 +1,22 @@
 # 研究员数据源配置
 
-news_sources:
-  - name: "新浪财经"
-    url: "https://finance.sina.com.cn/futuremarket/"
-    interval: 300
+sources:
+  - source_id: "sina_futures"
+    name: "新浪财经期货"
+    url_pattern: "https://finance.sina.com.cn/futuremarket/"
+    mode: "code"
+    parser: "futures"
+    enabled: true
+    priority: 8
+    schedule: ["盘前", "午间", "盘后", "夜盘"]
+    timeout: 30
 
-  - name: "东方财富"
-    url: "https://futures.eastmoney.com/news/"
-    interval: 300
+  - source_id: "eastmoney_futures"
+    name: "东方财富期货"
+    url_pattern: "https://futures.eastmoney.com/news/"
+    mode: "code"
+    parser: "futures"
+    enabled: true
+    priority: 8
+    schedule: ["盘前", "午间", "盘后", "夜盘"]
+    timeout: 30

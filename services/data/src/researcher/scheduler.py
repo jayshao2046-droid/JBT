@@ -131,8 +131,8 @@ class ResearcherScheduler:
             # 6b. 决策端置信度评审 + 飞书评级通知
             await self.reviewer.review_and_notify(report)
 
-            # 7. 推送到 Mini data API
-            await self._push_to_data_api(report)
+            # 7. 报告已落盘到 D:\researcher_reports（phi4 直接读取，不推送 Mini）
+            logger.info(f"[SAVE] 报告已保存: {report.file_path}")
 
             # 8. 邮件日报钩子
             if hour == ResearcherConfig.EMAIL_MORNING_TRIGGER_HOUR:
@@ -397,13 +397,15 @@ class ResearcherScheduler:
             True 表示推送成功
         """
         try:
+            logger.info(f"[PUSH] 开始推送报告到 Mini: {ResearcherConfig.DATA_API_PUSH_URL}")
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     ResearcherConfig.DATA_API_PUSH_URL,
-                    json=report.dict(),
+                    json=report.model_dump(mode='json'),
                     timeout=ResearcherConfig.HTTP_TIMEOUT_MEDIUM,
                 )
                 success = resp.status_code in (200, 201)
+                logger.info(f"[PUSH] 推送响应: status={resp.status_code}, success={success}")
 
             if success and not ResearcherConfig.PUSH_RETENTION_LOCAL:
                 # 推送成功后删除本地 JSON/MD 文件
@@ -414,12 +416,14 @@ class ResearcherScheduler:
                     try:
                         if os.path.exists(local_path):
                             os.remove(local_path)
+                            logger.info(f"[PUSH] 删除本地文件: {local_path}")
                     except Exception:
                         pass  # 删除失败不影响主流程
 
             return success
-        except Exception:
+        except Exception as e:
             # 推送失败不影响主流程，本地文件保留
+            logger.error(f"[PUSH] 推送失败: {e}")
             return False
 
     async def _send_morning_report(self, date: str):
