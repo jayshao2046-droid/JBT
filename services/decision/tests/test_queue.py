@@ -2,7 +2,7 @@
 队列管理器单元测试
 """
 import pytest
-from src.queue.manager import QueueManager
+from src.task_queue.manager import QueueManager
 
 
 class TestQueueManager:
