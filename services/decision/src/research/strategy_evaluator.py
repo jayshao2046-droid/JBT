@@ -181,6 +181,20 @@ class StrategyEvaluator:
             missing = required_params
             report['risk_params'] = {'status': 'fail', 'missing': missing}
 
+        # ── 硬性约束 1：禁止隔夜（no_overnight: true）──
+        no_overnight = bool(risk.get('no_overnight', False))
+        if no_overnight:
+            report['no_overnight'] = {'status': 'pass'}
+        else:
+            report['no_overnight'] = {'status': 'fail', 'reason': 'no_overnight 必须为 true，禁止隔夜'}
+
+        # ── 硬性约束 2：夜盘可做（force_close_night 必须有值）──
+        force_close_night = risk.get('force_close_night', '')
+        if force_close_night:
+            report['night_session'] = {'status': 'pass', 'close_at': force_close_night}
+        else:
+            report['night_session'] = {'status': 'warn', 'reason': 'force_close_night 未设置，夜盘无强平保障'}
+
         return score, report
 
     def _score_backtest_result(self, result: Any) -> tuple[int, dict]:
@@ -396,54 +410,129 @@ class StrategyEvaluator:
 
         return score, report
 
+    # ATR 倍数合理范围（按品种波动性分级，总金额 50 万）
+    _ATR_MULTIPLIER_RANGE: dict[str, tuple[float, float]] = {
+        # 高波动（黑色/有色/贵金属）
+        'rb': (1.5, 3.5), 'hc': (1.5, 3.5), 'i': (1.5, 3.5), 'j': (1.5, 3.5), 'jm': (1.5, 3.5),
+        'cu': (1.5, 3.5), 'al': (1.5, 3.0), 'zn': (1.5, 3.0), 'ni': (1.5, 3.5), 'ss': (1.5, 3.0),
+        'au': (1.2, 3.0), 'ag': (1.5, 3.5),
+        # 中波动（能化/油脂/农产品）
+        'p': (1.2, 2.8), 'y': (1.2, 2.8), 'm': (1.2, 2.8), 'oi': (1.2, 2.8),
+        'v': (1.2, 2.5), 'l': (1.2, 2.5), 'pp': (1.2, 2.5), 'eb': (1.2, 2.5),
+        'ru': (1.5, 3.0), 'sp': (1.5, 3.0), 'bu': (1.2, 2.8), 'fu': (1.2, 2.8),
+        'pg': (1.2, 2.8), 'eg': (1.2, 2.8),
+        # 低波动（农产品/CZCE）
+        'ma': (1.0, 2.5), 'ta': (1.0, 2.5), 'cf': (1.0, 2.5), 'sr': (1.0, 2.5),
+        'fg': (1.0, 2.5), 'sa': (1.0, 2.5), 'rm': (1.0, 2.5), 'pf': (1.0, 2.5), 'ur': (1.0, 2.5),
+        'a': (1.2, 2.8), 'c': (1.2, 2.5), 'cs': (1.2, 2.5), 'jd': (1.0, 2.5),
+        'lh': (1.5, 3.5), 'rr': (1.0, 2.5),
+    }
+
     def _evaluate_risk_strictness(self, strategy: dict) -> tuple[int, dict]:
         """风控严格度评估：20 分。
 
         评分维度：
-        - 回撤阈值（7 分）
-        - 日亏损限制（7 分）
-        - 单品种熔断（6 分）
+        - 回撤阈值（5 分）
+        - 日亏损限制 ≤ 2000 元（5 分）
+        - 单笔止损 ≤ 1000 元（4 分）
+        - ATR 过滤倍数合理性（3 分）
+        - 盈亏比 ≥ 2:1（3 分）
         """
         risk = strategy.get('risk', {})
-
         score = 0
+        report: dict = {}
 
-        # 回撤阈值（7 分）
+        # ── 回撤阈值（5 分）──
         max_dd_pct = risk.get('max_drawdown_pct', 0.1)
         if max_dd_pct <= 0.008:
-            score += 7
+            score += 5
         elif max_dd_pct <= 0.01:
-            score += 5
-        elif max_dd_pct <= 0.015:
-            score += 3
-
-        # 日亏损限制（7 分）
-        # 假设 50 万资金
-        daily_loss = risk.get('daily_loss_limit_yuan', 10000)
-        daily_loss_pct = daily_loss / 500000
-        if daily_loss_pct <= 0.003:
-            score += 7
-        elif daily_loss_pct <= 0.005:
-            score += 5
-        elif daily_loss_pct <= 0.01:
-            score += 3
-
-        # 单品种熔断（6 分）
-        fuse = risk.get('per_symbol_fuse_yuan', 10000)
-        fuse_pct = fuse / 500000
-        if fuse_pct <= 0.005:
-            score += 6
-        elif fuse_pct <= 0.01:
             score += 4
-        elif fuse_pct <= 0.015:
+        elif max_dd_pct <= 0.015:
             score += 2
+        elif max_dd_pct <= 0.02:
+            score += 1
+        report['max_drawdown_pct'] = {'value': max_dd_pct, 'pass': max_dd_pct <= 0.02}
 
-        report = {
-            'max_drawdown_pct': max_dd_pct,
-            'daily_loss_limit_yuan': daily_loss,
-            'daily_loss_pct': daily_loss_pct,
-            'per_symbol_fuse_yuan': fuse,
-            'fuse_pct': fuse_pct,
+        # ── 硬性约束 3：单品种每日熔断 ≤ 2000 元（5 分）──
+        # 总金额 50 万，每日熔断上限 2000 = 0.4%
+        daily_loss = risk.get('daily_loss_limit_yuan', 10000)
+        daily_loss_pass = daily_loss <= 2000
+        if daily_loss_pass:
+            if daily_loss <= 1000:
+                score += 5
+            elif daily_loss <= 1500:
+                score += 4
+            else:  # <= 2000
+                score += 3
+        report['daily_loss_limit_yuan'] = {
+            'value': daily_loss,
+            'hard_cap': 2000,
+            'pass': daily_loss_pass,
+            'status': 'pass' if daily_loss_pass else 'FAIL — 超出 2000 元上限',
+        }
+
+        # ── 硬性约束 4：单笔止损 ≤ 1000 元（4 分）──
+        # 用 per_symbol_fuse_yuan 作为单笔止损代理
+        per_trade_stop = risk.get('per_symbol_fuse_yuan', risk.get('per_trade_stop_yuan', 10000))
+        trade_stop_pass = per_trade_stop <= 1000
+        if trade_stop_pass:
+            if per_trade_stop <= 500:
+                score += 4
+            elif per_trade_stop <= 800:
+                score += 3
+            else:  # <= 1000
+                score += 2
+        report['per_trade_stop_yuan'] = {
+            'value': per_trade_stop,
+            'hard_cap': 1000,
+            'pass': trade_stop_pass,
+            'status': 'pass' if trade_stop_pass else 'FAIL — 单笔止损超出 1000 元上限',
+        }
+
+        # ── 硬性约束 5：ATR 过滤倍数合理性（3 分）──
+        pos_adj = strategy.get('position_adjustment', {})
+        atr_mul = float(pos_adj.get('atr_multiplier', 0))
+        symbol_raw = ''
+        syms = strategy.get('symbols', [])
+        if syms:
+            raw = str(syms[0])
+            import re as _re
+            m = _re.search(r'\.([A-Za-z]+)', raw)
+            symbol_raw = m.group(1).lower() if m else ''
+        lo, hi = self._ATR_MULTIPLIER_RANGE.get(symbol_raw, (1.0, 3.5))
+        atr_ok = (atr_mul == 0) or (lo <= atr_mul <= hi)
+        if atr_mul > 0:
+            score += 3 if atr_ok else 0
+        else:
+            score += 1  # 未设置 ATR 过滤，给少量分但不满分
+        report['atr_multiplier'] = {
+            'value': atr_mul,
+            'symbol': symbol_raw,
+            'recommended_range': [lo, hi],
+            'pass': atr_ok,
+            'status': 'pass' if atr_ok else f'WARN — 建议 ATR 倍数 {lo}~{hi}',
+        }
+
+        # ── 硬性约束 6：盈亏比 ≥ 2:1（3 分）──
+        # 通过 risk_reward_ratio 字段，或从 daily_loss / per_trade_stop 估算
+        rr_ratio = float(risk.get('risk_reward_ratio', 0))
+        if rr_ratio == 0 and per_trade_stop > 0:
+            # 用仓位 * 收益估算：position_fraction * close_est / per_trade_stop
+            # 简化：用 daily_loss_limit / per_trade_stop 作为粗略盈亏比
+            rr_ratio = round(daily_loss / per_trade_stop, 2) if per_trade_stop > 0 else 0
+        rr_pass = rr_ratio >= 2.0
+        if rr_ratio >= 3.0:
+            score += 3
+        elif rr_ratio >= 2.0:
+            score += 2
+        elif rr_ratio >= 1.5:
+            score += 1
+        report['risk_reward_ratio'] = {
+            'value': rr_ratio,
+            'minimum': 2.0,
+            'pass': rr_pass,
+            'status': 'pass' if rr_pass else f'WARN — 盈亏比 {rr_ratio:.1f}:1，建议 ≥ 2:1',
         }
 
         return score, report
@@ -487,6 +576,21 @@ class StrategyEvaluator:
 
         if max_dd_pct > 0.03:
             penalty += 2
+
+        # ── 硬性约束违规重罚 ──
+        # 每日熔断超 2000 元 → -10 分
+        daily_loss_abs = risk.get('daily_loss_limit_yuan', 10000)
+        if daily_loss_abs > 2000:
+            penalty += 10
+
+        # 单笔止损超 1000 元 → -8 分
+        per_trade_stop = risk.get('per_symbol_fuse_yuan', risk.get('per_trade_stop_yuan', 10000))
+        if per_trade_stop > 1000:
+            penalty += 8
+
+        # 未设置禁止隔夜 → -5 分
+        if not bool(risk.get('no_overnight', False)):
+            penalty += 5
 
         return bonus, penalty
 
