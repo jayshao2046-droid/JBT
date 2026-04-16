@@ -39,6 +39,12 @@ class EmailNotifier:
             logger.debug("EmailNotifier disabled, skipping event %s", event.event_code)
             return True
 
+        # 邮件只发三个时段的收盘交易汇总，断联/交易通知只走飞书
+        _EMAIL_ALLOWED_CODES = {"SESSION_CLOSE_SUMMARY"}
+        if event.event_code not in _EMAIL_ALLOWED_CODES:
+            logger.debug("EmailNotifier: skipping non-summary event %s", event.event_code)
+            return True
+
         missing = [
             name
             for name, val in [

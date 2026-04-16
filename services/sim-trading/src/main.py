@@ -210,7 +210,8 @@ async def _ctp_connection_guardian():
     IDLE_INTERVAL = 300         # 非交易时段休眠间隔（秒）
     ACCOUNT_REFRESH = 120       # 账户刷新间隔（秒）
     MAX_FAST_RETRIES = 3
-    RECONNECT_ALERT_COOLDOWN = 180
+    RECONNECT_ALERT_COOLDOWN = 180      # 交易时段：断联超 3 分钟才发飞书报警
+    IDLE_DISCONNECT_ALERT_COOLDOWN = 1800  # 非交易时段：每 30 分钟发一次飞书断联通知
     _fail_count = 0
     _last_checkpoint = None     # 避免同一检查点重复通知
     _last_account_refresh = 0.0
@@ -218,6 +219,8 @@ async def _ctp_connection_guardian():
     _last_preopen_sent = None   # 避免同一开盘前检查重复触发
     _last_open_sent = None      # 避免同一开盘通知重复推送
     _last_reconnect_alert_ts = 0.0
+    _last_idle_disconnect_alert_ts = 0.0  # 非交易时段断联通知冷却
+    _session_disconnect_ts: Optional[float] = None  # 交易时段首次断联时间戳
 
     def _in_pre_session():
         """工作日盘前窗口判定"""
@@ -423,8 +426,9 @@ async def _ctp_connection_guardian():
             if sc is not None and sc[0] != _last_summary_sent:
                 _last_summary_sent = sc[0]
                 _send_session_summary(sc[1])
-            # 24h 保持连接：非交易时段也检查并重连
+            # 24h 保持连接：非交易时段也检查并重连（断联每 30 分钟飞书通知一次）
             try:
+                import time as _time
                 from src.api.router import _get_gateway
                 gw_idle = _get_gateway()
                 if gw_idle is None:
@@ -435,7 +439,21 @@ async def _ctp_connection_guardian():
                     if not st_idle.get("md_connected") or not st_idle.get("td_connected"):
                         logger.info("[guardian] idle: disconnected (md=%s td=%s), reconnecting",
                                     st_idle.get("md_connected"), st_idle.get("td_connected"))
-                        await _try_connect(silent=True)
+                        md_r, td_r = await _try_connect(silent=True)
+                        if not md_r or not td_r:
+                            # 重连失败 → 每 30 分钟才发一次飞书通知，防止信息爆炸
+                            now_idle_ts = _time.time()
+                            if now_idle_ts - _last_idle_disconnect_alert_ts >= IDLE_DISCONNECT_ALERT_COOLDOWN:
+                                _send_guardian_alert(
+                                    "P1", "CTP_IDLE_DISCONNECTED",
+                                    f"非交易时段 CTP 断联（md={st_idle.get('md_connected')}, "
+                                    f"td={st_idle.get('td_connected')}），持续断联中，下次通知间隔 30 分钟",
+                                    "SYSTEM"
+                                )
+                                _last_idle_disconnect_alert_ts = now_idle_ts
+                        else:
+                            # 重连成功，重置冷却（恢复不单独通知，避免扰动）
+                            _last_idle_disconnect_alert_ts = 0.0
             except Exception as exc_idle:
                 logger.warning("[guardian] idle reconnect error: %s", exc_idle)
             await asyncio.sleep(IDLE_INTERVAL)
@@ -502,6 +520,7 @@ async def _ctp_connection_guardian():
             if in_session:
                 if md_ok and td_ok:
                     _fail_count = 0
+                    _session_disconnect_ts = None  # 重置断联计时
                     # 定期刷新账户
                     import time as _time
                     now_ts = _time.time()
@@ -510,11 +529,19 @@ async def _ctp_connection_guardian():
                         _last_account_refresh = now_ts
                     continue
 
-                # 断开 → 重连
-                logger.info("[guardian] session monitor: md=%s td=%s, reconnecting (attempt %d)",
-                            md_ok, td_ok, _fail_count + 1)
+                # 断开 → 记录首次断联时间戳
+                import time as _time
+                now_ts = _time.time()
+                if _session_disconnect_ts is None:
+                    _session_disconnect_ts = now_ts
+                disconnect_duration = now_ts - _session_disconnect_ts
+
+                # 尝试重连
+                logger.info("[guardian] session monitor: md=%s td=%s, reconnecting (%.0fs since disconnect)",
+                            md_ok, td_ok, disconnect_duration)
                 md_ok, td_ok = await _try_connect(silent=True)
                 if md_ok or td_ok:
+                    _session_disconnect_ts = None  # 重连成功，清除计时
                     try:
                         from src.notifier.dispatcher import get_dispatcher
                         dp = get_dispatcher()
@@ -522,17 +549,19 @@ async def _ctp_connection_guardian():
                             dp.emit_recovery("CTP_FRONT_DISCONNECTED")
                     except Exception:
                         pass
-                elif _fail_count >= MAX_FAST_RETRIES:
-                    import time as _time
-                    now_ts = _time.time()
-                    if now_ts - _last_reconnect_alert_ts >= RECONNECT_ALERT_COOLDOWN:
-                        # 发送 P0 前再做一次状态确认，避免短抖动恢复后的误报
+                else:
+                    # 3 分钟内未连回才发飞书报警，冷却期内不重复
+                    if (disconnect_duration >= RECONNECT_ALERT_COOLDOWN
+                            and now_ts - _last_reconnect_alert_ts >= RECONNECT_ALERT_COOLDOWN):
+                        # 发送前再确认状态，避免抖动恢复后的误报
                         st2 = gw.status if gw else {}
                         md_still_down = not st2.get("md_connected", False)
                         td_still_down = not st2.get("td_connected", False)
                         if md_still_down and td_still_down:
-                            _send_guardian_alert("P0", "CTP_RECONNECT_FAIL",
-                                                 f"交易时段连续{_fail_count}次重连失败")
+                            _send_guardian_alert(
+                                "P0", "CTP_RECONNECT_FAIL",
+                                f"交易时段断联已 {disconnect_duration:.0f}s，持续重连失败，请立即检查"
+                            )
                             _last_reconnect_alert_ts = now_ts
 
         except Exception as exc:
