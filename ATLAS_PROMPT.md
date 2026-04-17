@@ -423,8 +423,34 @@
 ### 待收口（保留）
 
 - **TASK-U0-20260417-004** ⚠️ 遗留 P1 健康检查误报（data service 代码变更未提交）
-- **TASK-U0-20260417-007** 🔄 研究员数据流（代码完成，待 Alienware 部署验证）
+- **TASK-U0-20260417-007** 🔄 研究员数据流 → 见下方 2026-04-18 跟进记录
 
 ### 未推送到 origin
 
 待 Jay.S 确认后 push：84db80c8e / 76cb80d83 / 6f2ac094f / e7a8e2ab3 / 2b7d7ab9b（共 5 commits）
+
+---
+
+## Atlas 跟进记录（2026-04-18）
+
+### TASK-U0-20260417-007 研究员数据流完善 — 服务修复与验证
+
+**跟进范围**：接续上一 session 修复，本次重点：服务状态最终确认、watchdog 验证、任务文件收口。
+
+**已完成（本次）**：
+- ✅ `researcher_evaluate.py` 路由确认：`POST /api/v1/evaluate` 接收 `ReportBatchRequest`，含 `batch_id/date/hour/generated_at` 字段，与 `ReportBatch` 模型完全匹配；评级后逐报告类型调用 `FeishuNotifier.send_researcher_score`
+- ✅ 服务健康确认：`/health` 返回 `{"status":"ok","ollama_url":"http://localhost:11434","model":"qwen3:14b"}` ✅
+- ✅ Watchdog 任务确认：`JBT_Researcher_Watchdog` 状态 **Ready**，已注册，守护任务运行中
+- ✅ 任务文件 TASK-U0-20260417-007 追加 6.6 修复记录，状态更新为"基本完成（服务运行中，等待开盘数据验证）"
+
+**Alienware 当前状态**：
+- 研究员服务 PID 13080，8199 端口监听 ✅
+- sim-trading 8101 端口监听（PID 37932），但有 PID 36588 僵尸实例（不影响服务）
+- watchdog 每分钟守护 ✅
+- decision evaluate 端点 Studio 8104 返回 200 OK ✅
+
+**遗留/等待**：
+- ⏳ Mini 数据截至 2026-04-09，等开盘（21:00 夜盘/09:00 日盘）后实时数据填补
+- ⏳ 届时触发完整流程：`POST /run` → 报告生成 → qwen3 分析 → push decision → 飞书通知
+- ⏳ Windows 任务计划（setup_researcher_windows_task.ps1）尚未运行（watchdog 已守护，优先级降低）
+- ⚠️ sim-trading 双实例（PID 36588 + 37932）——非本任务范围，需独立处理
