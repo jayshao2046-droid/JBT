@@ -376,3 +376,55 @@
 **签名**：Alienware 数据研究员  
 **日期**：2026-04-16  
 **状态**：问题诊断完成，等待 Atlas 回归后决策执行优先级
+
+---
+
+## Atlas 接管（2026-04-18）
+
+【签名】Atlas  
+【时间】2026-04-18  
+【状态】跟进 TASK-U0-20260417-007 研究员数据流完善（待验证阶段）
+
+### 当前 Todos
+
+- [x] 读取任务状态和上下文（TASK-U0-20260417-007）
+- [ ] 验证 Alienware 服务健康（curl http://192.168.31.223:8199/health）
+- [ ] 触发一次完整分析（curl -X POST http://192.168.31.223:8199/run）
+- [ ] 检查队列状态（curl http://192.168.31.223:8199/queue/status）
+- [ ] 验证报告文件生成（D:\researcher_reports\）
+- [ ] 验证 Studio qwen3 评级（Studio decision 服务）
+- [ ] 验证已读标记功能
+- [ ] 验证飞书通知
+- [ ] 配置 Windows 任务计划（每小时自动触发）
+- [ ] 更新任务状态并收口
+
+---
+
+## U0 批次收口（2026-04-18）
+
+【签名】Atlas  
+【时间】2026-04-18  
+【批次】TASK-U0-20260417-006 + TASK-U0-20260418-001
+
+### 已收口
+
+- **TASK-U0-20260417-006** ✅ 策略优化闭环验证与问题修复
+  - 代码 commit：84db80c8e（P0 市场过滤）/ 76cb80d83（P1 SymbolProfiler 增强）/ 6f2ac094f（P1-P2 多源交叉验证+参数自适应映射）
+  - 收口 commit：e7a8e2ab3（docs）
+  - 状态更新：进行中 → ✅ 已完成（2026-04-18 收口）
+
+- **TASK-U0-20260418-001** ✅ SymbolProfiler 增量更新实现
+  - 实现 FeatureCacheManager（JSON 缓存，增量日期范围，滚动状态合并）
+  - SymbolProfiler.calculate_features() 增量模式（缓存有效时跳过全量）
+  - data_scheduler job_symbol_features 17:30 每日触发（35品种）
+  - 验证：rb=0.0161 i=0.0263 MA=0.0410，35品种全通过
+  - 收口 commit：2b7d7ab9b
+
+### 待收口（保留）
+
+- **TASK-U0-20260417-004** ⚠️ 遗留 P1 健康检查误报（data service 代码变更未提交）
+- **TASK-U0-20260417-007** 🔄 研究员数据流（代码完成，待 Alienware 部署验证）
+
+### 未推送到 origin
+
+待 Jay.S 确认后 push：84db80c8e / 76cb80d83 / 6f2ac094f / e7a8e2ab3 / 2b7d7ab9b（共 5 commits）
