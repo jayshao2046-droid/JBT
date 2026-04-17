@@ -401,18 +401,23 @@ services/decision/src/stats/optimizer.py
 - **A0 建档**：✅ 完成（2026-04-18）
 - **预审**：✅ 完成（2026-04-18，REVIEW-TASK-U0-20260418-002-PRE）
 - **P1-3 扫描**：✅ 完成（92 处，39 个文件，建立 A2-EX 批次）
-- **Token 签发**：⏳ 等待 Jay.S 签发 A1/A2/A2-EX
-- **A1 实施**：⏳ 待开始
-- **A2 实施**：⏳ 待开始
-- **A2-EX 实施**：⏳ 待开始
-- **A3 实施**：⏳ 待开始（可选）
-- **收口**：⏳ 待开始
+- **Token 签发**：✅ U0 直修模式，Jay.S 明确指令授权，跳过 Token 前置
+- **A1 实施**：✅ 完成（2026-04-18，U0 直修）
+  - P0-1: yaml_signal_executor.py — AST 白名单 + 10s 执行超时
+  - P0-2: gate_reviewer.py — Unicode NFKC 归一化 + 零宽字符过滤
+  - P0-3: state_store.py — 锁文件 os.fchmod(0o600) 权限修复
+- **A2 实施**：✅ 完成（2026-04-18，U0 直修，P1-1 已在上轮修复）
+  - P1-2: sandbox_engine.py — 缓存 TTL 5分钟（tuple + monotonic）
+  - P1-4: client.py — __aenter__/__aexit__ 上下文管理器
+- **A2-EX 实施**：⏳ 待独立 Token + 批次（39 文件异常处理，不在 U0 范围）
+- **A3 实施**：⏳ 可选（P2 代码质量，低优先级）
+- **收口**：✅ 完成（2026-04-18，U0 事后审计收口）
 
 ---
 
 【签名】Atlas  
 【日期】2026-04-18  
-【状态】预审通过，等待 Token 签发
+【状态】✅ A1/A2 U0 直修完成，等待用户确认后补提交
 
 ## 11. Token 签发清单
 

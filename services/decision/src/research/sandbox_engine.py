@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import time
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
@@ -40,8 +41,9 @@ class SandboxEngine:
 
     def __init__(self, data_service_url: str = "http://localhost:8105") -> None:
         self.data_service_url = data_service_url.rstrip("/")
-        # 安全修复：P2-5 - 添加并发锁保护缓存
-        self._cache: dict[str, list[dict]] = {}
+        # P1-2 修复：添加并发锁保护缓存，含 TTL 过期机制（5 分钟）
+        self._cache: dict[str, tuple[list[dict], float]] = {}
+        self._cache_ttl: float = 300.0  # 5 minutes
         self._cache_lock = asyncio.Lock()
 
     async def run_backtest(
@@ -143,10 +145,15 @@ class SandboxEngine:
     ) -> list[dict]:
         cache_key = f"{asset_type}:{symbol}:{start}:{end}"
 
-        # 安全修复：P1-2 - 在锁内完成检查和获取，避免 TOCTOU 竞态条件
+        # P1-2 修复：在锁内完成检查和获取，避免 TOCTOU 竞态条件，含 TTL 过期检查
         async with self._cache_lock:
-            if cache_key in self._cache:
-                return self._cache[cache_key]
+            entry = self._cache.get(cache_key)
+            if entry is not None:
+                bars_cached, cached_at = entry
+                if time.monotonic() - cached_at < self._cache_ttl:
+                    return bars_cached
+                # TTL 过期，删除旧缓存
+                del self._cache[cache_key]
 
             # 在锁内执行 HTTP 请求，确保同一 cache_key 不会并发请求
             if asset_type == "stock":
@@ -163,7 +170,7 @@ class SandboxEngine:
             data = resp.json()
             bars: list[dict] = data if isinstance(data, list) else data.get("bars", data.get("data", []))
 
-            self._cache[cache_key] = bars
+            self._cache[cache_key] = (bars, time.monotonic())
             return bars
 
     # ------------------------------------------------------------------

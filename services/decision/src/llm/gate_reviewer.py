@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 from typing import Any, Dict, List, Optional
 
 from .client import OllamaClient

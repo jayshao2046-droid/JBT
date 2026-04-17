@@ -12,6 +12,7 @@ TASK-U0-20260417-006: 添加 Researcher ↔ Critic 迭代优化流程，
 from __future__ import annotations
 
 import ast
+import concurrent.futures
 import copy
 import json
 import logging
@@ -23,8 +24,8 @@ from typing import Any, Optional
 
 import httpx
 
-from services.decision.src.llm.client import OllamaClient
-from services.decision.src.llm.openai_client import OpenAICompatibleClient
+from ..llm.client import OllamaClient
+from ..llm.openai_client import OpenAICompatibleClient
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,48 @@ _SAFE_BUILTINS: dict[str, Any] = {
     "IndexError": IndexError, "ZeroDivisionError": ZeroDivisionError,
     "print": print,
 }
+
+# P0-1 安全修复：AST 白名单检查 + 执行超时（防止 LLM 代码注入）
+_DANGEROUS_CALL_NAMES = frozenset({
+    "eval", "exec", "compile", "__import__", "open", "getattr", "setattr",
+    "delattr", "vars", "dir", "globals", "locals", "breakpoint",
+})
+_EXEC_TIMEOUT = 10.0  # 信号函数执行超时（秒），防止死循环
+
+
+def _ast_whitelist_check(code: str) -> None:
+    """对 LLM 生成的代码执行 AST 节点白名单检查。
+
+    Raises:
+        ValueError: 当代码包含危险语法结构时
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        raise ValueError(f"代码语法错误: {e}") from e
+
+    for node in ast.walk(tree):
+        # 禁止 import 语句
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            raise ValueError("安全限制：不允许 import 语句")
+        # 禁止 global/nonlocal
+        if isinstance(node, (ast.Global, ast.Nonlocal)):
+            raise ValueError("安全限制：不允许 global/nonlocal 语句")
+        # 禁止 dunder 属性访问（防止 __class__.__mro__ 等沙箱逃逸）
+        if isinstance(node, ast.Attribute) and (
+            node.attr.startswith("__") and node.attr.endswith("__")
+        ):
+            raise ValueError(f"安全限制：不允许访问双下划线属性 '{node.attr}'")
+        # 禁止危险内置函数调用
+        if isinstance(node, ast.Call):
+            func = node.func
+            name: str | None = None
+            if isinstance(func, ast.Name):
+                name = func.id
+            elif isinstance(func, ast.Attribute):
+                name = func.attr
+            if name and name in _DANGEROUS_CALL_NAMES:
+                raise ValueError(f"安全限制：不允许调用 '{name}'")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -925,26 +968,42 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
         if params_override:
             params.update(params_override)
 
+        # P0-1 修复：AST 白名单安全检查
         try:
-            safe_globals = {"__builtins__": _SAFE_BUILTINS, "math": math, **_TA_FUNCTIONS}
-            local_ns: dict[str, Any] = {}
+            _ast_whitelist_check(code)
+        except ValueError as _ast_err:
+            logger.warning("AST 安全检查拒绝生成代码: %s", _ast_err)
+            return self._fail(strategy_id, f"生成代码安全拒绝: {_ast_err}")
 
-            # 打印生成的代码用于调试
-            logger.info(f"生成的信号函数代码:\n{code[:500]}...")
+        # 执行沙箱（含超时保护，防止死循环）
+        def _run_exec() -> list[int]:
+            """在受限沙箱中执行生成代码并运行信号计算。"""
+            _safe_globals = {"__builtins__": _SAFE_BUILTINS, "math": math, **_TA_FUNCTIONS}
+            _local_ns: dict[str, Any] = {}
+            exec(compile(code, "<generated_signal>", "exec"), _safe_globals, _local_ns)  # noqa: S102
+            _compute = _local_ns.get("compute_signals")
+            if not callable(_compute):
+                raise ValueError("生成函数 compute_signals 未定义")
+            return _compute(bars, params)
 
-            exec(compile(code, "<generated_signal>", "exec"), safe_globals, local_ns)  # noqa: S102
-            compute_signals = local_ns.get("compute_signals")
-            if not callable(compute_signals):
-                return self._fail(strategy_id, "生成函数 compute_signals 未定义")
-            signals: list[int] = compute_signals(bars, params)
+        try:
+            logger.info("生成的信号函数代码:\n%s...", code[:500])
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
+                _fut = _pool.submit(_run_exec)
+                try:
+                    signals: list[int] = _fut.result(timeout=_EXEC_TIMEOUT)
+                except concurrent.futures.TimeoutError:
+                    return self._fail(strategy_id, f"信号函数执行超时（>{_EXEC_TIMEOUT}s），疑似死循环")
             if not signals or len(signals) != len(bars):
                 return self._fail(
                     strategy_id,
                     f"信号序列长度异常: {len(signals) if signals else 0} vs {len(bars)}",
                 )
+        except ValueError as e:
+            return self._fail(strategy_id, f"信号函数执行错误: {e}")
         except Exception as e:
             import traceback
-            logger.error(f"信号函数执行异常详情:\n{traceback.format_exc()}")
+            logger.error("信号函数执行异常详情:\n%s", traceback.format_exc())
             return self._fail(strategy_id, f"信号函数执行异常: {type(e).__name__}: {e}")
 
         return self._simulate_trades(strategy_id, bars, signals, strategy, code)
@@ -969,6 +1028,17 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
         daily_loss_limit: float = float(risk.get("daily_loss_limit_yuan", 2000))
         max_dd_pct: float = float(risk.get("max_drawdown_pct", 0.015))
         tf: int = int(strategy.get("timeframe_minutes", 60))
+
+        # 读取止盈止损配置
+        stop_loss_config = strategy.get("stop_loss", {})
+        take_profit_config = strategy.get("take_profit", {})
+
+        # 计算ATR（如果需要）
+        atr_values = {}
+        if (stop_loss_config.get("type") == "atr" or
+            take_profit_config.get("type") == "atr"):
+            atr_period = stop_loss_config.get("atr_period", 14)
+            atr_values = self._calculate_atr(bars, atr_period)
 
         capital = self.initial_capital
         peak_capital = capital
@@ -1007,6 +1077,33 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
                 trades.append({"type": "daily_fuse", "bar": i, "price": price, "pnl": round(pnl, 2)})
                 position = 0
                 entry_price = 0.0
+
+            # 风控：止损检查
+            current_atr = atr_values.get(i, 0.0)
+            if position != 0 and self._should_stop_loss(
+                position, entry_price, price, stop_loss_config, current_atr
+            ):
+                pnl = self._calc_pnl(position, entry_price, price, position_fraction, capital, slippage, commission)
+                capital += pnl
+                daily_pnl[date_str] = daily_pnl.get(date_str, 0.0) + pnl
+                trades.append({"type": "stop_loss", "bar": i, "price": price, "pnl": round(pnl, 2)})
+                position = 0
+                entry_price = 0.0
+                equity_curve.append(capital)
+                continue
+
+            # 风控：止盈检查
+            if position != 0 and self._should_take_profit(
+                position, entry_price, price, take_profit_config, current_atr
+            ):
+                pnl = self._calc_pnl(position, entry_price, price, position_fraction, capital, slippage, commission)
+                capital += pnl
+                daily_pnl[date_str] = daily_pnl.get(date_str, 0.0) + pnl
+                trades.append({"type": "take_profit", "bar": i, "price": price, "pnl": round(pnl, 2)})
+                position = 0
+                entry_price = 0.0
+                equity_curve.append(capital)
+                continue
 
             sig = signals[i]
 
@@ -1141,6 +1238,79 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
         bars_per_day = max(1, _TRADING_MINS_PER_DAY // timeframe_minutes)
         annual_bars = bars_per_day * 240
         return (mean_r / std_r) * (annual_bars ** 0.5)
+
+    @staticmethod
+    def _calculate_atr(bars: list[dict], period: int = 14) -> dict[int, float]:
+        """计算每个K线的ATR值（简单移动平均）"""
+        atr_values = {}
+        tr_list = []
+
+        for i in range(1, len(bars)):
+            high = float(bars[i].get("high", 0))
+            low = float(bars[i].get("low", 0))
+            prev_close = float(bars[i-1].get("close", 0))
+
+            tr = max(
+                high - low,
+                abs(high - prev_close),
+                abs(low - prev_close)
+            )
+            tr_list.append(tr)
+
+            if len(tr_list) >= period:
+                atr_values[i] = sum(tr_list[-period:]) / period
+
+        return atr_values
+
+    @staticmethod
+    def _should_stop_loss(
+        position: int,
+        entry_price: float,
+        current_price: float,
+        stop_loss_config: dict,
+        atr: float = 0.0
+    ) -> bool:
+        """检查是否触发止损"""
+        if not stop_loss_config:
+            return False
+
+        stop_type = stop_loss_config.get("type", "atr")
+
+        if stop_type == "atr" and atr > 0:
+            multiplier = float(stop_loss_config.get("atr_multiplier", 1.5))
+            stop_distance = atr * multiplier
+
+            if position == 1:  # 多头
+                return current_price <= entry_price - stop_distance
+            else:  # 空头
+                return current_price >= entry_price + stop_distance
+
+        return False
+
+    @staticmethod
+    def _should_take_profit(
+        position: int,
+        entry_price: float,
+        current_price: float,
+        take_profit_config: dict,
+        atr: float = 0.0
+    ) -> bool:
+        """检查是否触发止盈"""
+        if not take_profit_config:
+            return False
+
+        profit_type = take_profit_config.get("type", "atr")
+
+        if profit_type == "atr" and atr > 0:
+            multiplier = float(take_profit_config.get("atr_multiplier", 2.5))
+            profit_distance = atr * multiplier
+
+            if position == 1:  # 多头
+                return current_price >= entry_price + profit_distance
+            else:  # 空头
+                return current_price <= entry_price - profit_distance
+
+        return False
 
     @staticmethod
     def _fail(strategy_id: str, error: str) -> SignalBacktestResult:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import threading
 from contextlib import contextmanager
 from pathlib import Path
@@ -130,6 +131,8 @@ class FileStateStore:
                 return
 
             with self._lock_path.open("a+", encoding="utf-8") as lock_file:
+                # P0-3 修复：设置锁文件权限（仅所有者可读写）
+                os.fchmod(lock_file.fileno(), 0o600)
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
                 try:
                     yield

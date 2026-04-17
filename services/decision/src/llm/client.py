@@ -127,3 +127,11 @@ class OllamaClient:
     async def close(self):
         """Close the HTTP client."""
         await self._client.aclose()
+
+    async def __aenter__(self) -> "OllamaClient":
+        """P1-4 修复：支持上下文管理器（async with OllamaClient() as c）。"""
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        """P1-4 修复：退出时自动关闭 HTTP 客户端。"""
+        await self.close()
