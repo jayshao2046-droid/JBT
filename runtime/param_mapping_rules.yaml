@@ -1,0 +1,131 @@
+# 参数映射规则模板 — TASK-U0-20260417-004
+# 自动生成于 2026-04-17
+# 用于指导不同品种特征下的参数选择
+
+# ============================================================
+# 波动率映射规则
+# ============================================================
+volatility:
+  High:
+    atr_multiplier: [1.5, 3.0]  # 放宽止损
+    entry_threshold: [0.5, 1.0]  # 降低入场门槛
+    volume_ratio_threshold: [0.8, 1.2]
+    description: "高波动品种（ATR/Close > 2%）适合更宽的止损和更低的入场门槛，避免频繁止损"
+
+  Medium:
+    atr_multiplier: [1.0, 2.0]
+    entry_threshold: [0.8, 1.5]
+    volume_ratio_threshold: [1.0, 1.5]
+    description: "中等波动品种（1% < ATR/Close < 2%）使用标准参数"
+
+  Low:
+    atr_multiplier: [0.5, 1.5]
+    entry_threshold: [1.0, 2.0]
+    volume_ratio_threshold: [1.2, 2.0]
+    description: "低波动品种（ATR/Close < 1%）适合更紧的止损和更高的入场门槛，提高信号质量"
+
+# ============================================================
+# 趋势强度映射规则
+# ============================================================
+trend_strength:
+  Strong:
+    enable_mean_reversion: false
+    breakout_filter: true
+    adx_threshold: [20, 30]
+    rsi_long_threshold: [35, 45]
+    rsi_short_threshold: [55, 65]
+    description: "强趋势品种（趋势强度 > 0.5）关闭均值回归，启用突破过滤，跟随趋势"
+
+  Weak:
+    enable_mean_reversion: true
+    breakout_filter: false
+    adx_threshold: [15, 25]
+    rsi_long_threshold: [25, 35]
+    rsi_short_threshold: [65, 75]
+    description: "弱趋势品种（趋势强度 < 0.3）启用均值回归，关闭突破过滤，捕捉震荡"
+
+# ============================================================
+# 流动性映射规则
+# ============================================================
+liquidity:
+  High:
+    volume_ratio_threshold: [0.8, 1.2]
+    min_volume: 1000
+    slippage_multiplier: 1.0
+    description: "高流动性品种（平均成交量 > 10000）可以放宽成交量过滤，滑点较小"
+
+  Low:
+    volume_ratio_threshold: [1.2, 2.0]
+    min_volume: 5000
+    slippage_multiplier: 1.5
+    description: "低流动性品种（平均成交量 < 10000）需要更严格的成交量过滤，滑点较大"
+
+# ============================================================
+# 自相关性映射规则
+# ============================================================
+autocorrelation:
+  High:
+    confirm_bars: [2, 3]
+    description: "高自相关品种（自相关系数 > 0.3）需要更多确认 K 线，避免假信号"
+
+  Low:
+    confirm_bars: [1, 2]
+    description: "低自相关品种（自相关系数 < 0.1）可以使用较少确认 K 线，快速入场"
+
+# ============================================================
+# 偏度和峰度映射规则
+# ============================================================
+distribution:
+  HighSkewness:
+    stop_loss_asymmetric: true
+    long_stop_multiplier: 1.2
+    short_stop_multiplier: 0.8
+    description: "高偏度品种（偏度 > 0.5）使用非对称止损，多头止损更宽"
+
+  HighKurtosis:
+    tail_risk_filter: true
+    max_position_size: 0.08
+    description: "高峰度品种（峰度 > 3）启用尾部风险过滤，降低仓位"
+
+# ============================================================
+# 品种特定规则（示例）
+# ============================================================
+symbol_specific:
+  rb:  # 螺纹钢
+    volatility: High
+    trend_strength: Strong
+    liquidity: High
+    recommended_params:
+      atr_multiplier: 2.0
+      adx_threshold: 25
+      volume_ratio_threshold: 1.0
+    description: "螺纹钢：高波动+强趋势+高流动性，适合趋势跟踪策略"
+
+  p:  # 棕榈油
+    volatility: Medium
+    trend_strength: Weak
+    liquidity: Medium
+    recommended_params:
+      atr_multiplier: 1.5
+      adx_threshold: 20
+      volume_ratio_threshold: 1.2
+      enable_mean_reversion: true
+    description: "棕榈油：中波动+弱趋势+中流动性，适合均值回归策略"
+
+  au:  # 黄金
+    volatility: Low
+    trend_strength: Strong
+    liquidity: High
+    recommended_params:
+      atr_multiplier: 1.0
+      adx_threshold: 30
+      volume_ratio_threshold: 0.9
+    description: "黄金：低波动+强趋势+高流动性，适合趋势跟踪策略，止损要紧"
+
+# ============================================================
+# 使用说明
+# ============================================================
+# 1. 使用 SymbolProfiler 计算品种特征
+# 2. 根据特征查找对应的参数范围
+# 3. 传递给 Optuna 或 LLM 作为搜索空间
+# 4. 每月通过 MetaOptimizer 自动更新此文件

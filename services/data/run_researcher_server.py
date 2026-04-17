@@ -90,8 +90,8 @@ async def startup_event():
     queue_manager = QueueManager(queue_dir)
     logger.info(f"队列管理器初始化: {queue_dir}")
 
-    # 初始化调度器
-    scheduler = ResearcherScheduler()
+    # 初始化调度器（传入队列管理器）
+    scheduler = ResearcherScheduler(queue_manager=queue_manager)
     logger.info("研究员调度器初始化完成")
 
 
@@ -140,13 +140,14 @@ async def trigger_research(hour: Optional[int] = None):
 
     try:
         # 执行研究员任务
-        await scheduler.run_once(hour=hour)
+        result = await scheduler.execute_hourly(hour=hour)
 
         return {
             "success": True,
             "hour": hour,
             "timestamp": datetime.now().isoformat(),
-            "message": f"研究员分析已触发（hour={hour}）"
+            "message": f"研究员分析已触发（hour={hour}）",
+            "result": result
         }
 
     except Exception as e:

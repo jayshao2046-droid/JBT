@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 class ResearcherScheduler:
     """研究员调度器（每小时执行）"""
 
-    def __init__(self):
+    def __init__(self, queue_manager=None):
         self.staging_manager = StagingManager()
         self.summarizer = Summarizer()
         self.reporter = Reporter()
@@ -49,6 +49,7 @@ class ResearcherScheduler:
             feishu_webhook=self.notifier.feishu_webhook,
             stats_tracker=self.reporter.stats_tracker,
         )
+        self.queue_manager = queue_manager
         # 服务启动时记录到当日统计
         self.reporter.stats_tracker.record_startup()
 
@@ -125,9 +126,22 @@ class ResearcherScheduler:
             await self.notifier.notify_batch_done(report_batch)
 
             # 7. 推送到 Studio decision 触发 phi4 评级
-            await self._push_to_decision(report_batch)
+            push_success = await self._push_to_decision(report_batch)
 
-            # 8. 报告已落盘到 D:\researcher_reports（phi4 直接读取，不推送 Mini）
+            # 8. 加入队列（供 decision 标记已读）
+            if push_success and self.queue_manager:
+                batch_file = os.path.join(
+                    ResearcherConfig.REPORTS_DIR,
+                    date,
+                    f"{hour:02d}-00.json"
+                )
+                self.queue_manager.add_report(
+                    report_id=report_batch.batch_id,
+                    file_path=batch_file
+                )
+                logger.info(f"[QUEUE] 报告已加入队列: {report_batch.batch_id}")
+
+            # 9. 报告已落盘到 D:\researcher_reports（phi4 直接读取，不推送 Mini）
             logger.info(f"[SAVE] 批次报告已保存: {report_batch.batch_id}, 共 {report_batch.total_reports} 份")
 
             # 9. 邮件日报钩子
@@ -515,10 +529,15 @@ class ResearcherScheduler:
 
         try:
             logger.info(f"[PUSH] 开始推送报告批次到 decision: {evaluate_endpoint}")
+
+            # 使用 model_dump_json() 确保 datetime 正确序列化
+            import json
+            payload = json.loads(batch.model_dump_json())
+
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     evaluate_endpoint,
-                    json=batch.model_dump(mode='json'),
+                    json=payload,
                     timeout=30.0,
                 )
                 success = resp.status_code in (200, 201)
@@ -526,7 +545,7 @@ class ResearcherScheduler:
                 return success
 
         except Exception as e:
-            logger.error(f"[PUSH] 推送到 decision 失败: {e}")
+            logger.error(f"[PUSH] 推送到 decision 失败: {e}", exc_info=True)
             return False
 
     async def close(self):
