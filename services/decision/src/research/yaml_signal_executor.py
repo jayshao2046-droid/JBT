@@ -23,8 +23,8 @@ from typing import Any, Optional
 
 import httpx
 
-from ..llm.client import OllamaClient
-from ..llm.openai_client import OpenAICompatibleClient
+from services.decision.src.llm.client import OllamaClient
+from services.decision.src.llm.openai_client import OpenAICompatibleClient
 
 logger = logging.getLogger(__name__)
 
@@ -577,7 +577,12 @@ class YAMLSignalExecutor:
     # ------------------------------------------------------------------
 
     def _extract_symbol(self, strategy: dict) -> str:
-        """将 YAML symbols（如 DCE.p2605）映射为连续合约格式（DCE.p0）。"""
+        """从 YAML 提取 symbol（支持 symbol 或 symbols 字段）。"""
+        # 优先从 strategy.symbol 读取
+        if "strategy" in strategy and "symbol" in strategy["strategy"]:
+            return strategy["strategy"]["symbol"]
+
+        # 兼容旧格式 symbols 列表
         symbols = strategy.get("symbols", [])
         if symbols:
             raw = str(symbols[0])
@@ -796,6 +801,34 @@ def compute_signals(bars: list, params: dict) -> list:
 
     # Step 3: Implement signal logic
     signals = [0] * n
+
+    # IMPORTANT: confirm_bars implementation
+    # If confirm_bars > 1, signal must be consistent for N consecutive bars
+    # CORRECT implementation:
+    #   long_count = 0
+    #   short_count = 0
+    #   for i in range(n):
+    #       # Check raw signal conditions
+    #       long_signal = (your_long_condition)
+    #       short_signal = (your_short_condition)
+    #
+    #       # Count consecutive bars
+    #       if long_signal:
+    #           long_count += 1
+    #           short_count = 0
+    #       elif short_signal:
+    #           short_count += 1
+    #           long_count = 0
+    #       else:
+    #           long_count = 0
+    #           short_count = 0
+    #
+    #       # Confirm signal after N consecutive bars
+    #       if long_count >= confirm_bars:
+    #           signals[i] = 1
+    #       elif short_count >= confirm_bars:
+    #           signals[i] = -1
+
     # ... your implementation here using the calculated indicators ...
 
     return signals
@@ -895,6 +928,10 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
         try:
             safe_globals = {"__builtins__": _SAFE_BUILTINS, "math": math, **_TA_FUNCTIONS}
             local_ns: dict[str, Any] = {}
+
+            # 打印生成的代码用于调试
+            logger.info(f"生成的信号函数代码:\n{code[:500]}...")
+
             exec(compile(code, "<generated_signal>", "exec"), safe_globals, local_ns)  # noqa: S102
             compute_signals = local_ns.get("compute_signals")
             if not callable(compute_signals):
@@ -906,6 +943,8 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
                     f"信号序列长度异常: {len(signals) if signals else 0} vs {len(bars)}",
                 )
         except Exception as e:
+            import traceback
+            logger.error(f"信号函数执行异常详情:\n{traceback.format_exc()}")
             return self._fail(strategy_id, f"信号函数执行异常: {type(e).__name__}: {e}")
 
         return self._simulate_trades(strategy_id, bars, signals, strategy, code)

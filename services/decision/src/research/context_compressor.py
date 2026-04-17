@@ -18,7 +18,7 @@ import json
 import logging
 from typing import Any
 
-from ..llm.client import OllamaClient
+from llm.client import OllamaClient
 
 logger = logging.getLogger(__name__)
 

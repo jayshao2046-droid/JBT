@@ -970,8 +970,7 @@ def _build_tushare_ts_codes() -> list[str]:
     """动态生成35个品种当前近月合约的 Tushare ts_code。
 
     格式规则:
-      SHFE/DCE: {VARIETY}{YYMM}.{SHF|DCE}  — e.g. RB2605.SHF
-      CZCE:    {VARIETY}{YMM}.ZCE           — e.g. MA605.ZCE (3位日期码)
+      SHFE/DCE/CZCE: {VARIETY}{YYMM}.{SHF|DCE|ZCE}  — e.g. RB2605.SHF, MA2605.ZCE
     近月逻辑: 当月15日前取当月，否则取下月。
     黄金/白银/生猪: 取下一个偶数月。
     """
@@ -998,8 +997,9 @@ def _build_tushare_ts_codes() -> list[str]:
     shfe_dce_mm = f"{ny:02d}{nm:02d}"
     ey, em = _next_even(ny, nm)
     even_mm = f"{ey:02d}{em:02d}"
-    czce_ymm = f"{ny % 10}{nm:02d}"
-    czce_even_ymm = f"{ey % 10}{em:02d}"
+    # 郑商所使用4位格式（与上期所/大商所一致）
+    czce_ymm = f"{ny:02d}{nm:02d}"
+    czce_even_ymm = f"{ey:02d}{em:02d}"
 
     result: list[str] = []
     # ── SHFE（10）──────────────────────────────────────────────────
@@ -1038,6 +1038,7 @@ def job_tushare_futures(config: dict[str, Any]) -> None:
             ts_code=ts_code,
             trade_date=today,
             config=config,
+            symbol=ts_code,
         )
 
 
@@ -1074,6 +1075,48 @@ def job_volatility(config: dict[str, Any]) -> None:
     """波动率 — 每日 17:00。"""
     from src.scheduler.pipeline import run_volatility_pipeline
     _safe_run("波动率指数", run_volatility_pipeline, config=config)
+
+
+def job_symbol_features(config: dict[str, Any]) -> None:
+    """品种特征更新 — 每日 17:30（日K线采集完成后）。"""
+    _calendar.refresh()
+    ok, reason = _calendar.is_cn_trading_day(datetime.now())
+    if not ok:
+        logger.info("跳过品种特征更新: %s", reason)
+        return
+
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    # 获取项目根目录
+    project_root = Path(__file__).parent.parent.parent.parent
+    script_path = project_root / "scripts" / "update_symbol_features.py"
+
+    if not script_path.exists():
+        logger.error(f"品种特征更新脚本不存在: {script_path}")
+        return
+
+    try:
+        logger.info("开始品种特征更新...")
+        result = subprocess.run(
+            [sys.executable, str(script_path)],
+            capture_output=True,
+            text=True,
+            timeout=600  # 10分钟超时
+        )
+
+        if result.returncode == 0:
+            logger.info("✅ 品种特征更新成功")
+            logger.info(result.stdout)
+        else:
+            logger.warning(f"⚠️ 品种特征更新失败 (exit code: {result.returncode})")
+            logger.warning(result.stderr)
+
+    except subprocess.TimeoutExpired:
+        logger.error("❌ 品种特征更新超时（10分钟）")
+    except Exception as e:
+        logger.error(f"❌ 品种特征更新异常: {e}", exc_info=True)
 
 
 def job_sentiment(config: dict[str, Any]) -> None:
@@ -1113,7 +1156,8 @@ def job_options(config: dict[str, Any]) -> None:
         logger.info("跳过期权行情: %s", reason)
         return
     from src.scheduler.pipeline import run_options_pipeline
-    _safe_run("期权行情", run_options_pipeline, config=config)
+    today = datetime.now().strftime("%Y%m%d")
+    _safe_run("期权行情", run_options_pipeline, exchanges=["sse", "szse", "cffex"], trade_date=today, config=config)
 
 
 def job_market_session_watch(config: dict[str, Any]) -> None:
@@ -1603,16 +1647,16 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
         job_overseas_kline_lme, CronTrigger(hour=2, minute=0, day_of_week="tue-sat"),
         args=[config], id="overseas_daily_lme", name="LME金属日线",
     )
-    # [DEPRECATED LIFTED] 外盘分钟K线: 每5分钟，境外交易时段门控在函数内。
-    scheduler.add_job(
-        job_overseas_minute_yf, IntervalTrigger(minutes=5),
-        args=[config], id="overseas_minute_yf", name="外盘分钟K线(yfinance)",
-    )
-    # 外盘收盘摘要: 05:05 北京时间发送 session 完整度汇报并重置状态
-    scheduler.add_job(
-        job_overseas_minute_close_summary, CronTrigger(hour=5, minute=5),
-        args=[config], id="overseas_minute_close_summary", name="外盘分钟K线收盘摘要",
-    )
+    # [PAUSED 2026-04-17] 外盘分钟K线: 暂停采集，保留日线
+    # scheduler.add_job(
+    #     job_overseas_minute_yf, IntervalTrigger(minutes=5),
+    #     args=[config], id="overseas_minute_yf", name="外盘分钟K线(yfinance)",
+    # )
+    # # 外盘收盘摘要: 05:05 北京时间发送 session 完整度汇报并重置状态
+    # scheduler.add_job(
+    #     job_overseas_minute_close_summary, CronTrigger(hour=5, minute=5),
+    #     args=[config], id="overseas_minute_close_summary", name="外盘分钟K线收盘摘要",
+    # )
     if STOCK_MINUTE_ENABLED:
         scheduler.add_job(
             job_stock_minute, IntervalTrigger(minutes=2),
@@ -1649,6 +1693,11 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
     scheduler.add_job(
         job_volatility, CronTrigger(hour=17, minute=15, day_of_week="mon-fri"),
         args=[config], id="volatility", name="波动率指数",
+    )
+    # 品种特征更新: 17:30（日K线采集完成后）
+    scheduler.add_job(
+        job_symbol_features, CronTrigger(hour=17, minute=30, day_of_week="mon-fri"),
+        args=[config], id="symbol_features", name="品种特征更新",
     )
     # [DEPRECATED LIFTED] 情绪指数: 每5分钟
     scheduler.add_job(
@@ -1807,6 +1856,7 @@ _FALLBACK_JOBS: list[tuple[str, Callable[..., Any], int | None, str | None]] = [
     ("新闻API",               job_news_api,             60,   None),
     ("RSS聚合",               job_rss,                 600,   None),
     ("波动率指数",             job_volatility,          None,  "17:15"),
+    ("品种特征更新",           job_symbol_features,     None,  "17:30"),
     ("情绪指数",               job_sentiment,           300,   None),
     ("海运物流",               job_shipping,            None,  "09:10"),
     ("外汇日线",               job_forex,               None,  "17:20"),

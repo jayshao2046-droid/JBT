@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from ..llm.openai_client import OpenAICompatibleClient
+from llm.openai_client import OpenAICompatibleClient
 
 logger = logging.getLogger(__name__)
 

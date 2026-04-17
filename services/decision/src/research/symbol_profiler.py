@@ -109,14 +109,36 @@ class SymbolProfiler:
         "strong": 0.5,  # ADX > 50
     }
 
-    def __init__(self, data_service_url: str = "http://192.168.31.76:8105"):
+    def __init__(
+        self,
+        data_service_url: str = "http://192.168.31.76:8105",
+        interval: int = 1440,
+        cache_dir: str = "runtime/symbol_profiles",
+        enable_cache: bool = True
+    ):
+        """
+        Args:
+            data_service_url: 数据服务地址
+            interval: K线周期（分钟），默认1440（日K），可设置为1/5/15/30/60/1440等
+            cache_dir: 缓存目录
+            enable_cache: 是否启用缓存（增量更新）
+        """
         self.data_service_url = data_service_url.rstrip("/")
+        self.interval = interval
+        self.enable_cache = enable_cache
 
-    async def calculate_features(self, symbol: str) -> Optional[SymbolFeatures]:
-        """计算品种特征（增强版）
+        if enable_cache:
+            from .feature_cache_manager import FeatureCacheManager
+            self.cache_manager = FeatureCacheManager(cache_dir=cache_dir)
+        else:
+            self.cache_manager = None
+
+    async def calculate_features(self, symbol: str, force_full: bool = False) -> Optional[SymbolFeatures]:
+        """计算品种特征（增强版，支持增量更新）
 
         Args:
             symbol: 品种代码（如 DCE.p0）
+            force_full: 强制全量计算（忽略缓存）
 
         Returns:
             SymbolFeatures 或 None（数据不足时）
@@ -124,6 +146,15 @@ class SymbolProfiler:
         logger.info(f"📊 计算品种特征: {symbol}")
 
         try:
+            # 尝试使用缓存（增量更新）
+            if self.enable_cache and not force_full:
+                cache = self.cache_manager.load_cache(symbol)
+                if cache and self.cache_manager.is_cache_valid(cache, max_age_days=1):
+                    logger.info(f"使用增量更新: {symbol}")
+                    return await self._incremental_update(symbol, cache)
+
+            # 全量计算
+            logger.info(f"执行全量计算: {symbol}")
             # 获取不同时间窗口的数据
             bars_3m = await self._fetch_bars(symbol, days=90)
             bars_1y = await self._fetch_bars(symbol, days=365)
@@ -203,6 +234,10 @@ class SymbolProfiler:
                 for warning in confidence.warnings:
                     logger.warning(f"⚠️ {symbol}: {warning}")
 
+            # 保存缓存（如果启用）
+            if self.enable_cache:
+                self._save_to_cache(symbol, features, bars_3m, bars_1y, bars_5y)
+
             return features
 
         except Exception as e:
@@ -221,7 +256,7 @@ class SymbolProfiler:
             "symbol": symbol,
             "start": start_date,
             "end": end_date,
-            "interval": 60,  # 60分钟
+            "interval": self.interval,  # 使用配置的K线周期
         }
 
         try:
@@ -522,3 +557,353 @@ class SymbolProfiler:
             feature_stability=feature_stability,
             warnings=warnings
         )
+
+    async def _incremental_update(self, symbol: str, cache: dict) -> Optional[SymbolFeatures]:
+        """增量更新特征（只获取新数据）
+
+        Args:
+            symbol: 品种代码
+            cache: 缓存数据
+
+        Returns:
+            更新后的 SymbolFeatures
+        """
+        from datetime import datetime
+
+        logger.info(f"🔄 增量更新: {symbol}, 上次更新={cache.get('last_update')}")
+
+        try:
+            # 获取增量日期范围
+            start_date, end_date = self.cache_manager.get_incremental_date_range(cache)
+
+            # 如果没有新数据，直接返回缓存的特征
+            if start_date >= end_date:
+                logger.info(f"无新数据，使用缓存: {symbol}")
+                return self._features_from_cache(cache)
+
+            # 获取新数据
+            new_bars = await self._fetch_bars_range(symbol, start_date, end_date)
+            if not new_bars:
+                logger.info(f"未获取到新数据，使用缓存: {symbol}")
+                return self._features_from_cache(cache)
+
+            logger.info(f"获取到 {len(new_bars)} 条新数据")
+
+            # 提取新数据的收益率和价格
+            new_returns = self._extract_returns(new_bars)
+            new_prices = [bar["close"] for bar in new_bars]
+
+            # 合并滚动状态
+            rolling_state = cache.get("rolling_state", {})
+            window_sizes = {
+                "returns_3m": 63,    # 约3个月交易日
+                "returns_1y": 252,   # 约1年交易日
+                "prices_5y": 1260,   # 约5年交易日
+            }
+
+            updated_state = self.cache_manager.merge_rolling_state(
+                old_state=rolling_state,
+                new_data={
+                    "returns_3m": new_returns,
+                    "returns_1y": new_returns,
+                    "prices_5y": new_prices,
+                },
+                window_sizes=window_sizes
+            )
+
+            # 基于更新后的滚动状态重新计算特征
+            features = self._calculate_features_from_state(symbol, updated_state)
+
+            # 保存更新后的缓存
+            if features:
+                self._save_to_cache_with_state(symbol, features, updated_state, start_date, end_date)
+
+            return features
+
+        except Exception as e:
+            logger.error(f"增量更新失败 {symbol}: {e}", exc_info=True)
+            # 失败时尝试使用缓存
+            return self._features_from_cache(cache)
+
+    def _features_from_cache(self, cache: dict) -> Optional[SymbolFeatures]:
+        """从缓存重建 SymbolFeatures 对象"""
+        try:
+            features_data = cache.get("features", {})
+            metadata_data = cache.get("metadata", {})
+            confidence_data = cache.get("confidence", {})
+
+            metadata = FeatureMetadata(**metadata_data)
+            confidence = FeatureConfidence(**confidence_data)
+
+            return SymbolFeatures(
+                symbol=features_data["symbol"],
+                volatility_3m=features_data["volatility_3m"],
+                volatility_1y=features_data["volatility_1y"],
+                volatility_5y=features_data["volatility_5y"],
+                volatility_weighted=features_data["volatility_weighted"],
+                trend_strength_3m=features_data["trend_strength_3m"],
+                trend_strength_1y=features_data["trend_strength_1y"],
+                trend_strength_weighted=features_data["trend_strength_weighted"],
+                autocorr_3m=features_data["autocorr_3m"],
+                autocorr_1y=features_data["autocorr_1y"],
+                skewness=features_data["skewness"],
+                kurtosis=features_data["kurtosis"],
+                liquidity=features_data["liquidity"],
+                metadata=metadata,
+                confidence=confidence,
+            )
+        except Exception as e:
+            logger.error(f"从缓存重建特征失败: {e}")
+            return None
+
+    async def _fetch_bars_range(self, symbol: str, start_date: str, end_date: str) -> list[dict]:
+        """获取指定日期范围的 K 线数据"""
+        url = f"{self.data_service_url}/api/v1/bars"
+        params = {
+            "symbol": symbol,
+            "start": start_date,
+            "end": end_date,
+            "interval": self.interval,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+
+            data = resp.json()
+            if isinstance(data, list):
+                return data
+            return data.get("bars", data.get("data", []))
+
+        except Exception as e:
+            logger.error(f"获取数据失败 {symbol} [{start_date} ~ {end_date}]: {e}")
+            return []
+
+    def _extract_returns(self, bars: list[dict]) -> list[float]:
+        """从 K 线数据提取收益率"""
+        if len(bars) < 2:
+            return []
+
+        returns = []
+        for i in range(1, len(bars)):
+            prev_close = bars[i - 1]["close"]
+            curr_close = bars[i]["close"]
+            if prev_close > 0:
+                ret = (curr_close - prev_close) / prev_close
+                returns.append(ret)
+
+        return returns
+
+    def _calculate_features_from_state(self, symbol: str, rolling_state: dict) -> Optional[SymbolFeatures]:
+        """基于滚动状态计算特征"""
+        try:
+            returns_3m = rolling_state.get("returns_3m", [])
+            returns_1y = rolling_state.get("returns_1y", [])
+            prices_5y = rolling_state.get("prices_5y", [])
+
+            if len(returns_3m) < 20 or len(returns_1y) < 50:
+                logger.warning(f"滚动状态数据不足: 3m={len(returns_3m)}, 1y={len(returns_1y)}")
+                return None
+
+            # 计算波动率（年化标准差）
+            import numpy as np
+            vol_3m = float(np.std(returns_3m) * np.sqrt(252))
+            vol_1y = float(np.std(returns_1y) * np.sqrt(252))
+            vol_5y = vol_1y  # 简化处理
+
+            # 加权波动率
+            vol_weighted_value = vol_3m * 0.6 + vol_1y * 0.3 + vol_5y * 0.1
+            vol_weighted_level = self._classify_volatility(vol_weighted_value)
+
+            # 计算趋势强度（简化版，基于收益率序列）
+            trend_3m = abs(float(np.mean(returns_3m))) / (vol_3m + 1e-8)
+            trend_1y = abs(float(np.mean(returns_1y))) / (vol_1y + 1e-8)
+            trend_weighted_value = trend_3m * 0.6 + trend_1y * 0.4
+            trend_weighted_level = self._classify_trend(trend_weighted_value)
+
+            # 计算自相关性
+            autocorr_3m = float(np.corrcoef(returns_3m[:-1], returns_3m[1:])[0, 1]) if len(returns_3m) > 1 else 0.0
+            autocorr_1y = float(np.corrcoef(returns_1y[:-1], returns_1y[1:])[0, 1]) if len(returns_1y) > 1 else 0.0
+
+            # 计算偏度和峰度
+            from scipy import stats
+            skewness = float(stats.skew(returns_1y))
+            kurtosis = float(stats.kurtosis(returns_1y))
+
+            # 流动性（简化为 High）
+            liquidity = "High"
+
+            # 元数据
+            from datetime import datetime
+            metadata = FeatureMetadata(
+                data_source="Mini API (incremental)",
+                calculation_time=datetime.now().isoformat(),
+                data_start_date="",
+                data_end_date="",
+                data_points_3m=len(returns_3m),
+                data_points_1y=len(returns_1y),
+                data_points_5y=len(prices_5y),
+                missing_data_ratio=0.0,
+            )
+
+            # 置信度（简化）
+            confidence = FeatureConfidence(
+                overall=0.85,
+                volatility=0.9,
+                trend=0.8,
+                liquidity=0.85,
+                data_sufficiency=0.9,
+                data_quality=0.9,
+                feature_stability=0.8,
+                warnings=[],
+            )
+
+            return SymbolFeatures(
+                symbol=symbol,
+                volatility_3m=vol_3m,
+                volatility_1y=vol_1y,
+                volatility_5y=vol_5y,
+                volatility_weighted=vol_weighted_level,
+                trend_strength_3m=trend_3m,
+                trend_strength_1y=trend_1y,
+                trend_strength_weighted=trend_weighted_level,
+                autocorr_3m=autocorr_3m,
+                autocorr_1y=autocorr_1y,
+                skewness=skewness,
+                kurtosis=kurtosis,
+                liquidity=liquidity,
+                metadata=metadata,
+                confidence=confidence,
+            )
+
+        except Exception as e:
+            logger.error(f"从滚动状态计算特征失败: {e}", exc_info=True)
+            return None
+
+    def _save_to_cache(self, symbol: str, features: SymbolFeatures, bars_3m: list, bars_1y: list, bars_5y: list):
+        """保存特征到缓存（全量）"""
+        from datetime import datetime
+
+        try:
+            # 提取滚动状态
+            returns_3m = self._extract_returns(bars_3m)
+            returns_1y = self._extract_returns(bars_1y)
+            prices_5y = [bar["close"] for bar in bars_5y] if bars_5y else []
+
+            # 构造缓存数据
+            # 获取时间字段（兼容 timestamp/datetime/date）
+            def get_time_field(bar):
+                return bar.get("timestamp") or bar.get("datetime") or bar.get("date") or ""
+
+            cache_data = {
+                "symbol": symbol,
+                "last_update": datetime.now().isoformat(),
+                "data_range": {
+                    "start": get_time_field(bars_5y[0]) if bars_5y else get_time_field(bars_1y[0]),
+                    "end": get_time_field(bars_3m[-1]),
+                },
+                "features": {
+                    "symbol": features.symbol,
+                    "volatility_3m": features.volatility_3m,
+                    "volatility_1y": features.volatility_1y,
+                    "volatility_5y": features.volatility_5y,
+                    "volatility_weighted": features.volatility_weighted,
+                    "trend_strength_3m": features.trend_strength_3m,
+                    "trend_strength_1y": features.trend_strength_1y,
+                    "trend_strength_weighted": features.trend_strength_weighted,
+                    "autocorr_3m": features.autocorr_3m,
+                    "autocorr_1y": features.autocorr_1y,
+                    "skewness": features.skewness,
+                    "kurtosis": features.kurtosis,
+                    "liquidity": features.liquidity,
+                },
+                "metadata": {
+                    "data_source": features.metadata.data_source,
+                    "calculation_time": features.metadata.calculation_time,
+                    "data_start_date": features.metadata.data_start_date,
+                    "data_end_date": features.metadata.data_end_date,
+                    "data_points_3m": features.metadata.data_points_3m,
+                    "data_points_1y": features.metadata.data_points_1y,
+                    "data_points_5y": features.metadata.data_points_5y,
+                    "missing_data_ratio": features.metadata.missing_data_ratio,
+                },
+                "confidence": {
+                    "overall": features.confidence.overall,
+                    "volatility": features.confidence.volatility,
+                    "trend": features.confidence.trend,
+                    "liquidity": features.confidence.liquidity,
+                    "data_sufficiency": features.confidence.data_sufficiency,
+                    "data_quality": features.confidence.data_quality,
+                    "feature_stability": features.confidence.feature_stability,
+                    "warnings": features.confidence.warnings,
+                },
+                "rolling_state": {
+                    "returns_3m": returns_3m[-63:],  # 保留最近63个
+                    "returns_1y": returns_1y[-252:],  # 保留最近252个
+                    "prices_5y": prices_5y[-1260:],  # 保留最近1260个
+                },
+            }
+
+            self.cache_manager.save_cache(symbol, cache_data)
+            logger.info(f"💾 缓存已保存: {symbol}")
+
+        except Exception as e:
+            logger.error(f"保存缓存失败 {symbol}: {e}", exc_info=True)
+
+    def _save_to_cache_with_state(self, symbol: str, features: SymbolFeatures, rolling_state: dict, start_date: str, end_date: str):
+        """保存特征到缓存（增量更新）"""
+        from datetime import datetime
+
+        try:
+            cache_data = {
+                "symbol": symbol,
+                "last_update": datetime.now().isoformat(),
+                "data_range": {
+                    "start": start_date,
+                    "end": end_date,
+                },
+                "features": {
+                    "symbol": features.symbol,
+                    "volatility_3m": features.volatility_3m,
+                    "volatility_1y": features.volatility_1y,
+                    "volatility_5y": features.volatility_5y,
+                    "volatility_weighted": features.volatility_weighted,
+                    "trend_strength_3m": features.trend_strength_3m,
+                    "trend_strength_1y": features.trend_strength_1y,
+                    "trend_strength_weighted": features.trend_strength_weighted,
+                    "autocorr_3m": features.autocorr_3m,
+                    "autocorr_1y": features.autocorr_1y,
+                    "skewness": features.skewness,
+                    "kurtosis": features.kurtosis,
+                    "liquidity": features.liquidity,
+                },
+                "metadata": {
+                    "data_source": features.metadata.data_source,
+                    "calculation_time": features.metadata.calculation_time,
+                    "data_start_date": features.metadata.data_start_date,
+                    "data_end_date": features.metadata.data_end_date,
+                    "data_points_3m": features.metadata.data_points_3m,
+                    "data_points_1y": features.metadata.data_points_1y,
+                    "data_points_5y": features.metadata.data_points_5y,
+                    "missing_data_ratio": features.metadata.missing_data_ratio,
+                },
+                "confidence": {
+                    "overall": features.confidence.overall,
+                    "volatility": features.confidence.volatility,
+                    "trend": features.confidence.trend,
+                    "liquidity": features.confidence.liquidity,
+                    "data_sufficiency": features.confidence.data_sufficiency,
+                    "data_quality": features.confidence.data_quality,
+                    "feature_stability": features.confidence.feature_stability,
+                    "warnings": features.confidence.warnings,
+                },
+                "rolling_state": rolling_state,
+            }
+
+            self.cache_manager.save_cache(symbol, cache_data)
+            logger.info(f"💾 缓存已更新: {symbol}")
+
+        except Exception as e:
+            logger.error(f"保存缓存失败 {symbol}: {e}", exc_info=True)
+
