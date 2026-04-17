@@ -42,7 +42,7 @@ from typing import Any, Optional
 
 import yaml
 
-from ..llm.openai_client import OpenAICompatibleClient
+from services.decision.src.llm.openai_client import OpenAICompatibleClient
 
 logger = logging.getLogger(__name__)
 
@@ -197,12 +197,34 @@ no_overnight: true
 【风险管理】
 {strategy_design['risk_management']}
 
-【要求】
+【关键要求】
 1. 严格按照 JBT YAML 格式输出
 2. 为每个因子配置合理的参数（基于因子特性）
 3. 将入场/出场逻辑转化为 long_condition 和 short_condition
-4. 配置合理的风险参数（止损、日内止损、最大回撤）
-5. 添加必要的市场过滤条件（ATR、ADX、成交量等）
+4. **信号条件语法规则**：
+   - 因子名称自动转为小写变量（ATR → atr, ADX → adx, OBV → obv）
+   - 只能使用简单的比较表达式，不支持函数调用
+   - 可用的内置变量：close, open, high, low, volume
+   - 可用的运算符：>, <, >=, <=, ==, and, or
+   - 正确示例：
+     * "atr > 0.015 * close and adx > 25"
+     * "close > open and volume > 10000"
+     * "obv > 0 and adx > 20"
+   - 错误示例（不要使用）：
+     * "atr > high(-20)" ❌ 不支持函数调用
+     * "obv > obv(-1)" ❌ 不支持历史值引用
+     * "atr < sma(atr, 10)" ❌ 不支持函数调用
+5. 配置合理的风险参数（止损、日内止损、最大回撤）
+6. **【关键】市场过滤条件必须比入场条件更宽松**：
+   - 市场过滤是全局前置条件，应该比开仓条件阈值更低
+   - 如果入场条件是 "atr > 0.008 * close"，市场过滤应该是 "atr > 0.002 * close"（更低）
+   - 如果入场条件是 "volume_ratio > 1.3"，市场过滤应该是 "volume_ratio > 0.9"（更低）
+   - 如果策略设计中提到"移除市场过滤"或"放宽市场过滤"，必须同步更新 market_filter
+   - 避免市场过滤与出场条件逻辑冲突（如市场过滤要求 volume_ratio > 1.0，出场条件是 volume_ratio < 0.95）
+7. **重要**：所有数值必须是具体的数字，不要使用模板语法如 {{{{ }}}}
+8. **重要**：position_fraction 必须是 0.05-0.2 之间的具体数值（如 0.1）
+9. **重要**：stop_loss_yuan 必须是具体数值（如 800-1500）
+10. **重要**：使用主力合约代码（如 SHFE.ru2505），不要使用指数合约（如 SHFE.ru0）
 
 【YAML 格式示例】
 ```yaml
@@ -210,7 +232,7 @@ name: rb_volatility_breakout_001
 description: 基于波动率突破 + 持仓量异动的趋势跟踪策略
 
 symbols:
-  - DCE.rb0
+  - SHFE.rb2505
 
 timeframe_minutes: 120
 
@@ -225,15 +247,21 @@ factors:
     params: {{}}
 
 signal:
-  long_condition: "atr > atr_ma_20 and obv > obv_prev and adx > 25"
-  short_condition: "atr > atr_ma_20 and obv < obv_prev and adx > 25"
+  long_condition: "atr > 0.015 * close and adx > 25 and obv > 0"
+  short_condition: "atr < 0.008 * close or adx < 20"
   confirm_bars: 2
+
+# 注意：
+# - 因子名称小写后直接使用：ATR → atr, ADX → adx, OBV → obv
+# - 只能与数值或内置变量（close/open/high/low/volume）比较
+# - 不要创造新变量如 atr_20_high, obv_prev, atr_10_sma 等
+# - 这些条件会被LLM转换为Python代码，必须是简单的比较表达式
 
 market_filter:
   conditions:
-    - "atr > 0.006 * close"
-    - "adx > 20"
-    - "volume_ratio > 1.0"
+    - "atr > 0.002 * close"    # 必须比入场条件更宽松
+    - "adx > 15"                # 必须比入场条件更宽松
+    - "volume_ratio > 0.8"      # 必须比入场条件更宽松
 
 risk:
   stop_loss_yuan: 1000
@@ -253,6 +281,10 @@ no_overnight: true
 - 不要输出任何解释
 - 不要使用 markdown 代码块标记
 - 只输出纯 YAML
+- **严禁在signal条件中创造新变量**：
+  * 禁止：atr_20_high, atr_10_sma, obv_prev, rsi_ma, macd_prev 等
+  * 只能使用：因子小写名称（atr, adx, obv）+ 内置变量（close, open, high, low, volume）+ 数值常量
+  * 正确示例：atr > 0.02 * close, adx > 25, obv > 0, volume > 10000
 """
 
     def _extract_yaml(self, content: str) -> Optional[str]:

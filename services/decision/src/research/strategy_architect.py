@@ -34,7 +34,7 @@ import os
 import re
 from typing import Any, Optional
 
-from ..llm.openai_client import OpenAICompatibleClient
+from services.decision.src.llm.openai_client import OpenAICompatibleClient
 from .symbol_profiler import SymbolFeatures
 
 logger = logging.getLogger(__name__)
@@ -194,11 +194,52 @@ class StrategyArchitect:
 【任务】
 基于 {features.symbol} 的特征，设计 3 种从未被尝试过的创新策略逻辑。
 
+【策略设计原则】
+1. **初始策略应该适度宽松，避免0交易**
+2. **目标：回测期间至少产生10笔交易**
+3. **市场过滤条件应该比入场条件更宽松**（市场过滤是前置条件，不应该比开仓条件更严格）
+4. **避免三重叠加**（市场过滤 + 入场条件 + 出场条件同时使用相同因子）
+
+【参数建议】
+- ATR阈值：0.002-0.005 * close（不要超过0.01，初始策略建议0.003左右）
+- VolumeRatio：1.2-1.5（不要超过2.0，初始策略建议1.3左右）
+- ADX：20-25（不要超过30，初始策略建议22左右）
+- RSI：30-70区间（不要使用极端值如<20或>80）
+- Bollinger偏移：使用middle±0.2*bandwidth（不要直接使用upper/lower突破）
+
+【可用因子库】
+只能使用以下因子，不要创造新因子：
+- ATR: 平均真实波幅
+- ADX: 平均趋向指标
+- RSI: 相对强弱指标
+- MACD: 指数平滑异同移动平均线
+- SMA: 简单移动平均
+- EMA: 指数移动平均
+- Bollinger: 布林带
+- VolumeRatio: 成交量比率
+- CCI: 商品通道指标
+
+【重要约束】
+- **只能使用上述因子库中的因子**，不要创造新因子（如"偏度"、"Close"、"OBV"等）
+- 入场/出场逻辑必须使用简单的阈值比较，不要使用"突破N日高点"、"回落至均线"等复杂表达
+- 因子只能与固定数值或价格（close/open/high/low）比较
+- close/open/high/low/volume 是内置变量，不需要在factors中定义
+- 正确示例：
+  * "ATR > 0.02 * close 且 ADX > 25 且 RSI < 70"
+  * "RSI < 30 且 volume > 10000"
+  * "VolumeRatio > 1.5 且 CCI > 100"
+- 错误示例（不要使用）：
+  * "ATR突破20日高点" ❌
+  * "MACD金叉" ❌
+  * "价格回落至均线" ❌
+  * 使用不存在的因子如"偏度"、"Close"、"OBV" ❌
+
 【要求】
 1. 不要只是 MACD+RSI 的简单组合
-2. 尝试引入"波动率突破 + 持仓量异动"等创新逻辑
+2. 尝试引入"波动率 + 持仓量"等创新因子组合
 3. 根据品种特征选择最适合的因子组合
 4. 每个策略必须有明确的创新点
+5. **入场/出场逻辑必须是简单的阈值比较**
 
 【输出格式】
 严格按照以下 JSON 格式输出（输出3个策略）：
@@ -207,18 +248,18 @@ class StrategyArchitect:
 {{
   "strategies": [
     {{
-      "strategy_name": "rb_volatility_breakout_001",
-      "logic_description": "基于波动率突破 + 持仓量异动的趋势跟踪策略",
+      "strategy_name": "rb_volatility_momentum_001",
+      "logic_description": "基于高波动率环境下的动量策略",
       "recommended_factors": ["ATR", "ADX", "OBV"],
-      "entry_logic": "当 ATR 突破20日高点 且 OBV 放量 且 ADX > 25 时开仓",
-      "exit_logic": "ATR 回落至10日均线以下 或 ADX < 20 时平仓",
-      "risk_management": "动态止损：ATR * 2.5",
+      "entry_logic": "ATR > 0.02 * close 且 ADX > 25 且 OBV > 0",
+      "exit_logic": "ATR < 0.01 * close 或 ADX < 20",
+      "risk_management": "固定止损 1000 元",
       "innovation_points": [
-        "引入持仓量异动作为确认信号",
-        "动态止损根据波动率调整"
+        "使用ATR相对价格比例作为波动率过滤",
+        "结合OBV确认趋势有效性"
       ],
       "适用品种特征": "高波动 + 强趋势 + 高流动性",
-      "预期优势": "在趋势启动初期快速入场，避免震荡市假突破"
+      "expected_advantage": "在高波动环境中捕捉强趋势"
     }},
     {{
       "strategy_name": "...",
