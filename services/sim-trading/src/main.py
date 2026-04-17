@@ -19,6 +19,11 @@ if _env_file.exists():
 from src.api.router import router
 from src.notifier.dispatcher import bootstrap_dispatcher
 
+# 初始化系统启动时间
+from src.api.router import _system_state
+import time
+_system_state["start_time"] = time.time()
+
 
 # --- 内存日志 Handler ---
 _MEMORY_LOG_MAX = 2000
@@ -120,6 +125,13 @@ async def start_report_scheduler():
     asyncio.create_task(_report_scheduler())
 
 
+@app.on_event("startup")
+async def start_heartbeat_scheduler():
+    """启动心跳健康报告调度协程（每 2 小时整点）。"""
+    import asyncio
+    asyncio.create_task(_heartbeat_scheduler())
+
+
 @app.on_event("shutdown")
 def on_shutdown():
     """服务关闭时清理资源。"""
@@ -156,6 +168,43 @@ async def _report_scheduler():
             logger.info("[scheduler] daily report sent: %s", result)
         except Exception as exc:
             logger.error("[scheduler] daily report failed: %s", exc)
+
+
+async def _heartbeat_scheduler():
+    """每 2 小时整点触发心跳健康报告推送到飞书。"""
+    import asyncio
+    from datetime import datetime, timedelta
+
+    logger.info("[heartbeat] scheduler started, interval=2h")
+
+    # 等待到下一个整点（0/2/4/6/8/10/12/14/16/18/20/22）
+    while True:
+        now = datetime.now()
+        current_hour = now.hour
+
+        # 计算下一个 2 小时整点
+        next_hour = ((current_hour // 2) * 2 + 2) % 24
+        target = now.replace(hour=next_hour, minute=0, second=0, microsecond=0)
+
+        # 如果跨天，加一天
+        if next_hour < current_hour:
+            target += timedelta(days=1)
+
+        wait_seconds = (target - now).total_seconds()
+        logger.info("[heartbeat] next report at %s (%.0f seconds)", target.strftime("%Y-%m-%d %H:%M:%S"), wait_seconds)
+        await asyncio.sleep(wait_seconds)
+
+        try:
+            from src.health.heartbeat import generate_heartbeat_report, send_heartbeat_to_feishu
+
+            report = generate_heartbeat_report()
+            success = send_heartbeat_to_feishu(report)
+            if success:
+                logger.info("[heartbeat] report sent: status=%s", report.get("status"))
+            else:
+                logger.warning("[heartbeat] report send failed")
+        except Exception as exc:
+            logger.error("[heartbeat] scheduler error: %s", exc)
 
 
 async def _ctp_connection_guardian():
