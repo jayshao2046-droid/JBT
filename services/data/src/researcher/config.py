@@ -161,11 +161,11 @@ class ResearcherConfig:
         os.makedirs(cls.REPORTS_DIR, exist_ok=True)
         os.makedirs(cls.LOGS_DIR, exist_ok=True)
 
-    # ── Studio phi4 评级配置 ─────────────────────────────────────────────
-    PHI4_API_URL: str = os.getenv("PHI4_API_URL", "http://192.168.31.142:11434/api/generate")
-    PHI4_MODEL: str = "phi4-reasoning:14b"
+    # ── Studio LLM 评级配置（2026-04-17 切换到 qwen3）─────────────────────
+    SCORER_API_URL: str = os.getenv("SCORER_API_URL", "http://192.168.31.142:11434/api/generate")
+    SCORER_MODEL: str = os.getenv("SCORER_MODEL", "qwen3:14b")  # 原为 phi4-reasoning:14b
     # 安全修复：P2-3 - 从环境变量读取超时配置
-    PHI4_TIMEOUT: float = float(os.getenv("PHI4_TIMEOUT", "30.0"))  # 超时后 fallback 到数学算法
+    SCORER_TIMEOUT: float = float(os.getenv("SCORER_TIMEOUT", "30.0"))  # 超时后 fallback 到数学算法
 
     # ── 网络请求超时配置（安全修复：P2-3）──────────────────────────────────
     HTTP_TIMEOUT_SHORT: float = float(os.getenv("HTTP_TIMEOUT_SHORT", "5.0"))    # 健康检查等快速请求

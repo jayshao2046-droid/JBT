@@ -142,3 +142,100 @@ class DecisionFeishuNotifier:
         except Exception as exc:
             logger.error("FeishuNotifier unexpected error event=%s: %s", event.event_code, exc)
             return False
+
+
+class FeishuNotifier:
+    """简化的飞书通知器，用于研究员评级通知"""
+
+    def __init__(self) -> None:
+        self._webhook_url: str = os.environ.get("FEISHU_WEBHOOK_URL", "")
+
+    async def send_researcher_score(
+        self,
+        report_type: str,
+        report_id: str,
+        score: float,
+        date: str,
+        hour: int
+    ) -> bool:
+        """
+        发送研究员报告评级通知
+
+        Args:
+            report_type: 报告类型（期货/股票/新闻等）
+            report_id: 报告ID
+            score: phi4 评分（0-100）
+            date: 日期
+            hour: 小时
+
+        Returns:
+            True 表示发送成功
+        """
+        if not self._webhook_url:
+            logger.warning("FEISHU_WEBHOOK_URL not set, skip researcher score notification")
+            return False
+
+        ts = datetime.now(_TZ_CST).strftime("%Y-%m-%d %H:%M:%S")
+
+        # 根据评分选择颜色
+        if score >= 80:
+            color = "green"
+            icon = "✅"
+        elif score >= 60:
+            color = "blue"
+            icon = "📊"
+        elif score >= 40:
+            color = "yellow"
+            icon = "⚠️"
+        else:
+            color = "red"
+            icon = "❌"
+
+        payload = {
+            "msg_type": "interactive",
+            "card": {
+                "header": {
+                    "title": {
+                        "tag": "plain_text",
+                        "content": f"{icon} 研究员报告评级 | {report_type}",
+                    },
+                    "template": color,
+                },
+                "elements": [
+                    {
+                        "tag": "div",
+                        "text": {
+                            "tag": "lark_md",
+                            "content": f"**报告ID:** {report_id}\n**评分:** {score:.1f}/100\n**时段:** {date} {hour:02d}:00",
+                        },
+                    },
+                    {"tag": "hr"},
+                    {
+                        "tag": "note",
+                        "elements": [
+                            {
+                                "tag": "plain_text",
+                                "content": f"phi4 评级 | {ts}",
+                            }
+                        ],
+                    },
+                ],
+            },
+        }
+
+        try:
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                self._webhook_url,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                resp_body = resp.read().decode("utf-8")
+                logger.debug("Feishu response: %s", resp_body)
+            return True
+        except Exception as exc:
+            logger.error("FeishuNotifier send_researcher_score error: %s", exc)
+            return False
+

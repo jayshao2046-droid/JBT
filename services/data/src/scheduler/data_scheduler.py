@@ -66,6 +66,68 @@ logger = get_logger("data_scheduler")
 _notifier = None  # CollectionNotifier, 延迟初始化
 
 
+def _notify_researcher_on_collection_complete(collector_name: str, record_count: int, elapsed_sec: float) -> None:
+    """
+    U0: Mini data 采集完成后，HTTP POST 回调 Alienware 研究员触发分析
+
+    Args:
+        collector_name: 采集器名称
+        record_count: 采集记录数
+        elapsed_sec: 耗时（秒）
+    """
+    # 根据当前时间判断时段
+    hour = datetime.now().hour
+    if 8 <= hour < 11:
+        segment = "盘前"
+    elif 11 <= hour < 15:
+        segment = "午间"
+    elif 15 <= hour < 21:
+        segment = "盘后"
+    else:
+        segment = "夜盘"
+
+    researcher_url = os.getenv("RESEARCHER_TRIGGER_URL", "http://192.168.31.223:8199/run")
+
+    try:
+        import httpx
+        import asyncio
+
+        async def _async_notify():
+            async with httpx.AsyncClient() as client:
+                # 使用查询参数传递 hour
+                resp = await client.post(
+                    f"{researcher_url}?hour={hour}",
+                    json={
+                        "source": "mini_data_collector",
+                        "collector": collector_name,
+                        "record_count": record_count,
+                        "elapsed_sec": elapsed_sec,
+                        "timestamp": datetime.now().isoformat()
+                    },
+                    timeout=10.0
+                )
+                logger.info(f"[RESEARCHER_CALLBACK] 通知研究员: collector={collector_name}, segment={segment}, status={resp.status_code}")
+                return resp.status_code
+
+        # 在同步上下文中运行异步回调
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        if loop.is_running():
+            # 如果事件循环已在运行，创建任务但不等待
+            asyncio.create_task(_async_notify())
+        else:
+            # 否则直接运行
+            loop.run_until_complete(_async_notify())
+
+    except Exception as e:
+        # 回调失败不影响主流程
+        logger.warning(f"[RESEARCHER_CALLBACK] 通知研究员失败: {e}")
+
+
 def _get_notifier(config: dict[str, Any] | None = None) -> Any:
     """获取或初始化 CollectionNotifier (legacy, 已由 NotifierDispatcher 替代)."""
     return None
@@ -417,6 +479,10 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
                 success=not zero_output,
                 error="zero_output" if zero_output else None,
             )
+
+        # U0: 采集成功后回调 Alienware 研究员（仅在非零产出时触发）
+        if not zero_output:
+            _notify_researcher_on_collection_complete(name, total, elapsed)
     except Exception:
         logger.error("❌ %s 失败:\n%s", name, traceback.format_exc())
         err_msg = traceback.format_exc()[-200:]

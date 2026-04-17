@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 class ResearcherLoader:
     """研究员报告加载器"""
 
-    def __init__(self, data_service_url: str = "http://192.168.31.76:8105"):
+    def __init__(self, data_service_url: str = "http://192.168.31.223:8199"):
         self.data_service_url = data_service_url
-        self.api_endpoint = f"{data_service_url}/api/v1/researcher/reports"
+        self.api_endpoint = f"{data_service_url}/reports"
 
     def get_latest_report(self, segment: Optional[str] = None) -> Optional[Dict]:
         """获取最新报告

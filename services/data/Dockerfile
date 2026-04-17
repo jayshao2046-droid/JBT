@@ -5,11 +5,15 @@ LABEL version="1.0.0"
 
 WORKDIR /app
 
-# Install system deps (curl for healthcheck) via apt, supervisor via pip
+# Install system deps (curl for healthcheck, tzdata for timezone) via apt, supervisor via pip
 RUN apt-get update -o Acquire::Retries=3 && \
-    apt-get install -y --no-install-recommends curl && \
+    apt-get install -y --no-install-recommends curl tzdata && \
     rm -rf /var/lib/apt/lists/* || \
     echo "apt-get failed, skipping curl"
+
+# Set timezone
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Python deps + supervisor via pip
 COPY requirements.txt .

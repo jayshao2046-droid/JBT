@@ -3,12 +3,19 @@
 import os
 import json
 import sqlite3
+import logging
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 from .config import ResearcherConfig
 from .daily_stats import DailyStatsTracker
-from .models import ResearchReport, SymbolResearch
+from .queue_manager import QueueManager
+from .models import (
+    ResearchReport, SymbolResearch,
+    ClassifiedReport, ReportBatch
+)
+
+logger = logging.getLogger(__name__)
 
 
 class Reporter:
@@ -17,6 +24,11 @@ class Reporter:
     def __init__(self):
         ResearcherConfig.ensure_dirs()
         self.stats_tracker = DailyStatsTracker(ResearcherConfig.LOGS_DIR)
+
+        # 初始化队列管理器
+        queue_dir = os.path.join(ResearcherConfig.REPORTS_DIR, ".queue")
+        self.queue_manager = QueueManager(queue_dir)
+
         self._init_report_index()
 
     def _init_report_index(self):
@@ -67,7 +79,7 @@ class Reporter:
         previous_summary: Optional[Dict[str, Any]] = None
     ) -> ResearchReport:
         """
-        生成研究报告
+        生成研究报告（LEGACY - 向后兼容）
 
         Args:
             date: 日期 YYYY-MM-DD
@@ -114,6 +126,239 @@ class Reporter:
         self._save_report(report)
 
         return report
+
+    def generate_classified_reports(
+        self,
+        date: str,
+        hour: int,
+        futures_researches: List[SymbolResearch],
+        stocks_researches: List[SymbolResearch],
+        crawler_stats: Dict[str, Any]
+    ) -> ReportBatch:
+        """
+        生成分类报告批次（按数据源分类）
+
+        Args:
+            date: 日期 YYYY-MM-DD
+            hour: 小时 0-23
+            futures_researches: 期货研究列表
+            stocks_researches: 股票研究列表
+            crawler_stats: 爬虫统计
+
+        Returns:
+            ReportBatch
+        """
+        batch_id = f"BATCH-{date.replace('-', '')}-{hour:02d}"
+        batch = ReportBatch(
+            batch_id=batch_id,
+            date=date,
+            hour=hour,
+            generated_at=datetime.now()
+        )
+
+        # 1. 生成期货报告
+        if futures_researches:
+            futures_report = self._generate_futures_report(date, hour, futures_researches)
+            batch.futures_report = futures_report
+            batch.total_reports += 1
+
+        # 2. 生成股票报告
+        if stocks_researches:
+            stocks_report = self._generate_stocks_report(date, hour, stocks_researches)
+            batch.stocks_report = stocks_report
+            batch.total_reports += 1
+
+        # 3. 生成新闻报告
+        news_items = crawler_stats.get("news_items", [])
+        if news_items:
+            news_report = self._generate_news_report(date, hour, news_items)
+            batch.news_report = news_report
+            batch.total_reports += 1
+
+        # 4. 生成 RSS 报告（暂时合并到新闻）
+        # TODO: 分离 RSS 数据源
+
+        # 5. 生成情绪报告（暂时从新闻中提取）
+        # TODO: 独立情绪分析
+
+        return batch
+
+    def _generate_futures_report(
+        self,
+        date: str,
+        hour: int,
+        researches: List[SymbolResearch]
+    ) -> ClassifiedReport:
+        """生成期货报告"""
+        report_id = f"FUT-{date.replace('-', '')}-{hour:02d}"
+
+        # 构建期货数据
+        symbols_dict = {}
+        for sr in researches:
+            symbols_dict[sr.symbol] = {
+                "trend": sr.trend,
+                "confidence": sr.confidence,
+                "key_factors": sr.key_factors,
+                "overnight_context": sr.overnight_context,
+                "news_highlights": sr.news_highlights,
+                "position_change": sr.position_change
+            }
+
+        market_overview = self._generate_market_overview(researches, "期货")
+
+        data = {
+            "market_overview": market_overview,
+            "symbols": symbols_dict,
+            "trend_distribution": self._get_trend_distribution(researches)
+        }
+
+        report = ClassifiedReport(
+            report_id=report_id,
+            report_type="futures",
+            date=date,
+            hour=hour,
+            generated_at=datetime.now(),
+            model="qwen3:14b",
+            data=data,
+            symbols_covered=len(researches),
+            data_points=sum(len(sr.key_factors) for sr in researches),
+            confidence=sum(sr.confidence for sr in researches) / len(researches) if researches else 0.0
+        )
+
+        # 保存报告
+        self._save_classified_report(report)
+        return report
+
+    def _generate_stocks_report(
+        self,
+        date: str,
+        hour: int,
+        researches: List[SymbolResearch]
+    ) -> ClassifiedReport:
+        """生成股票报告"""
+        report_id = f"STK-{date.replace('-', '')}-{hour:02d}"
+
+        # 提取 top movers
+        top_movers = sorted(
+            researches,
+            key=lambda x: abs(x.confidence - 0.5),
+            reverse=True
+        )[:10]
+
+        data = {
+            "market_overview": self._generate_market_overview(researches, "股票"),
+            "top_movers": [
+                {
+                    "symbol": sr.symbol,
+                    "trend": sr.trend,
+                    "confidence": sr.confidence,
+                    "key_factors": sr.key_factors
+                }
+                for sr in top_movers
+            ],
+            "trend_distribution": self._get_trend_distribution(researches)
+        }
+
+        report = ClassifiedReport(
+            report_id=report_id,
+            report_type="stocks",
+            date=date,
+            hour=hour,
+            generated_at=datetime.now(),
+            model="qwen3:14b",
+            data=data,
+            symbols_covered=len(researches),
+            data_points=len(researches),
+            confidence=sum(sr.confidence for sr in researches) / len(researches) if researches else 0.0
+        )
+
+        self._save_classified_report(report)
+        return report
+
+    def _generate_news_report(
+        self,
+        date: str,
+        hour: int,
+        news_items: List[Dict[str, Any]]
+    ) -> ClassifiedReport:
+        """生成新闻报告"""
+        report_id = f"NEWS-{date.replace('-', '')}-{hour:02d}"
+
+        # 按来源分组
+        sources_breakdown = {}
+        for item in news_items:
+            source = item.get("source", "unknown")
+            if source not in sources_breakdown:
+                sources_breakdown[source] = []
+            sources_breakdown[source].append(item)
+
+        data = {
+            "total_items": len(news_items),
+            "sources_breakdown": {
+                source: len(items) for source, items in sources_breakdown.items()
+            },
+            "items": news_items[:50],  # 最多保存 50 条
+            "urgent_items": [item for item in news_items if item.get("is_urgent", False)]
+        }
+
+        report = ClassifiedReport(
+            report_id=report_id,
+            report_type="news",
+            date=date,
+            hour=hour,
+            generated_at=datetime.now(),
+            model="crawler",
+            data=data,
+            symbols_covered=0,
+            data_points=len(news_items),
+            confidence=1.0 if news_items else 0.0
+        )
+
+        self._save_classified_report(report)
+        return report
+
+    def _get_trend_distribution(self, researches: List[SymbolResearch]) -> Dict[str, int]:
+        """获取趋势分布"""
+        trend_counts = {}
+        for sr in researches:
+            trend_counts[sr.trend] = trend_counts.get(sr.trend, 0) + 1
+        return trend_counts
+
+    def _save_classified_report(self, report: ClassifiedReport):
+        """保存分类报告到文件"""
+        # 创建日期目录
+        date_dir = os.path.join(ResearcherConfig.REPORTS_DIR, report.date)
+        os.makedirs(date_dir, exist_ok=True)
+
+        # 保存 JSON 文件：futures.json, stocks.json, news.json
+        filename = f"{report.report_type}_{report.hour}.json"
+        json_path = os.path.join(date_dir, filename)
+
+        try:
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(report.model_dump(mode='json'), f, ensure_ascii=False, indent=2)
+
+            # 记录文件路径
+            report.file_path = json_path
+
+            # 添加到待读队列
+            metadata = {
+                "report_type": report.report_type,
+                "date": report.date,
+                "hour": report.hour,
+                "symbols_covered": report.symbols_covered,
+                "confidence": report.confidence
+            }
+            self.queue_manager.add_to_queue(report.report_id, json_path, metadata)
+
+            logger.info(
+                f"[REPORT_SAVE] 报告已保存: {report.report_id} -> {json_path} "
+                f"(类型={report.report_type}, 品种数={report.symbols_covered})"
+            )
+
+        except Exception as e:
+            logger.error(f"[REPORT_SAVE] 保存失败: {report.report_id}, {e}", exc_info=True)
+            raise
 
     def _generate_report_id(self, date: str, segment: str) -> str:
         """生成报告ID（segment 保留原始格式如 '12:00'，文件名中用 '-' 替换 ':'）"""

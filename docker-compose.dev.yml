@@ -127,12 +127,13 @@ services:
       DATA_STORAGE_ROOT: /data
       JBT_DATA_LOG_DIR: /data/logs
       RESEARCHER_STORE_ROOT: /data/researcher
+      TZ: Asia/Shanghai
     env_file:
       - path: services/data/.env
         required: false
     volumes:
       - ./services/data:/app
-      - jbt-data-storage:/data
+      - ./data:/data
       - ./services/data/configs:/app/services/data/configs:ro
     restart: unless-stopped
     logging:
@@ -159,6 +160,4 @@ services:
       - ./services/dashboard:/app
       - ./services/dashboard/runtime:/runtime
 
-volumes:
-  jbt-data-storage:
-    driver: local
+# volumes 部分已移除，jbt-data 现在使用 bind mount 直接挂载 ./data

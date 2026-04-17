@@ -49,7 +49,7 @@ def _save_records(
         records=records,
         key="records",
         sort_by="timestamp",
-        mode="w",
+        mode="a",  # 修复：改为追加模式，避免覆盖历史数据
     )
 
 

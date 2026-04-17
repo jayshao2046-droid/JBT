@@ -1,4 +1,4 @@
-"""每小时调度器 — 11个整点 + 早晚报邮件 + 突发检测 + Mini推送"""
+"""每小时调度器 — 11个整点 + 早晚报邮件 + 突发检测 + decision推送"""
 
 import asyncio
 import os
@@ -25,7 +25,7 @@ from .notify import DailyDigest, ResearcherEmailSender, build_morning_report_htm
 from .crawler.engine import CodeCrawler, BrowserCrawler
 from .crawler.source_registry import SourceRegistry
 from .crawler.parsers import get_parser
-from .models import SymbolResearch
+from .models import SymbolResearch, ReportBatch
 
 logger = logging.getLogger(__name__)
 
@@ -110,31 +110,27 @@ class ResearcherScheduler:
             futures_researches = self._summarize_futures(futures_data, hour_label)
             stocks_researches = self._summarize_stocks(stocks_data, hour_label)
 
-            # 5. 生成报告
+            # 5. 生成分类报告（按数据源）
             date = datetime.now().strftime("%Y-%m-%d")
-            previous_summary = None  # 每小时调度不使用 previous_summary
-            previous_report_id = None  # TODO: 从上期报告获取
 
-            report = self.reporter.generate_report(
+            report_batch = self.reporter.generate_classified_reports(
                 date=date,
-                segment=hour_label,
+                hour=hour,
                 futures_researches=futures_researches,
                 stocks_researches=stocks_researches,
-                crawler_stats=crawler_stats,
-                previous_report_id=previous_report_id,
-                previous_summary=previous_summary
+                crawler_stats=crawler_stats
             )
 
-            # 6. 推送飞书卡片
-            await self.notifier.notify_report_done(report)
+            # 6. 推送飞书卡片（汇总通知）
+            await self.notifier.notify_batch_done(report_batch)
 
-            # 6b. 决策端置信度评审 + 飞书评级通知
-            await self.reviewer.review_and_notify(report)
+            # 7. 推送到 Studio decision 触发 phi4 评级
+            await self._push_to_decision(report_batch)
 
-            # 7. 报告已落盘到 D:\researcher_reports（phi4 直接读取，不推送 Mini）
-            logger.info(f"[SAVE] 报告已保存: {report.file_path}")
+            # 8. 报告已落盘到 D:\researcher_reports（phi4 直接读取，不推送 Mini）
+            logger.info(f"[SAVE] 批次报告已保存: {report_batch.batch_id}, 共 {report_batch.total_reports} 份")
 
-            # 8. 邮件日报钩子
+            # 9. 邮件日报钩子
             if hour == ResearcherConfig.EMAIL_MORNING_TRIGGER_HOUR:
                 await self._send_morning_report(date)
             elif hour == ResearcherConfig.EMAIL_EVENING_TRIGGER_HOUR:
@@ -162,7 +158,7 @@ class ResearcherScheduler:
             )
             self.reporter.stats_tracker.record_report(
                 hour=hour,
-                report_id=report.report_id,
+                report_id=report_batch.batch_id,
                 json_path=_json_path,
                 elapsed_s=elapsed,
                 success=True,
@@ -170,7 +166,7 @@ class ResearcherScheduler:
 
             return {
                 "success": True,
-                "report_id": report.report_id,
+                "report_id": report_batch.batch_id,
                 "hour": hour,
                 "elapsed_seconds": elapsed,
                 "futures_count": len(futures_researches),
@@ -456,10 +452,12 @@ class ResearcherScheduler:
 
     def _summarize_futures(self, data: Dict[str, Any], hour_label: str) -> list[SymbolResearch]:
         """归纳期货品种"""
+        logger.info(f"[SUMMARIZE] 开始归纳期货，共 {len(data)} 个品种")
         researches = []
 
         for symbol, bars in data.items():
             if not bars:
+                logger.warning(f"[SUMMARIZE] 期货 {symbol} 数据为空，跳过")
                 continue
 
             try:
@@ -470,18 +468,21 @@ class ResearcherScheduler:
                     news_items=[]  # TODO: 从爬虫结果匹配
                 )
                 researches.append(research)
-            except Exception:
+            except Exception as e:
                 # 归纳失败，跳过该品种
+                logger.error(f"[SUMMARIZE] 期货归纳失败 {symbol}: {e}", exc_info=True)
                 continue
 
         return researches
 
     def _summarize_stocks(self, data: Dict[str, Any], hour_label: str) -> list[SymbolResearch]:
         """归纳股票"""
+        logger.info(f"[SUMMARIZE] 开始归纳股票，共 {len(data)} 个标的")
         researches = []
 
         for symbol, bars in data.items():
             if not bars:
+                logger.warning(f"[SUMMARIZE] 股票 {symbol} 数据为空，跳过")
                 continue
 
             try:
@@ -492,10 +493,41 @@ class ResearcherScheduler:
                     news_items=[]
                 )
                 researches.append(research)
-            except Exception:
+            except Exception as e:
+                # 归纳失败，跳过该品种
+                logger.error(f"[SUMMARIZE] 股票归纳失败 {symbol}: {e}", exc_info=True)
                 continue
 
         return researches
+
+    async def _push_to_decision(self, batch: ReportBatch) -> bool:
+        """
+        推送报告批次到 Studio decision，触发 phi4 评级
+
+        Args:
+            batch: 报告批次
+
+        Returns:
+            True 表示推送成功
+        """
+        decision_url = os.getenv("DECISION_API_URL", "http://192.168.31.142:8104")
+        evaluate_endpoint = f"{decision_url}/api/v1/evaluate"
+
+        try:
+            logger.info(f"[PUSH] 开始推送报告批次到 decision: {evaluate_endpoint}")
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    evaluate_endpoint,
+                    json=batch.model_dump(mode='json'),
+                    timeout=30.0,
+                )
+                success = resp.status_code in (200, 201)
+                logger.info(f"[PUSH] decision 响应: status={resp.status_code}, success={success}")
+                return success
+
+        except Exception as e:
+            logger.error(f"[PUSH] 推送到 decision 失败: {e}")
+            return False
 
     async def close(self):
         """关闭资源"""

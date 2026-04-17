@@ -514,21 +514,32 @@ def _resolve_symbol_frame(
             if exact_frame is not None and _covers_requested_start(exact_frame, parsed_start):
                 return symbol_request.exact_symbol, "exact", exact_frame
 
-    continuous_dir = minute_root / symbol_request.continuous_symbol
+    resolved_continuous = symbol_request.continuous_symbol
+    continuous_dir = minute_root / resolved_continuous
+    if not continuous_dir.is_dir():
+        # Case-insensitive fallback: CZCE directories use uppercase product codes
+        parts = resolved_continuous.rsplit("_", 1)
+        if len(parts) == 2:
+            alt_product = parts[1].upper() if parts[1].islower() else parts[1].lower()
+            alt_dir = minute_root / f"{parts[0]}_{alt_product}"
+            if alt_dir.is_dir():
+                resolved_continuous = f"{parts[0]}_{alt_product}"
+                continuous_dir = alt_dir
+
     if continuous_dir.is_dir():
         try:
             continuous_frame = _load_symbol_frame(continuous_dir)
         except FileNotFoundError as exc:
             raise HTTPException(
                 status_code=404,
-                detail=f"no parquet data found for {symbol_request.continuous_symbol}",
+                detail=f"no parquet data found for {resolved_continuous}",
             ) from exc
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
-                detail=f"failed to load continuous data for {symbol_request.continuous_symbol}: {exc}",
+                detail=f"failed to load continuous data for {resolved_continuous}: {exc}",
             ) from exc
-        return symbol_request.continuous_symbol, "continuous", continuous_frame
+        return resolved_continuous, "continuous", continuous_frame
 
     raise HTTPException(
         status_code=404,

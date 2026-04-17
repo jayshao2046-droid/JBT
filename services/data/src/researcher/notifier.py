@@ -6,7 +6,7 @@ from typing import Dict, Any
 from datetime import datetime
 import logging
 
-from .models import ResearchReport
+from .models import ResearchReport, ReportBatch
 from .config import ResearcherConfig
 
 
@@ -47,6 +47,16 @@ class ResearcherNotifier:
 
         logger.error("Feishu send failed after retries: %s", last_error)
         return False
+
+    async def notify_batch_done(self, batch: ReportBatch):
+        """
+        通知批次报告完成
+
+        Args:
+            batch: 报告批次
+        """
+        # 飞书卡片（汇总通知）
+        await self._send_feishu_batch_card(batch)
 
     async def notify_report_done(self, report: ResearchReport):
         """
@@ -221,6 +231,70 @@ class ResearcherNotifier:
             lines.append(f"• {source}: {title}")
 
         return '\n'.join(lines)
+
+    async def _send_feishu_batch_card(self, batch: ReportBatch):
+        """发送批次报告飞书卡片（汇总通知）"""
+        if self._is_feishu_silent():
+            return  # 静默期（23:30-08:00），不推送飞书
+
+        if not self.feishu_webhook:
+            return
+
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        # 统计各类报告
+        report_types = []
+        if batch.futures_report:
+            report_types.append("期货")
+        if batch.stocks_report:
+            report_types.append("股票")
+        if batch.news_report:
+            report_types.append("新闻")
+        if batch.rss_report:
+            report_types.append("RSS")
+        if batch.sentiment_report:
+            report_types.append("情绪")
+
+        source_summary = ', '.join(report_types) if report_types else "无"
+
+        card = {
+            "msg_type": "interactive",
+            "card": {
+                "config": {
+                    "wide_screen_mode": True
+                },
+                "header": {
+                    "template": "blue",
+                    "title": {
+                        "content": f"📊 研究员批次报告 | {batch.batch_id}",
+                        "tag": "plain_text"
+                    }
+                },
+                "elements": [
+                    {
+                        "tag": "div",
+                        "text": {
+                            "content": f"**批次时间**: {timestamp}\n**报告数量**: {batch.total_reports}\n**数据源**: {source_summary}",
+                            "tag": "lark_md"
+                        }
+                    },
+                    {
+                        "tag": "hr"
+                    },
+                    {
+                        "tag": "note",
+                        "elements": [
+                            {
+                                "tag": "plain_text",
+                                "content": f"生成于 {timestamp} | Alienware 研究员"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+
+        await self._post_feishu(card)
 
     async def _send_feishu_alert(self, hour: str, error: str):
         if self._is_feishu_silent():
