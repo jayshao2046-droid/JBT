@@ -11,7 +11,7 @@
 import logging
 import json
 import httpx
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from .client import OllamaClient, HybridClient
 from .openai_client import OpenAICompatibleClient
 
@@ -75,6 +75,36 @@ class ResearcherPhi4Scorer:
         self.model = os.getenv("ONLINE_AUDITOR_MODEL", "gpt-5.4") if llm_provider == "online" else model
         self.researcher_api_url = researcher_api_url
 
+    async def score_report_detail(
+        self,
+        report: Dict,
+        context: Optional[Dict] = None,
+    ) -> Dict[str, Any]:
+        """返回完整评分详情（含看到内容和评分理由）。"""
+        try:
+            logger.info(f"[SCORER] 开始评级报告: {report.get('report_id')}")
+
+            result = await self._score_report_full(report, context)
+            score = float(result.get("score", 50.0))
+
+            report_id = report.get("report_id")
+            if report_id:
+                await self._mark_report_read(
+                    report_id,
+                    score=score,
+                    reasoning=result.get("reasoning", ""),
+                    model=result.get("model", self.model),
+                )
+
+            logger.info(
+                f"[SCORER] 评级完成: {report_id}, "
+                f"score={score:.2f}, model={result.get('model')}"
+            )
+            return result
+        except Exception as e:
+            logger.error(f"[SCORER] 评级异常: {e}", exc_info=True)
+            return self._fallback_score()
+
     async def score_report(
         self,
         report: Dict,
@@ -89,32 +119,66 @@ class ResearcherPhi4Scorer:
         Returns:
             评分（0-100）
         """
-        try:
-            logger.info(f"[SCORER] 开始评级报告: {report.get('report_id')}")
+        result = await self.score_report_detail(report, context)
+        return float(result.get("score", 50.0))
 
-            result = await self._score_report_full(report, context)
-            score = result.get("score", 50.0)
+    def _normalize_report(self, report: Dict[str, Any]) -> Dict[str, Any]:
+        """统一 data/decision 两侧结构，供评分器使用。"""
+        report_type = str(report.get("report_type") or "unknown").lower()
+        data = report.get("data") or {}
 
-            # 标记报告为已读
-            report_id = report.get("report_id")
-            if report_id:
-                await self._mark_report_read(
-                    report_id,
-                    score=score,
-                    reasoning=result.get("reasoning", ""),
-                    model=result.get("model", self.model)
-                )
+        futures_symbols = 0
+        stocks_symbols = 0
+        news_items = []
+        urgent_items = []
 
-            logger.info(
-                f"[SCORER] 评级完成: {report_id}, "
-                f"score={score:.2f}, model={result.get('model')}"
-            )
+        futures_summary = report.get("futures_summary") or {}
+        stocks_summary = report.get("stocks_summary") or {}
+        crawler_stats = report.get("crawler_stats") or {}
 
-            return score
+        if futures_summary:
+            futures_symbols = int(futures_summary.get("symbols_covered") or 0)
+        elif report_type == "futures":
+            futures_symbols = int(data.get("total_symbols") or len(data.get("reports") or []))
 
-        except Exception as e:
-            logger.error(f"[SCORER] 评级异常: {e}", exc_info=True)
-            return 50.0
+        if stocks_summary:
+            stocks_symbols = int(stocks_summary.get("symbols_covered") or 0)
+        elif report_type == "stocks":
+            stocks_symbols = int(data.get("total_symbols") or len(data.get("reports") or []))
+
+        if crawler_stats.get("news_items"):
+            news_items = crawler_stats.get("news_items") or []
+        elif report_type == "news":
+            news_items = data.get("items") or []
+
+        if report_type == "news":
+            urgent_items = data.get("urgent_items") or [x for x in news_items if x.get("is_urgent")]
+
+        sample_titles = []
+        for item in news_items[:3]:
+            title = str(item.get("title") or "").strip()
+            if title:
+                sample_titles.append(title)
+
+        observed_parts = [
+            f"类型={report_type}",
+            f"期货品种={futures_symbols}",
+            f"股票数量={stocks_symbols}",
+            f"新闻条数={len(news_items)}",
+            f"紧急新闻={len(urgent_items)}",
+        ]
+        if sample_titles:
+            observed_parts.append("样本标题=" + " | ".join(sample_titles))
+
+        return {
+            "report_type": report_type,
+            "futures_symbols": futures_symbols,
+            "stocks_symbols": stocks_symbols,
+            "news_items": news_items,
+            "urgent_items": urgent_items,
+            "sample_titles": sample_titles,
+            "observed_content": "；".join(observed_parts),
+        }
 
     async def _score_report_full(
         self,
@@ -131,6 +195,9 @@ class ResearcherPhi4Scorer:
             评级结果字典，包含 score, confidence, reasoning, improvements
         """
         try:
+            normalized = self._normalize_report(report)
+            report_type = normalized["report_type"]
+
             # 提取上下文信息
             watched_symbols = context.get("watched_symbols", set()) if context else set()
             current_positions = context.get("current_positions", set()) if context else set()
@@ -146,24 +213,28 @@ class ResearcherPhi4Scorer:
 
             context_text = "\n".join(context_parts) if context_parts else "无特定持仓和关注品种"
 
-            # 格式化报告内容
-            report_text = self._format_report(report)
+            if report_type == "news":
+                scoring_rule = "新闻报告评分：信息覆盖(40%) + 关键信息密度(40%) + 时效性(20%)。新闻单类报告不因缺少期货/股票而扣分。"
+            elif report_type == "futures":
+                scoring_rule = "期货报告评分：品种覆盖(40%) + 趋势/结构分析质量(40%) + 时效性(20%)。期货单类报告不因缺少股票/新闻而扣分。"
+            elif report_type == "stocks":
+                scoring_rule = "股票报告评分：覆盖度(40%) + 行业/轮动分析质量(40%) + 时效性(20%)。股票单类报告不因缺少期货/新闻而扣分。"
+            else:
+                scoring_rule = "综合报告评分：完整性(40%) + 信息质量(40%) + 时效性(20%)。"
 
             # 构建 prompt
             user_content = f"""请评估以下研究员报告：
 
 【报告信息】
 - 报告ID: {report.get('report_id')}
+- 报告类型: {report_type}
 - 生成时间: {report.get('generated_at')}
 
-【数据统计】
-- 期货品种: {report.get('futures_summary', {}).get('symbols_covered', 0)} 个
-- 股票数量: {report.get('stocks_summary', {}).get('symbols_covered', 0)} 个
-- 新闻文章: {report.get('crawler_stats', {}).get('articles_processed', 0)} 篇
+【评分口径】
+{scoring_rule}
 
-【市场概况】
-期货: {report.get('futures_summary', {}).get('market_overview', '无')}
-股票: {report.get('stocks_summary', {}).get('market_overview', '无')}
+【可见内容摘要】
+{normalized['observed_content']}
 
 请给出评分、简短理由和改进建议。"""
 
@@ -190,29 +261,39 @@ class ResearcherPhi4Scorer:
             try:
                 score_result = json.loads(content)
                 # 支持中文和英文字段名
-                score = score_result.get("评分", score_result.get("score", 0.5))
+                raw_score = score_result.get("评分", score_result.get("score", 50.0))
+                try:
+                    score = float(raw_score)
+                except Exception:
+                    score = 50.0
+                # 兼容 0-1 归一化评分
+                if 0.0 <= score <= 1.0:
+                    score = score * 100.0
+                score = max(0.0, min(100.0, score))
 
                 # 计算置信度
-                confidence = self._calculate_confidence(score, report)
+                confidence = self._calculate_confidence(score, normalized)
 
                 return {
                     "score": score,
                     "confidence": confidence,
                     "reasoning": score_result.get("理由", score_result.get("reasoning", "")),
                     "improvements": score_result.get("改进建议", score_result.get("improvements", [])),
+                    "observed_content": normalized["observed_content"],
                     "model": result.get("model", self.model)
                 }
             except json.JSONDecodeError:
                 logger.warning(f"LLM 返回非 JSON 格式: {content}")
                 # 尝试从文本中提取评分
                 score = self._extract_score_from_text(content)
-                confidence = self._calculate_confidence(score, report)
+                confidence = self._calculate_confidence(score, normalized)
 
                 return {
                     "score": score,
                     "confidence": confidence,
                     "reasoning": content,
                     "improvements": [],
+                    "observed_content": normalized["observed_content"],
                     "model": result.get("model", self.model)
                 }
 
@@ -281,7 +362,7 @@ class ResearcherPhi4Scorer:
                 pass
         return 50.0
 
-    def _calculate_confidence(self, score: float, report: Dict) -> str:
+    def _calculate_confidence(self, score: float, normalized: Dict[str, Any]) -> str:
         """计算置信度
 
         Args:
@@ -292,9 +373,9 @@ class ResearcherPhi4Scorer:
             置信度等级: "high" / "medium" / "low"
         """
         # 基于数据完整性计算置信度
-        futures_covered = report.get("futures_summary", {}).get("symbols_covered", 0)
-        stocks_covered = report.get("stocks_summary", {}).get("symbols_covered", 0)
-        news_count = len(report.get("crawler_stats", {}).get("news_items", []))
+        futures_covered = int(normalized.get("futures_symbols", 0))
+        stocks_covered = int(normalized.get("stocks_symbols", 0))
+        news_count = len(normalized.get("news_items", []))
 
         # 数据完整性评分
         data_completeness = 0
@@ -320,6 +401,7 @@ class ResearcherPhi4Scorer:
             "confidence": "low",
             "reasoning": "LLM 评级服务不可用，使用默认评分",
             "improvements": [],
+            "observed_content": "评分服务降级，未获取到完整可见内容摘要",
             "model": "fallback"
         }
 

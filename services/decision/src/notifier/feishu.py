@@ -156,7 +156,9 @@ class FeishuNotifier:
         report_id: str,
         score: float,
         date: str,
-        hour: int
+        hour: int,
+        reasoning: str = "",
+        seen_content: str = "",
     ) -> bool:
         """
         发送研究员报告评级通知
@@ -191,6 +193,14 @@ class FeishuNotifier:
             color = "red"
             icon = "❌"
 
+        # 避免卡片过长，摘要截断展示
+        safe_seen = (seen_content or "无").replace("\n", " ").strip()
+        safe_reasoning = (reasoning or "无").replace("\n", " ").strip()
+        if len(safe_seen) > 180:
+            safe_seen = safe_seen[:177] + "..."
+        if len(safe_reasoning) > 180:
+            safe_reasoning = safe_reasoning[:177] + "..."
+
         payload = {
             "msg_type": "interactive",
             "card": {
@@ -206,7 +216,24 @@ class FeishuNotifier:
                         "tag": "div",
                         "text": {
                             "tag": "lark_md",
-                            "content": f"**报告ID:** {report_id}\n**评分:** {score:.1f}/100\n**时段:** {date} {hour:02d}:00",
+                            "content": (
+                                f"**报告ID:** {report_id}\n"
+                                f"**评分:** {score:.1f}/100\n"
+                                f"**时段:** {date} {hour:02d}:00"
+                            ),
+                        },
+                    },
+                    {
+                        "tag": "hr",
+                    },
+                    {
+                        "tag": "div",
+                        "text": {
+                            "tag": "lark_md",
+                            "content": (
+                                f"**看到内容:** {safe_seen}\n"
+                                f"**评分理由:** {safe_reasoning}"
+                            ),
                         },
                     },
                     {"tag": "hr"},
