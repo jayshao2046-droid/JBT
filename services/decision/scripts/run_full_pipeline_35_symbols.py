@@ -45,7 +45,12 @@ sys.path.insert(0, str(_BASE))
 
 # 加载环境变量（必须在 import src 模块之前）
 from dotenv import load_dotenv
-load_dotenv(_BASE / ".env")
+env_path = _BASE / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+    print(f"✅ 已加载环境变量: {env_path}")
+else:
+    print(f"⚠️  .env 文件不存在: {env_path}")
 
 from src.research.tqsdk_backtest_client import TqSdkBacktestClient
 from src.research.evidence_manager import EvidenceManager
@@ -56,6 +61,7 @@ from src.research.symbol_profiler import SymbolProfiler
 from src.research.code_generator import CodeGenerator
 from src.research.strategy_param_optimizer import StrategyParamOptimizer
 from src.research.strategy_evaluator import StrategyEvaluator
+from src.research.strategy_monitor import StrategyMonitor
 from src.llm.openai_client import OpenAICompatibleClient
 
 logging.basicConfig(
@@ -137,6 +143,77 @@ STRATEGY_TEMPLATES = [
 ]
 
 PROGRESS_FILE = _BASE / "runtime" / "pipeline_progress.json"
+MAX_RETRIES = 3  # 每个策略最大重试次数
+
+
+def _filter_templates_by_features(features: Any) -> list[dict]:
+    """根据品种特征过滤策略模板。
+
+    如果无特征信息，返回全部模板。
+    - 高波动品种：优先 breakout / intraday_momentum
+    - 低波动品种：优先 mean_reversion / intraday_oscillation
+    - 强趋势品种：优先 trend_following
+    """
+    if features is None:
+        return list(STRATEGY_TEMPLATES)
+
+    applicable = []
+    vol_label = getattr(features, "volatility_label", "Medium")
+    trend_label = getattr(features, "trend_label", "Medium")
+
+    for t in STRATEGY_TEMPLATES:
+        cat = t["category"]
+
+        # 低波动品种跳过纯趋势策略
+        if vol_label == "Low" and cat == "trend_following" and trend_label == "Weak":
+            logger.info(f"  跳过模板 {t['name_suffix']}（低波动+弱趋势品种不适合趋势跟踪）")
+            continue
+
+        # 强趋势品种跳过均值回归
+        if trend_label == "Strong" and cat == "mean_reversion":
+            logger.info(f"  跳过模板 {t['name_suffix']}（强趋势品种不适合均值回归）")
+            continue
+
+        applicable.append(t)
+
+    # 确保至少保留 3 个模板
+    if len(applicable) < 3:
+        return list(STRATEGY_TEMPLATES)
+
+    return applicable
+
+
+def _preflight_check(strategy: dict, strategy_name: str) -> list[str]:
+    """策略 YAML 预检，在进入调优前排除明显无效的策略。
+
+    Returns:
+        错误列表（空 = 通过）
+    """
+    errors: list[str] = []
+
+    if not strategy.get("name"):
+        errors.append("缺少 name 字段")
+
+    if not strategy.get("symbols"):
+        errors.append("缺少 symbols 字段")
+
+    factors = strategy.get("factors", [])
+    if not factors:
+        errors.append("缺少 factors 字段")
+    else:
+        for i, f in enumerate(factors):
+            if not f.get("factor_name"):
+                errors.append(f"factors[{i}] 缺少 factor_name")
+
+    signal = strategy.get("signal", {})
+    if not signal.get("long_condition") and not signal.get("short_condition"):
+        errors.append("signal 缺少 long_condition 和 short_condition")
+
+    risk = strategy.get("risk", {})
+    if not risk:
+        errors.append("缺少 risk 风控配置")
+
+    return errors
 
 
 class PipelineProgress:
@@ -211,6 +288,7 @@ async def process_one_strategy(
         "symbol": symbol,
         "category": template["category"],
         "status": "pending",
+        "run_id": datetime.now().strftime("%Y%m%d_%H%M%S"),
     }
 
     try:
@@ -219,17 +297,73 @@ async def process_one_strategy(
         with open(yaml_path, "r", encoding="utf-8") as f:
             strategy = yaml.safe_load(f)
 
-        # 1. 调优
+        # 预检: 基本字段校验
+        preflight_errors = _preflight_check(strategy, strategy_name)
+        if preflight_errors:
+            result["status"] = "failed"
+            result["error"] = f"预检失败: {'; '.join(preflight_errors)}"
+            logger.warning(f"  预检失败: {strategy_name} — {result['error']}")
+            evidence_mgr.save_failure_report(
+                symbol, strategy_name, "preflight", result["error"],
+                run_id=result["run_id"],
+            )
+            return result
+
+        # 1. 调优（带重试）
         logger.info(f"  [1/5] 开始调优...")
-        opt_result = await optimizer.optimize(strategy, start_date, end_date)
+        opt_result = None
+        for attempt in range(MAX_RETRIES):
+            opt_result = await optimizer.optimize(strategy, start_date, end_date)
+            if "error" not in opt_result:
+                break
+            logger.warning(f"  调优第 {attempt + 1} 次失败: {opt_result.get('error')}")
         result["optimization"] = opt_result
         evidence_mgr.save_optimization_report(symbol, strategy_name, opt_result)
+
+        # 1b. 将 Optuna 最优参数写回 YAML（P0 修复：防止 TqSdk 仍用原始参数）
+        best_params = opt_result.get("best_params") if opt_result else None
+        if best_params:
+            try:
+                import yaml as _yaml
+                with open(yaml_path, "r", encoding="utf-8") as f:
+                    strategy_data = _yaml.safe_load(f)
+                if "parameters" in strategy_data:
+                    for k, v in best_params.items():
+                        if k in strategy_data["parameters"]:
+                            strategy_data["parameters"][k] = v
+                    with open(yaml_path, "w", encoding="utf-8") as f:
+                        _yaml.dump(strategy_data, f, allow_unicode=True, default_flow_style=False)
+                    logger.info(f"  ✓ Optuna 最优参数已写回 YAML: {list(best_params.keys())}")
+                    # 重新加载 strategy 以使用新参数
+                    strategy = strategy_data
+            except Exception as e:
+                logger.warning(f"  ⚠ 参数写回 YAML 失败: {e}")
 
         # 2. 本地回测
         logger.info(f"  [2/5] 本地回测...")
         local_result = await executor.execute(strategy, start_date, end_date)
         result["local_backtest"] = local_result.to_dict()
         evidence_mgr.save_local_backtest_report(symbol, strategy_name, local_result.to_dict())
+
+        # 2b. XGBoost 信号过滤（收集特征并过滤低质量信号）
+        try:
+            from src.research.xgboost_signal_filter import XGBoostSignalFilter
+            xgb_filter = XGBoostSignalFilter()
+            trade_features = local_result.to_dict().get("trade_features", [])
+            if trade_features and len(trade_features) >= 20:
+                xgb_filter.train(trade_features)
+                filtered_count = xgb_filter.filter_signals(trade_features)
+                result["xgboost_filter"] = {
+                    "total_trades": len(trade_features),
+                    "filtered": filtered_count,
+                    "pass_rate": f"{(len(trade_features) - filtered_count) / len(trade_features) * 100:.1f}%",
+                }
+                logger.info(f"  XGBoost 过滤: {filtered_count}/{len(trade_features)} 笔被过滤")
+            else:
+                result["xgboost_filter"] = {"status": "skipped", "reason": "交易特征不足"}
+        except Exception as e:
+            logger.warning(f"  XGBoost 过滤跳过: {e}")
+            result["xgboost_filter"] = {"status": "error", "reason": str(e)}
 
         # 3. TqSdk 回测
         logger.info(f"  [3/5] TqSdk 回测...")
@@ -260,6 +394,24 @@ async def process_one_strategy(
         result["grade"] = grade
         result["status"] = "completed"
 
+        # 5b. 归档归因记录（策略为何拿到这个分数）
+        try:
+            monitor = StrategyMonitor()
+            sharpe = local_result.to_dict().get("sharpe_ratio")
+            max_dd = local_result.to_dict().get("max_drawdown")
+            if final_score < 60 or is_fused:
+                reason = "fused" if is_fused else "low_score"
+                monitor.record_archive_attribution(
+                    strategy_id=strategy_name,
+                    symbol=symbol,
+                    reason=reason,
+                    final_sharpe=sharpe,
+                    max_drawdown=max_dd,
+                    market_context=f"score={final_score}, grade={grade}",
+                )
+        except Exception as e:
+            logger.warning(f"  归档归因记录失败: {e}")
+
         # 6. 飞书通知
         logger.info(f"  [6/6] 发送飞书通知...")
         await feishu_notifier.notify_strategy_completed(
@@ -282,6 +434,11 @@ async def process_one_strategy(
         logger.exception(f"❌ 策略处理失败: {strategy_name}")
         result["status"] = "failed"
         result["error"] = str(e)
+        # 保存失败报告
+        evidence_mgr.save_failure_report(
+            symbol, strategy_name, "pipeline",
+            str(e), run_id=result.get("run_id"),
+        )
 
     return result
 
@@ -326,14 +483,27 @@ async def generate_strategies_for_symbol(
     # 1. 品种特征分析
     try:
         features = await profiler.calculate_features(symbol=symbol_with_exchange)
-        features_desc = f"品种: {symbol}, 波动率: {features.volatility_weighted}, 趋势强度: {features.trend_strength_weighted}"
+        features_desc = (
+            f"品种: {symbol}\n"
+            f"  波动率(1年加权): {features.volatility_weighted:.4f} → {features.volatility_label}\n"
+            f"  趋势强度(1年加权): {features.trend_strength_weighted:.2f} → {features.trend_label}\n"
+            f"  流动性: {features.liquidity_label}\n"
+            f"  周期性: {features.cyclicality_label}\n"
+            f"  均值回归倾向: {features.mean_reversion_label}\n"
+            f"  波动率变化率: {features.volatility_change_label}\n"
+            f"  特征置信度: {features.confidence:.2f}"
+        )
+        symbol_features = features  # 保留完整特征对象用于模板过滤
     except Exception as e:
         logger.warning(f"  品种特征分析失败: {e}，使用默认特征")
-        features_desc = f"品种: {symbol}"
+        features_desc = f"品种: {symbol}（特征分析失败，使用保守参数）"
+        symbol_features = None
 
-    # 2. 逐个生成策略
+    # 2. 根据品种特征过滤策略模板
+    applicable_templates = _filter_templates_by_features(symbol_features)
+
     yaml_files = []
-    for template in STRATEGY_TEMPLATES:
+    for template in applicable_templates:
         strategy_name = f"{symbol}_{template['name_suffix']}"
         yaml_path = output_dir / f"{strategy_name}.yaml"
 
@@ -497,12 +667,28 @@ async def process_one_symbol(
 
     logger.info(f"\n品种 {symbol} 完成: {completed}/{len(results)} 成功, {failed} 失败")
 
+    # 策略池容量检查
+    try:
+        monitor = StrategyMonitor()
+        high_score = sum(1 for r in results if r.get("final_score", 0) >= 70)
+        pool_check = monitor.check_pool_capacity(
+            production_count=completed,
+            candidate_count=high_score,
+        )
+        if pool_check["needs_replenishment"]:
+            logger.warning(f"⚠ {pool_check['reason']}")
+        result_summary = {"pool_check": pool_check}
+    except Exception as e:
+        logger.warning(f"策略池检查失败: {e}")
+        result_summary = {}
+
     return {
         "symbol": symbol,
         "total": len(results),
         "completed": completed,
         "failed": failed,
         "results": results,
+        **result_summary,
     }
 
 

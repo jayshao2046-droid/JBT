@@ -22,6 +22,9 @@ from .researcher_phi4_scorer import ResearcherPhi4Scorer
 
 logger = logging.getLogger(__name__)
 
+# 研报消费审计日志
+_RESEARCH_AUDIT_LOG: list[dict] = []
+
 
 class LLMPipeline:
     """Three-model serial pipeline for strategy research, audit, and analysis."""
@@ -105,6 +108,33 @@ class LLMPipeline:
 
                 context_block = "\n".join(context_parts) + "\n\n"
                 logger.info("已注入研究员上下文到 research() prompt")
+
+        # 注入 ResearchStore 最新宏观判断
+        try:
+            from ..research.research_store import ResearchStore
+            macro = ResearchStore().get_macro_summary()
+            if macro.get("available"):
+                macro_block = (
+                    f"[最新宏观评级]\n"
+                    f"  趋势: {macro.get('macro_trend', 'N/A')}\n"
+                    f"  风险等级: {macro.get('risk_level', 'N/A')}\n"
+                    f"  关键驱动: {', '.join(macro.get('key_drivers', []))}\n"
+                    f"  推荐板块: {', '.join(macro.get('recommended_sectors', []))}\n"
+                    f"  评分: {macro.get('score', 'N/A')}\n\n"
+                )
+                context_block += macro_block
+                # 审计日志：记录宏观判断被消费
+                _RESEARCH_AUDIT_LOG.append({
+                    "consumer": "pipeline.research",
+                    "report_type": "macro",
+                    "action": "inject_to_prompt",
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    "macro_trend": macro.get("macro_trend"),
+                    "risk_level": macro.get("risk_level"),
+                })
+                logger.info("已注入 ResearchStore 宏观判断到 research() prompt")
+        except Exception as e:
+            logger.warning(f"注入宏观判断失败（非致命）: {e}")
 
         # 将上下文拼接到 intent 前
         user_content = context_block + intent

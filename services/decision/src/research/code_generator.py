@@ -172,10 +172,11 @@ no_overnight: true
     ) -> str:
         """构建代码生成 Prompt"""
 
+        recommended_factors = strategy_design.get('recommended_factors', [])
         factors_desc = "\n".join([
             f"- {factor}: 需要配置合理的参数"
-            for factor in strategy_design['recommended_factors']
-        ])
+            for factor in recommended_factors
+        ]) if recommended_factors else "- 根据策略逻辑自行选择合适的技术因子"
 
         # 读取 TqSDK 标准模板
         template_path = Path(__file__).parent / "templates" / "strategy_template.yaml"

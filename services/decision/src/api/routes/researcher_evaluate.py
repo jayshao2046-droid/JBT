@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from ...llm.researcher_qwen3_scorer import ResearcherPhi4Scorer
 from ...notifier.feishu import FeishuNotifier
+from ...research.research_store import ResearchStore
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,7 @@ async def evaluate_researcher_reports(batch: ReportBatchRequest):
         # 初始化评级器（使用 qwen3:14b）
         scorer = ResearcherPhi4Scorer()
         feishu = FeishuNotifier()
+        research_store = ResearchStore()
 
         results = []
 
@@ -98,14 +100,30 @@ async def evaluate_researcher_reports(batch: ReportBatchRequest):
             reasoning = score_result.get("reasoning", "")
             observed_content = score_result.get("observed_content", "")
 
-            results.append({
+            result_record = {
                 "report_type": report_kind,
                 "report_id": report_id,
                 "score": score,
                 "confidence": score_result.get("confidence", "low"),
                 "reasoning": reasoning,
                 "observed_content": observed_content,
-            })
+                "batch_id": batch.batch_id,
+                "date": batch.date,
+                "hour": batch.hour,
+            }
+
+            # 提取宏观报告中的结构化字段（供策略引擎查询）
+            if report_kind == "macro" and isinstance(report_obj, dict):
+                for field in ("macro_trend", "risk_level", "key_drivers",
+                              "recommended_sectors", "volatility_signal",
+                              "sentiment", "risk_note"):
+                    if field in report_obj:
+                        result_record[field] = report_obj[field]
+
+            results.append(result_record)
+
+            # 持久化到 ResearchStore（供 GET /api/v1/research/latest 查询）
+            research_store.save(report_kind, result_record)
 
             await feishu.send_researcher_score(
                 report_type=report_label,

@@ -53,7 +53,7 @@ logging.basicConfig(
 logger = logging.getLogger("llm_pipeline_palm")
 
 # ── 配置 ──────────────────────────────────────────────
-SYMBOL = "DCE.p0"
+SYMBOL = "KQ_m_DCE_p"  # Mini data API 主力连续合约格式
 SYMBOL_NAME = "p"
 SYMBOL_CN = "棕榈油"
 DATA_URL = "http://192.168.31.76:8105"

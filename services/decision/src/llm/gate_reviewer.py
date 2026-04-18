@@ -16,6 +16,9 @@ from ..notifier.dispatcher import DecisionEvent, NotifyLevel, get_dispatcher
 
 logger = logging.getLogger(__name__)
 
+# 研报消费审计日志
+_GATE_AUDIT_LOG: list[dict] = []
+
 
 class GateReviewer:
     """qwen3:14b L1/L2 门控审查器。"""
@@ -221,6 +224,33 @@ class GateReviewer:
         factor_detail = "\n".join([f"  {f['name']}: {f['value']:.4f}" for f in factors[:10]])
         signal_desc = "做多" if signal == 1 else "做空" if signal == -1 else "观望"
 
+        # 注入最新宏观判断
+        macro_block = ""
+        try:
+            from ..research.research_store import ResearchStore
+            macro = ResearchStore().get_macro_summary()
+            if macro.get("available"):
+                macro_block = (
+                    f"\n宏观研判:\n"
+                    f"  趋势: {macro.get('macro_trend', 'N/A')}\n"
+                    f"  风险等级: {macro.get('risk_level', 'N/A')}\n"
+                    f"  关键驱动: {', '.join(macro.get('key_drivers', []))}\n"
+                )
+                # 审计日志
+                import time as _time
+                _GATE_AUDIT_LOG.append({
+                    "consumer": "gate_reviewer.l2_deep_review",
+                    "strategy_id": strategy_id,
+                    "symbol": symbol,
+                    "report_type": "macro",
+                    "action": "inject_to_l2_prompt",
+                    "timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    "risk_level": macro.get("risk_level"),
+                })
+                logger.info("L2 深审已注入宏观风险等级: %s", macro.get("risk_level"))
+        except Exception as e:
+            logger.warning(f"L2 注入宏观判断失败（非致命）: {e}")
+
         system_prompt = """你是 qwen3 门控审查员，负责 L2 深度审查。
 任务：综合评估策略可执行性、风险水平、市场环境匹配度。
 输出格式：严格 JSON，包含 approve(bool), reasoning(str), confidence(float), risk_assessment(str)。"""
@@ -242,7 +272,7 @@ L1 快审结果:
   通过: {l1_result.get('pass')}
   风险标记: {l1_result.get('risk_flag')}
   置信度: {l1_result.get('confidence'):.2f}
-
+{macro_block}
 {context}
 
 请综合评估该策略是否可执行，输出 JSON。"""

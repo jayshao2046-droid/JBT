@@ -37,6 +37,7 @@ _SAFE_BUILTINS: dict[str, Any] = {
     "abs": abs, "max": max, "min": min, "sum": sum, "round": round,
     "sorted": sorted, "reversed": reversed, "isinstance": isinstance,
     "any": any, "all": all, "map": map, "filter": filter,
+    "hasattr": hasattr, "type": type,
     "Exception": Exception, "ValueError": ValueError,
     "IndexError": IndexError, "ZeroDivisionError": ZeroDivisionError,
     "print": print,
@@ -577,6 +578,21 @@ class YAMLSignalExecutor:
         if error:
             return self._fail(strategy_id, error)
 
+        # 信号可行性校验：先跑一次全量数据，信号全 0 则重新生成
+        feasible, signals_preview = self._validate_signal_feasibility(
+            strategy_id, bars, code, strategy, params_override
+        )
+        if not feasible:
+            logger.warning("信号可行性校验失败，尝试重新生成代码...")
+            code, error = await self._generate_signal_code(
+                strategy, params_override,
+                feedback="前一次生成的代码对整个数据集产生 0 笔交易（信号全为 0）。"
+                         "请放宽条件：减少 AND 条件数量、降低阈值、"
+                         "确保 market_filter 和 signal 条件不矛盾。"
+            )
+            if error:
+                return self._fail(strategy_id, error)
+
         return self._run_backtest(strategy_id, bars, code, strategy, params_override)
 
     async def execute_with_code(
@@ -748,11 +764,29 @@ class YAMLSignalExecutor:
   DO NOT access bars[i]["MACD"], bars[i]["RSI"], bars[i]["EMA"], etc. — THESE KEYS DO NOT EXIST!
   You MUST use the ta_* functions below to calculate ALL technical indicators.
 
-OPTIMIZATION OBJECTIVES (优化目标):
-  - 目标交易次数: ≥10 次/年（OOS 期间）
-  - 目标 Sharpe: ≥0.5
-  - 目标胜率: ≥40%
-  - 最大回撤: ≤5%
+DERIVED VARIABLE MAPPING (派生变量计算公式 — 重要!):
+  YAML 信号条件中的变量名必须按以下公式计算：
+  - bollinger_upper, bollinger_mid, bollinger_lower = ta_bollinger(closes, period, std_dev)
+  - bb_bandwidth = (bollinger_upper[i] - bollinger_lower[i]) / bollinger_mid[i]  if bollinger_mid[i] > 0 else 0
+  - bb_position = (close[i] - bollinger_lower[i]) / (bollinger_upper[i] - bollinger_lower[i])  if (bollinger_upper[i] - bollinger_lower[i]) > 0 else 0.5
+  - rsi = ta_rsi(closes, period)  # rsi[i] is the RSI value at bar i
+  - atr = ta_atr(highs, lows, closes, period)  # atr[i] is ATR at bar i
+  - volume_ratio = ta_volume_ratio(volumes, period)  # volume_ratio[i] is ratio at bar i
+  - macd_line, signal_line, macd_hist = ta_macd(closes, fast, slow, signal)
+  - adx = ta_adx(highs, lows, closes, period)
+  - k_vals, d_vals, j_vals = ta_kdj(highs, lows, closes)
+  - cci = ta_cci(highs, lows, closes, period)
+
+SIGNAL CONSISTENCY RULE (信号一致性规则):
+  market_filter 和 signal 条件必须逻辑一致，不能自相矛盾。例如：
+  - ❌ 错误: filter 要求 bb_position 在 0.4~0.6（中间），但 signal 要求 close > bollinger_upper（顶部）
+  - ✅ 正确: breakout 策略的 filter 应该检查波动率（如 atr），signal 检查突破（close > upper）
+  - ✅ 正确: mean_reversion 策略的 filter 检查非极端行情，signal 检查偏离回归
+
+OPTIMIZATION OBJECTIVES (优化目标 — 激进探索优先):
+  - 首要目标: 产生足够多的交易（≥50 次），有亏有赚都可以
+  - 次要目标: 在大量交易中提升胜率和 Sharpe
+  - 条件不要太严格，宁可多开仓再收敛，也不要 0 笔交易
 
 HARD CONSTRAINTS (底线约束 - 绝对不可违反):
   - 必须保持日内交易逻辑（不持仓过夜）
@@ -961,6 +995,72 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
         return "\n".join(lines[start:])
 
     # ------------------------------------------------------------------
+    # Signal feasibility validation (#9, #24)
+    # ------------------------------------------------------------------
+
+    def _validate_signal_feasibility(
+        self,
+        strategy_id: str,
+        bars: list[dict],
+        code: str,
+        strategy: dict,
+        params_override: Optional[dict],
+    ) -> tuple[bool, list[int]]:
+        """校验生成的信号代码是否能产生非零信号。
+
+        用全量 bars 跑一次 compute_signals，如果信号全为 0（无任何开仓），
+        说明条件自相矛盾或过于严格，需要重新生成。
+
+        Returns:
+            (feasible, signals) — feasible=True 表示至少有 1 个非零信号
+        """
+        params: dict[str, Any] = {}
+        for f in strategy.get("factors", []):
+            params.update(f.get("params", {}))
+        if params_override:
+            params.update(params_override)
+
+        try:
+            _ast_whitelist_check(code)
+        except ValueError:
+            return False, []
+
+        try:
+            def _run():
+                _safe_globals = {"__builtins__": _SAFE_BUILTINS, "math": math, **_TA_FUNCTIONS}
+                _local_ns: dict[str, Any] = {}
+                exec(compile(code, "<feasibility_check>", "exec"), _safe_globals, _local_ns)  # noqa: S102
+                _compute = _local_ns.get("compute_signals")
+                if not callable(_compute):
+                    return []
+                return _compute(bars, params)
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(_run)
+                signals = fut.result(timeout=_EXEC_TIMEOUT)
+
+            if not signals or len(signals) != len(bars):
+                return False, []
+
+            non_zero = sum(1 for s in signals if s != 0)
+            if non_zero == 0:
+                logger.warning(
+                    "信号可行性校验: %s — %d 根 K 线全部信号为 0，条件过严或自相矛盾",
+                    strategy_id, len(bars),
+                )
+                return False, signals
+
+            logger.info(
+                "信号可行性校验通过: %s — %d/%d 根有信号 (%.1f%%)",
+                strategy_id, non_zero, len(bars), non_zero / len(bars) * 100,
+            )
+            return True, signals
+
+        except Exception as e:
+            logger.warning("信号可行性校验异常: %s — %s", strategy_id, e)
+            return False, []
+
+    # ------------------------------------------------------------------
     # Backtest execution
     # ------------------------------------------------------------------
 
@@ -1056,9 +1156,22 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
         peak_capital = capital
         position = 0        # 1=long, -1=short, 0=flat
         entry_price = 0.0
+        entry_bar = 0
         daily_pnl: dict[str, float] = {}
         trades: list[dict] = []
         equity_curve: list[float] = [capital]
+
+        # 预计算技术指标用于交易特征快照（供 XGBoost 训练）
+        closes = [float(b.get("close", 0)) for b in bars]
+        highs = [float(b.get("high", 0)) for b in bars]
+        lows = [float(b.get("low", 0)) for b in bars]
+        volumes = [float(b.get("volume", 0)) for b in bars]
+        _feat_rsi = _ta_rsi(closes, 14)
+        _feat_atr = _ta_atr(highs, lows, closes, 14)
+        _feat_adx = _ta_adx(highs, lows, closes, 14)
+        _feat_vol_ratio = _ta_volume_ratio(volumes, 10)
+        _feat_bb_upper, _feat_bb_mid, _feat_bb_lower = _ta_bollinger(closes, 20, 2.0)
+        _feat_macd, _feat_macd_sig, _feat_macd_hist = _ta_macd(closes)
 
         for i, bar in enumerate(bars):
             price = float(bar.get("close", 0) or 0)
@@ -1137,11 +1250,24 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
             if position == 0 and sig == 1:
                 position = 1
                 entry_price = price
-                trades.append({"type": "open_long", "bar": i, "price": price})
+                entry_bar = i
+                # 特征快照（供 XGBoost 训练）
+                feat_snapshot = self._capture_trade_features(
+                    i, closes, _feat_rsi, _feat_atr, _feat_adx,
+                    _feat_vol_ratio, _feat_bb_upper, _feat_bb_mid, _feat_bb_lower,
+                    _feat_macd_hist, bar,
+                )
+                trades.append({"type": "open_long", "bar": i, "price": price, "features": feat_snapshot})
             elif position == 0 and sig == -1:
                 position = -1
                 entry_price = price
-                trades.append({"type": "open_short", "bar": i, "price": price})
+                entry_bar = i
+                feat_snapshot = self._capture_trade_features(
+                    i, closes, _feat_rsi, _feat_atr, _feat_adx,
+                    _feat_vol_ratio, _feat_bb_upper, _feat_bb_mid, _feat_bb_lower,
+                    _feat_macd_hist, bar,
+                )
+                trades.append({"type": "open_short", "bar": i, "price": price, "features": feat_snapshot})
 
             equity_curve.append(capital)
 
@@ -1250,6 +1376,54 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
         bars_per_day = max(1, _TRADING_MINS_PER_DAY // timeframe_minutes)
         annual_bars = bars_per_day * 240
         return (mean_r / std_r) * (annual_bars ** 0.5)
+
+    @staticmethod
+    def _capture_trade_features(
+        idx: int,
+        closes: list[float],
+        rsi: list[float],
+        atr: list[float],
+        adx: list[float],
+        vol_ratio: list[float],
+        bb_upper: list[float],
+        bb_mid: list[float],
+        bb_lower: list[float],
+        macd_hist: list[float],
+        bar: dict,
+    ) -> dict:
+        """捕获开仓时刻的技术指标特征快照（供 XGBoost 训练）。"""
+        close = closes[idx] if idx < len(closes) else 0.0
+        bb_width = (
+            (bb_upper[idx] - bb_lower[idx]) / bb_mid[idx]
+            if idx < len(bb_mid) and bb_mid[idx] > 0
+            else 0.0
+        )
+        bb_pos = (
+            (close - bb_lower[idx]) / (bb_upper[idx] - bb_lower[idx])
+            if idx < len(bb_upper) and (bb_upper[idx] - bb_lower[idx]) > 0
+            else 0.5
+        )
+        # 提取小时（日内时段特征）
+        dt_str = str(bar.get("datetime", bar.get("date", "")))
+        hour = -1
+        try:
+            if len(dt_str) >= 13:
+                hour = int(dt_str[11:13])
+        except (ValueError, IndexError):
+            pass
+
+        return {
+            "rsi": round(rsi[idx], 4) if idx < len(rsi) else 50.0,
+            "atr": round(atr[idx], 6) if idx < len(atr) else 0.0,
+            "atr_pct": round(atr[idx] / close, 6) if idx < len(atr) and close > 0 else 0.0,
+            "adx": round(adx[idx], 4) if idx < len(adx) else 0.0,
+            "volume_ratio": round(vol_ratio[idx], 4) if idx < len(vol_ratio) else 1.0,
+            "bb_width": round(bb_width, 6),
+            "bb_position": round(bb_pos, 4),
+            "macd_hist": round(macd_hist[idx], 6) if idx < len(macd_hist) else 0.0,
+            "hour": hour,
+            "close": round(close, 2),
+        }
 
     @staticmethod
     def _calculate_atr(bars: list[dict], period: int = 14) -> dict[int, float]:
