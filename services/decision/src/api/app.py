@@ -1,4 +1,5 @@
 import hmac
+import logging
 import os
 import time
 from collections import defaultdict
@@ -33,6 +34,8 @@ from .routes.decision_web import router as decision_web_router
 from .routes.factor import router as factor_router
 # LLM 计费 API
 from .routes.billing import router as billing_router
+
+logger = logging.getLogger(__name__)
 
 _DECISION_API_KEY = os.environ.get("DECISION_API_KEY", "")
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -141,27 +144,59 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def _start_daily_summary_scheduler():
-        """每天 18:00 CST 发送门控日报邮件。"""
+        """每天固定 3 个收盘后时点发送门控日报邮件（默认 11:35/15:05/23:05, CST）。"""
         import asyncio
         from datetime import datetime, timezone, timedelta
         from ..notifier.daily_summary import get_daily_summary, send_daily_summary
 
         _TZ_CST = timezone(timedelta(hours=8))
+        raw_times = os.environ.get("DECISION_DAILY_SUMMARY_TIMES", "11:35,15:05,23:05")
+
+        trigger_times: list[tuple[int, int]] = []
+        for item in raw_times.replace("，", ",").split(","):
+            text = item.strip()
+            if not text or ":" not in text:
+                continue
+            hh, mm = text.split(":", 1)
+            if hh.isdigit() and mm.isdigit():
+                h, m = int(hh), int(mm)
+                if 0 <= h <= 23 and 0 <= m <= 59:
+                    trigger_times.append((h, m))
+
+        if len(trigger_times) < 3:
+            trigger_times = [(11, 35), (15, 5), (23, 5)]
+
+        trigger_times = sorted(set(trigger_times))
+
+        def _next_trigger(now: datetime) -> datetime:
+            for h, m in trigger_times:
+                candidate = now.replace(hour=h, minute=m, second=0, microsecond=0)
+                if now < candidate:
+                    return candidate
+            first_h, first_m = trigger_times[0]
+            return (now + timedelta(days=1)).replace(
+                hour=first_h,
+                minute=first_m,
+                second=0,
+                microsecond=0,
+            )
 
         async def _loop():
             while True:
                 now = datetime.now(_TZ_CST)
-                # 计算下一个 18:00
-                target = now.replace(hour=18, minute=0, second=0, microsecond=0)
-                if now >= target:
-                    target = target + timedelta(days=1)
+                target = _next_trigger(now)
                 wait = (target - now).total_seconds()
-                logger.info("日报定时器: 将在 %s 发送 (%.0f 秒后)", target.strftime("%Y-%m-%d %H:%M"), wait)
+                logger.info(
+                    "日报定时器: 将在 %s 发送 (%.0f 秒后), 触发时点=%s",
+                    target.strftime("%Y-%m-%d %H:%M"),
+                    wait,
+                    ",".join(f"{h:02d}:{m:02d}" for h, m in trigger_times),
+                )
                 await asyncio.sleep(wait)
                 try:
                     summary = get_daily_summary()
                     send_daily_summary(summary)
-                    logger.info("日报邮件已触发")
+                    logger.info("日报邮件已触发: %s", target.strftime("%Y-%m-%d %H:%M"))
                 except Exception as exc:
                     logger.error("日报定时器异常: %s", exc)
 
