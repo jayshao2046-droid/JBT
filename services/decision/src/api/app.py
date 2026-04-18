@@ -139,6 +139,34 @@ def create_app() -> FastAPI:
         notifier = BillingNotifier()
         notifier.start()
 
+    @app.on_event("startup")
+    async def _start_daily_summary_scheduler():
+        """每天 18:00 CST 发送门控日报邮件。"""
+        import asyncio
+        from datetime import datetime, timezone, timedelta
+        from ..notifier.daily_summary import get_daily_summary, send_daily_summary
+
+        _TZ_CST = timezone(timedelta(hours=8))
+
+        async def _loop():
+            while True:
+                now = datetime.now(_TZ_CST)
+                # 计算下一个 18:00
+                target = now.replace(hour=18, minute=0, second=0, microsecond=0)
+                if now >= target:
+                    target = target + timedelta(days=1)
+                wait = (target - now).total_seconds()
+                logger.info("日报定时器: 将在 %s 发送 (%.0f 秒后)", target.strftime("%Y-%m-%d %H:%M"), wait)
+                await asyncio.sleep(wait)
+                try:
+                    summary = get_daily_summary()
+                    send_daily_summary(summary)
+                    logger.info("日报邮件已触发")
+                except Exception as exc:
+                    logger.error("日报定时器异常: %s", exc)
+
+        asyncio.create_task(_loop())
+
     return app
 
 

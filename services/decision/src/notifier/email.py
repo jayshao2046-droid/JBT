@@ -90,12 +90,19 @@ class DecisionEmailNotifier:
         self._enabled = raw == "true"
         self._smtp_host: str = os.environ.get("EMAIL_SMTP_HOST", "")
         self._smtp_port: int = int(os.environ.get("EMAIL_SMTP_PORT", "587"))
+        self._smtp_use_ssl: bool = os.environ.get("EMAIL_SMTP_USE_SSL", "false").strip().lower() == "true"
         self._smtp_user: str = os.environ.get("EMAIL_SMTP_USER", "")
         self._smtp_password: str = os.environ.get("EMAIL_SMTP_PASSWORD", "")
         self._from_addr: str = os.environ.get("EMAIL_FROM", "")
-        self._to_addr: str = os.environ.get("EMAIL_TO", "")
+        # 支持逗号分隔多收件人
+        raw_to = os.environ.get("EMAIL_TO", "")
+        self._to_addrs: list[str] = [a.strip() for a in raw_to.replace('，', ',').split(',') if a.strip()]
+        self._to_addr: str = raw_to  # 保留原始字段供 missing 检测
 
     def send(self, event: "DecisionEvent") -> bool:
+        # 仅 DAILY 事件发邮件，其余全部跳过
+        if event.event_type != "DAILY":
+            return True
         if not self._enabled:
             logger.debug("EmailNotifier disabled, skipping %s", event.event_code)
             return True
@@ -146,15 +153,20 @@ class DecisionEmailNotifier:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = f"[DECISION-{level_str}] {event.title}"
         msg["From"] = self._from_addr
-        msg["To"] = self._to_addr
+        msg["To"] = ", ".join(self._to_addrs)
         msg.attach(MIMEText(html_content, "html", "utf-8"))
 
         try:
-            with smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=15) as server:
-                server.starttls()
-                server.login(self._smtp_user, self._smtp_password)
-                server.sendmail(self._from_addr, [self._to_addr], msg.as_string())
-            logger.info("Email sent for event %s", event.event_code)
+            if self._smtp_use_ssl:
+                with smtplib.SMTP_SSL(self._smtp_host, self._smtp_port, timeout=15) as server:
+                    server.login(self._smtp_user, self._smtp_password)
+                    server.sendmail(self._from_addr, self._to_addrs, msg.as_string())
+            else:
+                with smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=15) as server:
+                    server.starttls()
+                    server.login(self._smtp_user, self._smtp_password)
+                    server.sendmail(self._from_addr, self._to_addrs, msg.as_string())
+            logger.info("Email sent for event %s to %s", event.event_code, self._to_addrs)
             return True
         except smtplib.SMTPException as exc:
             logger.error("EmailNotifier SMTP error event=%s: %s", event.event_code, exc)
