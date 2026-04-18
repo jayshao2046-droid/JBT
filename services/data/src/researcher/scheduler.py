@@ -896,8 +896,43 @@ class ResearcherScheduler:
             errors.append(f"context_refresh: {exc}")
             logger.warning("[CONTEXT] 刷新/分析异常: %s", exc)
 
+        # ── 阶段0.5: 把 Mini news_api/rss 缓存记录转为文章对象，注入分析队列 ──
+        mini_news_articles: List[Dict] = []
+        try:
+            for src_key, source_id, title_field, content_field in (
+                ("news_api", "mini_news_api", "title", "content"),
+                ("rss",      "mini_rss",      "title", "summary"),
+            ):
+                cached = self._context_cache.get(src_key, [])
+                if not cached:
+                    continue
+                # 只取最近 30 条，避免重复分析
+                for rec in cached[:30]:
+                    title = str(rec.get(title_field) or rec.get("title") or "").strip()
+                    content = str(rec.get(content_field) or rec.get("full_text") or "").strip()
+                    source_name = str(rec.get("feed") or rec.get("source") or src_key)
+                    if not title or len(title) < 5:
+                        continue
+                    # 用 ArticleDedup 去重
+                    if not self.dedup.is_new(source_id, title):
+                        continue
+                    self.dedup.mark_seen(source_id, title, rec.get("link") or rec.get("url") or "")
+                    mini_news_articles.append({
+                        "source_id": source_id,
+                        "source_name": source_name,
+                        "title": title,
+                        "content": content,
+                        "url": rec.get("link") or rec.get("url") or "",
+                        "published_at": str(rec.get("timestamp") or rec.get("time") or ""),
+                    })
+            if mini_news_articles:
+                logger.info("[CONTEXT] Mini 新闻注入分析队列: %d 条", len(mini_news_articles))
+        except Exception as exc:
+            logger.warning("[CONTEXT] Mini 新闻转换异常: %s", exc)
+
         # ── 阶段1: 流式新闻爬取 + 逐条分析 ──
         new_articles = await self._crawl_stream_with_dedup()
+        new_articles = mini_news_articles + new_articles  # Mini 新闻优先置前
         logger.info(f"[STREAM] 周期 {self._cycle_count}: 新文章 {len(new_articles)} 条")
 
         # 逐条 LLM 分析
@@ -1151,7 +1186,7 @@ class ResearcherScheduler:
         # 注入 Mini 宏观上下文（如有缓存）
         context_text = self._build_context_text()
         context_section = (
-            f"\n\n当前市场宏观背景（来自 Mini 采集，仅供参考）：\n{context_text[:400]}"
+            f"\n\n当前市场宏观背景（来自 Mini 全量采集）：\n{context_text[:800]}"
             if context_text else ""
         )
 
