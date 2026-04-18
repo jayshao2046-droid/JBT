@@ -201,6 +201,8 @@ async def process_one_strategy(
     feishu_webhook: str,
     idx: int,
     total: int,
+    *,
+    iterative: bool = False,
 ) -> dict[str, Any]:
     """处理单个策略：硬性约束预检 + 基线 + 优化 + 评级 + 报告 + 通知。"""
     strategy_id = yaml_path.stem
@@ -229,9 +231,17 @@ async def process_one_strategy(
         return result
 
     # ── 1. 基线回测（全量数据）──
-    logger.info("  [1/2] 基线回测 %s ...", strategy_id)
-    baseline_result = await executor.execute(strategy, start_date, end_date)
-    result["baseline"] = baseline_result.to_dict()
+    if iterative and hasattr(executor, 'execute_with_iterative_optimization'):
+        logger.info("  [1/2] 迭代优化回测 %s ...", strategy_id)
+        baseline_result, iteration_history = await executor.execute_with_iterative_optimization(
+            strategy, start_date, end_date
+        )
+        result["baseline"] = baseline_result.to_dict()
+        result["iteration_history"] = iteration_history
+    else:
+        logger.info("  [1/2] 基线回测 %s ...", strategy_id)
+        baseline_result = await executor.execute(strategy, start_date, end_date)
+        result["baseline"] = baseline_result.to_dict()
 
     if baseline_result.status == "failed":
         logger.error("  基线回测失败: %s", baseline_result.error)
@@ -385,6 +395,8 @@ async def main() -> None:
         help="飞书 Webhook URL（或设置 FEISHU_WEBHOOK_URL 环境变量）",
     )
     parser.add_argument("--sector", default=None, help="限定 sector 目录（如 oilseed）")
+    parser.add_argument("--iterative", action="store_true", default=False,
+                        help="启用迭代优化（ThreeTierOptimizer）替代普通基线回测")
     args = parser.parse_args()
 
     logger.info("╔══════════════════════════════════════════════════════════════╗")
@@ -457,6 +469,7 @@ async def main() -> None:
                 feishu_webhook=args.feishu_webhook,
                 idx=idx,
                 total=len(yaml_files),
+                iterative=args.iterative,
             )
             all_results.append(result)
         except Exception as e:
