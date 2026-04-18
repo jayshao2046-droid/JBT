@@ -76,10 +76,11 @@ class MiniClient:
         return result
 
     def get_context_data(self, data_type: str, days: int = 7) -> List[Dict]:
-        """从 Mini API 获取上下文数据（macro/volatility/shipping/sentiment/rss）
+        """从 Mini API 获取上下文数据（macro/volatility/shipping/sentiment/rss/
+        cftc/forex/news_api/weather/options/position）
 
         Args:
-            data_type: 数据类型，可选 macro/volatility/shipping/sentiment/rss
+            data_type: 数据类型
             days: 查询最近 N 天
 
         Returns:
@@ -95,4 +96,24 @@ class MiniClient:
             return []
         except Exception as exc:
             logger.warning("Failed to fetch %s context from Mini: %s", data_type, exc)
+            return []
+
+    def get_futures_minute_context(self, hours: int = 2) -> List[Dict]:
+        """从 Mini API 获取期货分钟K行情摘要（所有品种近 N 小时聚合）
+
+        Args:
+            hours: 查询最近 N 小时（1~8）
+
+        Returns:
+            summaries 列表，每条含 symbol/latest_close/change_pct/volume 等
+        """
+        try:
+            url = f"{self.base_url}/api/v1/context/futures_minute"
+            resp = requests.get(url, params={"hours": hours}, timeout=20)
+            if resp.status_code == 200:
+                return resp.json().get("summaries", [])
+            logger.warning("Mini futures_minute API returned %s", resp.status_code)
+            return []
+        except Exception as exc:
+            logger.warning("Failed to fetch futures_minute context from Mini: %s", exc)
             return []

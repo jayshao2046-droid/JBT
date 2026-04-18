@@ -303,9 +303,12 @@ class ResearcherScheduler:
         ):
             return False
 
-        logger.info("[CONTEXT] 开始刷新 Mini 上下文数据（宏观/波动率/航运/情绪）...")
+        logger.info("[CONTEXT] 开始刷新 Mini 全量上下文数据（11类+期货分钟K）...")
         ctx: Dict[str, Any] = {}
-        for data_type in ("macro", "volatility", "shipping", "sentiment"):
+        for data_type in (
+            "macro", "volatility", "shipping", "sentiment", "rss",
+            "cftc", "forex", "news_api", "weather", "options", "position",
+        ):
             try:
                 records = self.mini_client.get_context_data(data_type, days=7)
                 ctx[data_type] = records
@@ -313,11 +316,19 @@ class ResearcherScheduler:
             except Exception as exc:
                 logger.warning("[CONTEXT] %s 获取失败: %s", data_type, exc)
                 ctx[data_type] = []
+        # 期货分钟K单独拉取（三级路径，聚合摘要格式与普通records不同）
+        try:
+            summaries = self.mini_client.get_futures_minute_context(hours=2)
+            ctx["futures_minute"] = summaries
+            logger.info("[CONTEXT] futures_minute: %d 个品种", len(summaries))
+        except Exception as exc:
+            logger.warning("[CONTEXT] futures_minute 获取失败: %s", exc)
+            ctx["futures_minute"] = []
 
         self._context_cache = ctx
         self._context_fetched_at = now
         total = sum(len(v) for v in ctx.values())
-        logger.info("[CONTEXT] 刷新完成，共 %d 条: %s", total,
+        logger.info("[CONTEXT] 刷新完成，共 %d 条/项: %s", total,
                     ", ".join(f"{k}={len(v)}" for k, v in ctx.items()))
         return True
 
@@ -387,6 +398,71 @@ class ResearcherScheduler:
                     else:
                         parts.append(f"  {ind}: {ts}")
 
+        # CFTC 持仓
+        cftc = self._context_cache.get("cftc", [])
+        if cftc:
+            parts.append("【CFTC持仓】")
+            seen = set()
+            for r in cftc[:4]:
+                ind = r.get("indicator", "")
+                if ind and ind not in seen:
+                    seen.add(ind)
+                    net = r.get("net_long", r.get("net", r.get("value", "N/A")))
+                    chg = r.get("change", "")
+                    ts = str(r.get("timestamp", ""))[:10]
+                    chg_str = f" 变动{chg:+.0f}" if isinstance(chg, (int, float)) else ""
+                    parts.append(f"  {ind}: 净多{net}{chg_str} ({ts})")
+
+        # 外汇
+        forex = self._context_cache.get("forex", [])
+        if forex:
+            parts.append("【外汇】")
+            seen = set()
+            for r in forex[:4]:
+                ind = r.get("indicator", "")
+                if ind and ind not in seen:
+                    seen.add(ind)
+                    val = r.get("value", r.get("close", "N/A"))
+                    ts = str(r.get("timestamp", ""))[:10]
+                    parts.append(f"  {ind}: {val} ({ts})")
+
+        # 天气
+        weather = self._context_cache.get("weather", [])
+        if weather:
+            parts.append("【主产区天气】")
+            seen = set()
+            for r in weather[:3]:
+                ind = r.get("indicator", "")
+                if ind and ind not in seen:
+                    seen.add(ind)
+                    desc = r.get("description", r.get("condition", r.get("value", "N/A")))
+                    ts = str(r.get("timestamp", ""))[:10]
+                    parts.append(f"  {ind}: {desc} ({ts})")
+
+        # 期权 PCR
+        options = self._context_cache.get("options", [])
+        if options:
+            parts.append("【期权信号】")
+            seen = set()
+            for r in options[:3]:
+                ind = r.get("indicator", "")
+                if ind and ind not in seen:
+                    seen.add(ind)
+                    pcr = r.get("pcr", r.get("value", "N/A"))
+                    ts = str(r.get("timestamp", ""))[:10]
+                    parts.append(f"  {ind} PCR: {pcr} ({ts})")
+
+        # 期货分钟K涨跌幅 Top5（按绝对值排序）
+        futures_min = self._context_cache.get("futures_minute", [])
+        if futures_min:
+            parts.append("【期货近2h涨跌 Top5】")
+            top5 = sorted(futures_min, key=lambda x: abs(x.get("change_pct", 0)), reverse=True)[:5]
+            for r in top5:
+                sym = r.get("symbol", "").replace("KQ_m_", "")
+                close = r.get("latest_close", "N/A")
+                chg = r.get("change_pct", 0)
+                parts.append(f"  {sym}: {close} ({chg:+.2f}%)")
+
         return "\n".join(parts)
 
     async def _analyze_mini_context(self, today: str, hour: int) -> Optional[Dict]:
@@ -397,14 +473,19 @@ class ResearcherScheduler:
             return None
 
         prompt = (
-            "你是期货市场宏观分析师。以下是来自 Mini 数据端采集的最新市场指标数据：\n\n"
+            "你是期货市场宏观分析师。以下是来自 Mini 数据端采集的最新全量市场指标数据：\n\n"
             f"{context_text}\n\n"
-            "请综合分析以上宏观/波动率/航运/情绪指标，生成期货市场宏观研报，用JSON格式回复：\n"
+            "请综合分析以上宏观/波动率/航运/情绪/CFTC持仓/外汇/天气/期权/期货行情等全量指标，"
+            "生成期货市场宏观研报，用JSON格式回复：\n"
             '{"macro_trend":"偏多/偏空/震荡","risk_level":"high/medium/low",'
             '"key_drivers":["驱动1","驱动2","驱动3"],'
             '"volatility_signal":"上升/下降/稳定","shipping_signal":"扩张/收缩/稳定",'
+            '"cftc_signal":"净多持续增加/净多减少/净空增加/震荡",'
+            '"forex_signal":"美元偏强/美元偏弱/震荡",'
             '"sentiment":"乐观/悲观/中性",'
-            '"impact_on_futures":"对期货市场的综合影响分析(150字以内)",'
+            '"top_movers":["涨幅最大品种代码","跌幅最大品种代码"],'
+            '"weather_impact":"天气对农产品期货的影响(50字,无影响填无)",'
+            '"impact_on_futures":"对期货市场的综合影响分析(200字以内)",'
             '"recommended_sectors":["推荐板块1","板块2"],'
             '"risk_note":"主要风险提示"}'
         )
@@ -449,12 +530,16 @@ class ResearcherScheduler:
                     "key_drivers": analysis.get("key_drivers", []),
                     "volatility_signal": analysis.get("volatility_signal", "稳定"),
                     "shipping_signal": analysis.get("shipping_signal", "稳定"),
+                    "cftc_signal": analysis.get("cftc_signal", ""),
+                    "forex_signal": analysis.get("forex_signal", ""),
                     "sentiment": analysis.get("sentiment", "中性"),
+                    "top_movers": analysis.get("top_movers", []),
+                    "weather_impact": analysis.get("weather_impact", ""),
                     "impact_on_futures": analysis.get("impact_on_futures", ""),
                     "recommended_sectors": analysis.get("recommended_sectors", []),
                     "risk_note": analysis.get("risk_note", ""),
                     "data_coverage": coverage,
-                    "context_summary": context_text[:500],
+                    "context_summary": context_text[:800],
                 },
                 "confidence": 1.0,
             }

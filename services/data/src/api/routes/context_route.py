@@ -137,3 +137,121 @@ def get_rss_context(hours: int = Query(24, ge=1, le=168)) -> dict[str, Any]:
     limit = (hours // 24 + 1) * 50
     records = _read_context_records("rss", "news_rss", limit)
     return {"data_type": "rss", "records": records, "count": len(records)}
+
+
+@router.get("/cftc")
+def get_cftc_context(days: int = Query(14, ge=1, le=60)) -> dict[str, Any]:
+    """CFTC 持仓周报（来自 Mini 采集）"""
+    records = _read_context_records("cftc", "cftc", days * 5)
+    return {"data_type": "cftc", "records": records, "count": len(records)}
+
+
+@router.get("/forex")
+def get_forex_context(days: int = Query(7, ge=1, le=30)) -> dict[str, Any]:
+    """外汇数据（USD/CNY、USDX 等，来自 Mini 采集）"""
+    records = _read_context_records("forex", "forex", days * 5)
+    return {"data_type": "forex", "records": records, "count": len(records)}
+
+
+@router.get("/news_api")
+def get_news_api_context(days: int = Query(3, ge=1, le=14)) -> dict[str, Any]:
+    """新闻 API 采集数据（来自 Mini）"""
+    records = _read_context_records("news_api", "news_api", days * 20)
+    return {"data_type": "news_api", "records": records, "count": len(records)}
+
+
+@router.get("/weather")
+def get_weather_context(days: int = Query(7, ge=1, le=30)) -> dict[str, Any]:
+    """主产区天气数据（来自 Mini 采集）"""
+    records = _read_context_records("weather", "weather", days * 5)
+    return {"data_type": "weather", "records": records, "count": len(records)}
+
+
+@router.get("/options")
+def get_options_context(days: int = Query(5, ge=1, le=30)) -> dict[str, Any]:
+    """期权数据（PCR / 隐含波动率等，来自 Mini 采集）"""
+    records = _read_context_records("options", "options", days * 10)
+    return {"data_type": "options", "records": records, "count": len(records)}
+
+
+@router.get("/position")
+def get_position_context(days: int = Query(5, ge=1, le=30)) -> dict[str, Any]:
+    """期货持仓日报（来自 Mini 采集）"""
+    records = _read_context_records("position", "position_daily", days * 10)
+    return {"data_type": "position", "records": records, "count": len(records)}
+
+
+# ─── 期货分钟K专项端点（三级路径，多月分文件，按品种聚合）────────────────────
+
+def _read_futures_minute_summary(hours: int) -> list[dict[str, Any]]:
+    """读取所有期货品种近 N 小时分钟K聚合摘要。
+
+    路径结构：{root}/futures_minute/1m/{symbol}/{yyyymm}.parquet
+    每个品种取最新月份文件，过滤到近 hours 小时，计算涨跌幅/高低点/成交量。
+    """
+    try:
+        import pandas as pd
+    except ImportError:
+        logger.warning("pandas not available, cannot read futures_minute")
+        return []
+
+    root = _get_storage_root()
+    base = Path(root) / "futures_minute" / "1m"
+    if not base.exists():
+        return []
+
+    cutoff = datetime.now() - timedelta(hours=hours)
+    results: list[dict[str, Any]] = []
+
+    for sym_dir in sorted(base.iterdir()):
+        if not sym_dir.is_dir():
+            continue
+        symbol = sym_dir.name  # e.g. KQ_m_SHFE_rb
+        parquets = sorted(sym_dir.glob("*.parquet"))
+        if not parquets:
+            continue
+        # 从最新月份往前找，直到找到近期数据
+        for parquet_file in reversed(parquets):
+            try:
+                df = pd.read_parquet(parquet_file)
+                if df.empty:
+                    continue
+                # 统一去时区（tqsdk 存储可能带 UTC）
+                if hasattr(df["datetime"].dtype, "tz") and df["datetime"].dtype.tz is not None:
+                    df["datetime"] = df["datetime"].dt.tz_localize(None)
+                df_recent = df[df["datetime"] >= cutoff]
+                if df_recent.empty:
+                    continue
+                open_price = float(df_recent.iloc[0]["open"])
+                latest_close = float(df_recent.iloc[-1]["close"])
+                high = float(df_recent["high"].max())
+                low = float(df_recent["low"].min())
+                volume = float(df_recent["volume"].sum())
+                change_pct = (
+                    round((latest_close - open_price) / open_price * 100, 2)
+                    if open_price else 0.0
+                )
+                results.append({
+                    "symbol": symbol,
+                    "latest_close": latest_close,
+                    "open": open_price,
+                    "high": high,
+                    "low": low,
+                    "volume": volume,
+                    "change_pct": change_pct,
+                    "latest_time": str(df_recent.iloc[-1]["datetime"])[:16],
+                    "bars_count": len(df_recent),
+                })
+                break  # 找到有效数据后停止向前找
+            except Exception as exc:
+                logger.warning("futures_minute read error: %s %s", symbol, exc)
+                continue
+
+    return results
+
+
+@router.get("/futures_minute")
+def get_futures_minute_context(hours: int = Query(2, ge=1, le=8)) -> dict[str, Any]:
+    """获取所有期货品种近 N 小时分钟K行情摘要（按品种聚合，供宏观分析使用）"""
+    summaries = _read_futures_minute_summary(hours)
+    return {"data_type": "futures_minute", "hours": hours, "summaries": summaries, "count": len(summaries)}
