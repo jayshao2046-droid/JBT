@@ -615,3 +615,17 @@ Mini 采集 → context API (/api/v1/context/macro,volatility,shipping,sentiment
 ```
 
 **状态：✅ 全链路部署完成，待下一研究周期自动触发验证**
+
+## 最近动作（补录 2026-04-19 — U0 收口）
+
+- 2026-04-19：**TASK-U0-20260419-009 U0 收口完成 ✅**（研究员全量数据接入与决策通知优化）
+  - 涉及 2 服务（data + decision）、8 文件、7 commits（`24cb37d3e`→`fe20ee42b`）
+  - 修复 1：邮件 SSL 465 + 多收件人 + 日报 18:00 触发
+  - 修复 2：日报三次触发（09:35/12:05/15:05）
+  - 修复 3：研究员评级分类型评分 + 字段映射 + 去重 + 飞书卡片理由
+  - 修复 4+5：Mini 11类数据 + 期货分钟K 全量接入（13 个 context 端点）
+  - 修复 6：news_api/rss 文章化分析（阶段0.5）+ macro 专属评分规则 + context 扩800字
+  - 部署验证：py_compile OK；Alienware PID 68720 重启；Studio DECISION 容器重启确认
+  - 审计材料：`docs/tasks/TASK-U0-20260419-009-*.md`、`docs/reviews/REVIEW-U0-20260419-009.md`、`docs/locks/lock-U0-20260419-009.md`
+  - 遗留 P0：TqSdk 参数覆盖（TASK-0127）需标准流程单独建任务修复
+  - 待执行：git commit 审计材料 + push origin/main + 两地同步
