@@ -54,6 +54,7 @@ class ReportBatchRequest(BaseModel):
     futures_report: Dict[str, Any] | None = None
     stocks_report: Dict[str, Any] | None = None
     news_report: Dict[str, Any] | None = None
+    macro_report: Dict[str, Any] | None = None
     rss_report: Dict[str, Any] | None = None
     sentiment_report: Dict[str, Any] | None = None
     total_reports: int = 0
@@ -130,6 +131,11 @@ async def evaluate_researcher_reports(batch: ReportBatchRequest):
         if batch.news_report:
             logger.info(f"评级新闻报告: {batch.news_report.get('report_id')}")
             await _evaluate_and_notify("news", "新闻", batch.news_report)
+
+        # 评级宏观上下文报告（来自 Mini 全量采集数据的 LLM 综合分析）
+        if batch.macro_report:
+            logger.info(f"评级宏观报告: {batch.macro_report.get('report_id')}")
+            await _evaluate_and_notify("macro", "宏观", batch.macro_report)
 
         logger.info(f"完成 qwen3 评级: {batch.batch_id}, 评级 {len(results)} 份报告")
 

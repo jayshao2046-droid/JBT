@@ -31,6 +31,7 @@ from .crawler.anti_detect import AntiDetect
 from .models import SymbolResearch, ReportBatch
 from .dedup import ArticleDedup
 from .kline_analyzer import KlineAnalyzer, is_trading_hours, get_trading_session, _extract_short_symbol, SYMBOL_CN_NAMES
+from .mini_client import MiniClient
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,11 @@ class ResearcherScheduler:
         self._email_evening_sent: Optional[str] = None  # 最后一次发送晚报的日期（YYYY-MM-DD）
         # 4段日报发送记录（key: "08"/"13"/"20"/"00" → 最后发送日期）
         self._email_sent: Dict[str, Optional[str]] = {"08": None, "13": None, "20": None, "00": None}
+        # Mini 上下文数据缓存（宏观/波动率/航运/情绪）
+        self.mini_client = MiniClient(ResearcherConfig.DATA_API_URL)
+        self._context_cache: Dict[str, Any] = {}
+        self._context_fetched_at: Optional[datetime] = None
+        self._pending_macro_report: Optional[Dict] = None
         # 服务启动时记录到当日统计
         self.reporter.stats_tracker.record_startup()
 
@@ -279,6 +285,182 @@ class ResearcherScheduler:
             logger.error(f"Health check failed: {e}", exc_info=True)
             # 检查失败，保守起见暂停
             return False
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Mini 上下文数据接入 — 宏观/波动率/航运/情绪全量数据注入研究员分析链路
+    # ═══════════════════════════════════════════════════════════════════════
+
+    async def _refresh_mini_context(self) -> bool:
+        """刷新 Mini 采集数据上下文缓存（60 分钟 TTL）。
+
+        Returns:
+            True 表示发生了实际刷新，False 表示使用缓存。
+        """
+        now = datetime.now()
+        if (
+            self._context_fetched_at
+            and (now - self._context_fetched_at).total_seconds() < 3600
+        ):
+            return False
+
+        logger.info("[CONTEXT] 开始刷新 Mini 上下文数据（宏观/波动率/航运/情绪）...")
+        ctx: Dict[str, Any] = {}
+        for data_type in ("macro", "volatility", "shipping", "sentiment"):
+            try:
+                records = self.mini_client.get_context_data(data_type, days=7)
+                ctx[data_type] = records
+                logger.info("[CONTEXT] %s: %d 条", data_type, len(records))
+            except Exception as exc:
+                logger.warning("[CONTEXT] %s 获取失败: %s", data_type, exc)
+                ctx[data_type] = []
+
+        self._context_cache = ctx
+        self._context_fetched_at = now
+        total = sum(len(v) for v in ctx.values())
+        logger.info("[CONTEXT] 刷新完成，共 %d 条: %s", total,
+                    ", ".join(f"{k}={len(v)}" for k, v in ctx.items()))
+        return True
+
+    def _build_context_text(self) -> str:
+        """将缓存的上下文数据格式化为 LLM 可读文本（最多 600 字）。"""
+        if not self._context_cache:
+            return ""
+        parts: List[str] = []
+
+        # 宏观指标
+        macro = self._context_cache.get("macro", [])
+        if macro:
+            parts.append("【宏观指标】")
+            seen: set = set()
+            for r in macro[:15]:
+                ind = r.get("indicator", "")
+                if ind and ind not in seen:
+                    seen.add(ind)
+                    val = r.get("value", "N/A")
+                    ts = str(r.get("timestamp", ""))[:10]
+                    parts.append(f"  {ind}: {val} ({ts})")
+
+        # 波动率
+        vol = self._context_cache.get("volatility", [])
+        if vol:
+            parts.append("【波动率指数】")
+            seen = set()
+            for r in vol[:6]:
+                ind = r.get("indicator", "")
+                if ind and ind not in seen:
+                    seen.add(ind)
+                    close = r.get("close", r.get("value", "N/A"))
+                    ts = str(r.get("timestamp", ""))[:10]
+                    parts.append(f"  {ind.upper()}: {close} ({ts})")
+
+        # 航运
+        ship = self._context_cache.get("shipping", [])
+        if ship:
+            parts.append("【航运指数】")
+            seen = set()
+            for r in ship[:6]:
+                ind = r.get("indicator", "")
+                if ind and ind not in seen:
+                    seen.add(ind)
+                    val = r.get("value", "N/A")
+                    chg = r.get("change_pct", "")
+                    ts = str(r.get("timestamp", ""))[:10]
+                    chg_str = f" {chg:+.2f}%" if isinstance(chg, (int, float)) else ""
+                    parts.append(f"  {ind.upper()}: {val}{chg_str} ({ts})")
+
+        # 情绪
+        sent = self._context_cache.get("sentiment", [])
+        if sent:
+            parts.append("【市场情绪】")
+            seen = set()
+            for r in sent[:4]:
+                ind = r.get("indicator", "")
+                if ind and ind not in seen:
+                    seen.add(ind)
+                    ts = str(r.get("timestamp", ""))[:10]
+                    if "margin" in ind:
+                        bal = r.get("margin_balance", "N/A")
+                        parts.append(f"  融资余额({ind}): {bal} ({ts})")
+                    elif "north" in ind:
+                        net = r.get("net_buy", "N/A")
+                        parts.append(f"  北向净买入: {net} ({ts})")
+                    else:
+                        parts.append(f"  {ind}: {ts}")
+
+        return "\n".join(parts)
+
+    async def _analyze_mini_context(self, today: str, hour: int) -> Optional[Dict]:
+        """对 Mini 上下文数据进行 LLM 宏观分析，生成 macro_report 报告。"""
+        context_text = self._build_context_text()
+        if not context_text:
+            logger.info("[CONTEXT] 上下文为空，跳过宏观 LLM 分析")
+            return None
+
+        prompt = (
+            "你是期货市场宏观分析师。以下是来自 Mini 数据端采集的最新市场指标数据：\n\n"
+            f"{context_text}\n\n"
+            "请综合分析以上宏观/波动率/航运/情绪指标，生成期货市场宏观研报，用JSON格式回复：\n"
+            '{"macro_trend":"偏多/偏空/震荡","risk_level":"high/medium/low",'
+            '"key_drivers":["驱动1","驱动2","驱动3"],'
+            '"volatility_signal":"上升/下降/稳定","shipping_signal":"扩张/收缩/稳定",'
+            '"sentiment":"乐观/悲观/中性",'
+            '"impact_on_futures":"对期货市场的综合影响分析(150字以内)",'
+            '"recommended_sectors":["推荐板块1","板块2"],'
+            '"risk_note":"主要风险提示"}'
+        )
+
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{ResearcherConfig.OLLAMA_URL}/api/generate",
+                    json={
+                        "model": ResearcherConfig.OLLAMA_MODEL,
+                        "prompt": prompt,
+                        "stream": False,
+                        "options": {"temperature": 0.3, "num_ctx": 4096},
+                    },
+                    timeout=ResearcherConfig.OLLAMA_TIMEOUT,
+                )
+            if resp.status_code != 200:
+                return None
+
+            text = resp.json().get("response", "")
+            if "<think>" in text and "</think>" in text:
+                text = text[text.index("</think>") + len("</think>"):]
+            text = text.strip()
+
+            analysis: Dict = {}
+            if "{" in text:
+                try:
+                    json_str = text[text.index("{"):text.rindex("}") + 1]
+                    analysis = json.loads(json_str)
+                except Exception:
+                    pass
+
+            coverage = {k: len(v) for k, v in self._context_cache.items() if v}
+            return {
+                "report_id": f"MACRO-{today.replace('-', '')}-{hour:02d}",
+                "report_type": "macro",
+                "date": today,
+                "hour": hour,
+                "data": {
+                    "macro_trend": analysis.get("macro_trend", "震荡"),
+                    "risk_level": analysis.get("risk_level", "medium"),
+                    "key_drivers": analysis.get("key_drivers", []),
+                    "volatility_signal": analysis.get("volatility_signal", "稳定"),
+                    "shipping_signal": analysis.get("shipping_signal", "稳定"),
+                    "sentiment": analysis.get("sentiment", "中性"),
+                    "impact_on_futures": analysis.get("impact_on_futures", ""),
+                    "recommended_sectors": analysis.get("recommended_sectors", []),
+                    "risk_note": analysis.get("risk_note", ""),
+                    "data_coverage": coverage,
+                    "context_summary": context_text[:500],
+                },
+                "confidence": 1.0,
+            }
+        except Exception as exc:
+            logger.warning("[CONTEXT] 宏观 LLM 分析失败: %s", exc)
+            return None
 
     def _check_sim_trading_latency(self) -> float:
         """检查 sim-trading 延迟（毫秒）"""
@@ -617,6 +799,18 @@ class ResearcherScheduler:
                 "pushed_to_decision": 0, "errors": ["资源不足，暂停"], "elapsed_seconds": 0,
             }
 
+        # ── 阶段0: 刷新 Mini 上下文数据（60分钟 TTL）──
+        try:
+            context_refreshed = await self._refresh_mini_context()
+            if context_refreshed and any(self._context_cache.values()):
+                macro_rpt = await self._analyze_mini_context(today, now.hour)
+                if macro_rpt:
+                    self._pending_macro_report = macro_rpt
+                    logger.info("[CONTEXT] 宏观研报已生成: %s", macro_rpt["report_id"])
+        except Exception as exc:
+            errors.append(f"context_refresh: {exc}")
+            logger.warning("[CONTEXT] 刷新/分析异常: %s", exc)
+
         # ── 阶段1: 流式新闻爬取 + 逐条分析 ──
         new_articles = await self._crawl_stream_with_dedup()
         logger.info(f"[STREAM] 周期 {self._cycle_count}: 新文章 {len(new_articles)} 条")
@@ -671,11 +865,15 @@ class ResearcherScheduler:
                 errors.append(f"日K分析失败: {e}")
                 logger.error(f"[STREAM] 盘后日K分析异常: {e}", exc_info=True)
 
-        # ── 阶段3: 推送到 decision（汇总研报）──
+        # ── 阶段3: 推送到 decision（汇总研报 + 宏观上下文报告）──
         pushed = 0
-        if analyzed or kline_reports:
+        macro_report = self._pending_macro_report
+        self._pending_macro_report = None  # 取出后清除，避免重复推送
+        if analyzed or kline_reports or macro_report:
             try:
-                pushed = await self._push_rich_report_to_decision(analyzed, kline_reports, today)
+                pushed = await self._push_rich_report_to_decision(
+                    analyzed, kline_reports, today, macro_report=macro_report
+                )
             except Exception as e:
                 errors.append(f"推送失败: {e}")
                 logger.error(f"[STREAM] 推送 decision 异常: {e}", exc_info=True)
@@ -865,8 +1063,15 @@ class ResearcherScheduler:
             logger.warning(f"[QUALITY] 内容过短，跳过LLM: title={title[:30]!r}, len={len(content)}")
             return None
 
+        # 注入 Mini 宏观上下文（如有缓存）
+        context_text = self._build_context_text()
+        context_section = (
+            f"\n\n当前市场宏观背景（来自 Mini 采集，仅供参考）：\n{context_text[:400]}"
+            if context_text else ""
+        )
+
         # 构建分析 prompt
-        prompt = f"""你是期货市场分析师。请分析以下新闻对期货市场的影响。
+        prompt = f"""你是期货市场分析师。请分析以下新闻对期货市场的影响。{context_section}
 
 新闻标题：{title}
 新闻内容：{content[:500]}
@@ -999,6 +1204,8 @@ class ResearcherScheduler:
         article_reports: List[Dict],
         kline_reports: List[Dict],
         date: str,
+        *,
+        macro_report: Optional[Dict] = None,
     ) -> int:
         """推送研报到 decision — 适配 Studio ReportBatchRequest schema"""
         decision_url = os.getenv("DECISION_API_URL", "http://192.168.31.142:8104")
@@ -1068,7 +1275,8 @@ class ResearcherScheduler:
             "generated_at": now.isoformat(),
             "news_report": news_report,
             "futures_report": futures_report,
-            "total_reports": (1 if news_report else 0) + (1 if futures_report else 0),
+            "macro_report": macro_report,
+            "total_reports": (1 if news_report else 0) + (1 if futures_report else 0) + (1 if macro_report else 0),
         }
 
         try:

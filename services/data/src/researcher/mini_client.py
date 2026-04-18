@@ -74,3 +74,25 @@ class MiniClient:
                 result[symbol] = bars
 
         return result
+
+    def get_context_data(self, data_type: str, days: int = 7) -> List[Dict]:
+        """从 Mini API 获取上下文数据（macro/volatility/shipping/sentiment/rss）
+
+        Args:
+            data_type: 数据类型，可选 macro/volatility/shipping/sentiment/rss
+            days: 查询最近 N 天
+
+        Returns:
+            records 列表，每条含 indicator/timestamp 及 payload 字段
+        """
+        try:
+            url = f"{self.base_url}/api/v1/context/{data_type}"
+            params: Dict = {"days": days}
+            resp = requests.get(url, params=params, timeout=15)
+            if resp.status_code == 200:
+                return resp.json().get("records", [])
+            logger.warning("Mini context API %s returned %s", data_type, resp.status_code)
+            return []
+        except Exception as exc:
+            logger.warning("Failed to fetch %s context from Mini: %s", data_type, exc)
+            return []
