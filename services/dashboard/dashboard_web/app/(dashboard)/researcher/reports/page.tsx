@@ -26,8 +26,8 @@ export default function ResearcherReportsPage() {
         )
 
         const validReports = results
-          .filter((r) => r.status === "fulfilled")
-          .map((r: any) => r.value)
+          .filter((r): r is PromiseFulfilledResult<{ date: string; segments: ReportListItem[] }> => r.status === "fulfilled")
+          .map((r) => r.value)
           .filter((r) => r.segments && r.segments.length > 0)
 
         setReports(validReports)

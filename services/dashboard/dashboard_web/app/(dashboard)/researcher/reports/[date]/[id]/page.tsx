@@ -1,10 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { researcherApi, type ResearchReport } from "@/lib/api/researcher"
 import { useParams, useRouter } from "next/navigation"
 import { ResearchReport as ResearchReportComponent } from "@/components/researcher/ResearchReport"

@@ -2,6 +2,14 @@ import { apiFetch } from "./fetcher"
 
 const BASE = "/api/data/api/v1/researcher"
 
+export interface FuturesSymbolData {
+  [key: string]: unknown
+}
+
+export interface StockMover {
+  [key: string]: unknown
+}
+
 export interface ResearchReport {
   report_id: string
   segment: string
@@ -10,12 +18,12 @@ export interface ResearchReport {
   futures_summary: {
     symbols_covered: number
     market_overview: string
-    symbols: Record<string, any>
+    symbols: Record<string, FuturesSymbolData>
   }
   stocks_summary: {
     symbols_covered: number
     market_overview: string
-    top_movers: any[]
+    top_movers: StockMover[]
   }
 }
 
@@ -43,7 +51,7 @@ export const researcherApi = {
     }>(`${BASE}/status`),
 
   triggerResearch: (segment: string) =>
-    apiFetch<any>(`${BASE}/trigger?segment=${encodeURIComponent(segment)}`, {
+    apiFetch<{ status: string; message: string }>(`${BASE}/trigger?segment=${encodeURIComponent(segment)}`, {
       method: "POST",
     }),
 }

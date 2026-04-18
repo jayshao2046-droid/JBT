@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { ResearchReport as ResearchReportType } from "@/lib/api/researcher"
+import type { ResearchReport as ResearchReportType, FuturesSymbolData, StockMover } from "@/lib/api/researcher"
 
 interface ResearchReportProps {
   report: ResearchReportType
@@ -66,7 +66,7 @@ export function ResearchReport({ report }: ResearchReportProps) {
                   <div className="space-y-2">
                     <div className="font-medium">品种详情</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {Object.entries(report.futures_summary.symbols).map(([symbol, data]: [string, any]) => (
+                      {Object.entries(report.futures_summary.symbols).map(([symbol, data]: [string, FuturesSymbolData]) => (
                         <Card key={symbol}>
                           <CardContent className="p-4">
                             <div className="font-medium mb-2">{symbol}</div>
@@ -104,7 +104,7 @@ export function ResearchReport({ report }: ResearchReportProps) {
                   <div className="space-y-2">
                     <div className="font-medium">异动股票</div>
                     <div className="space-y-2">
-                      {report.stocks_summary.top_movers.map((mover: any, idx: number) => (
+                      {report.stocks_summary.top_movers.map((mover: StockMover, idx: number) => (
                         <Card key={idx}>
                           <CardContent className="p-4">
                             <div className="text-sm text-muted-foreground">
