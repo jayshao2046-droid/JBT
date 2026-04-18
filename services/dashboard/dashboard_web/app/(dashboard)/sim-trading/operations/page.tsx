@@ -11,6 +11,7 @@ import { simTradingApi } from "@/lib/api/sim-trading"
 import { useToast } from "@/hooks/use-toast"
 import { ALL_CONTRACTS } from "@/lib/contracts"
 import { Skeleton } from "@/components/ui/skeleton"
+import { BatchCloseDialog } from "@/components/sim-trading/batch-close-dialog"
 
 export default function OperationsPage() {
   const { account, positions, orders, loading, refetch } = useSimTrading()
@@ -239,6 +240,12 @@ export default function OperationsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 批量平仓对话框 */}
+      <BatchCloseDialog
+        positions={safePositions}
+        onSuccess={refetch}
+      />
     </div>
   )
 }

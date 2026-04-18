@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
 import {
   Cpu,
   HardDrive,
@@ -25,6 +26,9 @@ import {
   FileText,
   AlertCircle,
   Clock,
+  Search,
+  Play,
+  Square,
 } from "lucide-react"
 import { collectorDisplayName, collectorZhName } from "@/lib/collector-labels"
 import { dataApi, ResourceCpu, ResourceMem, ResourceDisk, ProcessEntry, NotifChannel, SourceItem, LogEntry } from "@/lib/api/data"
@@ -38,6 +42,7 @@ function humanBytes(b: number) {
 
 export default function SystemMonitor() {
   const [logFilter, setLogFilter] = useState("all")
+  const [logSearch, setLogSearch] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [fetchError, setFetchError] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
@@ -49,6 +54,8 @@ export default function SystemMonitor() {
   const [notifications, setNotifications] = useState<NotifChannel[]>([])
   const [sources, setSources] = useState<SourceItem[]>([])
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [cpuHistory, setCpuHistory] = useState<number[]>([])
+  const [memHistory, setMemHistory] = useState<number[]>([])
 
   const fetchData = useCallback(async () => {
     try {
@@ -62,6 +69,14 @@ export default function SystemMonitor() {
       setLogs(d.logs ?? [])
       setLastUpdate(new Date().toLocaleTimeString("zh-CN"))
       setFetchError(false)
+
+      // 更新历史数据（保留最近20个数据点）
+      if (d.resources?.cpu?.usage_percent != null) {
+        setCpuHistory((prev) => [...prev.slice(-19), d.resources.cpu.usage_percent])
+      }
+      if (d.resources?.memory?.used_percent != null) {
+        setMemHistory((prev) => [...prev.slice(-19), d.resources.memory.used_percent])
+      }
     } catch {
       setFetchError(true)
     } finally {
@@ -79,6 +94,7 @@ export default function SystemMonitor() {
   }, [autoRefresh, fetchData])
 
   const filteredLogs = logFilter === "all" ? logs : logs.filter((l) => l.level.toLowerCase() === logFilter)
+  const searchedLogs = logSearch ? filteredLogs.filter((l) => l.message.toLowerCase().includes(logSearch.toLowerCase()) || l.source.toLowerCase().includes(logSearch.toLowerCase())) : filteredLogs
 
   if (isLoading)
     return (
@@ -155,6 +171,20 @@ export default function SystemMonitor() {
               </div>
               {r.value != null && <Progress value={r.value} className="h-3 bg-neutral-800" />}
               {r.sub && <p className="text-xs text-neutral-500 mt-2">{r.sub}</p>}
+              {r.label === "CPU 使用率" && cpuHistory.length > 1 && (
+                <div className="mt-3 flex items-end gap-0.5 h-8">
+                  {cpuHistory.map((val, i) => (
+                    <div key={i} className="flex-1 bg-blue-500/30 rounded-t" style={{ height: `${val}%` }} />
+                  ))}
+                </div>
+              )}
+              {r.label === "内存使用率" && memHistory.length > 1 && (
+                <div className="mt-3 flex items-end gap-0.5 h-8">
+                  {memHistory.map((val, i) => (
+                    <div key={i} className="flex-1 bg-purple-500/30 rounded-t" style={{ height: `${val}%` }} />
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -180,9 +210,21 @@ export default function SystemMonitor() {
                         {p.status === "running" ? <CheckCircle className="w-4 h-4 text-green-500" /> : p.status === "warning" ? <AlertTriangle className="w-4 h-4 text-yellow-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
                         <span className="text-white font-medium">{p.name}</span>
                       </div>
-                      <Badge variant="outline" className={p.status === "running" ? "bg-green-500/20 text-green-400 border-green-500/30" : p.status === "warning" ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}>
-                        {p.status === "running" ? "运行中" : p.status === "warning" ? "警告" : "已停止"}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={p.status === "running" ? "bg-green-500/20 text-green-400 border-green-500/30" : p.status === "warning" ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}>
+                          {p.status === "running" ? "运行中" : p.status === "warning" ? "警告" : "已停止"}
+                        </Badge>
+                        {p.status === "stopped" && (
+                          <Button size="sm" variant="outline" className="h-7 px-2 border-green-500/30 text-green-400 hover:bg-green-500/10">
+                            <Play className="w-3 h-3" />
+                          </Button>
+                        )}
+                        {p.status === "running" && (
+                          <Button size="sm" variant="outline" className="h-7 px-2 border-red-500/30 text-red-400 hover:bg-red-500/10">
+                            <Square className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
                       <div>
@@ -255,31 +297,42 @@ export default function SystemMonitor() {
                 <FileText className="w-4 h-4 text-orange-500" />
                 调度日志
               </CardTitle>
-              <Tabs value={logFilter} onValueChange={setLogFilter}>
-                <TabsList className="bg-neutral-800 h-8">
-                  <TabsTrigger value="all" className="text-xs px-3 py-1">
-                    全部
-                  </TabsTrigger>
-                  <TabsTrigger value="info" className="text-xs px-3 py-1">
-                    INFO
-                  </TabsTrigger>
-                  <TabsTrigger value="warning" className="text-xs px-3 py-1">
-                    WARN
-                  </TabsTrigger>
-                  <TabsTrigger value="error" className="text-xs px-3 py-1">
-                    ERROR
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-500" />
+                  <Input
+                    placeholder="搜索日志..."
+                    value={logSearch}
+                    onChange={(e) => setLogSearch(e.target.value)}
+                    className="pl-7 w-40 h-7 text-xs bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500"
+                  />
+                </div>
+                <Tabs value={logFilter} onValueChange={setLogFilter}>
+                  <TabsList className="bg-neutral-800 h-8">
+                    <TabsTrigger value="all" className="text-xs px-3 py-1">
+                      全部
+                    </TabsTrigger>
+                    <TabsTrigger value="info" className="text-xs px-3 py-1">
+                      INFO
+                    </TabsTrigger>
+                    <TabsTrigger value="warning" className="text-xs px-3 py-1">
+                      WARN
+                    </TabsTrigger>
+                    <TabsTrigger value="error" className="text-xs px-3 py-1">
+                      ERROR
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-80 bg-neutral-950 rounded-lg border border-neutral-800 p-4">
-              {filteredLogs.length === 0 ? (
+              {searchedLogs.length === 0 ? (
                 <p className="text-xs text-neutral-500 text-center py-8">暂无日志</p>
               ) : (
                 <div className="space-y-1 font-mono text-xs">
-                  {filteredLogs
+                  {searchedLogs
                     .slice()
                     .reverse()
                     .map((l, i) => (

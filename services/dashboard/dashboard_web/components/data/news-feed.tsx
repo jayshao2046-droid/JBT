@@ -33,7 +33,8 @@ export default function NewsFeed() {
   const [showImportantOnly, setShowImportantOnly] = useState(false)
   const [autoScroll, setAutoScroll] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
-  const [timeRange, setTimeRange] = useState<"1h" | "24h">("1h")
+  const [timeRange, setTimeRange] = useState<"1h" | "6h" | "24h">("24h")
+  const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null)
 
   const [newsItems, setNewsItems] = useState<NewsItem[]>([])
   const [hotKeywords, setHotKeywords] = useState<HotKeyword[]>([])
@@ -67,7 +68,15 @@ export default function NewsFeed() {
     const matchSource = selectedSource === "全部" || news.source === selectedSource
     const matchSearch = news.title.toLowerCase().includes(searchTerm.toLowerCase()) || news.keywords.some((k) => k.toLowerCase().includes(searchTerm.toLowerCase()))
     const matchImportant = !showImportantOnly || news.is_important
-    return matchSource && matchSearch && matchImportant
+    const matchKeyword = !selectedKeyword || news.keywords.includes(selectedKeyword)
+
+    // 时间范围过滤
+    const now = new Date()
+    const publishTime = new Date(news.publish_time)
+    const hoursDiff = (now.getTime() - publishTime.getTime()) / (1000 * 60 * 60)
+    const matchTime = timeRange === "24h" ? hoursDiff <= 24 : timeRange === "6h" ? hoursDiff <= 6 : hoursDiff <= 1
+
+    return matchSource && matchSearch && matchImportant && matchKeyword && matchTime
   })
 
   const getSentimentIcon = (sentiment: SentimentDirection) => {
@@ -119,6 +128,17 @@ export default function NewsFeed() {
             <p className="text-sm text-neutral-400 mt-1">实时财经资讯聚合与情绪观测</p>
           </div>
           <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1 bg-neutral-800 rounded-lg p-1">
+              <button onClick={() => setTimeRange("1h")} className={`px-3 py-1 text-xs rounded ${timeRange === "1h" ? "bg-orange-500 text-white" : "text-neutral-400 hover:text-white"}`}>
+                1小时
+              </button>
+              <button onClick={() => setTimeRange("6h")} className={`px-3 py-1 text-xs rounded ${timeRange === "6h" ? "bg-orange-500 text-white" : "text-neutral-400 hover:text-white"}`}>
+                6小时
+              </button>
+              <button onClick={() => setTimeRange("24h")} className={`px-3 py-1 text-xs rounded ${timeRange === "24h" ? "bg-orange-500 text-white" : "text-neutral-400 hover:text-white"}`}>
+                24小时
+              </button>
+            </div>
             <div className="flex items-center gap-2 text-sm">
               <span className="text-neutral-400">仅看重大</span>
               <Switch checked={showImportantOnly} onCheckedChange={setShowImportantOnly} className="data-[state=checked]:bg-orange-500" />
@@ -135,6 +155,14 @@ export default function NewsFeed() {
         </div>
 
         <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2">
+          {selectedKeyword && (
+            <button
+              onClick={() => setSelectedKeyword(null)}
+              className="px-3 py-1.5 text-sm rounded-lg whitespace-nowrap bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30 transition-colors"
+            >
+              ✕ {selectedKeyword}
+            </button>
+          )}
           {sources.map((source) => (
             <button
               key={source}
@@ -199,7 +227,15 @@ export default function NewsFeed() {
                             </div>
                             <div className="flex items-center gap-2">
                               {news.keywords.slice(0, 3).map((keyword) => (
-                                <Badge key={keyword} variant="outline" className="text-xs border-neutral-700 text-neutral-500 bg-neutral-800/50">
+                                <Badge
+                                  key={keyword}
+                                  variant="outline"
+                                  className="text-xs border-neutral-700 text-neutral-500 bg-neutral-800/50 cursor-pointer hover:bg-neutral-700 hover:text-orange-400 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setSelectedKeyword(keyword)
+                                  }}
+                                >
                                   {keyword}
                                 </Badge>
                               ))}
@@ -254,21 +290,17 @@ export default function NewsFeed() {
                   <Zap className="w-4 h-4 text-orange-500" />
                   关键词热度榜
                 </h3>
-                <div className="flex items-center gap-1 bg-neutral-800 rounded-lg p-1">
-                  <button onClick={() => setTimeRange("1h")} className={`px-2 py-0.5 text-xs rounded ${timeRange === "1h" ? "bg-neutral-700 text-white" : "text-neutral-400"}`}>
-                    1小时
-                  </button>
-                  <button onClick={() => setTimeRange("24h")} className={`px-2 py-0.5 text-xs rounded ${timeRange === "24h" ? "bg-neutral-700 text-white" : "text-neutral-400"}`}>
-                    24小时
-                  </button>
-                </div>
               </div>
               {hotKeywords.length === 0 ? (
                 <p className="text-xs text-neutral-500">暂无热词数据</p>
               ) : (
                 <div className="space-y-2">
                   {hotKeywords.map((item, index) => (
-                    <div key={item.word} className="flex items-center justify-between p-2 bg-neutral-800/50 rounded-lg hover:bg-neutral-800 transition-colors cursor-pointer">
+                    <div
+                      key={item.word}
+                      className="flex items-center justify-between p-2 bg-neutral-800/50 rounded-lg hover:bg-neutral-800 transition-colors cursor-pointer"
+                      onClick={() => setSelectedKeyword(item.word)}
+                    >
                       <div className="flex items-center gap-3">
                         <span className={`w-5 h-5 rounded text-xs font-bold flex items-center justify-center ${index < 3 ? "bg-orange-500 text-white" : "bg-neutral-700 text-neutral-400"}`}>{index + 1}</span>
                         <span className="text-sm text-white">{item.word}</span>

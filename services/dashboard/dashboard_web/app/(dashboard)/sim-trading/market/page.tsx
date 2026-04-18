@@ -4,9 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useMarketData } from "@/hooks/use-market-data"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { KlineChart } from "@/components/sim-trading/kline-chart"
 
 export default function MarketPage() {
   const { ticks, movers, loading } = useMarketData()
+  const selectedSymbol = "IF2505"
 
   // 防御性编程：确保数组类型
   const safeTicks = Array.isArray(ticks) ? ticks : []
@@ -22,6 +24,9 @@ export default function MarketPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* K线图 */}
+      <KlineChart symbol={selectedSymbol} />
+
       {/* 实时行情 */}
       <Card>
         <CardHeader>

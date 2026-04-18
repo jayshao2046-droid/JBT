@@ -5,6 +5,7 @@ import { useSimTrading } from "@/hooks/use-sim-trading"
 import { useRiskControl } from "@/hooks/use-risk-control"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DollarSign, TrendingUp, Activity, AlertTriangle } from "lucide-react"
+import { ExecutionQualityCard } from "@/components/sim-trading/execution-quality-card"
 
 export default function SimTradingOverviewPage() {
   const { account, performance, positions, orders, loading: simLoading } = useSimTrading()
@@ -191,6 +192,9 @@ export default function SimTradingOverviewPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* 执行质量 */}
+      <ExecutionQualityCard />
     </div>
   )
 }

@@ -1,14 +1,26 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useBacktestResults } from "@/hooks/use-backtest-results"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { ResultDetailDialog } from "@/components/backtest/result-detail-dialog"
+import { Eye } from "lucide-react"
+import type { BacktestResult } from "@/lib/api/backtest"
 
 export default function ResultsPage() {
   const { results, loading } = useBacktestResults()
+  const [selectedResult, setSelectedResult] = useState<BacktestResult | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   const safeResults = Array.isArray(results) ? results : []
+
+  const handleViewDetail = (result: BacktestResult) => {
+    setSelectedResult(result)
+    setDialogOpen(true)
+  }
 
   if (loading) {
     return (
@@ -36,7 +48,17 @@ export default function ResultsPage() {
                       <p className="font-medium">{result.strategy_name}</p>
                       <p className="text-xs text-muted-foreground">任务ID: {result.task_id}</p>
                     </div>
-                    <Badge variant="default">已完成</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="default">已完成</Badge>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleViewDetail(result)}
+                      >
+                        <Eye className="w-4 h-4 mr-1" />
+                        详情
+                      </Button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div>
@@ -68,6 +90,14 @@ export default function ResultsPage() {
           )}
         </CardContent>
       </Card>
+
+      {selectedResult && (
+        <ResultDetailDialog
+          result={selectedResult}
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+        />
+      )}
     </div>
   )
 }

@@ -1,18 +1,23 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ParameterOptimizer } from "@/components/backtest/parameter-optimizer"
+import { useBacktest } from "@/hooks/use-backtest"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function OptimizerPage() {
+  const { strategies, loading } = useBacktest()
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <Skeleton className="h-96" />
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>参数优化</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-sm">参数优化功能开发中...</p>
-        </CardContent>
-      </Card>
+      <ParameterOptimizer strategies={strategies} />
     </div>
   )
 }

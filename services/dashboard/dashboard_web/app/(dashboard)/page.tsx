@@ -19,6 +19,9 @@ import { SignalConfirmDialog } from "@/components/dashboard/signal-confirm-dialo
 import { ClosePositionDialog } from "@/components/dashboard/close-position-dialog"
 import { ManualOpenDialog } from "@/components/dashboard/manual-open-dialog"
 import { DisableSignalDialog } from "@/components/dashboard/disable-signal-dialog"
+import { EquityChart } from "@/components/dashboard/equity-chart"
+import { DailyReportCard } from "@/components/dashboard/daily-report-card"
+import { EmergencyStopButton } from "@/components/dashboard/emergency-stop-button"
 import { TrendingUp, DollarSign, Activity, AlertTriangle, RefreshCw } from "lucide-react"
 import { simTradingApi } from "@/lib/api/sim-trading"
 import { reviewSignal } from "@/lib/api/decision"
@@ -222,7 +225,7 @@ export default function DashboardPage() {
           </Card>
         )}
 
-        {/* KPI 卡片 + 服务状态 */}
+        {/* KPI 卡片 + 服务状态 + 紧急暂停 */}
         <div className="flex items-start gap-4">
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {kpiData.map((kpi, idx) => (
@@ -230,6 +233,7 @@ export default function DashboardPage() {
             ))}
           </div>
           <div className="flex gap-2">
+            <EmergencyStopButton />
             {Object.entries(serviceStatuses).map(([name, status]) => (
               <div key={name} className="flex items-center gap-1" title={name}>
                 <div
@@ -244,6 +248,14 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* 权益曲线 + 日报卡片 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <EquityChart />
+          </div>
+          <DailyReportCard />
         </div>
 
         {/* 收益表 + 今日交易汇总 */}

@@ -25,6 +25,8 @@ export default function DataExplorer() {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
   const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
+  const [fileTypeFilter, setFileTypeFilter] = useState("all")
+  const [sortBy, setSortBy] = useState<"name" | "size">("name")
   const [isLoading, setIsLoading] = useState(true)
   const [fetchError, setFetchError] = useState(false)
   const [totals, setTotals] = useState<StorageTotals | null>(null)
@@ -57,10 +59,29 @@ export default function DataExplorer() {
     setExpandedPaths(next)
   }
 
+  const getFileExtension = (name: string) => {
+    const parts = name.split(".")
+    return parts.length > 1 ? parts[parts.length - 1] : ""
+  }
+
+  const matchesFilter = (node: TreeNode): boolean => {
+    if (node.type === "folder") return true
+    if (fileTypeFilter === "all") return true
+    const ext = getFileExtension(node.name)
+    if (fileTypeFilter === "csv" && ext === "csv") return true
+    if (fileTypeFilter === "parquet" && ext === "parquet") return true
+    if (fileTypeFilter === "json" && ext === "json") return true
+    if (fileTypeFilter === "other" && !["csv", "parquet", "json"].includes(ext)) return true
+    return false
+  }
+
   const renderNode = (node: TreeNode, depth = 0): React.ReactElement | null => {
     const isExpanded = expandedPaths.has(node.path)
     const isSelected = selectedNode?.path === node.path
-    if (searchTerm && !node.name.toLowerCase().includes(searchTerm.toLowerCase()) && node.type === "file") {
+    const searchLower = searchTerm.toLowerCase()
+    const matchesSearch = !searchTerm || node.name.toLowerCase().includes(searchLower) || node.path.toLowerCase().includes(searchLower)
+
+    if (!matchesSearch || !matchesFilter(node)) {
       return null
     }
     return (
@@ -164,10 +185,23 @@ export default function DataExplorer() {
 
       <div className="flex-1 flex overflow-hidden">
         <div className="w-72 border-r border-neutral-800 flex flex-col bg-neutral-900/50 flex-shrink-0">
-          <div className="p-3 border-b border-neutral-800">
+          <div className="p-3 border-b border-neutral-800 space-y-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-              <Input placeholder="搜索文件/目录..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500 h-8 text-sm" />
+              <Input placeholder="搜索文件/路径..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500 h-8 text-sm" />
+            </div>
+            <div className="flex items-center gap-2">
+              <select value={fileTypeFilter} onChange={(e) => setFileTypeFilter(e.target.value)} className="flex-1 h-8 px-2 text-xs bg-neutral-800 border border-neutral-700 text-white rounded-md">
+                <option value="all">全部类型</option>
+                <option value="csv">CSV</option>
+                <option value="parquet">Parquet</option>
+                <option value="json">JSON</option>
+                <option value="other">其他</option>
+              </select>
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as "name" | "size")} className="flex-1 h-8 px-2 text-xs bg-neutral-800 border border-neutral-700 text-white rounded-md">
+                <option value="name">按名称</option>
+                <option value="size">按大小</option>
+              </select>
             </div>
           </div>
           <ScrollArea className="flex-1 p-2">
