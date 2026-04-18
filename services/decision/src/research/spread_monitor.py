@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class SpreadMonitor:
     """监控期货产业链内的价差 Z-score。
 
-    Z-score > 2σ → deepcoder 自动生成套利策略意图 → pipeline.full_pipeline()
+    Z-score > 2σ → qwen3 自动生成套利策略意图 → pipeline.full_pipeline()
     """
 
     CHAINS = {

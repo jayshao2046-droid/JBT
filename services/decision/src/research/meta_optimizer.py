@@ -27,7 +27,7 @@ from typing import Any, Optional
 
 import yaml
 
-from llm.openai_client import OpenAICompatibleClient
+from ..llm.openai_client import OpenAICompatibleClient
 from .stability_filter import StabilityFilter, OptimizationRecord
 
 logger = logging.getLogger(__name__)

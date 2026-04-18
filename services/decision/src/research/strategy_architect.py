@@ -34,7 +34,7 @@ import os
 import re
 from typing import Any, Optional
 
-from services.decision.src.llm.openai_client import OpenAICompatibleClient
+from ..llm.openai_client import OpenAICompatibleClient
 from .symbol_profiler import SymbolFeatures
 
 logger = logging.getLogger(__name__)

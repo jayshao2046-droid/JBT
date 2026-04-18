@@ -1,7 +1,7 @@
 """YAML 信号执行器 — TASK-0122-B + TASK-U0-20260417-006
 
-将 YAML 策略文件中的信号定义通过 deepcoder:14b 翻译为可执行 Python 函数，
-phi4-reasoning:14b 审核后，使用 Mini 历史 K 线数据执行真实回测。
+将 YAML 策略文件中的信号定义通过 qwen3:14b 翻译为可执行 Python 函数，
+qwen3:14b 审核后，使用 Mini 历史 K 线数据执行真实回测。
 
 TASK-U0-20260417-006: 添加 Researcher ↔ Critic 迭代优化流程，
 支持多轮迭代（最多30轮），将策略优化到生产级标准。
@@ -383,8 +383,8 @@ class SignalBacktestResult:
 class YAMLSignalExecutor:
     """YAML 策略信号执行器。
 
-    通过 deepcoder:14b 将 YAML 信号定义翻译为 Python 函数，
-    phi4-reasoning:14b 审核后用真实 K 线数据执行回测。
+    通过 qwen3:14b 将 YAML 信号定义翻译为 Python 函数，
+    qwen3:14b 审核后用真实 K 线数据执行回测。
     """
 
     MAX_RETRY = 2
@@ -393,8 +393,8 @@ class YAMLSignalExecutor:
         self,
         data_service_url: str = "http://192.168.31.76:8105",
         ollama_url: str = "http://192.168.31.142:11434",
-        researcher_model: str = "deepcoder:14b",
-        auditor_model: str = "phi4-reasoning:14b",
+        researcher_model: str = "qwen3:14b-q4_K_M",
+        auditor_model: str = "qwen3:14b-q4_K_M",
         initial_capital: float = 500_000.0,
     ) -> None:
         self.data_service_url = data_service_url.rstrip("/")
@@ -403,20 +403,32 @@ class YAMLSignalExecutor:
         llm_provider = os.getenv("LLM_PROVIDER", "ollama").lower()
         if llm_provider == "online":
             logger.info("使用在线 API 客户端（OpenAI-compatible）")
-            self.client = OpenAICompatibleClient()
+            self.client = OpenAICompatibleClient(component="yaml_executor")
             self.researcher_model = os.getenv("ONLINE_RESEARCHER_MODEL", "qwen-coder-plus")
             self.auditor_model = os.getenv("ONLINE_AUDITOR_MODEL", "qwen-plus")
         else:
             logger.info("使用本地 Ollama 客户端")
-            self.client = OllamaClient(base_url=ollama_url)
+            self.client = OllamaClient(base_url=ollama_url, component="yaml_executor")
             self.researcher_model = os.getenv("OLLAMA_RESEARCHER_MODEL", researcher_model)
             self.auditor_model = os.getenv("OLLAMA_AUDITOR_MODEL", auditor_model)
 
         self.initial_capital = initial_capital
 
-        # Critic 客户端（本地 Ollama，用于迭代优化）
-        self.critic_client = OllamaClient(base_url=ollama_url)
-        self.critic_model = os.getenv("CRITIC_MODEL", "qwen3:14b")
+        # Critic 客户端走 HybridClient：Ollama 优先，超时降级在线
+        from ..llm.client import HybridClient
+        critic_provider = os.getenv("CRITIC_LLM_PROVIDER", "hybrid").lower()
+        if critic_provider == "online":
+            self.critic_client = OpenAICompatibleClient(component="critic")
+            self.critic_model = os.getenv("ONLINE_AUDITOR_MODEL", "gpt-5.4")
+        elif critic_provider == "ollama":
+            self.critic_client = OllamaClient(base_url=ollama_url, component="critic")
+            self.critic_model = os.getenv("CRITIC_MODEL", "qwen3:14b")
+        else:
+            self.critic_client = HybridClient(
+                ollama_client=OllamaClient(base_url=ollama_url),
+                component="critic",
+            )
+            self.critic_model = os.getenv("CRITIC_MODEL", "qwen3:14b")
 
         # 迭代优化开关
         self.enable_iterative_optimization = os.getenv("ENABLE_ITERATIVE_OPTIMIZATION", "false").lower() == "true"
@@ -541,7 +553,7 @@ class YAMLSignalExecutor:
         end_date: str,
         params_override: Optional[dict] = None,
     ) -> SignalBacktestResult:
-        """执行 YAML 策略回测（含 deepcoder 代码生成）。
+        """执行 YAML 策略回测（含 qwen3 代码生成）。
 
         Args:
             strategy: YAML 策略配置字典
@@ -579,7 +591,7 @@ class YAMLSignalExecutor:
         Args:
             strategy: YAML 策略配置字典
             bars: 已拉取的 K 线数据
-            code: deepcoder 已生成的 compute_signals 函数代码
+            code: qwen3 已生成的 compute_signals 函数代码
             params_override: 覆盖因子参数
         """
         strategy_id = strategy.get("name", "unknown")
@@ -637,19 +649,19 @@ class YAMLSignalExecutor:
         return "UNKNOWN.0"
 
     # ------------------------------------------------------------------
-    # Code generation (deepcoder + phi4)
+    # Code generation (qwen3 + qwen3)
     # ------------------------------------------------------------------
 
     async def _generate_signal_code(
         self, strategy: dict, params_override: Optional[dict], feedback: str = ""
     ) -> tuple[str, str]:
-        """调用 deepcoder 生成信号函数，phi4 审核，最多 MAX_RETRY 次。
+        """调用 qwen3 生成信号函数，qwen3 审核，最多 MAX_RETRY 次。
 
         Returns:
             (code, error_message) — error_message 为空表示成功
         """
         for attempt in range(self.MAX_RETRY + 1):
-            prompt = self._build_deepcoder_prompt(strategy, params_override, feedback)
+            prompt = self._build_qwen3_prompt(strategy, params_override, feedback)
             messages = [
                 {
                     "role": "system",
@@ -664,15 +676,15 @@ class YAMLSignalExecutor:
 
             if "error" in result:
                 if attempt < self.MAX_RETRY:
-                    logger.warning("deepcoder attempt %d failed: %s, retrying...", attempt + 1, result["error"])
+                    logger.warning("qwen3 attempt %d failed: %s, retrying...", attempt + 1, result["error"])
                     continue
-                return "", f"deepcoder 生成失败: {result['error']}"
+                return "", f"qwen3 生成失败: {result['error']}"
 
             code = self._extract_python_code(result.get("content", ""))
             if not code:
                 if attempt < self.MAX_RETRY:
                     continue
-                return "", "deepcoder 未生成有效 Python 函数"
+                return "", "qwen3 未生成有效 Python 函数"
 
             # 语法校验
             try:
@@ -683,22 +695,22 @@ class YAMLSignalExecutor:
                     continue
                 return "", f"生成代码语法错误: {e}"
 
-            # phi4 审核
+            # qwen3 审核
             audit_ok, audit_reason = await self._audit_code(strategy, code)
             if audit_ok:
                 logger.info("策略 %s 代码生成通过审核（attempt %d）", strategy.get("name"), attempt + 1)
                 return code, ""
 
             if attempt < self.MAX_RETRY:
-                logger.warning("phi4 审核拒绝 attempt %d: %s，重试...", attempt + 1, audit_reason)
+                logger.warning("qwen3 审核拒绝 attempt %d: %s，重试...", attempt + 1, audit_reason)
                 feedback = audit_reason
                 continue
 
-            return "", f"phi4 审核失败（{self.MAX_RETRY + 1} 次后放弃）: {audit_reason}"
+            return "", f"qwen3 审核失败（{self.MAX_RETRY + 1} 次后放弃）: {audit_reason}"
 
         return "", "代码生成失败（未知原因）"
 
-    def _build_deepcoder_prompt(
+    def _build_qwen3_prompt(
         self,
         strategy: dict,
         params_override: Optional[dict],
@@ -879,7 +891,7 @@ def compute_signals(bars: list, params: dict) -> list:
 Output ONLY the Python function. No markdown fences. No explanation."""
 
     async def _audit_code(self, strategy: dict, code: str) -> tuple[bool, str]:
-        """phi4-reasoning 审核生成代码是否符合策略意图。"""
+        """qwen3:14b 审核生成代码是否符合策略意图。"""
         signal = strategy.get("signal", {})
         factors = strategy.get("factors", [])
         factor_names = [f.get("factor_name", "") for f in factors]
@@ -909,8 +921,8 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
         result = await self.client.chat(self.auditor_model, messages, timeout=180.0)
 
         if "error" in result:
-            # phi4 失败时不阻断，允许通过
-            logger.warning("phi4 audit error (non-blocking): %s", result["error"])
+            # qwen3 失败时不阻断，允许通过
+            logger.warning("qwen3 audit error (non-blocking): %s", result["error"])
             return True, ""
 
         content = result.get("content", "").strip()

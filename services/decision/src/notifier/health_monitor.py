@@ -109,12 +109,12 @@ class HealthMonitor:
         try:
             # TODO: 实际检查逻辑
             # 1. 检查 Ollama 服务可用性
-            # 2. 检查 phi4-reasoning:14b 模型加载状态
+            # 2. 检查 qwen3:14b 模型加载状态
             # 3. 检查模型响应时间
 
             comp.set_healthy("模型服务正常")
             comp.metrics = {
-                "model": "phi4-reasoning:14b",
+                "model": "qwen3:14b",
                 "avg_response_time_ms": 0,
             }
 

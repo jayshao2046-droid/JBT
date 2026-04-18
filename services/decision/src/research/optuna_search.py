@@ -61,7 +61,7 @@ class OptunaSearch:
     ) -> dict[str, Any]:
         """夜间批量参数调优入口（TASK-0112-C）。
 
-        由 deepcoder:14b 在非交易时段触发，搜索最优 XGBoost 参数。
+        由 qwen3:14b 在非交易时段触发，搜索最优 XGBoost 参数。
         返回 best_params + 调优摘要，不自动写入注册表（由调用方决定是否注册）。
 
         Args:

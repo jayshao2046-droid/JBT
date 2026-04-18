@@ -177,6 +177,24 @@ L2 深审结果:
             response.raise_for_status()
             data = response.json()
 
+            # 检测网关伪 200 错误 (中转站返回 HTTP 200 + status "439" 等)
+            gw_status = data.get("status")
+            if gw_status and str(gw_status) != "200":
+                error_msg = data.get("msg", f"upstream error {gw_status}")
+                raise RuntimeError(f"Gateway [{gw_status}]: {error_msg[:200]}")
+
+            # 记录计费
+            usage = data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            from .billing import get_billing_tracker
+            get_billing_tracker().record(
+                model=model,
+                input_tokens=prompt_tokens,
+                output_tokens=completion_tokens,
+                component="online_confirmer",
+            )
+
             content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
 
             # 解析 JSON 响应

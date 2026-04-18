@@ -1,6 +1,6 @@
-"""Gate Reviewer for phi4-reasoning L1/L2 signal review.
+"""Gate Reviewer for qwen3:14b L1/L2 signal review.
 
-TASK-0112 Batch A: phi4-reasoning:14b L1 快审 + L2 深审封装。
+TASK-0112 Batch A: qwen3:14b L1 快审 + L2 深审封装。
 """
 
 import json
@@ -10,27 +10,42 @@ import re
 import unicodedata
 from typing import Any, Dict, List, Optional
 
-from .client import OllamaClient
+from .client import OllamaClient, HybridClient
+from .openai_client import OpenAICompatibleClient
 from ..notifier.dispatcher import DecisionEvent, NotifyLevel, get_dispatcher
 
 logger = logging.getLogger(__name__)
 
 
 class GateReviewer:
-    """phi4-reasoning:14b L1/L2 门控审查器。"""
+    """qwen3:14b L1/L2 门控审查器。"""
 
-    MODEL = "phi4-reasoning:14b"
+    MODEL = "qwen3:14b-q4_K_M"
     # 安全修复：P2-3 - 从环境变量读取超时配置
     L1_TIMEOUT = float(os.environ.get("GATE_L1_TIMEOUT", "30.0"))  # L1 快审超时
     L2_TIMEOUT = float(os.environ.get("GATE_L2_TIMEOUT", "60.0"))  # L2 深审超时
 
-    def __init__(self, client: Optional[OllamaClient] = None):
+    def __init__(self, client=None):
         """初始化门控审查器。
 
         Args:
-            client: OllamaClient 实例，默认创建新实例
+            client: OllamaClient 或 OpenAICompatibleClient 实例，默认按 LLM_PROVIDER 选择
         """
-        self.client = client or OllamaClient()
+        # L1/L2 高频审查走 HybridClient：Ollama 优先，超时自动降级在线
+        llm_provider = os.getenv("GATE_LLM_PROVIDER", "hybrid").lower()
+        if client is not None:
+            self.client = client
+        elif llm_provider == "online":
+            self.client = OpenAICompatibleClient(component="gate_reviewer")
+        elif llm_provider == "ollama":
+            self.client = OllamaClient(component="gate_reviewer")
+        else:
+            self.client = HybridClient(component="gate_reviewer")
+
+        if llm_provider == "online":
+            self.model = os.getenv("ONLINE_AUDITOR_MODEL", "gpt-5.4")
+        else:
+            self.model = self.MODEL
 
     @staticmethod
     def _sanitize_context(context: str) -> str:
@@ -108,7 +123,7 @@ class GateReviewer:
         # 清理 context 防止 prompt 注入（安全修复：P0-3）
         context = self._sanitize_context(context)
 
-        system_prompt = """你是 phi4-reasoning 门控审查员，负责 L1 快速审查。
+        system_prompt = """你是 qwen3 门控审查员，负责 L1 快速审查。
 任务：判断信号方向是否与近期趋势严重矛盾。
 输出格式：严格 JSON，包含 pass(bool), risk_flag(str), confidence(float), reasoning(str)。"""
 
@@ -126,7 +141,7 @@ class GateReviewer:
             {"role": "user", "content": user_prompt},
         ]
 
-        result = await self.client.chat(self.MODEL, messages, timeout=self.L1_TIMEOUT)
+        result = await self.client.chat(self.model, messages, timeout=self.L1_TIMEOUT)
 
         if "error" in result:
             logger.error(f"L1 快审失败: {result['error']}")
@@ -206,7 +221,7 @@ class GateReviewer:
         factor_detail = "\n".join([f"  {f['name']}: {f['value']:.4f}" for f in factors[:10]])
         signal_desc = "做多" if signal == 1 else "做空" if signal == -1 else "观望"
 
-        system_prompt = """你是 phi4-reasoning 门控审查员，负责 L2 深度审查。
+        system_prompt = """你是 qwen3 门控审查员，负责 L2 深度审查。
 任务：综合评估策略可执行性、风险水平、市场环境匹配度。
 输出格式：严格 JSON，包含 approve(bool), reasoning(str), confidence(float), risk_assessment(str)。"""
 
@@ -237,7 +252,7 @@ L1 快审结果:
             {"role": "user", "content": user_prompt},
         ]
 
-        result = await self.client.chat(self.MODEL, messages, timeout=self.L2_TIMEOUT)
+        result = await self.client.chat(self.model, messages, timeout=self.L2_TIMEOUT)
 
         if "error" in result:
             logger.error(f"L2 深审失败: {result['error']}")

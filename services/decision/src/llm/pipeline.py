@@ -12,7 +12,8 @@ from typing import Any, Dict, Optional
 
 import httpx
 
-from .client import OllamaClient
+from .client import OllamaClient, HybridClient
+from .openai_client import OpenAICompatibleClient
 from .context_loader import get_daily_context
 from .prompts import ANALYST_SYSTEM, AUDITOR_SYSTEM, RESEARCHER_SYSTEM
 from .researcher_loader import ResearcherLoader
@@ -25,17 +26,37 @@ logger = logging.getLogger(__name__)
 class LLMPipeline:
     """Three-model serial pipeline for strategy research, audit, and analysis."""
 
-    def __init__(self, client: Optional[OllamaClient] = None):
+    def __init__(self, client=None):
         """
         Initialize LLM pipeline.
 
         Args:
-            client: OllamaClient instance. If None, creates a new one.
+            client: OllamaClient or OpenAICompatibleClient instance.
+                   If None, auto-selects based on LLM_PROVIDER env var.
         """
-        self.client = client or OllamaClient()
-        self.researcher_model = os.getenv("OLLAMA_RESEARCHER_MODEL", "deepcoder:14b")
-        self.auditor_model = os.getenv("OLLAMA_AUDITOR_MODEL", "phi4-reasoning:14b")
-        self.analyst_model = os.getenv("OLLAMA_ANALYST_MODEL", "phi4-reasoning:14b")
+        # 高频组件走 HybridClient：本地 Ollama 优先，超时自动降级到在线 API
+        llm_provider = os.getenv("PIPELINE_LLM_PROVIDER", "hybrid").lower()
+
+        if client is not None:
+            self.client = client
+        elif llm_provider == "online":
+            logger.info("LLMPipeline: 强制使用在线 API")
+            self.client = OpenAICompatibleClient(component="pipeline")
+        elif llm_provider == "ollama":
+            logger.info("LLMPipeline: 强制使用本地 Ollama（无降级）")
+            self.client = OllamaClient(component="pipeline")
+        else:
+            logger.info("LLMPipeline: 混合模式（Ollama 优先，超时降级在线）")
+            self.client = HybridClient(component="pipeline")
+
+        if llm_provider == "online":
+            self.researcher_model = os.getenv("ONLINE_RESEARCHER_MODEL", "gpt-5.4")
+            self.auditor_model = os.getenv("ONLINE_AUDITOR_MODEL", "gpt-5.4")
+            self.analyst_model = os.getenv("ONLINE_RESEARCHER_MODEL", "gpt-5.4")
+        else:
+            self.researcher_model = os.getenv("OLLAMA_RESEARCHER_MODEL", "qwen3:14b-q4_K_M")
+            self.auditor_model = os.getenv("OLLAMA_AUDITOR_MODEL", "qwen3:14b-q4_K_M")
+            self.analyst_model = os.getenv("OLLAMA_ANALYST_MODEL", "qwen3:14b-q4_K_M")
 
         # TASK-0121-D1: 初始化研究员报告加载器和评分器
         data_service_url = os.getenv("DATA_SERVICE_URL", "http://192.168.31.76:8105")
@@ -45,7 +66,7 @@ class LLMPipeline:
 
     async def research(self, intent: str) -> Dict[str, Any]:
         """
-        Call deepcoder to generate strategy code.
+        Call qwen3 to generate strategy code.
 
         TASK-0104-D2: 注入 researcher_context 到 user message 前。
 
@@ -211,7 +232,7 @@ class LLMPipeline:
 
     async def analyze(self, performance_data: Dict[str, Any], symbol: Optional[str] = None, timeframe: Optional[str] = None) -> Dict[str, Any]:
         """
-        Call phi4-reasoning to analyze performance data.
+        Call qwen3 to analyze performance data.
 
         TASK-0083: 增加自动从 data 服务拉取 K 线数据能力。
         TASK-0104-D2: 注入 analyst_dataset 到 user message 前。
@@ -414,7 +435,7 @@ class LLMPipeline:
 
     async def research_with_data(self, intent: str, symbol: str, timeframe: str, start_date: str, end_date: str) -> Dict[str, Any]:
         """
-        TASK-0083: 先从 data API 拉取标的 K 线，再传给 deepcoder 做策略研究。
+        TASK-0083: 先从 data API 拉取标的 K 线，再传给 qwen3 做策略研究。
 
         Args:
             intent: Strategy intent description
@@ -502,7 +523,7 @@ class LLMPipeline:
         Returns:
             Dict containing:
                 - report: 原始报告数据
-                - score: phi4 评分 (0.0-1.0)
+                - score: qwen3 评分 (0.0-1.0)
                 - confidence: 置信度 (high/medium/low)
                 - reasoning: 评级理由
                 - key_insights: 关键洞察列表
@@ -526,15 +547,15 @@ class LLMPipeline:
             result["report"] = report
             logger.info(f"已加载报告: {report.get('report_id', 'unknown')}")
 
-            # 2. 使用 phi4 进行评级
-            logger.info("使用 phi4 评估报告")
+            # 2. 使用 qwen3 进行评级
+            logger.info("使用 qwen3 评估报告")
             scoring_result = await self.researcher_phi4_scorer.score_report(
                 report=report,
                 context={}  # 可以传入持仓、市场上下文等
             )
 
             result.update(scoring_result)
-            logger.info(f"phi4 评分: {scoring_result.get('score')}, 置信度: {scoring_result.get('confidence')}")
+            logger.info(f"qwen3 评分: {scoring_result.get('score')}, 置信度: {scoring_result.get('confidence')}")
 
             # 3. 发送飞书通知
             logger.info("发送飞书通知")

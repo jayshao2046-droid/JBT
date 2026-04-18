@@ -1,6 +1,6 @@
 """研究员报告评级端点 - 接收 Alienware 研究员推送并触发 LLM 评级
 
-使用 qwen3:14b 模型进行报告评级（2026-04-17 切换，原为 phi4-reasoning:14b）
+使用 qwen3:14b 模型进行报告评级（2026-04-17 切换，原为 qwen3:14b）
 """
 
 import logging
@@ -8,7 +8,7 @@ from typing import Dict, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ...llm.researcher_phi4_scorer import ResearcherPhi4Scorer
+from ...llm.researcher_qwen3_scorer import ResearcherPhi4Scorer
 from ...notifier.feishu import FeishuNotifier
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ class ReportBatchRequest(BaseModel):
 @router.post("/evaluate")
 async def evaluate_researcher_reports(batch: ReportBatchRequest):
     """
-    接收研究员报告批次并触发 phi4 评级
+    接收研究员报告批次并触发 qwen3 评级
 
     Args:
         batch: 报告批次
@@ -111,7 +111,7 @@ async def evaluate_researcher_reports(batch: ReportBatchRequest):
                 hour=batch.hour
             )
 
-        logger.info(f"完成 phi4 评级: {batch.batch_id}, 评级 {len(results)} 份报告")
+        logger.info(f"完成 qwen3 评级: {batch.batch_id}, 评级 {len(results)} 份报告")
 
         return {
             "success": True,

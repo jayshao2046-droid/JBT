@@ -1,6 +1,6 @@
 """行情类型检测器 — TASK-0114
 
-调用 phi4-reasoning 判断行情类型（5分类：趋势/震荡/高波动/压缩/事件驱动）。
+调用 qwen3:14b 判断行情类型（5分类：趋势/震荡/高波动/压缩/事件驱动）。
 """
 
 import json
@@ -43,14 +43,14 @@ class RegimeResult:
     regime: Regime
     confidence: float  # 0.0-1.0
     reasoning: str
-    source: str  # "phi4" | "fallback"
+    source: str  # "qwen3" | "fallback"
 
 
 class RegimeDetector:
-    """调 phi4-reasoning 判断行情类型（趋势/震荡/高波动）。"""
+    """调 qwen3:14b 判断行情类型（趋势/震荡/高波动）。"""
 
     OLLAMA_URL = "http://192.168.31.142:11434"
-    MODEL = "phi4-reasoning:14b"
+    MODEL = "qwen3:14b-q4_K_M"
     TIMEOUT = 15.0  # 超时降级为 trend
     FALLBACK_REGIME = Regime.TREND  # 保守降级策略
 
@@ -125,7 +125,7 @@ class RegimeDetector:
         bars_5d: List[Dict[str, Any]],
         bars_20d: List[Dict[str, Any]],
     ) -> str:
-        """构造结构化提示词，要求 phi4 输出 JSON。
+        """构造结构化提示词，要求 qwen3 输出 JSON。
 
         Args:
             symbol: 品种代码
@@ -236,7 +236,7 @@ JSON:"""
     def _parse_response(
         self, symbol: str, response_data: Dict[str, Any]
     ) -> RegimeResult:
-        """解析 phi4 返回的 JSON。
+        """解析 qwen3 返回的 JSON。
 
         Args:
             symbol: 品种代码
@@ -270,7 +270,7 @@ JSON:"""
                 regime=regime,
                 confidence=confidence,
                 reasoning=reasoning,
-                source="phi4",
+                source="qwen3",
             )
 
         except json.JSONDecodeError:
@@ -291,15 +291,15 @@ JSON:"""
                         regime=regime,
                         confidence=confidence,
                         reasoning=reasoning,
-                        source="phi4",
+                        source="qwen3",
                     )
             except Exception:
                 pass
 
-            logger.warning(f"无法解析 phi4 返回: {response_text[:100]}")
+            logger.warning(f"无法解析 qwen3 返回: {response_text[:100]}")
 
         except Exception as e:
-            logger.warning(f"解析 phi4 返回失败: {e}")
+            logger.warning(f"解析 qwen3 返回失败: {e}")
 
         # 解析失败，降级
         return RegimeResult(

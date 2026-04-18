@@ -16,15 +16,15 @@ from ...persistence.state_store import get_state_store
 router = APIRouter(prefix="/signals", tags=["signal"])
 
 _L1_MODEL_PROFILE = {
-    "profile_id": "local-l1-phi4-reasoning",
-    "model_name": "phi4-reasoning:14b",
+    "profile_id": "local-l1-qwen3",
+    "model_name": "qwen3:14b",
     "deployment_class": "local",
     "route_role": "L1_gate_review",
 }
 
 _L2_MODEL_PROFILE = {
-    "profile_id": "local-l2-phi4-reasoning",
-    "model_name": "phi4-reasoning:14b",
+    "profile_id": "local-l2-qwen3",
+    "model_name": "qwen3:14b",
     "deployment_class": "local",
     "route_role": "L2_deep_review",
 }
@@ -164,9 +164,9 @@ def get_signal_overview() -> dict:
 
 @router.post("/review", status_code=status.HTTP_201_CREATED)
 async def review_signal(req: DecisionRequest) -> dict:
-    """信号审查端点：资格门禁 + phi4 L1/L2 门控 + 发布流程判断。
+    """信号审查端点：资格门禁 + qwen3 L1/L2 门控 + 发布流程判断。
 
-    TASK-0112 Batch A: 接入真实 phi4-reasoning:14b L1/L2 门控。
+    TASK-0112 Batch A: 接入真实 qwen3:14b L1/L2 门控。
     """
     decision_id = f"dd-{uuid.uuid4().hex[:12]}"
 

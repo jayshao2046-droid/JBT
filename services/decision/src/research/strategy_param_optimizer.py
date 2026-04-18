@@ -3,7 +3,7 @@
 基于 Optuna 贝叶斯优化，对 YAML 策略的因子参数进行调优。
 
 设计原则：
-- deepcoder 只在每个策略调用一次（生成基础代码，缓存复用）
+- qwen3 只在每个策略调用一次（生成基础代码，缓存复用）
 - IS（前 80% 数据）: Optuna 100 trials 优化 Sharpe
 - OOS（后 20% 数据）: 硬性验证，不达标则标记未通过（不降级）
 
@@ -92,7 +92,7 @@ class StrategyParamOptimizer:
         if len(bars_oos) < 50:
             return {"error": f"OOS 数据不足: {len(bars_oos)} 根（需要 ≥ 50）"}
 
-        # 3. deepcoder 只生成一次基础代码（参数从 objective 里覆盖）
+        # 3. qwen3 只生成一次基础代码（参数从 objective 里覆盖）
         base_code, err = await self.executor._generate_signal_code(strategy, None)
         if err:
             return {"error": f"基础代码生成失败: {err}"}

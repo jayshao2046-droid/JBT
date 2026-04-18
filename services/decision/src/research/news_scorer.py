@@ -1,6 +1,6 @@
 """盘前资讯打分模块 — TASK-0117 模块 3
 
-读取 qwen3 研报 → 调 deepcoder 对每条资讯打标：
+读取 qwen3 研报 → 调 qwen3 对每条资讯打标：
 - 影响品种列表（从 35 品种中圈定）
 - 紧急程度评分（0-10）
 已持有品种相关资讯若评分 > 7 → 飞书 blue 推送
@@ -17,14 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 class NewsScorer:
-    """读取 qwen3 研报 → 调 deepcoder 对每条资讯打标。
+    """读取 qwen3 研报 → 调 qwen3 对每条资讯打标。
 
     已持有品种相关资讯若评分 > 7 → 飞书 blue 推送
     """
 
     SCORE_THRESHOLD = 7         # 推送阈值
-    OLLAMA_MODEL = "deepcoder:14b"
-    OLLAMA_TIMEOUT = 10.0       # deepcoder 超时 10s
+    OLLAMA_MODEL = "qwen3:14b-q4_K_M"
+    OLLAMA_TIMEOUT = 10.0       # qwen3 超时 10s
 
     # 35 品种白名单
     SYMBOLS_WHITELIST = {
@@ -79,7 +79,7 @@ class NewsScorer:
 
         results = []
         for item in news_items:
-            # 调用 deepcoder 打分
+            # 调用 qwen3 打分
             score_result = await self._score_single_item(item)
 
             if score_result is None:
@@ -153,7 +153,7 @@ class NewsScorer:
     async def _score_single_item(
         self, news_item: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
-        """调用 deepcoder 对单条资讯打分。
+        """调用 qwen3 对单条资讯打分。
 
         Args:
             news_item: 资讯条目
@@ -185,17 +185,17 @@ class NewsScorer:
                 return result
 
         except httpx.TimeoutException:
-            logger.warning(f"deepcoder 超时: {news_item.get('title', 'N/A')}")
+            logger.warning(f"qwen3 超时: {news_item.get('title', 'N/A')}")
             return None
         except Exception as e:
             logger.warning(
-                f"deepcoder 调用失败: {e}",
+                f"qwen3 调用失败: {e}",
                 exc_info=True
             )
             return None
 
     def _build_scoring_prompt(self, news_item: Dict[str, Any]) -> str:
-        """构造 deepcoder 打分 prompt。
+        """构造 qwen3 打分 prompt。
 
         要求输出 JSON: {"symbols": [...], "urgency": 0-10, "reason": "..."}
 
@@ -234,10 +234,10 @@ JSON:"""
         return prompt
 
     def _parse_scoring_response(self, response_text: str) -> Optional[Dict[str, Any]]:
-        """解析 deepcoder 返回的 JSON。
+        """解析 qwen3 返回的 JSON。
 
         Args:
-            response_text: deepcoder 返回文本
+            response_text: qwen3 返回文本
 
         Returns:
             解析后的字典，失败时返回 None
@@ -248,7 +248,7 @@ JSON:"""
 
             # 验证必需字段
             if "symbols" not in result or "urgency" not in result:
-                logger.warning("deepcoder 返回缺少必需字段")
+                logger.warning("qwen3 返回缺少必需字段")
                 return None
 
             # 验证类型
@@ -277,7 +277,7 @@ JSON:"""
             except Exception:
                 pass
 
-            logger.warning(f"无法解析 deepcoder 返回: {response_text[:100]}")
+            logger.warning(f"无法解析 qwen3 返回: {response_text[:100]}")
             return None
 
     def _should_push(

@@ -164,7 +164,7 @@ class FeishuNotifier:
         Args:
             report_type: 报告类型（期货/股票/新闻等）
             report_id: 报告ID
-            score: phi4 评分（0-100）
+            score: qwen3 评分（0-100）
             date: 日期
             hour: 小时
 
@@ -215,7 +215,7 @@ class FeishuNotifier:
                         "elements": [
                             {
                                 "tag": "plain_text",
-                                "content": f"phi4 评级 | {ts}",
+                                "content": f"qwen3 评级 | {ts}",
                             }
                         ],
                     },

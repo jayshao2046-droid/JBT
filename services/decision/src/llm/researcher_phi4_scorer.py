@@ -12,7 +12,8 @@ import logging
 import json
 import httpx
 from typing import Dict, Optional
-from .client import OllamaClient
+from .client import OllamaClient, HybridClient
+from .openai_client import OpenAICompatibleClient
 
 logger = logging.getLogger(__name__)
 
@@ -49,19 +50,29 @@ class ResearcherPhi4Scorer:
 
     def __init__(
         self,
-        client: Optional[OllamaClient] = None,
-        model: str = "qwen3:14b",
+        client=None,
+        model: str = "qwen3:14b-q4_K_M",
         researcher_api_url: str = "http://192.168.31.223:8199"
     ):
         """初始化评级器
 
         Args:
-            client: OllamaClient 实例
-            model: 评级模型名称（默认 qwen3:14b）
+            client: OllamaClient 或 OpenAICompatibleClient 实例
+            model: 评级模型名称
             researcher_api_url: Alienware 研究员服务 API 地址
         """
-        self.client = client or OllamaClient()
-        self.model = model
+        import os
+        # 评分走 HybridClient：Ollama 优先，超时降级在线
+        llm_provider = os.getenv("PIPELINE_LLM_PROVIDER", "hybrid").lower()
+        if client is not None:
+            self.client = client
+        elif llm_provider == "online":
+            self.client = OpenAICompatibleClient(component="phi4_scorer")
+        elif llm_provider == "ollama":
+            self.client = OllamaClient(component="phi4_scorer")
+        else:
+            self.client = HybridClient(component="phi4_scorer")
+        self.model = os.getenv("ONLINE_AUDITOR_MODEL", "gpt-5.4") if llm_provider == "online" else model
         self.researcher_api_url = researcher_api_url
 
     async def score_report(
