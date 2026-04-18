@@ -79,6 +79,13 @@ queue_manager: Optional[QueueManager] = None
 _continuous_thread: Optional[threading.Thread] = None
 _continuous_running: bool = False
 
+# 防止 execute_hourly 并发重入（callback / /run 端点共享）
+_hourly_lock = threading.Lock()
+
+# 全量采集状态
+_full_crawl_running = False
+_full_crawl_last_result: dict = {}
+
 
 class CallbackRequest(BaseModel):
     """Mini data 采集器回调请求"""
@@ -213,6 +220,11 @@ async def trigger_research(hour: Optional[int] = None):
 
     logger.info(f"[TRIGGER] 手动触发研究员分析: hour={hour}")
 
+    # 防止并发重入：如果 execute_hourly 已在运行，直接返回
+    if not _hourly_lock.acquire(blocking=False):
+        logger.warning("[TRIGGER] execute_hourly 已在运行，跳过本次触发")
+        return {"success": False, "message": "已有分析任务正在运行，请稍后再试", "hour": hour}
+
     try:
         # 执行研究员任务（run_in_executor + 独立 event loop 避免阻塞 FastAPI）
         loop = asyncio.get_event_loop()
@@ -235,6 +247,65 @@ async def trigger_research(hour: Optional[int] = None):
     except Exception as e:
         logger.error(f"[TRIGGER] 执行失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"执行失败: {str(e)}")
+    finally:
+        _hourly_lock.release()
+
+
+@app.post("/crawl/full")
+async def trigger_full_crawl():
+    """
+    全量采集 — 后台异步触发，立即返回。
+    通过 GET /crawl/status 查看进度和结果。
+    """
+    global scheduler, _full_crawl_running, _full_crawl_last_result
+
+    if not scheduler:
+        raise HTTPException(status_code=500, detail="调度器未初始化")
+
+    if _full_crawl_running:
+        return {"success": False, "message": "全量采集已在运行中，请稍后通过 /crawl/status 查询结果"}
+
+    async def _do_full():
+        global _full_crawl_running, _full_crawl_last_result
+        _full_crawl_running = True
+        try:
+            logger.info("[CRAWL/FULL] 全量采集开始（force_all=True）")
+            articles = await scheduler._crawl_stream_with_dedup(force_all=True)
+            _full_crawl_last_result = {
+                "status": "done",
+                "total_new_articles": len(articles),
+                "active_sources": list({a.get("source_id") for a in articles if a.get("source_id")}),
+                "fail_counts": dict(scheduler._source_fail_count),
+                "finished_at": datetime.now().isoformat(),
+            }
+            logger.info(f"[CRAWL/FULL] 完成: {len(articles)} 新文章, 失败源: {dict(scheduler._source_fail_count)}")
+        except Exception as e:
+            _full_crawl_last_result = {"status": "error", "error": str(e), "finished_at": datetime.now().isoformat()}
+            logger.error(f"[CRAWL/FULL] 失败: {e}", exc_info=True)
+        finally:
+            _full_crawl_running = False
+
+    asyncio.create_task(_do_full())
+    return {
+        "success": True,
+        "message": "全量采集已在后台启动，通过 GET /crawl/status 查询结果",
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+@app.get("/crawl/status")
+async def crawl_source_status():
+    """返回各采集源的连续失败计数及最近一次全量采集结果"""
+    global scheduler, _full_crawl_running, _full_crawl_last_result
+    if not scheduler:
+        raise HTTPException(status_code=500, detail="调度器未初始化")
+    return {
+        "full_crawl_running": _full_crawl_running,
+        "full_crawl_last_result": _full_crawl_last_result,
+        "fail_counts": dict(scheduler._source_fail_count),
+        "notified_at": {k: v.isoformat() for k, v in scheduler._source_fail_notified_at.items()},
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @app.post("/callback")
