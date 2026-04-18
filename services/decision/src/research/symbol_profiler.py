@@ -98,16 +98,26 @@ class SymbolProfiler:
     使用滚动窗口计算品种特征，避免"用5年前的市场特征指导今天的交易"。
     """
 
-    # 分级阈值
+    # 分级阈值（默认值，用于年化波动率和 ADX 分类）
     VOLATILITY_THRESHOLDS = {
-        "low": 0.01,    # ATR/Close < 1%
-        "high": 0.02,   # ATR/Close > 2%
+        "low": 0.15,    # 年化波动率 < 15%
+        "high": 0.30,   # 年化波动率 > 30%
     }
 
     TREND_THRESHOLDS = {
-        "weak": 0.3,    # ADX < 30
-        "strong": 0.5,  # ADX > 50
+        "weak": 20.0,   # ADX < 20
+        "strong": 30.0, # ADX > 30
     }
+
+    # 典型品种波动率基准范围（年化，用于自检）
+    INDUSTRY_BENCHMARKS = {
+        "rb": (0.15, 0.40), "cu": (0.12, 0.35), "au": (0.08, 0.25),
+        "ag": (0.15, 0.45), "p": (0.15, 0.40), "y": (0.12, 0.35),
+        "m": (0.12, 0.35), "i": (0.20, 0.50), "sc": (0.20, 0.50),
+    }
+
+    # 每日交易分钟数（期货日盘+夜盘合计约 600 分钟）
+    TRADING_MINS_PER_DAY = 600
 
     def __init__(
         self,
@@ -244,6 +254,25 @@ class SymbolProfiler:
             logger.error(f"计算品种特征失败 {symbol}: {e}", exc_info=True)
             return None
 
+    @staticmethod
+    def _to_kq_symbol(symbol: str) -> str:
+        """将交易所.品种格式转为 KQ_m_ 主力合约格式
+
+        DCE.p  → KQ_m_DCE_p
+        DCE.p0 → KQ_m_DCE_p （去掉尾部数字）
+        CZCE.CF → KQ_m_CZCE_CF
+        已是 KQ_m_ 格式则原样返回。
+        """
+        if symbol.startswith("KQ_m_"):
+            return symbol
+        if "." in symbol:
+            exchange, code = symbol.split(".", 1)
+            # 去掉尾部数字（如 p0 → p, CF305 → CF）
+            import re
+            code_clean = re.sub(r'\d+$', '', code)
+            return f"KQ_m_{exchange}_{code_clean}"
+        return symbol
+
     async def _fetch_bars(self, symbol: str, days: int) -> list[dict]:
         """获取 K 线数据"""
         from datetime import datetime, timedelta
@@ -251,12 +280,15 @@ class SymbolProfiler:
         end_date = datetime.now().strftime("%Y-%m-%d")
         start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
+        # 期货品种自动转换为 KQ_m_ 主力合约格式
+        api_symbol = self._to_kq_symbol(symbol)
+
         url = f"{self.data_service_url}/api/v1/bars"
         params = {
-            "symbol": symbol,
+            "symbol": api_symbol,
             "start": start_date,
             "end": end_date,
-            "interval": self.interval,  # 使用配置的K线周期
+            "timeframe_minutes": self.interval,  # Fix: API 参数名是 timeframe_minutes
         }
 
         try:
@@ -276,8 +308,9 @@ class SymbolProfiler:
     def _calculate_volatility(self, bars: list[dict]) -> float:
         """计算波动率（年化标准差）
 
-        使用日收益率标准差 * sqrt(252) 计算年化波动率。
-        这比 ATR/Close 更准确，因为 ATR 受 K 线周期影响。
+        根据实际 K 线周期动态计算年化因子：
+        bars_per_day = trading_mins_per_day / interval
+        annualization_factor = sqrt(252 * bars_per_day)
         """
         if len(bars) < 20:
             return 0.0
@@ -299,34 +332,73 @@ class SymbolProfiler:
         variance = sum((r - mean_return) ** 2 for r in returns) / len(returns)
         std_dev = variance ** 0.5
 
-        # 年化波动率（假设每天4个60分钟K线，252个交易日）
-        # 如果是60分钟K线，需要 sqrt(4 * 252) = sqrt(1008) ≈ 31.75
-        annualization_factor = (252 * 4) ** 0.5
+        # 动态年化因子：根据实际 K 线周期计算
+        bars_per_day = max(1, self.TRADING_MINS_PER_DAY // self.interval)
+        annualization_factor = (252 * bars_per_day) ** 0.5
 
         return std_dev * annualization_factor
 
     def _calculate_trend_strength(self, bars: list[dict]) -> float:
-        """计算趋势强度（简化版 ADX）"""
-        if len(bars) < 20:
+        """计算趋势强度（真实 ADX）"""
+        if len(bars) < 30:
             return 0.0
 
+        highs = [float(b.get("high", 0)) for b in bars]
+        lows = [float(b.get("low", 0)) for b in bars]
         closes = [float(b.get("close", 0)) for b in bars]
-
-        # 简化版: 使用线性回归斜率的绝对值
         n = len(closes)
-        x_mean = (n - 1) / 2
-        y_mean = sum(closes) / n
+        period = 14
 
-        numerator = sum((i - x_mean) * (closes[i] - y_mean) for i in range(n))
-        denominator = sum((i - x_mean) ** 2 for i in range(n))
-
-        if denominator == 0:
+        if n < period * 2:
             return 0.0
 
-        slope = numerator / denominator
-        trend_strength = abs(slope) / y_mean if y_mean > 0 else 0.0
+        # 计算 True Range
+        tr = [highs[0] - lows[0]]
+        for i in range(1, n):
+            tr.append(max(
+                highs[i] - lows[i],
+                abs(highs[i] - closes[i - 1]),
+                abs(lows[i] - closes[i - 1]),
+            ))
 
-        return min(trend_strength * 100, 1.0)  # 归一化到 [0, 1]
+        # 计算 +DM / -DM
+        plus_dm = [0.0] * n
+        minus_dm = [0.0] * n
+        for i in range(1, n):
+            up = highs[i] - highs[i - 1]
+            down = lows[i - 1] - lows[i]
+            plus_dm[i] = up if (up > down and up > 0) else 0.0
+            minus_dm[i] = down if (down > up and down > 0) else 0.0
+
+        # Wilder 平滑
+        def _wilder_smooth(data: list[float], p: int) -> list[float]:
+            result = [0.0] * len(data)
+            result[p] = sum(data[1:p + 1])
+            for i in range(p + 1, len(data)):
+                result[i] = result[i - 1] - result[i - 1] / p + data[i]
+            return result
+
+        smooth_tr = _wilder_smooth(tr, period)
+        smooth_plus = _wilder_smooth(plus_dm, period)
+        smooth_minus = _wilder_smooth(minus_dm, period)
+
+        # 计算 DX → ADX
+        dx_values = []
+        for i in range(period, n):
+            if smooth_tr[i] < 1e-10:
+                continue
+            plus_di = 100.0 * smooth_plus[i] / smooth_tr[i]
+            minus_di = 100.0 * smooth_minus[i] / smooth_tr[i]
+            di_sum = plus_di + minus_di
+            if di_sum > 0:
+                dx_values.append(100.0 * abs(plus_di - minus_di) / di_sum)
+
+        if not dx_values:
+            return 0.0
+
+        # ADX = 最近 period 个 DX 的简单平均
+        adx = sum(dx_values[-period:]) / min(period, len(dx_values))
+        return round(adx, 2)
 
     def _calculate_autocorr(self, bars: list[dict]) -> float:
         """计算自相关性（lag=1）"""
@@ -399,7 +471,7 @@ class SymbolProfiler:
         return kurtosis - 3  # 超额峰度
 
     def _classify_volatility(self, vol: float) -> str:
-        """分类波动率"""
+        """分类波动率（年化标准差）"""
         if vol < self.VOLATILITY_THRESHOLDS["low"]:
             return "Low"
         elif vol > self.VOLATILITY_THRESHOLDS["high"]:
@@ -408,11 +480,13 @@ class SymbolProfiler:
             return "Medium"
 
     def _classify_trend(self, trend: float) -> str:
-        """分类趋势强度"""
+        """分类趋势强度（ADX 值）"""
         if trend < self.TREND_THRESHOLDS["weak"]:
             return "Weak"
-        else:
+        elif trend > self.TREND_THRESHOLDS["strong"]:
             return "Strong"
+        else:
+            return "Medium"
 
     def _classify_liquidity(self, bars: list[dict]) -> str:
         """分类流动性（基于成交量）"""
@@ -539,13 +613,25 @@ class SymbolProfiler:
             liquidity_confidence * 0.2
         )
 
-        # 6. 行业基准验证（螺纹钢典型波动率 2-4%）
-        if "rb" in metadata.data_source.lower() or "rb" in str(bars_3m[0].get("symbol", "")).lower():
-            if vol_1y < 0.01 or vol_1y > 0.06:
+        # 6. 行业基准验证（自动匹配品种）
+        symbol_code = ""
+        try:
+            raw = bars_3m[0].get("symbol", "") if bars_3m else ""
+            import re
+            m = re.search(r'[._]([a-zA-Z]{1,3})[0-9]', str(raw))
+            if m:
+                symbol_code = m.group(1).lower()
+        except Exception:
+            pass
+
+        if symbol_code and symbol_code in self.INDUSTRY_BENCHMARKS:
+            bench_low, bench_high = self.INDUSTRY_BENCHMARKS[symbol_code]
+            if vol_1y < bench_low * 0.5 or vol_1y > bench_high * 2.0:
                 warnings.append(
-                    f"波动率异常: {vol_1y:.4f} 不在螺纹钢典型范围 [0.02, 0.04]"
+                    f"波动率异常: {vol_1y:.4f} 不在 {symbol_code} 典型范围 "
+                    f"[{bench_low:.2f}, {bench_high:.2f}]，可能数据周期或年化因子有误"
                 )
-                volatility_confidence *= 0.7
+                volatility_confidence *= 0.5
 
         return FeatureConfidence(
             overall=overall_confidence,
@@ -658,12 +744,13 @@ class SymbolProfiler:
 
     async def _fetch_bars_range(self, symbol: str, start_date: str, end_date: str) -> list[dict]:
         """获取指定日期范围的 K 线数据"""
+        api_symbol = self._to_kq_symbol(symbol)
         url = f"{self.data_service_url}/api/v1/bars"
         params = {
-            "symbol": symbol,
+            "symbol": api_symbol,
             "start": start_date,
             "end": end_date,
-            "interval": self.interval,
+            "timeframe_minutes": self.interval,  # Fix: API 参数名是 timeframe_minutes
         }
 
         try:
@@ -906,4 +993,39 @@ class SymbolProfiler:
 
         except Exception as e:
             logger.error(f"保存缓存失败 {symbol}: {e}", exc_info=True)
+
+    async def refresh_all_features(self, symbols: list[str]) -> dict[str, Any]:
+        """批量刷新所有品种特征（盘后定时调度用）
+
+        Args:
+            symbols: 品种代码列表
+
+        Returns:
+            {refreshed, failed, skipped, details}
+        """
+        import asyncio
+
+        results = {"refreshed": 0, "failed": 0, "skipped": 0, "details": []}
+
+        for symbol in symbols:
+            try:
+                features = await self.calculate_features(symbol)
+                if features:
+                    results["refreshed"] += 1
+                    results["details"].append({"symbol": symbol, "status": "ok"})
+                else:
+                    results["skipped"] += 1
+                    results["details"].append({"symbol": symbol, "status": "skipped", "reason": "数据不足"})
+            except Exception as e:
+                results["failed"] += 1
+                results["details"].append({"symbol": symbol, "status": "failed", "error": str(e)})
+
+            # 避免 API 过载
+            await asyncio.sleep(0.5)
+
+        logger.info(
+            "特征批量刷新完成: %d 成功, %d 失败, %d 跳过 (共 %d)",
+            results["refreshed"], results["failed"], results["skipped"], len(symbols),
+        )
+        return results
 

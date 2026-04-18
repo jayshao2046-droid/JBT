@@ -2,15 +2,19 @@
 
 基于 Optuna 贝叶斯优化，对 YAML 策略的因子参数进行调优。
 
-设计原则：
+设计原则（激进→收敛）：
 - qwen3 只在每个策略调用一次（生成基础代码，缓存复用）
-- IS（前 80% 数据）: Optuna 100 trials 优化 Sharpe
-- OOS（后 20% 数据）: 硬性验证，不达标则标记未通过（不降级）
+- IS（前 80% 数据）: Optuna 100 trials 分两阶段优化
+  Phase 1（前 40 trial）: 最大化交易次数，鼓励频繁开仓
+  Phase 2（后 60 trial）: 最大化 sharpe * sqrt(trades)，在有量基础上优化质量
+- OOS（后 20% 数据）: 放宽验证，留给 XGBoost 二次过滤
 
-OOS 验收标准（全部满足）：
-  - OOS Sharpe ≥ 0.8
-  - OOS 交易次数 ≥ 20
-  - IS/OOS Sharpe 比值 ≤ 2.0（防过拟合）
+OOS 验收标准（放宽 — 允许有亏有赚，只排除极端）：
+  - OOS Sharpe ≥ 0.3
+  - OOS 交易次数 ≥ 30
+  - OOS 胜率 ≥ 30%
+  - OOS 最大回撤 ≤ 8%
+  - IS/OOS Sharpe 比值 ≤ 3.0（放宽过拟合阈值）
 """
 from __future__ import annotations
 
@@ -29,13 +33,14 @@ optuna.logging.set_verbosity(optuna.logging.WARNING)
 class StrategyParamOptimizer:
     """Optuna 驱动的策略参数优化器。"""
 
-    # OOS 验收硬标准（对齐最新评估方案）
-    OOS_MIN_SHARPE: float = 1.5          # OOS Sharpe ≥ 1.5
-    OOS_MAX_IS_OOS_RATIO: float = 2.0    # 过拟合防护
-    OOS_MIN_TRADES: int = 20             # OOS 最少交易次数
-    OOS_MIN_WIN_RATE: float = 0.50       # OOS 胜率 ≥ 50%
-    OOS_MAX_DRAWDOWN: float = 0.02       # OOS 最大回撤 ≤ 2%
+    # OOS 验收标准（放宽 — 激进→收敛策略）
+    OOS_MIN_SHARPE: float = 0.3          # OOS Sharpe ≥ 0.3
+    OOS_MAX_IS_OOS_RATIO: float = 3.0    # 放宽过拟合防护
+    OOS_MIN_TRADES: int = 30             # OOS 最少交易次数
+    OOS_MIN_WIN_RATE: float = 0.30       # OOS 胜率 ≥ 30%
+    OOS_MAX_DRAWDOWN: float = 0.08       # OOS 最大回撤 ≤ 8%
     IS_RATIO: float = 0.80               # 前 80% 作为 IS
+    PHASE1_TRIALS: int = 40              # Phase 1 占前 40 trials
 
     def __init__(
         self,
@@ -105,14 +110,23 @@ class StrategyParamOptimizer:
         # 5. Optuna IS 优化（同步 objective，不重复调 LLM）
         strategy_name = strategy.get("name", "opt")
 
+        phase1_trials = self.PHASE1_TRIALS
+
         def objective(trial: optuna.Trial) -> float:
             params = self._suggest_params(trial, param_space)
             result = self.executor._run_backtest(
                 strategy_name, bars_is, base_code, strategy, params
             )
-            if result.status == "failed" or result.trades_count < 5:
-                return -10.0
-            return float(result.sharpe_ratio)
+            if result.status == "failed" or result.trades_count < 3:
+                return -1.0
+
+            # Phase 1（前 N trials）: 最大化交易次数
+            if trial.number < phase1_trials:
+                return float(result.trades_count)
+
+            # Phase 2: sharpe * sqrt(trades) — 在有量的基础上优化质量
+            trades = max(1, result.trades_count)
+            return float(result.sharpe_ratio) * (trades ** 0.5)
 
         study = optuna.create_study(
             direction="maximize",
@@ -165,12 +179,12 @@ class StrategyParamOptimizer:
             params = factor.get("params", {})
             for k, v in params.items():
                 if isinstance(v, int) and v > 0:
-                    lo = max(2, int(v * 0.5))
-                    hi = max(lo + 2, int(v * 2.0))
+                    lo = max(2, int(v * 0.3))
+                    hi = max(lo + 2, int(v * 3.0))
                     space[k] = {"type": "int", "low": lo, "high": hi, "original": v}
                 elif isinstance(v, float) and v > 0:
-                    lo = round(v * 0.5, 4)
-                    hi = round(v * 2.0, 4)
+                    lo = round(v * 0.3, 4)
+                    hi = round(v * 3.0, 4)
                     space[k] = {"type": "float", "low": lo, "high": hi, "original": v}
 
         # ATR 止损/止盈乘数
@@ -266,3 +280,44 @@ class StrategyParamOptimizer:
             verdict["fail_reasons"] = reasons
 
         return verdict
+
+    async def reoptimize_recycled(
+        self,
+        strategy: dict,
+        full_start: str,
+        full_end: str,
+        previous_params: Optional[dict] = None,
+    ) -> dict[str, Any]:
+        """回炉策略重新调优
+
+        与普通 optimize 相比：
+        - 如果有历史最优参数，以其为搜索中心收窄范围
+        - 增加 trials 数量（1.5x）以更充分搜索
+
+        Args:
+            strategy: YAML 策略配置
+            full_start: 数据起始
+            full_end: 数据结束
+            previous_params: 上一轮最优参数（可选）
+
+        Returns:
+            优化结果字典
+        """
+        # 保存原始 trials 数
+        original_trials = self.n_trials
+        self.n_trials = int(self.n_trials * 1.5)  # 回炉策略多搜索 50%
+
+        try:
+            # 如果有历史参数，注入为策略的 parameter 初始值
+            if previous_params and "parameters" in strategy:
+                for k, v in previous_params.items():
+                    if k in strategy["parameters"]:
+                        strategy["parameters"][k] = v
+                logger.info(f"回炉策略: 注入历史参数 {list(previous_params.keys())}")
+
+            result = await self.optimize(strategy, full_start, full_end)
+            result["recycled"] = True
+            result["previous_params"] = previous_params
+            return result
+        finally:
+            self.n_trials = original_trials

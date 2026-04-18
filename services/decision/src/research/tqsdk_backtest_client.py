@@ -117,10 +117,27 @@ class TqSdkBacktestClient:
             "end": end_date,
             "symbols": symbols,
             "initial_capital": initial_capital,
-            "params": strategy,
+            # 注意: 不传 params，TqSdk backtest 422 拒绝 runtime params override
+            # 最优参数已通过 import 写入 YAML，backtest 直接读取注册策略
         }
 
-        # 4. 提交回测任务
+        # 4. 确保策略已在 backtest 服务注册（避免 "Strategy X not found" 404）
+        try:
+            import yaml as _yaml
+            strategy_yaml_content = _yaml.dump(strategy, allow_unicode=True, default_flow_style=False)
+            import_url = f"{self.backtest_url}/api/strategy/import"
+            import_resp = await self._client.post(
+                import_url,
+                json={"name": strategy_name, "content": strategy_yaml_content},
+            )
+            if import_resp.status_code in (200, 201):
+                logger.info(f"策略已注册到 backtest 服务: {strategy_name}")
+            else:
+                logger.warning(f"策略注册返回 {import_resp.status_code}，继续提交: {import_resp.text[:100]}")
+        except Exception as e:
+            logger.warning(f"策略注册步骤异常（非阻塞）: {e}")
+
+        # 5. 提交回测任务
         try:
             url = f"{self.backtest_url}/api/backtest/run"
             logger.info(f"提交 TqSdk 回测任务: {strategy_name} ({start_date} ~ {end_date})")

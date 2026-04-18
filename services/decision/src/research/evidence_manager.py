@@ -127,6 +127,41 @@ class EvidenceManager:
             report=report,
         )
 
+    def save_failure_report(
+        self,
+        symbol: str,
+        strategy_name: str,
+        stage: str,
+        error: str,
+        context: Optional[dict[str, Any]] = None,
+        run_id: Optional[str] = None,
+    ) -> Path:
+        """保存失败报告（任意阶段失败时记录）。
+
+        Args:
+            symbol: 品种代码
+            strategy_name: 策略名称
+            stage: 失败阶段 (generation / optimization / local_backtest / tqsdk / evaluation)
+            error: 错误信息
+            context: 额外上下文
+            run_id: 运行 ID（用于时间戳归档）
+
+        Returns:
+            报告文件路径
+        """
+        report = {
+            "stage": stage,
+            "error": error,
+            "context": context or {},
+        }
+        return self._save_report(
+            symbol=symbol,
+            strategy_name=strategy_name,
+            report_type=f"failure_{stage}",
+            report=report,
+            run_id=run_id,
+        )
+
     def move_to_bucket(
         self,
         yaml_path: str | Path,
@@ -229,6 +264,7 @@ class EvidenceManager:
         strategy_name: str,
         report_type: str,
         report: dict[str, Any],
+        run_id: Optional[str] = None,
     ) -> Path:
         """保存报告到临时目录（后续通过 move_to_bucket 迁移）
 
@@ -237,6 +273,7 @@ class EvidenceManager:
             strategy_name: 策略名称
             report_type: 报告类型
             report: 报告内容
+            run_id: 运行 ID（如提供则同时保存时间戳归档副本）
 
         Returns:
             报告文件路径
@@ -253,9 +290,19 @@ class EvidenceManager:
             "saved_at": datetime.now().isoformat(),
             "report_type": report_type,
         }
+        if run_id:
+            report_with_meta["run_id"] = run_id
 
         with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report_with_meta, f, ensure_ascii=False, indent=2)
+
+        # run_id 归档副本（不覆盖历史）
+        if run_id:
+            archive_dir = temp_dir / "history" / run_id
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            archive_file = archive_dir / f"{report_type}_report.json"
+            with open(archive_file, "w", encoding="utf-8") as f:
+                json.dump(report_with_meta, f, ensure_ascii=False, indent=2)
 
         logger.debug(f"报告已保存: {report_file}")
         return report_file
