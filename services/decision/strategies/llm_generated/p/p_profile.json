@@ -1,0 +1,14 @@
+{
+  "symbol": "DCE.p0",
+  "volatility_weighted": "High",
+  "trend_strength_weighted": "Weak",
+  "liquidity": "Low",
+  "volatility_3m": 0.03262031297561677,
+  "volatility_1y": 0.02297880096323672,
+  "trend_strength_3m": 0.000721513789342135,
+  "trend_strength_1y": 0.00014386730072634286,
+  "autocorr_3m": -0.06528925699730072,
+  "skewness": -4.15023846936641,
+  "kurtosis": 574.9962659559695,
+  "calculated_at": "2026-04-18T16:29:44.857299"
+}

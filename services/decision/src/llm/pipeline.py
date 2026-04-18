@@ -485,22 +485,87 @@ class LLMPipeline:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> list:
-        """从 data 服务拉取 K 线数据。"""
-        url = f"{data_service_url.rstrip('/')}/api/v1/bars"
-        params = {
-            "symbol": symbol,
-            "timeframe": timeframe,
-        }
-        if start_date:
-            params["start"] = start_date
-        if end_date:
-            params["end"] = end_date
+        """拉取 K 线数据：tqsdk 实时主路，Mini API 降为 fallback。"""
+        # 1. 尝试 tqsdk 实时分钟线
+        try:
+            bars = await self._fetch_kline_via_tqsdk(symbol, timeframe)
+            if bars:
+                return bars
+        except Exception as e:
+            logger.warning(f"[KLINE] tqsdk 主路失败: {e}")
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("bars", [])
+        # 2. fallback: Mini API
+        try:
+            url = f"{data_service_url.rstrip('/')}/api/v1/bars"
+            params: Dict[str, Any] = {"symbol": symbol, "timeframe": timeframe}
+            if start_date:
+                params["start"] = start_date
+            if end_date:
+                params["end"] = end_date
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+                return data.get("bars", [])
+        except Exception as e:
+            logger.warning(f"[KLINE] Mini API fallback 失败: {e}")
+            return []
+
+    async def _fetch_kline_via_tqsdk(self, symbol: str, timeframe: str) -> list:
+        """通过 tqsdk 拉取实时分钟 K 线（在 executor 中运行，避免阻塞事件循环）。"""
+        import os
+        username = os.getenv("TQSDK_AUTH_USERNAME", "")
+        password = os.getenv("TQSDK_AUTH_PASSWORD", "")
+        if not username or not password:
+            logger.debug("[KLINE] TQSDK 账号未配置，跳过")
+            return []
+
+        duration_map = {"1min": 60, "5min": 300, "15min": 900, "1d": 86400}
+        duration_seconds = duration_map.get(timeframe, 60)
+
+        import asyncio
+        loop = asyncio.get_event_loop()
+        bars = await loop.run_in_executor(
+            None,
+            self._sync_fetch_tqsdk,
+            symbol, duration_seconds, username, password,
+        )
+        return bars or []
+
+    @staticmethod
+    def _sync_fetch_tqsdk(symbol: str, duration_seconds: int, username: str, password: str) -> list:
+        """同步 tqsdk 拉取（在 executor 中运行）。"""
+        api = None
+        try:
+            from tqsdk import TqApi, TqAuth
+            api = TqApi(auth=TqAuth(username, password))
+            klines = api.get_kline_serial(symbol, duration_seconds, data_length=120)
+            api.wait_update()
+            bars = []
+            for _, row in klines.iterrows():
+                if float(row.get("close", 0)) > 0:
+                    bars.append({
+                        "datetime": str(row.get("datetime", "")),
+                        "open": float(row.get("open", 0)),
+                        "high": float(row.get("high", 0)),
+                        "low": float(row.get("low", 0)),
+                        "close": float(row.get("close", 0)),
+                        "volume": float(row.get("volume", 0)),
+                        "open_oi": float(row.get("open_oi", 0)),
+                    })
+            return bars
+        except ImportError:
+            logger.warning("[KLINE] tqsdk 未安装，跳过")
+            return []
+        except Exception as e:
+            logger.warning(f"[KLINE] tqsdk sync fetch 失败: {e}")
+            return []
+        finally:
+            if api:
+                try:
+                    api.close()
+                except Exception:
+                    pass
 
     async def _run_sandbox_backtest(self, code: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """运行沙箱回测（调用 SandboxEngine）。TASK-0112-C: 支持传入 Optuna 最优参数。"""

@@ -8,9 +8,9 @@ from typing import Any
 # Storage 采用延迟注入模式：调用方通过 storage 参数传入后端实例。
 # 当前所有采集器均通过 data_scheduler 的文件持久化路径存储，
 # storage 参数预留给未来 HDF5 / Parquet 统一存储层。
-from src.utils.config import get_config
-from src.utils.exceptions import DataError
-from src.utils.logger import get_logger
+from utils.config import get_config
+from utils.exceptions import DataError
+from utils.logger import get_logger
 
 
 class BaseCollector(ABC):

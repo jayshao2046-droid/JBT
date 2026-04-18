@@ -1,0 +1,37 @@
+{
+  "symbol": "DCE.pg2505",
+  "volatility_3m": 0.07473607916660888,
+  "volatility_1y": 0.04211473715166912,
+  "volatility_5y": 0.03922993018339049,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 0.00349411929306697,
+  "trend_strength_1y": 0.0003123726802615159,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": -0.010459354401604167,
+  "autocorr_1y": -0.01681231266054453,
+  "skewness": 0.17032180759291277,
+  "kurtosis": 1762.2799574355342,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.76:8105)",
+    "calculation_time": "2026-04-17 22:53:28",
+    "data_start_date": "2021-04-19T01:00:00",
+    "data_end_date": "2026-04-08T14:59:00",
+    "data_points_3m": 17355,
+    "data_points_1y": 80700,
+    "data_points_5y": 411420,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.7870500896706267,
+    "volatility": 0.7676252241765668,
+    "trend": 0.7,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.11270870696094465,
+    "warnings": [
+      "特征不稳定: 波动率3M=0.0747 vs 1Y=0.0421, 趋势3M=0.0035 vs 1Y=0.0003"
+    ]
+  }
+}

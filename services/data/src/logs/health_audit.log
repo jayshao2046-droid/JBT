@@ -3,3 +3,5 @@
 {"ts": "2026-04-13T21:16:51.108599+08:00", "device": "076256daffea", "cpu": 12.4, "mem": 6.5, "disk": [7.0], "alarms": 0, "p0": false}
 {"ts": "2026-04-13T21:43:54.633597+08:00", "device": "076256daffea", "cpu": 15.9, "mem": 7.1, "disk": [7.0], "alarms": 0, "p0": false}
 {"ts": "2026-04-15T18:22:27.694136+08:00", "device": "076256daffea", "cpu": 13.5, "mem": 7.4, "disk": [8.0], "alarms": 0, "p0": false}
+{"ts": "2026-04-18T00:43:40.496740+08:00", "device": "macbook-pro-3.local", "cpu": 20.7, "mem": 78.6, "disk": [11.0, 77.0], "alarms": 1, "p0": false}
+{"ts": "2026-04-18T01:35:59.668998+08:00", "device": "076256daffea", "cpu": 0.9, "mem": 86.6, "disk": [8.0], "alarms": 1, "p0": false}

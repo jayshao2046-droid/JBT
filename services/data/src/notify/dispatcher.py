@@ -166,8 +166,8 @@ class NotifierDispatcher:
         email_sender: Any | None = None,
         collector_window_sec: float | None = None,
     ) -> None:
-        from src.notify.feishu import FeishuSender
-        from src.notify.email_notify import EmailSender
+        from notify.feishu import FeishuSender
+        from notify.email_notify import EmailSender
 
         self._feishu = feishu_sender or FeishuSender()
         self._email = email_sender or EmailSender()

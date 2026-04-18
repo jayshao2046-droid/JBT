@@ -5,12 +5,15 @@ import json
 import sqlite3
 import hashlib
 import re
+import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 import httpx
 
 from .config import ResearcherConfig
 from .models import StagingRecord
+
+logger = logging.getLogger(__name__)
 
 
 class StagingManager:
@@ -113,6 +116,8 @@ class StagingManager:
         try:
             url = f"{ResearcherConfig.DATA_API_URL}/api/v1/bars"
             now = datetime.now()
+
+            # symbol 格式保持原始格式（如 KQ.m@SHFE.rb），由 API 侧处理
             params = {
                 "symbol": symbol,
                 "start": since.isoformat(),
@@ -124,8 +129,10 @@ class StagingManager:
             if resp.status_code == 200:
                 return resp.json().get("bars", [])
             else:
+                logger.warning(f"Mini API 返回错误 {resp.status_code} for {symbol}: {resp.text[:200]}")
                 return []
-        except Exception:
+        except Exception as e:
+            logger.error(f"拉取 {symbol} 数据失败: {e}")
             return []
 
     def _compute_hash(self, data: List[Dict[str, Any]]) -> str:

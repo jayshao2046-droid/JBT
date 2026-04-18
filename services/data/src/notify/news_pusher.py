@@ -200,7 +200,7 @@ class NewsPusher:
     ) -> dict[str, Any]:
         """从现有 news_api/rss 存储中同步新增新闻到批量缓冲。"""
         if storage is None:
-            from src.data.storage import HDF5Storage
+            from data.storage import HDF5Storage
 
             storage_root = os.environ.get("DATA_STORAGE_ROOT", str(Path(__file__).resolve().parents[3] / "runtime" / "data"))
             storage = HDF5Storage(base_dir=storage_root)
@@ -351,7 +351,7 @@ class NewsPusher:
     def dispatch_breaking(self, dispatcher: Any | None = None) -> dict[str, int]:
         """立即下发缓冲中的黑天鹅新闻，成功后从批量队列移除。"""
         if dispatcher is None:
-            from src.notify.dispatcher import get_dispatcher
+            from notify.dispatcher import get_dispatcher
 
             dispatcher = get_dispatcher()
 
@@ -361,7 +361,7 @@ class NewsPusher:
         if not breaking_items:
             return {"breaking_pushed": 0}
 
-        from src.notify.dispatcher import DataEvent, NotifyType
+        from notify.dispatcher import DataEvent, NotifyType
 
         sent_items: list[dict[str, Any]] = []
         for item in breaking_items:
@@ -402,7 +402,7 @@ class NewsPusher:
         return "\n".join(lines)
 
     def _build_batch_event(self, items: list[dict[str, Any]]) -> Any:
-        from src.notify.dispatcher import DataEvent, NotifyType
+        from notify.dispatcher import DataEvent, NotifyType
 
         batch_hash = hashlib.md5(
             "|".join(sorted(str(item.get("uid") or "") for item in items)).encode("utf-8")
@@ -449,7 +449,7 @@ class NewsPusher:
     ) -> dict[str, int]:
         """发送当前新闻缓冲区的一条合并摘要通知。"""
         if dispatcher is None:
-            from src.notify.dispatcher import get_dispatcher
+            from notify.dispatcher import get_dispatcher
 
             dispatcher = get_dispatcher()
 
@@ -465,7 +465,7 @@ class NewsPusher:
                 "buffer_size": self.stats["buffer_size"],
             }
 
-        from src.notify.dispatcher import NotifyType, _is_quiet_hours_for_type
+        from notify.dispatcher import NotifyType, _is_quiet_hours_for_type
 
         if _is_quiet_hours_for_type(NotifyType.NEWS, now):
             return {

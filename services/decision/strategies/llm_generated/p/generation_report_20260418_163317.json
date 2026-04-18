@@ -1,0 +1,75 @@
+{
+  "symbol": "DCE.p0",
+  "symbol_name": "p",
+  "symbol_cn": "棕榈油",
+  "generated_at": "2026-04-18T16:33:17.487396",
+  "elapsed_seconds": 212.7,
+  "designer_model": "gpt-5.4",
+  "coder_model": "qwen3-max",
+  "total": 7,
+  "success": 7,
+  "failed": 0,
+  "constraints": {
+    "force_close_day": "14:55",
+    "force_close_night": "22:55",
+    "no_overnight": true
+  },
+  "results": [
+    {
+      "name": "p_trend_following_60m_v1",
+      "category": "trend_following",
+      "timeframe": 60,
+      "status": "success",
+      "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/p/p_trend_following_60m_v1.yaml",
+      "error": null
+    },
+    {
+      "name": "p_trend_following_15m_v1",
+      "category": "trend_following",
+      "timeframe": 15,
+      "status": "success",
+      "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/p/p_trend_following_15m_v1.yaml",
+      "error": null
+    },
+    {
+      "name": "p_breakout_30m_v1",
+      "category": "breakout",
+      "timeframe": 30,
+      "status": "success",
+      "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/p/p_breakout_30m_v1.yaml",
+      "error": null
+    },
+    {
+      "name": "p_mean_reversion_15m_v1",
+      "category": "mean_reversion",
+      "timeframe": 15,
+      "status": "success",
+      "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/p/p_mean_reversion_15m_v1.yaml",
+      "error": null
+    },
+    {
+      "name": "p_intraday_momentum_5m_v1",
+      "category": "intraday_momentum",
+      "timeframe": 5,
+      "status": "success",
+      "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/p/p_intraday_momentum_5m_v1.yaml",
+      "error": null
+    },
+    {
+      "name": "p_intraday_oscillation_5m_v1",
+      "category": "intraday_oscillation",
+      "timeframe": 5,
+      "status": "success",
+      "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/p/p_intraday_oscillation_5m_v1.yaml",
+      "error": null
+    },
+    {
+      "name": "p_multi_factor_30m_v1",
+      "category": "multi_factor",
+      "timeframe": 30,
+      "status": "success",
+      "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/p/p_multi_factor_30m_v1.yaml",
+      "error": null
+    }
+  ]
+}

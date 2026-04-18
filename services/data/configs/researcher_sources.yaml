@@ -1,22 +1,211 @@
-# 研究员数据源配置
+# ═══════════════════════════════════════════════════════════════════════
+# 研究员数据源配置 v2 — 多文章提取 + 反爬增强 + 扩展源
+# ═══════════════════════════════════════════════════════════════════════
+# 每个 parser 返回 articles 列表（多文章提取版）
+# market: domestic/international/both（控制内外盘时段过滤）
+# multi_article: true（默认，parser 返回文章列表）
 
 sources:
+  # ── 国内期货源 ──────────────────────────────────────────────────────
+
+  - source_id: "jin10"
+    name: "金十数据"
+    url_pattern: "https://www.jin10.com/"
+    mode: "browser"
+    parser: "jin10"
+    market: "both"
+    enabled: true
+    priority: 9
+    timeout: 45
+    schedule: ["盘前", "午间", "盘后", "夜盘"]
+
+  - source_id: "eastmoney_futures"
+    name: "东方财富期货"
+    url_pattern: "https://futures.eastmoney.com/"
+    mode: "code"
+    parser: "eastmoney_futures"
+    market: "domestic"
+    enabled: true
+    priority: 8
+    timeout: 30
+    schedule: ["盘前", "午间", "盘后", "夜盘"]
+
   - source_id: "sina_futures"
     name: "新浪财经期货"
     url_pattern: "https://finance.sina.com.cn/futuremarket/"
     mode: "code"
-    parser: "futures"
+    parser: "sina_futures"
+    market: "domestic"
     enabled: true
-    priority: 8
-    schedule: ["盘前", "午间", "盘后", "夜盘"]
+    priority: 7
     timeout: 30
+    schedule: ["盘前", "午间", "盘后", "夜盘"]
 
-  - source_id: "eastmoney_futures"
-    name: "东方财富期货"
-    url_pattern: "https://futures.eastmoney.com/news/"
+  - source_id: "hexun_futures"
+    name: "和讯期货"
+    url_pattern: "https://futures.hexun.com/"
     mode: "code"
-    parser: "futures"
+    parser: "hexun_futures"
+    market: "domestic"
+    enabled: true
+    priority: 7
+    timeout: 30
+    schedule: ["盘前", "午间", "盘后"]
+
+  - source_id: "mysteel"
+    name: "我的钢铁网"
+    url_pattern: "https://www.mysteel.com/"
+    mode: "browser"
+    parser: "mysteel"
+    market: "domestic"
+    enabled: true
+    priority: 7
+    timeout: 30
+    schedule: ["盘前", "午间", "盘后"]
+
+  - source_id: "sci99"
+    name: "卓创资讯"
+    url_pattern: "https://www.sci99.com/"
+    mode: "code"
+    parser: "sci99"
+    market: "domestic"
+    enabled: true
+    priority: 6
+    timeout: 30
+    schedule: ["盘前", "午间", "盘后"]
+
+  - source_id: "99futures"
+    name: "99期货"
+    url_pattern: "https://www.99qh.com/"
+    mode: "code"
+    parser: "99futures"
+    market: "domestic"
+    enabled: true
+    priority: 6
+    timeout: 30
+    schedule: ["盘前", "午间", "盘后"]
+
+  # ── 交易所公告 ──────────────────────────────────────────────────────
+
+  - source_id: "shfe_notice"
+    name: "上期所公告"
+    url_pattern: "https://www.shfe.com.cn/bourseService/businessdata/notification/"
+    mode: "code"
+    parser: "shfe_notice"
+    market: "domestic"
+    enabled: true
+    priority: 6
+    timeout: 30
+    schedule: ["盘前", "盘后"]
+
+  - source_id: "dce_notice"
+    name: "大商所公告"
+    url_pattern: "http://www.dce.com.cn/dalianshangpin/ywfw/jystz/ywtz/index.html"
+    mode: "code"
+    parser: "dce_notice"
+    market: "domestic"
+    enabled: true
+    priority: 6
+    timeout: 30
+    schedule: ["盘前", "盘后"]
+
+  - source_id: "czce_notice"
+    name: "郑商所公告"
+    url_pattern: "http://www.czce.com.cn/cn/jystz/jytb/H770303index_1.htm"
+    mode: "code"
+    parser: "czce_notice"
+    market: "domestic"
+    enabled: true
+    priority: 6
+    timeout: 30
+    schedule: ["盘前", "盘后"]
+
+  - source_id: "cffex_notice"
+    name: "中金所公告"
+    url_pattern: "http://www.cffex.com.cn/jytz/"
+    mode: "code"
+    parser: "cffex_notice"
+    market: "domestic"
+    enabled: true
+    priority: 6
+    timeout: 30
+    schedule: ["盘前", "盘后"]
+
+  # ── 国际源 ──────────────────────────────────────────────────────────
+
+  - source_id: "kitco_gold"
+    name: "Kitco 贵金属"
+    url_pattern: "https://www.kitco.com/news"
+    mode: "code"
+    parser: "kitco_gold"
+    market: "international"
+    enabled: true
+    priority: 7
+    timeout: 30
+    schedule: ["夜盘"]
+
+  - source_id: "oilprice_com"
+    name: "OilPrice 能源"
+    url_pattern: "https://oilprice.com/Latest-Energy-News/World-News/"
+    mode: "code"
+    parser: "oilprice_com"
+    market: "international"
+    enabled: true
+    priority: 7
+    timeout: 30
+    schedule: ["夜盘"]
+
+  - source_id: "investing_commodities"
+    name: "Investing 大宗商品"
+    url_pattern: "https://www.investing.com/news/commodities-news"
+    mode: "browser"
+    parser: "investing_commodities"
+    market: "international"
     enabled: true
     priority: 8
-    schedule: ["盘前", "午间", "盘后", "夜盘"]
+    timeout: 60
+    schedule: ["夜盘"]
+
+  - source_id: "cme_advisory"
+    name: "CME 公告"
+    url_pattern: "https://www.cmegroup.com/market-data/advisories.html"
+    mode: "browser"
+    parser: "cme_advisory"
+    market: "international"
+    enabled: false  # HTTP2 协议错误，暂时禁用 2026-04-18
+    priority: 7
+    timeout: 60
+    schedule: ["夜盘"]
+
+  - source_id: "fed_releases"
+    name: "美联储公告"
+    url_pattern: "https://www.federalreserve.gov/newsevents/pressreleases.htm"
+    mode: "code"
+    parser: "fed_releases"
+    market: "international"
+    enabled: true
+    priority: 6
     timeout: 30
+    schedule: ["夜盘"]
+
+  - source_id: "reuters_commodities"
+    name: "路透社大宗商品"
+    url_pattern: "https://www.reuters.com/markets/commodities/"
+    mode: "browser"
+    parser: "reuters_commodities"
+    market: "international"
+    enabled: true
+    priority: 8
+    timeout: 60
+    schedule: ["夜盘"]
+
+  - source_id: "mining_com"
+    name: "Mining.com 矿业"
+    url_pattern: "https://www.mining.com/category/news/"
+    mode: "code"
+    parser: "mining_com"
+    market: "international"
+    enabled: true
+    priority: 6
+    timeout: 30
+    schedule: ["夜盘"]

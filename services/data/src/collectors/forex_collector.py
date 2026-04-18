@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from src.collectors.base import BaseCollector
+from collectors.base import BaseCollector
 
 
 # 主要货币对 (与期货品种高度相关)

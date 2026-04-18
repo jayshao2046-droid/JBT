@@ -16,7 +16,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
-from src.utils.logger import get_logger
+from utils.logger import get_logger
 
 logger = get_logger("preread_generator")
 
@@ -125,7 +125,7 @@ class PrereadGenerator:
 
         # 1. watchlist 股票池
         try:
-            from src.collectors.watchlist_client import WatchlistClient
+            from collectors.watchlist_client import WatchlistClient
             client = WatchlistClient()
             watchlist = client.fetch_watchlist()
             context["watchlist"] = watchlist[:30]  # 限制 30 只
@@ -136,7 +136,7 @@ class PrereadGenerator:
 
         # 2. 近5日日线摘要（标的平均涨跌/成交量）
         try:
-            from src.collectors.tushare_collector import TushareDailyCollector
+            from collectors.tushare_collector import TushareDailyCollector
             collector = TushareDailyCollector()
             # 简化：只取 watchlist 前 5 只的近 5 日数据作为市场概况
             sample_symbols = context["watchlist"][:5]
@@ -162,7 +162,7 @@ class PrereadGenerator:
 
         # 3. 宏观背景快照（最新 CPI/PPI/PMI 月度值）
         try:
-            from src.collectors.macro_collector import MacroCollector
+            from collectors.macro_collector import MacroCollector
             collector = MacroCollector()
             macro_records = collector.collect(countries=["CN", "US"], full_history=False)
             # 取最新一条记录
@@ -195,7 +195,7 @@ class PrereadGenerator:
 
         # 1. 市场情绪简报（北向资金 + 融资融券）
         try:
-            from src.collectors.sentiment_collector import SentimentCollector
+            from collectors.sentiment_collector import SentimentCollector
             collector = SentimentCollector()
             sentiment_records = collector.collect(symbols=["north_flow", "margin_sh", "margin_sz"])
             # 取最新一条
@@ -215,7 +215,7 @@ class PrereadGenerator:
 
         # 2. 重大新闻标题列表（近 12h Top 10）
         try:
-            from src.collectors.news_api_collector import NewsAPICollector
+            from collectors.news_api_collector import NewsAPICollector
             collector = NewsAPICollector()
             news_records = collector.collect(sources=["cls", "eastmoney"])
             # 取最新 10 条标题
@@ -228,7 +228,7 @@ class PrereadGenerator:
 
         # 3. 波动率指数（50ETF QVIX / VIX）
         try:
-            from src.collectors.volatility_collector import VolatilityCollector
+            from collectors.volatility_collector import VolatilityCollector
             collector = VolatilityCollector()
             vol_records = collector.collect(symbols=["50ETF", "VIX"])
             vol_snapshot = {}
@@ -251,8 +251,8 @@ class PrereadGenerator:
 
         # 1. 近 20 日分钟 K 线统计（简化：只取 watchlist 前 3 只）
         try:
-            from src.collectors.watchlist_client import WatchlistClient
-            from src.collectors.stock_minute_collector import StockMinuteCollector
+            from collectors.watchlist_client import WatchlistClient
+            from collectors.stock_minute_collector import StockMinuteCollector
             wl_client = WatchlistClient()
             watchlist = wl_client.fetch_watchlist()
             collector = StockMinuteCollector()
@@ -281,7 +281,7 @@ class PrereadGenerator:
 
         # 3. 期权隐含波动率（IV vs HV 差值）
         try:
-            from src.collectors.options_collector import OptionsCollector
+            from collectors.options_collector import OptionsCollector
             collector = OptionsCollector()
             options_records = collector.collect(symbols=["50ETF", "300ETF"])
             iv_snapshot = {}
@@ -298,7 +298,7 @@ class PrereadGenerator:
 
         # 4. 宏观月报（完整 CPI/PPI/PMI 序列）
         try:
-            from src.collectors.macro_collector import MacroCollector
+            from collectors.macro_collector import MacroCollector
             collector = MacroCollector()
             macro_records = collector.collect(countries=["CN", "US"], full_history=True)
             context["macro_series"] = macro_records[-30:]  # 最近 30 条
@@ -319,7 +319,7 @@ class PrereadGenerator:
 
         # 2. 波动率指数序列
         try:
-            from src.collectors.volatility_collector import VolatilityCollector
+            from collectors.volatility_collector import VolatilityCollector
             collector = VolatilityCollector()
             vol_records = collector.collect(symbols=["50ETF", "VIX", "300ETF"])
             dataset["volatility_series"] = vol_records[-30:]  # 最近 30 条
@@ -333,7 +333,7 @@ class PrereadGenerator:
 
         # 4. 北向资金近 20 日净买入排名
         try:
-            from src.collectors.sentiment_collector import SentimentCollector
+            from collectors.sentiment_collector import SentimentCollector
             collector = SentimentCollector()
             sentiment_records = collector.collect(symbols=["north_flow"])
             dataset["north_flow_series"] = sentiment_records[-20:]  # 最近 20 条
@@ -347,7 +347,7 @@ class PrereadGenerator:
 
         # 6. 融资融券余额变化率
         try:
-            from src.collectors.sentiment_collector import SentimentCollector
+            from collectors.sentiment_collector import SentimentCollector
             collector = SentimentCollector()
             sentiment_records = collector.collect(symbols=["margin_sh", "margin_sz"])
             dataset["margin_series"] = sentiment_records[-20:]  # 最近 20 条

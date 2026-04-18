@@ -10,7 +10,7 @@ from typing import Any
 
 import httpx
 
-from src.collectors.base import BaseCollector
+from collectors.base import BaseCollector
 
 _DEFAULT_HEADERS = {"User-Agent": "Mozilla/5.0"}
 _TIMEOUT = 15

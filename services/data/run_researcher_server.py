@@ -16,6 +16,9 @@ import os
 import sys
 import logging
 import json
+import asyncio
+import atexit
+import threading
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
@@ -33,15 +36,38 @@ from services.data.src.researcher.scheduler import ResearcherScheduler
 from services.data.src.researcher.config import ResearcherConfig
 from services.data.src.researcher.queue_manager import QueueManager
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("runtime/researcher/logs/server.log", encoding="utf-8"),
-        logging.StreamHandler()
-    ]
-)
+# --- 日志设置：直接挂 handler，避免 QueueListener daemon 线程在 Windows 丢日志 ---
+_log_dir = Path("runtime/researcher/logs")
+_log_dir.mkdir(parents=True, exist_ok=True)
+
+class _FlushFileHandler(logging.FileHandler):
+    """每条日志写入后立即 flush + fsync"""
+    def emit(self, record):
+        super().emit(record)
+        self.flush()
+        try:
+            os.fsync(self.stream.fileno())
+        except (OSError, ValueError):
+            pass
+
+_file_handler = _FlushFileHandler(str(_log_dir / "server.log"), encoding="utf-8")
+_file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+_console_handler = logging.StreamHandler()  # 默认 stderr，避免 Start-Process 无 stdout
+_console_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+root_logger.addHandler(_file_handler)
+root_logger.addHandler(_console_handler)
+
+def _flush_all_logs():
+    for h in root_logger.handlers:
+        try:
+            h.flush()
+        except Exception:
+            pass
+
+atexit.register(_flush_all_logs)
 logger = logging.getLogger(__name__)
 
 # 创建 FastAPI 应用
@@ -50,6 +76,8 @@ app = FastAPI(title="JBT Researcher Service", version="1.0.0")
 # 全局调度器和队列管理器实例
 scheduler: Optional[ResearcherScheduler] = None
 queue_manager: Optional[QueueManager] = None
+_continuous_thread: Optional[threading.Thread] = None
+_continuous_running: bool = False
 
 
 class CallbackRequest(BaseModel):
@@ -71,7 +99,7 @@ class MarkReadRequest(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """启动时初始化"""
-    global scheduler, queue_manager
+    global scheduler, queue_manager, _continuous_task, _continuous_running
     logger.info("=" * 60)
     logger.info("JBT 研究员服务启动")
     logger.info(f"时间: {datetime.now()}")
@@ -94,14 +122,61 @@ async def startup_event():
     scheduler = ResearcherScheduler(queue_manager=queue_manager)
     logger.info("研究员调度器初始化完成")
 
+    # 启动 24 小时持续运行循环（独立线程 + 独立 event loop）
+    _continuous_running = True
+    _continuous_thread = threading.Thread(target=_continuous_loop_thread, daemon=True)
+    _continuous_thread.start()
+    logger.info("[LOOP] 24 小时持续研究循环已启动（独立线程）")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """关闭时清理资源"""
-    global scheduler
+    global scheduler, _continuous_thread, _continuous_running
+    _continuous_running = False
+    if _continuous_thread and _continuous_thread.is_alive():
+        _continuous_thread.join(timeout=10)
     if scheduler:
         await scheduler.close()
     logger.info("研究员服务已关闭")
+
+
+def _continuous_loop_thread():
+    """独立线程：流式循环 — 持续爬取+分析+推送，拥有自己的 event loop"""
+    global scheduler, _continuous_running
+    loop_count = 0
+    logger.info("[LOOP] 流式研究循环开始（独立线程）")
+    # 创建独立 event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        while _continuous_running:
+            try:
+                loop_count += 1
+                logger.info(f"[LOOP] 流式周期 {loop_count} 开始")
+                result = loop.run_until_complete(scheduler.execute_stream_cycle())
+                elapsed = result.get("elapsed_seconds", 0)
+                mode = result.get("mode", "?")
+                new_art = result.get("new_articles", 0)
+                kline = result.get("kline_reports", 0)
+                today_total = result.get("today_total_articles", 0)
+                logger.info(
+                    f"[LOOP] 流式周期 {loop_count} 完成: "
+                    f"mode={mode}, new_articles={new_art}, kline={kline}, "
+                    f"today_total={today_total}, elapsed={elapsed:.1f}s"
+                )
+                _flush_all_logs()
+                # 如果本轮无新内容，等待 30 秒后再轮询
+                if new_art == 0 and kline == 0:
+                    import time as time_mod
+                    time_mod.sleep(30)
+            except Exception as e:
+                logger.error(f"[LOOP] 流式周期 {loop_count} 异常: {e}", exc_info=True)
+                import time as time_mod
+                time_mod.sleep(60)
+    finally:
+        loop.close()
+    logger.info(f"[LOOP] 流式研究循环结束，共完成 {loop_count} 轮")
 
 
 @app.get("/health")
@@ -139,8 +214,15 @@ async def trigger_research(hour: Optional[int] = None):
     logger.info(f"[TRIGGER] 手动触发研究员分析: hour={hour}")
 
     try:
-        # 执行研究员任务
-        result = await scheduler.execute_hourly(hour=hour)
+        # 执行研究员任务（run_in_executor + 独立 event loop 避免阻塞 FastAPI）
+        loop = asyncio.get_event_loop()
+        def _run_hourly(h):
+            _loop = asyncio.new_event_loop()
+            try:
+                return _loop.run_until_complete(scheduler.execute_hourly(hour=h))
+            finally:
+                _loop.close()
+        result = await loop.run_in_executor(None, _run_hourly, hour)
 
         return {
             "success": True,
@@ -318,4 +400,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # Windows 上必须使用 ProactorEventLoop 才能支持子进程和 asyncio
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
     main()

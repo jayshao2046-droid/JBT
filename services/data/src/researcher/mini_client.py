@@ -18,13 +18,29 @@ class MiniClient:
         self.base_url = base_url
         self.bars_endpoint = f"{base_url}/api/v1/bars"
 
-    def get_bars(self, symbol: str, interval: str = "1m", limit: Optional[int] = None) -> List[Dict]:
-        """获取 K 线数据"""
+    def get_bars(self, symbol: str, interval: str = "1m", limit: Optional[int] = None,
+                 start: Optional[str] = None, end: Optional[str] = None) -> List[Dict]:
+        """获取 K 线数据
+
+        Args:
+            symbol: 品种代码（如 SHFE_rb）
+            interval: 时间周期（暂未使用，API 固定返回1分钟）
+            limit: 限制返回条数
+            start: 开始时间（ISO格式或相对时间如 -1h, -7d）
+            end: 结束时间（可选，默认当前时间）
+        """
         try:
+            # 如果未指定 start，默认获取最近1小时数据
+            if start is None:
+                start = "-1h"
+
             params = {
                 "symbol": symbol,
-                "interval": interval
+                "start": start
             }
+
+            if end is not None:
+                params["end"] = end
 
             if limit is not None:
                 params["limit"] = limit
@@ -32,9 +48,10 @@ class MiniClient:
             resp = requests.get(self.bars_endpoint, params=params, timeout=10)
 
             if resp.status_code == 200:
-                return resp.json()
+                data = resp.json()
+                return data.get("bars", [])
             else:
-                logger.error(f"Failed to get bars for {symbol}: {resp.status_code}")
+                logger.error(f"Failed to get bars for {symbol}: {resp.status_code} - {resp.text}")
                 return []
 
         except Exception as e:
@@ -46,12 +63,13 @@ class MiniClient:
         bars = self.get_bars(symbol, interval, limit=1)
         return bars[0] if bars else None
 
-    def get_multiple_symbols(self, symbols: List[str], interval: str = "1m", limit: int = 1) -> Dict[str, List[Dict]]:
+    def get_multiple_symbols(self, symbols: List[str], interval: str = "1m", limit: int = 1,
+                            start: Optional[str] = None, end: Optional[str] = None) -> Dict[str, List[Dict]]:
         """批量获取多个品种的 K 线"""
         result = {}
 
         for symbol in symbols:
-            bars = self.get_bars(symbol, interval, limit)
+            bars = self.get_bars(symbol, interval, limit, start, end)
             if bars:
                 result[symbol] = bars
 

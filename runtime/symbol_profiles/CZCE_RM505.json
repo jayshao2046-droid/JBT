@@ -1,0 +1,35 @@
+{
+  "symbol": "CZCE.RM505",
+  "volatility_3m": 0.025303988199452822,
+  "volatility_1y": 0.02425962845472388,
+  "volatility_5y": 0.031752963886183566,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 0.00031349949547146216,
+  "trend_strength_1y": 0.00019848244265219402,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": -0.0738864500227214,
+  "autocorr_1y": -0.07810754233354719,
+  "skewness": 2.7646280755766064,
+  "kurtosis": 222.16809100127406,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.76:8105)",
+    "calculation_time": "2026-04-17 22:54:47",
+    "data_start_date": "2021-04-19T01:00:00",
+    "data_end_date": "2026-04-08T14:59:00",
+    "data_points_3m": 17355,
+    "data_points_1y": 80700,
+    "data_points_5y": 411420,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.9810320390393197,
+    "volatility": 0.98708521344408,
+    "trend": 0.9654948841542195,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.9209668293304992,
+    "warnings": []
+  }
+}

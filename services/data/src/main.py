@@ -43,6 +43,7 @@ COLUMN_ALIASES = {
     "timestamp": "datetime",
     "vol": "volume",
     "oi": "open_interest",
+    "open_oi": "open_interest",
     "openInterest": "open_interest",
     "open_interest1": "open_interest",
 }
@@ -235,8 +236,10 @@ app = FastAPI(title="JBT Data Service", version=SERVICE_VERSION, dependencies=[D
 try:
     from api.routes.data_web import router as data_web_router
     app.include_router(data_web_router)
-except ImportError:
-    pass  # 开发环境可能未安装所有依赖
+except ImportError as e:
+    logger.warning(f"Failed to load data_web_router: {e}")
+except Exception as e:
+    logger.error(f"Error loading data_web_router: {e}")
 
 # 注册决策端上下文投喂路由
 try:

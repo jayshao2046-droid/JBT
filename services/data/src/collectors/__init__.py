@@ -1,18 +1,18 @@
 """Collector implementations for market data sources."""
 
-from src.collectors.akshare_backup import AkshareBackupCollector
-from src.collectors.base import BaseCollector
-from src.collectors.macro_collector import MacroCollector
-from src.collectors.news_api_collector import NewsAPICollector
-from src.collectors.overseas_minute_collector import OverseasMinuteCollector
-from src.collectors.position_collector import PositionCollector
-from src.collectors.rss_collector import RSSCollector
-from src.collectors.sentiment_collector import SentimentCollector
-from src.collectors.shipping_collector import ShippingCollector
-from src.collectors.stock_minute_collector import StockMinuteCollector
-from src.collectors.tqsdk_collector import TqSdkCollector
-from src.collectors.tushare_collector import TushareDailyCollector
-from src.collectors.volatility_collector import VolatilityCollector
+from collectors.akshare_backup import AkshareBackupCollector
+from collectors.base import BaseCollector
+from collectors.macro_collector import MacroCollector
+from collectors.news_api_collector import NewsAPICollector
+from collectors.overseas_minute_collector import OverseasMinuteCollector
+from collectors.position_collector import PositionCollector
+from collectors.rss_collector import RSSCollector
+from collectors.sentiment_collector import SentimentCollector
+from collectors.shipping_collector import ShippingCollector
+from collectors.stock_minute_collector import StockMinuteCollector
+from collectors.tqsdk_collector import TqSdkCollector
+from collectors.tushare_collector import TushareDailyCollector
+from collectors.volatility_collector import VolatilityCollector
 
 __all__ = [
     "BaseCollector",

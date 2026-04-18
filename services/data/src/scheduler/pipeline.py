@@ -2,30 +2,33 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
-from src.collectors.akshare_backup import AkshareBackupCollector
-from src.collectors.base import BaseCollector
-from src.collectors.cftc_collector import CftcCollector
-from src.collectors.watchlist_client import WatchlistClient
-from src.collectors.forex_collector import ForexCollector
-from src.collectors.macro_collector import MacroCollector
-from src.collectors.news_api_collector import NewsAPICollector
-from src.collectors.options_collector import OptionsCollector
-from src.collectors.position_collector import PositionCollector
-from src.collectors.rss_collector import RSSCollector
-from src.collectors.sentiment_collector import SentimentCollector
-from src.collectors.shipping_collector import ShippingCollector
-from src.collectors.tqsdk_collector import TqSdkCollector
-from src.collectors.tushare_futures_collector import TushareFuturesCollector
-from src.collectors.tushare_collector import TushareDailyCollector
-from src.collectors.volatility_collector import VolatilityCollector
-from src.data.source_manager import SourceManager
-from src.data.storage import HDF5Storage
-from src.data.sentiment_mapper import map_news_to_score, map_sentiment_to_score
-from src.utils.config import get_config
+from collectors.akshare_backup import AkshareBackupCollector
+from collectors.base import BaseCollector
+from collectors.cftc_collector import CftcCollector
+from collectors.watchlist_client import WatchlistClient
+from collectors.forex_collector import ForexCollector
+from collectors.macro_collector import MacroCollector
+from collectors.news_api_collector import NewsAPICollector
+from collectors.options_collector import OptionsCollector
+from collectors.position_collector import PositionCollector
+from collectors.rss_collector import RSSCollector
+from collectors.sentiment_collector import SentimentCollector
+from collectors.shipping_collector import ShippingCollector
+from collectors.weather_collector import WeatherCollector
+from collectors.tqsdk_collector import TqSdkCollector
+from collectors.tushare_futures_collector import TushareFuturesCollector
+from collectors.tushare_collector import TushareDailyCollector
+from collectors.volatility_collector import VolatilityCollector
+from data.source_manager import SourceManager
+from data.storage import HDF5Storage
+from data.sentiment_mapper import map_news_to_score, map_sentiment_to_score
+from utils.config import get_config
 
 _logger = logging.getLogger(__name__)
 
@@ -51,6 +54,117 @@ def _save_records(
         sort_by="timestamp",
         mode="a",  # 修复：改为追加模式，避免覆盖历史数据
     )
+
+
+def _sync_minute_to_bars_dir(
+    records_by_symbol: dict[str, list[dict[str, Any]]],
+) -> None:
+    """同步分钟数据到 bars API 目录: futures_minute/1m/{symbol}/YYYYMM.parquet"""
+    import pandas as pd
+
+    storage_root = os.environ.get("DATA_STORAGE_ROOT", "")
+    if not storage_root:
+        return
+
+    bars_root = Path(storage_root) / "futures_minute" / "1m"
+
+    for sym, records in records_by_symbol.items():
+        try:
+            rows = []
+            for rec in records:
+                payload = rec.get("payload", {})
+                if isinstance(payload, str):
+                    payload = json.loads(payload)
+                rows.append({
+                    "datetime": rec.get("timestamp") or payload.get("datetime", ""),
+                    "open": float(payload.get("open", 0)),
+                    "high": float(payload.get("high", 0)),
+                    "low": float(payload.get("low", 0)),
+                    "close": float(payload.get("close", 0)),
+                    "volume": int(payload.get("volume", 0)),
+                    "open_interest": int(payload.get("open_oi", 0)),
+                })
+
+            if not rows:
+                continue
+
+            df = pd.DataFrame(rows)
+            df["datetime"] = pd.to_datetime(df["datetime"])
+            df = df.sort_values("datetime").drop_duplicates(
+                subset=["datetime"], keep="last"
+            )
+
+            dirname = sym.replace(".", "_").replace("@", "_")
+            sym_dir = bars_root / dirname
+            sym_dir.mkdir(parents=True, exist_ok=True)
+
+            for period, group in df.groupby(df["datetime"].dt.to_period("M")):
+                month_str = period.strftime("%Y%m")
+                fpath = sym_dir / f"{month_str}.parquet"
+                if fpath.exists():
+                    old = pd.read_parquet(fpath)
+                    old["datetime"] = pd.to_datetime(old["datetime"])
+                    combined = pd.concat([old, group], ignore_index=True)
+                    combined = combined.sort_values("datetime").drop_duplicates(
+                        subset=["datetime"], keep="last"
+                    )
+                else:
+                    combined = group
+                combined.to_parquet(fpath, index=False, engine="pyarrow")
+
+            _logger.info("bars-sync minute: %s → %d bars", dirname, len(df))
+        except Exception as exc:
+            _logger.warning("bars-sync minute failed for %s: %s", sym, exc)
+
+
+def _sync_daily_to_bars_dir(
+    symbol: str,
+    records: list[dict[str, Any]],
+) -> None:
+    """同步日K数据到统一目录: futures_daily/{symbol}/daily.parquet"""
+    import pandas as pd
+
+    storage_root = os.environ.get("DATA_STORAGE_ROOT", "")
+    if not storage_root:
+        return
+
+    try:
+        daily_root = Path(storage_root) / "futures_daily"
+        rows = []
+        for rec in records:
+            rows.append({
+                "trade_date": rec.get("timestamp", ""),
+                "open": float(rec.get("open", 0)),
+                "high": float(rec.get("high", 0)),
+                "low": float(rec.get("low", 0)),
+                "close": float(rec.get("close", 0)),
+                "volume": float(rec.get("volume", 0)),
+                "oi": float(rec.get("oi", 0)),
+                "amount": float(rec.get("amount", 0)),
+            })
+
+        if not rows:
+            return
+
+        dirname = symbol.replace(".", "_").replace("@", "_")
+        sym_dir = daily_root / dirname
+        sym_dir.mkdir(parents=True, exist_ok=True)
+        fpath = sym_dir / "daily.parquet"
+
+        df = pd.DataFrame(rows)
+        if fpath.exists():
+            old = pd.read_parquet(fpath)
+            df = pd.concat([old, df], ignore_index=True)
+            df = df.sort_values("trade_date").drop_duplicates(
+                subset=["trade_date"], keep="last"
+            )
+        else:
+            df = df.sort_values("trade_date")
+
+        df.to_parquet(fpath, index=False, engine="pyarrow")
+        _logger.info("bars-sync daily: %s → %d rows", dirname, len(df))
+    except Exception as exc:
+        _logger.warning("bars-sync daily failed for %s: %s", symbol, exc)
 
 
 def run_minute_pipeline(
@@ -99,6 +213,9 @@ def run_minute_pipeline(
     for sym, recs in by_symbol.items():
         written = _save_records(storage=resolved_storage, data_type="1min", symbol=sym, records=recs)
         result[sym] = written
+
+    # 同步到 bars API 目录 (futures_minute/1m/)
+    _sync_minute_to_bars_dir(by_symbol)
     return result
 
 
@@ -130,6 +247,8 @@ def run_daily_pipeline(
         )
         written = _save_records(storage=resolved_storage, data_type="daily", symbol=symbol, records=records)
         result[symbol] = written
+        # 同步到统一日K目录 (futures_daily/)
+        _sync_daily_to_bars_dir(symbol, records)
     return result
 
 
@@ -178,25 +297,34 @@ def run_overseas_daily_pipeline(
     config: dict[str, Any] | None = None,
     storage: HDF5Storage | None = None,
 ) -> dict[str, int]:
-    """D107: 外盘日线采集 (全部 30 品种, AkShare)."""
+    """D107: 外盘日线采集 (全部 31 品种, yfinance + AkShare)."""
     resolved_config = config or get_config()
     resolved_storage = storage or _build_storage(resolved_config)
 
-    from src.collectors.overseas_minute_collector import OverseasMinuteCollector
+    from collectors.overseas_minute_collector import OverseasMinuteCollector
     collector = OverseasMinuteCollector(config=resolved_config, storage=resolved_storage)
 
     result: dict[str, int] = {}
     try:
-        records = collector.collect_daily_only()
-        for rec in records:
+        # 1. 采集 yfinance 品种日线 (COMEX/NYMEX/CBOT/ICE/CME)
+        yf_records = collector.collect_yfinance_daily(symbols=symbols)
+
+        # 2. 采集 AkShare 品种日线 (LME/SGX)
+        ak_records = collector.collect_daily_only()
+
+        # 3. 合并所有记录
+        all_records = yf_records + ak_records
+
+        for rec in all_records:
             sym = rec.get("symbol_or_indicator", "unknown")
             if sym not in result:
                 result[sym] = 0
             result[sym] += 1
-        # Save grouped
+
+        # Save grouped by symbol
         from collections import defaultdict
         by_sym: dict[str, list] = defaultdict(list)
-        for rec in records:
+        for rec in all_records:
             by_sym[rec.get("symbol_or_indicator", "unknown")].append(rec)
         for sym, recs in by_sym.items():
             _save_records(storage=resolved_storage, data_type="daily", symbol=sym, records=recs)
@@ -215,7 +343,7 @@ def run_overseas_minute_yf_pipeline(
     resolved_config = config or get_config()
     resolved_storage = storage or _build_storage(resolved_config)
 
-    from src.collectors.overseas_minute_collector import OverseasMinuteCollector
+    from collectors.overseas_minute_collector import OverseasMinuteCollector
     collector = OverseasMinuteCollector(config=resolved_config, storage=resolved_storage)
 
     result: dict[str, int] = {}
@@ -243,7 +371,7 @@ def run_stock_minute_pipeline(
     resolved_config = config or get_config()
     resolved_storage = storage or _build_storage(resolved_config)
 
-    from src.collectors.stock_minute_collector import StockMinuteCollector
+    from collectors.stock_minute_collector import StockMinuteCollector
     collector = StockMinuteCollector(
         config=resolved_config,
         storage=resolved_storage,
@@ -275,6 +403,103 @@ def run_stock_minute_pipeline(
     return result
 
 
+def run_stock_daily_pipeline(
+    *,
+    trade_date: str | None = None,
+    config: dict[str, Any] | None = None,
+    storage: HDF5Storage | None = None,
+) -> dict[str, int]:
+    """A股全量日线采集 — 每日收盘后按 trade_date 拉取一次全市场，
+    落盘到 DATA_STORAGE_ROOT/stock_daily/YYYYMM.parquet（按月分文件）。
+
+    使用 Tushare pro.daily(trade_date=...) 一次 API 拉取全市场 ~5500 行，
+    远比按个股逐只拉取高效。同时采集6个主要指数。
+    """
+    import pandas as pd
+    import time as _time
+
+    _ = storage  # 本管道直接写文件，不走 HDF5Storage.write_records
+
+    storage_root = os.environ.get("DATA_STORAGE_ROOT", "")
+    if not storage_root:
+        _logger.error("DATA_STORAGE_ROOT 未设置，跳过股票日线采集")
+        return {}
+
+    stock_dir = Path(storage_root) / "stock_daily"
+    stock_dir.mkdir(parents=True, exist_ok=True)
+
+    resolved_config = config or get_config()
+    data_sources = resolved_config.get("data_sources", {})
+    token = str(data_sources.get("tushare", {}).get("token", "") or "")
+    if not token:
+        token = os.environ.get("TUSHARE_TOKEN", "")
+    if not token:
+        _logger.error("TUSHARE_TOKEN 未配置，跳过股票日线采集")
+        return {}
+
+    try:
+        import tushare as ts
+        ts.set_token(token)
+        pro = ts.pro_api()
+    except Exception as exc:
+        _logger.error("Tushare 初始化失败: %s", exc)
+        return {}
+
+    today = trade_date or _time.strftime("%Y%m%d")
+    month_key = today[:6]  # YYYYMM
+
+    result: dict[str, int] = {}
+
+    # 1. 全市场个股日线
+    try:
+        df = pro.daily(trade_date=today)
+        _time.sleep(0.3)
+        if df is not None and not df.empty:
+            month_file = stock_dir / f"{month_key}.parquet"
+            if month_file.exists():
+                old = pd.read_parquet(month_file)
+                df = pd.concat([old, df], ignore_index=True)
+                df = df.sort_values(["ts_code", "trade_date"]).drop_duplicates(
+                    subset=["ts_code", "trade_date"], keep="last"
+                )
+            else:
+                df = df.sort_values(["ts_code", "trade_date"])
+            df.to_parquet(month_file, index=False, engine="pyarrow")
+            result["stock_daily"] = len(df)
+            _logger.info("A股日线: trade_date=%s → %d行 → %s", today, len(df), month_file.name)
+        else:
+            _logger.warning("A股日线: trade_date=%s 无数据", today)
+    except Exception as exc:
+        _logger.error("A股日线采集失败 trade_date=%s: %s", today, exc)
+
+    # 2. 主要指数
+    index_dir = stock_dir / "index"
+    index_dir.mkdir(parents=True, exist_ok=True)
+    INDEX_CODES = [
+        "000001.SH", "399001.SZ", "399006.SZ",
+        "000300.SH", "000905.SH", "000852.SH",
+    ]
+    for idx_code in INDEX_CODES:
+        try:
+            idf = pro.index_daily(ts_code=idx_code, trade_date=today)
+            _time.sleep(0.2)
+            if idf is not None and not idf.empty:
+                fname = idx_code.replace(".", "_")
+                ifile = index_dir / f"{fname}.parquet"
+                if ifile.exists():
+                    old_i = pd.read_parquet(ifile)
+                    idf = pd.concat([old_i, idf], ignore_index=True)
+                    idf = idf.sort_values("trade_date").drop_duplicates(
+                        subset=["trade_date"], keep="last"
+                    )
+                idf.to_parquet(ifile, index=False, engine="pyarrow")
+                result[idx_code] = len(idf)
+        except Exception as exc:
+            _logger.warning("指数日线 %s 失败: %s", idx_code, exc)
+
+    return result
+
+
 def run_macro_pipeline(
     *,
     countries: list[str] | None = None,
@@ -297,7 +522,7 @@ def run_macro_pipeline(
     except Exception as exc:
         _logger.warning("macro primary (AkShare) failed: %s, trying Tushare backup", exc)
         try:
-            from src.collectors.tushare_full_collector import TushareFullCollector
+            from collectors.tushare_full_collector import TushareFullCollector
             ts_col = TushareFullCollector(config=resolved_config)
             shibor = ts_col.collect_shibor()
             records = [{"symbol": symbol, "indicator": "shibor", "value": r} for r in shibor]
@@ -459,7 +684,7 @@ def run_sentiment_pipeline(
     except Exception as exc:
         _logger.warning("sentiment primary (AkShare) failed: %s, trying Tushare backup", exc)
         try:
-            from src.collectors.tushare_full_collector import TushareFullCollector
+            from collectors.tushare_full_collector import TushareFullCollector
             ts_col = TushareFullCollector(config=resolved_config)
             margin = ts_col.collect_margin_detail() if hasattr(ts_col, "collect_margin_detail") else []
             records = [{"symbol": symbol, "indicator": "margin", "value": r} for r in margin]
@@ -507,6 +732,35 @@ def run_shipping_pipeline(
     return {symbol: written}
 
 
+def run_weather_pipeline(
+    *,
+    locations: list[str] | None = None,
+    as_of: str | None = None,
+    days: int = 7,
+    config: dict[str, Any] | None = None,
+    storage: HDF5Storage | None = None,
+    collector: WeatherCollector | None = None,
+    symbol: str = "weather",
+) -> dict[str, int]:
+    """Run weather collection and save to hdf5/{symbol}/weather/.
+
+    采集全球15个关键期货影响地点的天气数据，支持策略决策。
+    数据源：Open-Meteo Forecast (免费免Key)
+    """
+    resolved_config = config or get_config()
+    resolved_storage = storage or _build_storage(resolved_config)
+    resolved_collector = collector or WeatherCollector(config=resolved_config, storage=resolved_storage, use_mock=False)
+
+    try:
+        records = resolved_collector.collect(locations=locations, as_of=as_of, days=days)
+    except Exception as exc:
+        _logger.error("weather pipeline failed: %s", exc)
+        records = []
+
+    written = _save_records(storage=resolved_storage, data_type="weather", symbol=symbol, records=records)
+    return {symbol: written}
+
+
 def run_tushare_futures_pipeline(
     *,
     ts_code: str,
@@ -516,7 +770,14 @@ def run_tushare_futures_pipeline(
     collector: TushareFuturesCollector | None = None,
     symbol: str = "futures",
 ) -> dict[str, int]:
-    """Run Tushare futures collection and save to hdf5/{symbol}/futures/."""
+    """Run Tushare futures collection and save to separate directories.
+
+    Data types:
+    - daily: fut_daily (日K线) -> hdf5/{symbol}/futures_daily/
+    - holding: fut_holding (持仓排名) -> hdf5/{symbol}/futures_holding/
+    - wsr: fut_wsr (仓单日报) -> hdf5/{symbol}/futures_wsr/
+    - settle: fut_settle (结算参数) -> hdf5/{symbol}/futures_settle/
+    """
     resolved_config = config or get_config()
     resolved_storage = storage or _build_storage(resolved_config)
     resolved_collector = collector or TushareFuturesCollector(
@@ -525,9 +786,20 @@ def run_tushare_futures_pipeline(
         use_mock=False,
     )
 
-    records = resolved_collector.collect_all(ts_code=ts_code, trade_date=trade_date)
-    written = _save_records(storage=resolved_storage, data_type="futures", symbol=symbol, records=records)
-    return {symbol: written}
+    data_by_type = resolved_collector.collect_all(ts_code=ts_code, trade_date=trade_date)
+
+    result: dict[str, int] = {}
+    for data_type, records in data_by_type.items():
+        if records:
+            written = _save_records(
+                storage=resolved_storage,
+                data_type=f"futures_{data_type}",
+                symbol=symbol,
+                records=records,
+            )
+            result[f"{symbol}_{data_type}"] = written
+
+    return result
 
 
 def run_forex_pipeline(
@@ -580,8 +852,8 @@ def run_cftc_pipeline(
 
 def run_options_pipeline(
     *,
-    indicators: list[str] | None = None,
-    as_of: str | None = None,
+    exchanges: list[str] | None = None,
+    trade_date: str | None = None,
     config: dict[str, Any] | None = None,
     storage: HDF5Storage | None = None,
     collector: OptionsCollector | None = None,
@@ -590,11 +862,15 @@ def run_options_pipeline(
     """Run options market data collection and save to hdf5/{symbol}/options/."""
     resolved_config = config or get_config()
     resolved_storage = storage or _build_storage(resolved_config)
+
+    # Get Tushare token from config
+    tushare_token = resolved_config.get("data_sources", {}).get("tushare", {}).get("token", "")
+
     resolved_collector = collector or OptionsCollector(
-        config=resolved_config, storage=resolved_storage, use_mock=False,
+        config=resolved_config, storage=resolved_storage, use_mock=False, token=tushare_token,
     )
     try:
-        records = resolved_collector.collect(indicators=indicators, as_of=as_of)
+        records = resolved_collector.collect(exchanges=exchanges, trade_date=trade_date)
     except Exception as exc:
         _logger.error("options pipeline failed: %s", exc)
         records = []
@@ -611,7 +887,7 @@ def run_watchlist_minute_pipeline(
     """CB5: 从决策服务 watchlist API 动态获取股票列表，采集分钟 K 线。"""
     from collections import defaultdict
 
-    from src.collectors.stock_minute_collector import StockMinuteCollector
+    from collectors.stock_minute_collector import StockMinuteCollector
 
     resolved_config = config or get_config()
     resolved_storage = storage or _build_storage(resolved_config)

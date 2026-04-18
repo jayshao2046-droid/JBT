@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Protocol
 
-from src.utils.exceptions import DataError
-from src.utils.logger import get_logger
+from utils.exceptions import DataError
+from utils.logger import get_logger
 
 
 class DataSource(Protocol):

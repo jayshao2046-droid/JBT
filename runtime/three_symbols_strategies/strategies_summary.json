@@ -1,0 +1,154 @@
+{
+  "total_strategies": 9,
+  "symbols": [
+    "橡胶",
+    "螺纹钢",
+    "棕榈油"
+  ],
+  "strategies": [
+    {
+      "symbol": "SHFE.ru0",
+      "symbol_name": "橡胶",
+      "strategy_name": "ru_meanreversion_skewfilter_001",
+      "yaml_file": "strategies/ru_meanreversion_skewfilter_001.yaml",
+      "logic_description": "基于偏度动态阈值的布林带均值回归策略，利用高正偏度与极端峰度识别反转机会",
+      "recommended_factors": [
+        "Bollinger",
+        "RSI",
+        "ATR"
+      ],
+      "innovation_points": [
+        "偏度作为动态过滤器——仅在正偏度显著时启用多头反转信号，规避右偏分布下的假突破风险",
+        "峰度加权入场延迟：当峰度 > 30 时，强制等待连续两根K线确认布林带触碰，抑制尖峰噪声干扰"
+      ]
+    },
+    {
+      "symbol": "SHFE.ru0",
+      "symbol_name": "橡胶",
+      "strategy_name": "ru_autocorr_reversal_001",
+      "yaml_file": "strategies/ru_autocorr_reversal_001.yaml",
+      "logic_description": "基于负自相关性与成交量比率协同触发的隔日反转策略",
+      "recommended_factors": [
+        "RSI",
+        "VolumeRatio",
+        "ATR"
+      ],
+      "innovation_points": [
+        "将统计自相关性（-0.025）转化为可执行的隔日反转结构，而非传统滞后指标",
+        "VolumeRatio仅用于确认反转动能，不参与趋势方向判断，规避低流动性下的虚假放量"
+      ]
+    },
+    {
+      "symbol": "SHFE.ru0",
+      "symbol_name": "橡胶",
+      "strategy_name": "ru_volatility_regime_switch_001",
+      "yaml_file": "strategies/ru_volatility_regime_switch_001.yaml",
+      "logic_description": "基于波动率分位数驱动的RSI周期自适应策略，动态切换震荡区间宽度与超买超卖阈值",
+      "recommended_factors": [
+        "RSI",
+        "ATR",
+        "Bollinger"
+      ],
+      "innovation_points": [
+        "波动率分位数作为策略元参数，驱动全部子指标参数实时重构，非简单开关式切换",
+        "RSI周期与布林带参数形成反向耦合：低波时用短周期+窄带强化灵敏度，高波时用长周期+宽带抑制噪声"
+      ]
+    },
+    {
+      "symbol": "SHFE.rb0",
+      "symbol_name": "螺纹钢",
+      "strategy_name": "rb_skew_kurtosis_meanreversion_001",
+      "yaml_file": "strategies/rb_skew_kurtosis_meanreversion_001.yaml",
+      "logic_description": "基于极端分布特征（高偏度+高峰度）驱动的自适应布林带均值回归策略",
+      "recommended_factors": [
+        "Bollinger",
+        "RSI",
+        "ATR"
+      ],
+      "innovation_points": [
+        "首次将峰度与偏度联合建模为均值回归强度开关",
+        "布林带参数根据实时峰度动态调整带宽倍数（峰度>100时带宽×0.7）"
+      ]
+    },
+    {
+      "symbol": "SHFE.rb0",
+      "symbol_name": "螺纹钢",
+      "strategy_name": "rb_autocorr_flip_001",
+      "yaml_file": "strategies/rb_autocorr_flip_001.yaml",
+      "logic_description": "基于显著负自相关性（-0.1724）构建的反转信号链策略",
+      "recommended_factors": [
+        "KDJ",
+        "ATR",
+        "VolumeRatio"
+      ],
+      "innovation_points": [
+        "将负自相关性量化为可交易的反转确认阈值",
+        "引入VolumeRatio作为反转有效性过滤器（缩量反转更可靠）"
+      ]
+    },
+    {
+      "symbol": "SHFE.rb0",
+      "symbol_name": "螺纹钢",
+      "strategy_name": "rb_vol_stasis_break_001",
+      "yaml_file": "strategies/rb_vol_stasis_break_001.yaml",
+      "logic_description": "基于极低波动率停滞态识别 + 突破动能衰减拐点的双阶段突破策略",
+      "recommended_factors": [
+        "ATR",
+        "ADX",
+        "RSI"
+      ],
+      "innovation_points": [
+        "定义‘波动率停滞态’作为突破策略前提，避免在非停滞期盲目追涨杀跌",
+        "用RSI斜率而非绝对值判断突破真实性，规避高波动假突破"
+      ]
+    },
+    {
+      "symbol": "DCE.p0",
+      "symbol_name": "棕榈油",
+      "strategy_name": "p0_skew_kurtosis_meanreversion_001",
+      "yaml_file": "strategies/p0_skew_kurtosis_meanreversion_001.yaml",
+      "logic_description": "基于极端负偏度与超高峰度驱动的均值回归策略，利用统计尾部特征识别超跌反转点",
+      "recommended_factors": [
+        "RSI",
+        "Bollinger",
+        "KDJ"
+      ],
+      "innovation_points": [
+        "首次将品种实时偏度/峰度阈值作为策略激活开关",
+        "三重低延迟震荡指标协同过滤，专为极低波动+强非正态分布设计"
+      ]
+    },
+    {
+      "symbol": "DCE.p0",
+      "symbol_name": "棕榈油",
+      "strategy_name": "p0_autocorr_adaptive_holding_001",
+      "yaml_file": "strategies/p0_autocorr_adaptive_holding_001.yaml",
+      "logic_description": "基于显著负自相关性的自适应持仓周期策略，通过时间序列结构动态调整持有窗口",
+      "recommended_factors": [
+        "ATR",
+        "RSI",
+        "CCI"
+      ],
+      "innovation_points": [
+        "将样本自相关性直接映射为策略持仓周期参数，实现统计结构驱动的自适应交易节奏",
+        "CCI用于捕捉短期极端反转，与RSI形成跨尺度动量过滤"
+      ]
+    },
+    {
+      "symbol": "DCE.p0",
+      "symbol_name": "棕榈油",
+      "strategy_name": "p0_volatility_regime_shift_001",
+      "yaml_file": "strategies/p0_volatility_regime_shift_001.yaml",
+      "logic_description": "基于波动率状态跃迁检测的静默期突破策略，专为长期低波动但存在隐性结构突变风险的品种设计",
+      "recommended_factors": [
+        "ATR",
+        "Bollinger",
+        "ADX"
+      ],
+      "innovation_points": [
+        "首创‘波动率双时间窗压缩+跃迁’作为突破前提，替代传统单一波动率阈值",
+        "将布林带宽度历史分位与ADX趋势确认耦合，解决低流动性品种假突破率高的问题"
+      ]
+    }
+  ]
+}

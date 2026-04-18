@@ -1,0 +1,35 @@
+{
+  "symbol": "SHFE.bu2506",
+  "volatility_3m": 0.06489137229385238,
+  "volatility_1y": 0.06489137229385238,
+  "volatility_5y": 0.06489137229385238,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 0.0030348941054431375,
+  "trend_strength_1y": 0.0030348941054431375,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": 0.018959243640556712,
+  "autocorr_1y": 0.018959243640556712,
+  "skewness": -3.496965715552258,
+  "kurtosis": 385.0846824496469,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.76:8105)",
+    "calculation_time": "2026-04-17 22:52:40",
+    "data_start_date": "2026-02-09T05:55:00",
+    "data_end_date": "2026-04-08T14:59:00",
+    "data_points_3m": 12020,
+    "data_points_1y": 12020,
+    "data_points_5y": 12020,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 1.0,
+    "volatility": 1.0,
+    "trend": 1.0,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 1.0,
+    "warnings": []
+  }
+}

@@ -36,7 +36,7 @@ def get_daily_context(date: Optional[str] = Query(None, description="日期 YYYY
         HTTPException: 404 摘要文件不存在
         HTTPException: 500 摘要加载失败
     """
-    from src.scheduler.preread_generator import PrereadGenerator
+    from scheduler.preread_generator import PrereadGenerator
 
     date_str = date or datetime.now(CN_TZ).strftime("%Y-%m-%d")
     storage_root = os.environ.get(

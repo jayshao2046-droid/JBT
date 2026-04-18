@@ -1,16 +1,16 @@
 {
   "device": "076256daffea",
   "device_label": "076256daffea",
-  "ts": "2026-04-15T18:22:27.694136+08:00",
-  "ts_display": "2026-04-15 18:22",
+  "ts": "2026-04-18T01:35:59.668998+08:00",
+  "ts_display": "2026-04-18 01:35",
   "cpu": {
     "cores": 10,
-    "usage_percent": 13.5
+    "usage_percent": 0.9
   },
   "memory": {
     "total_mb": 7836,
-    "used_mb": 581,
-    "used_percent": 7.4
+    "used_mb": 6788,
+    "used_percent": 86.6
   },
   "disk": [
     {
@@ -26,16 +26,48 @@
     "vpn": "未部署",
     "mihomo": "未部署",
     "proxy_overseas": "未部署",
-    "collectors": 0
+    "collectors": 1
   },
   "parquet": {
     "exists": false,
     "note": "数据在 Mini"
   },
-  "processes_high": [],
-  "alarms": [],
+  "processes_high": [
+    {
+      "pid": 9,
+      "cmd": "python -m src.scheduler.data_scheduler",
+      "mem_mb": 6108,
+      "cpu_percent": 0.0
+    },
+    {
+      "pid": 7,
+      "cmd": "python -m uvicorn src.main:app --host 0.0.0.0 --port 8105",
+      "mem_mb": 127,
+      "cpu_percent": 0.0
+    },
+    {
+      "pid": 1,
+      "cmd": "/usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/conf.d/jbt-data.conf",
+      "mem_mb": 29,
+      "cpu_percent": 0.0
+    },
+    {
+      "pid": 91589,
+      "cmd": "python -m src.health.health_check",
+      "mem_mb": 16,
+      "cpu_percent": 0.0
+    }
+  ],
+  "alarms": [
+    {
+      "metric": "内存",
+      "level": "P1",
+      "value": "86.6%",
+      "rule": ">=75%"
+    }
+  ],
   "has_p0": false,
-  "has_p1": false,
+  "has_p1": true,
   "collector_freshness": [],
   "collector_alarms": [],
   "collector_recovered": [],

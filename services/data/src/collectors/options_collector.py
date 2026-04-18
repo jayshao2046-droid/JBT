@@ -1,6 +1,6 @@
-"""期权数据采集器 — 基于 AkShare 期权行情接口。
+"""期权数据采集器 — 基于 Tushare 期权行情接口。
 
-采集 50ETF/300ETF 期权行情、持仓量、隐含波动率等数据。
+采集上交所、深交所、中金所期权日线行情数据。
 数据用于波动率曲面、PCR（Put/Call Ratio）等因子计算。
 """
 
@@ -10,134 +10,120 @@ import time
 from datetime import datetime
 from typing import Any
 
-from src.collectors.base import BaseCollector
+from collectors.base import BaseCollector
 
 
-# 期权品种映射
-OPTION_INDICATORS = {
-    "sse_50etf":   {"name": "50ETF期权", "exchange": "SSE"},
-    "sse_300etf":  {"name": "300ETF期权", "exchange": "SSE"},
-    "sse_500etf":  {"name": "500ETF期权", "exchange": "SSE"},
-    "szse_300etf": {"name": "深300ETF期权", "exchange": "SZSE"},
+# 期权交易所映射
+OPTION_EXCHANGES = {
+    "sse": {"name": "上交所期权", "exchange": "SSE"},
+    "szse": {"name": "深交所期权", "exchange": "SZSE"},
+    "cffex": {"name": "中金所期权", "exchange": "CFFEX"},
 }
 
-DEFAULT_INDICATORS = list(OPTION_INDICATORS.keys())
+DEFAULT_EXCHANGES = list(OPTION_EXCHANGES.keys())
 
 
 class OptionsCollector(BaseCollector):
-    """Collect option market data via AkShare."""
+    """Collect option market data via Tushare."""
 
-    def __init__(self, *, use_mock: bool = False, **kwargs: Any) -> None:
+    def __init__(self, *, use_mock: bool = False, token: str | None = None, **kwargs: Any) -> None:
         kwargs.pop("name", None)
         super().__init__(name="options", **kwargs)
         self.use_mock = use_mock
+        self.token = token
+        self._pro = None
+
+    @property
+    def pro(self):
+        if self._pro is None:
+            import tushare as ts
+            ts.set_token(self.token or "")
+            self._pro = ts.pro_api()
+        return self._pro
 
     def collect(
         self,
         *,
-        indicators: list[str] | None = None,
-        as_of: str | None = None,
+        exchanges: list[str] | None = None,
+        trade_date: str | None = None,
     ) -> list[dict[str, Any]]:
-        indicator_list = indicators or DEFAULT_INDICATORS
+        exchange_list = exchanges or DEFAULT_EXCHANGES
         if self.use_mock:
-            return self._mock_records(indicator_list=indicator_list, as_of=as_of)
+            return self._mock_records(exchange_list=exchange_list, trade_date=trade_date)
         try:
-            return self._fetch_live(indicator_list=indicator_list, as_of=as_of)
+            return self._fetch_live(exchange_list=exchange_list, trade_date=trade_date)
         except Exception as exc:
             self.logger.warning("options live fetch failed: %s, falling back to mock", exc)
-            return self._mock_records(indicator_list=indicator_list, as_of=as_of)
+            return self._mock_records(exchange_list=exchange_list, trade_date=trade_date)
 
     def _fetch_live(
         self,
         *,
-        indicator_list: list[str],
-        as_of: str | None,
+        exchange_list: list[str],
+        trade_date: str | None,
     ) -> list[dict[str, Any]]:
-        import akshare as ak
+        from datetime import datetime
 
         records: list[dict[str, Any]] = []
-        timestamp = as_of or datetime.utcnow().replace(microsecond=0).isoformat()
+        timestamp = trade_date or datetime.now().strftime("%Y%m%d")
 
-        # 1) 综合 PCR 指标 — 认沽/认购比率 (全市场截面)
-        try:
-            df_pcr = ak.option_lhb_em()
-            time.sleep(0.5)
-            if df_pcr is not None and not df_pcr.empty:
-                for _, row in df_pcr.iterrows():
-                    records.append({
-                        "source_type": "options",
-                        "symbol_or_indicator": "pcr_summary",
-                        "timestamp": timestamp,
-                        "payload": {
-                            "indicator": "pcr_summary",
-                            "name": str(row.get("标的名称", row.get("name", ""))),
-                            "pcr_volume": _to_float(row, "成交量PCR"),
-                            "pcr_oi": _to_float(row, "持仓量PCR"),
-                            "mode": "live",
-                        },
-                    })
-                self.logger.info("options pcr fetched: rows=%d", len(df_pcr))
-        except Exception as exc:
-            self.logger.warning("options pcr fetch failed: %s", exc)
-
-        # 2) 各品种期权行情
-        for ind in indicator_list:
-            meta = OPTION_INDICATORS.get(ind)
+        for exch_key in exchange_list:
+            meta = OPTION_EXCHANGES.get(exch_key)
             if not meta:
                 continue
 
-            # 50ETF / 300ETF / 500ETF 期权行情 (上交所/深交所)
             try:
-                if ind == "sse_50etf":
-                    df = ak.option_current_em(symbol="50ETF期权", exchange="上海证券交易所")
-                elif ind == "sse_300etf":
-                    df = ak.option_current_em(symbol="沪深300ETF期权", exchange="上海证券交易所")
-                elif ind == "sse_500etf":
-                    df = ak.option_current_em(symbol="中证500ETF期权", exchange="上海证券交易所")
-                elif ind == "szse_300etf":
-                    df = ak.option_current_em(symbol="沪深300ETF期权", exchange="深圳证券交易所")
-                else:
-                    continue
+                df = self.pro.opt_daily(trade_date=timestamp, exchange=meta["exchange"])
+                time.sleep(0.3)
 
-                time.sleep(0.5)
                 if df is not None and not df.empty:
+                    # Fill NaN values
+                    for col in df.columns:
+                        if df[col].dtype in ["float64", "int64"]:
+                            df[col] = df[col].fillna(0)
+                        else:
+                            df[col] = df[col].fillna("")
+
                     for _, row in df.iterrows():
                         records.append({
                             "source_type": "options",
-                            "symbol_or_indicator": ind,
+                            "symbol_or_indicator": exch_key,
                             "timestamp": timestamp,
                             "payload": {
-                                "indicator": ind,
-                                "name": meta["name"],
-                                "contract": str(row.get("合约代码", row.get("code", ""))),
-                                "last_price": _to_float(row, "最新价"),
-                                "change_pct": _to_float(row, "涨跌幅"),
-                                "volume": _to_float(row, "成交量"),
-                                "oi": _to_float(row, "持仓量"),
-                                "implied_vol": _to_float(row, "隐含波动率"),
-                                "strike": _to_float(row, "行权价"),
-                                "option_type": str(row.get("期权类型", row.get("type", ""))),
+                                "ts_code": str(row.get("ts_code", "")),
+                                "trade_date": str(row.get("trade_date", "")),
+                                "exchange": meta["exchange"],
+                                "pre_close": float(row.get("pre_close", 0)),
+                                "open": float(row.get("open", 0)),
+                                "high": float(row.get("high", 0)),
+                                "low": float(row.get("low", 0)),
+                                "close": float(row.get("close", 0)),
+                                "settle": float(row.get("settle", 0)),
+                                "vol": float(row.get("vol", 0)),
+                                "amount": float(row.get("amount", 0)),
+                                "oi": float(row.get("oi", 0)),
                                 "mode": "live",
                             },
                         })
-                    self.logger.info("options fetched: %s rows=%d", ind, len(df))
+                    self.logger.info("options fetched: %s rows=%d", exch_key, len(df))
             except Exception as exc:
-                self.logger.warning("options fetch failed for %s: %s", ind, exc)
+                self.logger.warning("options fetch failed for %s: %s", exch_key, exc)
 
         if not records:
-            raise RuntimeError("all options indicators fetch failed")
+            raise RuntimeError("all options exchanges fetch failed")
         return records
 
-    def _mock_records(self, *, indicator_list: list[str], as_of: str | None) -> list[dict[str, Any]]:
-        timestamp = as_of or datetime.utcnow().replace(microsecond=0).isoformat()
+    def _mock_records(self, *, exchange_list: list[str], trade_date: str | None) -> list[dict[str, Any]]:
+        from datetime import datetime
+        timestamp = trade_date or datetime.now().strftime("%Y%m%d")
         return [
             {
                 "source_type": "options",
-                "symbol_or_indicator": ind,
+                "symbol_or_indicator": exch,
                 "timestamp": timestamp,
-                "payload": {"indicator": ind, "last_price": 0.15 + i * 0.01, "mode": "mock"},
+                "payload": {"exchange": exch, "close": 0.15 + i * 0.01, "mode": "mock"},
             }
-            for i, ind in enumerate(indicator_list)
+            for i, exch in enumerate(exchange_list)
         ]
 
 

@@ -116,7 +116,7 @@ Step 5（lockback） → Step 6（git push） → Step 7（两地同步）
 
 ## ✅ [已完成] 3. TASK-0107 — Alienware sim-trading 裸 Python 部署
 
-> **状态**：✅ 已验收（Jay.S 确认）。`curl http://192.168.31.223:8101/health` → `{"status":"ok"}` ✅  
+> **状态**：✅ 已验收（Jay.S 确认）。`curl http://192.168.31.224:8101/health` → `{"status":"ok"}` ✅  
 > 部署形式：**裸 Python**（非 Docker），`stage: 1.0.0`，`trading_enabled: true`，`active_preset: sim_50w`。  
 > Token `tok-6c984fae` 已 lockback（approved）。
 
@@ -262,7 +262,7 @@ ssh jaybot@192.168.31.142 "cd ~/jbt && git pull && echo 'STUDIO PULL OK'"
 
 ## 补充说明
 
-1. **dashboard .env.local**：`services/dashboard/dashboard_web/.env.local` 已创建（git-ignored），`SIM_TRADING_URL=http://192.168.31.223:8101`。看板重启后立即生效，无需 token（runtime 配置文件）。
+1. **dashboard .env.local**：`services/dashboard/dashboard_web/.env.local` 已创建（git-ignored），`SIM_TRADING_URL=http://192.168.31.224:8101`。看板重启后立即生效，无需 token（runtime 配置文件）。
 2. **pytest 注意**：decision 服务测试必须先 `source /Users/jayshao/JBT/.venv/bin/activate` 才能找到 pytest-asyncio。
 3. **TASK-0107 部署口径**：裸 Python（非 Docker），`active_preset: sim_50w`，当前连 SimNow（非光大期货生产）。Docker 化部署待 Alienware BIOS 虚拟化开启后另行建任务。
 

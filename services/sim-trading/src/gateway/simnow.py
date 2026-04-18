@@ -579,6 +579,23 @@ class SimNowGateway:
         self._pending_positions: list = []
         self._shutdown = False
         self._reconnect_threads: Dict[str, Optional[threading.Thread]] = {"md": None, "td": None}
+        self._announce_order_trace()
+
+    def _order_trace_log_path(self) -> str:
+        import sys
+
+        return "C:/temp/order_trace.jsonl" if sys.platform == "win32" else "/tmp/order_trace.jsonl"
+
+    def _announce_order_trace(self) -> None:
+        """服务启动时明确记录订单追踪已启用及输出位置。"""
+        try:
+            import os
+
+            log_file = self._order_trace_log_path()
+            os.makedirs(os.path.dirname(log_file), exist_ok=True)
+            logger.info("[ORDER TRACE] integrated tracing enabled, output=%s", log_file)
+        except Exception as exc:
+            logger.warning("[ORDER TRACE] tracer bootstrap failed: %s", exc)
 
     @property
     def status(self):
@@ -911,6 +928,81 @@ class SimNowGateway:
         with self._lock:
             return list(self._order_errors)
 
+    def _trace_order_source(self, instrument_id: str, direction: str, offset: str,
+                            price: float, volume: int):
+        """订单追踪：记录调用栈和上下文到日志文件"""
+        try:
+            import traceback
+            import json
+            import inspect
+            from datetime import datetime
+
+            # 获取调用栈
+            stack = traceback.extract_stack()[:-1]  # 排除当前帧
+
+            # 获取调用者的局部变量
+            caller_frame = inspect.currentframe().f_back.f_back  # 跳过 insert_order
+            caller_locals = {}
+            caller_globals = {}
+
+            if caller_frame:
+                try:
+                    caller_locals = {
+                        k: str(v)[:200]
+                        for k, v in caller_frame.f_locals.items()
+                        if not k.startswith("_") and k not in ["self", "cls"]
+                    }
+                    caller_globals = {
+                        k: str(v)[:200]
+                        for k, v in caller_frame.f_globals.items()
+                        if k in ["strategy_id", "signal_id", "task_id", "account_id"]
+                    }
+                except Exception:
+                    pass
+
+            # 方向和开平转换
+            direction_str = "买" if direction == "0" else "卖"
+            offset_str = {"0": "开仓", "1": "平仓", "3": "平今", "4": "平昨"}.get(offset, offset)
+
+            # 构造追踪记录
+            trace_record = {
+                "timestamp": datetime.now().isoformat(),
+                "order": {
+                    "instrument_id": instrument_id,
+                    "direction": direction,
+                    "direction_str": direction_str,
+                    "offset": offset,
+                    "offset_str": offset_str,
+                    "price": price,
+                    "volume": volume,
+                },
+                "caller_context": {
+                    "locals": caller_locals,
+                    "globals": caller_globals,
+                },
+                "call_stack": [
+                    {
+                        "file": frame.filename,
+                        "line": frame.lineno,
+                        "function": frame.name,
+                        "code": frame.line,
+                    }
+                    for frame in stack
+                ],
+            }
+
+            # 写入追踪日志
+            log_file = self._order_trace_log_path()
+            with open(log_file, "a") as f:
+                f.write(json.dumps(trace_record, ensure_ascii=False) + "\n")
+
+            # 打印到日志
+            logger.info("[ORDER TRACE] %s%s %s %d手@%.2f | 调用栈深度: %d",
+                       direction_str, offset_str, instrument_id, volume, price, len(stack))
+
+        except Exception as e:
+            logger.warning("[ORDER TRACE] 追踪失败: %s", e)
+
     def insert_order(self, instrument_id: str, direction: str, offset: str,
                      price: float, volume: int) -> Dict:
         """
@@ -919,6 +1011,9 @@ class SimNowGateway:
         offset: '0'=开仓, '1'=平仓, '3'=平今
         返回 {"order_ref": str, "status": "submitted"} 或 raise
         """
+        # 订单追踪：记录调用栈和上下文
+        self._trace_order_source(instrument_id, direction, offset, price, volume)
+
         if self._td_api is None or self._td_status not in ("td_ready", "td_logged_in"):
             raise RuntimeError("交易通道未就绪")
 

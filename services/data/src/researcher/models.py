@@ -118,6 +118,81 @@ class ReportBatch(BaseModel):
         }
 
 
+class ArticleReport(BaseModel):
+    """单篇文章研报（流式模式：看一条写一条）"""
+    article_id: str = Field(..., description="文章ID ART-YYYYMMDD-HHMMSS-xxx")
+    source_id: str = Field(..., description="采集源ID")
+    source_name: str = Field(default="", description="采集源名称")
+    title: str = Field(..., description="原文标题")
+    content: str = Field(default="", description="原文摘要（前500字）")
+    url: str = Field(default="", description="原文URL")
+    published_at: Optional[datetime] = Field(None, description="原文发布时间")
+    crawled_at: datetime = Field(default_factory=datetime.now, description="爬取时间")
+
+    # LLM 分析结果
+    category: str = Field(default="general", description="分类：futures/macro/energy/metals/agriculture/policy/general")
+    relevance: float = Field(default=0.0, ge=0.0, le=1.0, description="与期货市场相关度 0~1")
+    sentiment: str = Field(default="neutral", description="情绪：bullish/bearish/neutral")
+    impact_level: str = Field(default="low", description="影响级别：high/medium/low")
+    affected_symbols: List[str] = Field(default_factory=list, description="受影响品种")
+    summary_cn: str = Field(default="", description="中文摘要分析")
+    key_points: List[str] = Field(default_factory=list, description="核心要点")
+    is_urgent: bool = Field(default=False, description="是否突发")
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class KlineAnalysisReport(BaseModel):
+    """K线技术分析研报（盘中模式）"""
+    report_id: str = Field(..., description="报告ID KLINE-YYYYMMDD-HHMM-symbol")
+    symbol: str = Field(..., description="品种代码")
+    symbol_name: str = Field(default="", description="品种中文名")
+    date: str = Field(..., description="日期 YYYY-MM-DD")
+    generated_at: datetime = Field(default_factory=datetime.now, description="生成时间")
+    timeframe: str = Field(default="1min", description="K线周期")
+    bars_count: int = Field(default=0, description="K线数据条数")
+
+    # 技术指标
+    latest_price: float = Field(default=0.0, description="最新价格")
+    price_change_pct: float = Field(default=0.0, description="涨跌幅%")
+    volume: float = Field(default=0.0, description="成交量")
+    ma5: float = Field(default=0.0, description="5均线")
+    ma20: float = Field(default=0.0, description="20均线")
+    rsi14: float = Field(default=50.0, description="14日RSI")
+    atr14: float = Field(default=0.0, description="14日ATR")
+
+    # LLM 技术分析
+    trend: str = Field(default="观望", description="趋势判断：偏多/偏空/震荡/观望")
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="信心度")
+    analysis: str = Field(default="", description="技术分析文本（中文）")
+    support_levels: List[float] = Field(default_factory=list, description="支撑位")
+    resistance_levels: List[float] = Field(default_factory=list, description="压力位")
+    risk_note: str = Field(default="", description="风险提示")
+
+    # 关联新闻
+    related_news: List[str] = Field(default_factory=list, description="关联新闻标题")
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class StreamCycleResult(BaseModel):
+    """一次流式循环的结果"""
+    cycle_id: int = Field(default=0, description="循环序号")
+    timestamp: str = Field(default="", description="时间戳")
+    mode: str = Field(default="news", description="模式：news/kline/both")
+    new_articles: int = Field(default=0, description="新文章数")
+    kline_reports: int = Field(default=0, description="K线报告数")
+    pushed_to_decision: int = Field(default=0, description="推送到决策端数")
+    errors: List[str] = Field(default_factory=list, description="错误列表")
+    elapsed_seconds: float = Field(default=0.0, description="耗时")
+
+
 class StagingRecord(BaseModel):
     """暂存区记录"""
     symbol: str
@@ -139,10 +214,12 @@ class SourceConfig(BaseModel):
     url_pattern: str = Field(..., description="URL 模板")
     mode: str = Field(..., description="模式：code/browser")
     parser: str = Field(..., description="解析器名称")
+    market: str = Field(default="both", description="市场归属：domestic/international/both")
     schedule: List[str] = Field(default_factory=list, description="适用时段：盘前/午间/盘后/夜盘")
     enabled: bool = Field(default=True, description="是否启用")
     priority: int = Field(default=5, description="优先级 1~10")
     timeout: int = Field(default=30, description="超时秒数")
+    multi_article: bool = Field(default=True, description="是否多文章列表页（True=列表页, False=单文章页）")
 
     class Config:
         json_schema_extra = {

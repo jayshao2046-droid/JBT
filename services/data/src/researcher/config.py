@@ -79,11 +79,19 @@ class ResearcherConfig:
         {"hour": 23, "label": "23:00", "cron": "0 23 * * *", "desc": "夜盘收盘（23:30后飞书静默）"},
     ]
 
-    # 邮件日报配置
-    EMAIL_MORNING_TRIGGER_HOUR = 16   # 16:00 研究完成后发早报
-    EMAIL_EVENING_TRIGGER_HOUR = 23   # 23:00 研究完成后发晚报
-    EMAIL_MORNING_HOURS = [8, 9, 10, 11, 13, 14, 15, 16]  # 早报汇总这些整点
-    EMAIL_EVENING_HOURS = [21, 22, 23]                      # 晚报汇总这些整点
+    # 邮件日报配置 — 4次/天
+    # 触发时刻 → 汇总区间
+    EMAIL_TRIGGERS = [
+        {"hour": 8,  "label": "夜间报",  "hours_range": list(range(0, 8))},    # 00:00~07:59
+        {"hour": 13, "label": "上午报",  "hours_range": list(range(8, 13))},   # 08:00~12:59
+        {"hour": 20, "label": "下午报",  "hours_range": list(range(13, 20))},  # 13:00~19:59
+        {"hour": 0,  "label": "夜盘报",  "hours_range": list(range(20, 24))},  # 20:00~23:59
+    ]
+    # 兼容旧代码（deprecated）
+    EMAIL_MORNING_TRIGGER_HOUR = 13
+    EMAIL_EVENING_TRIGGER_HOUR = 20
+    EMAIL_MORNING_HOURS = list(range(8, 13))
+    EMAIL_EVENING_HOURS = list(range(13, 20))
 
     # Mini data API 推送（研究报告推送到 Mini 供决策端消费）
     DATA_API_PUSH_URL = os.getenv("DATA_API_URL", "http://192.168.31.76:8105") + "/api/v1/researcher/reports"
@@ -102,6 +110,11 @@ class ResearcherConfig:
         "盘后": {"cron": "20 15 * * 1-5", "description": "全天总结"},
         "夜盘": {"cron": "10 23 * * 1-5", "description": "夜盘收盘汇总"},
     }
+
+    # Tushare 日 K 配置（盘后日线分析）
+    TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN", "")
+    DAILY_KLINE_TRIGGER_HOUR = int(os.getenv("DAILY_KLINE_TRIGGER_HOUR", "16"))
+    DAILY_KLINE_COUNT = int(os.getenv("DAILY_KLINE_COUNT", "60"))
 
     # 资源监控阈值
     RESOURCE_THRESHOLDS = {

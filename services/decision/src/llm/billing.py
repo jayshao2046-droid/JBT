@@ -6,6 +6,7 @@
 价格数据来源: MODEL_PRICES 环境变量（¥/1M tokens 人民币）
 """
 
+import atexit
 import json
 import logging
 import os
@@ -99,6 +100,10 @@ class LLMBillingTracker:
             )
         )
         self._persist_dir.mkdir(parents=True, exist_ok=True)
+        # JSONL 实时流水文件路径 — 每条记录立即追加
+        self._records_jsonl = self._persist_dir / "billing_records.jsonl"
+        # 注册进程退出时自动 flush
+        atexit.register(self._atexit_flush)
         logger.info(
             "LLMBillingTracker 初始化完成，已加载 %d 个模型价格，日预算 ¥%.2f",
             len(self._prices), self._daily_budget,
@@ -175,13 +180,33 @@ class LLMBillingTracker:
         with self._data_lock:
             self._records.append(rec)
 
+        # 实时持久化 — 每条记录立即追加到 JSONL 文件
+        self._append_record_jsonl(rec)
+
         if not is_local and rec.total_cost > 0:
-            logger.debug(
+            logger.info(
                 "💰 计费: %s [%s] in=%d out=%d ¥%.6f",
                 model, component, input_tokens, output_tokens, rec.total_cost,
             )
 
         return rec
+
+    def _append_record_jsonl(self, rec: LLMBillingRecord) -> None:
+        """将单条记录追加写入 JSONL 流水文件（实时持久化）。"""
+        try:
+            with open(self._records_jsonl, "a", encoding="utf-8") as f:
+                f.write(json.dumps(rec.to_dict(), ensure_ascii=False) + "\n")
+        except Exception as exc:
+            logger.error("JSONL 流水写入失败: %s", exc)
+
+    def _atexit_flush(self) -> None:
+        """进程退出时自动 flush 当前小时汇总。"""
+        try:
+            result = self.flush_hourly()
+            if result:
+                logger.info("进程退出前已自动 flush 计费数据: %s", result)
+        except Exception as exc:
+            logger.error("进程退出 flush 失败: %s", exc)
 
     # ------------------------------------------------------------------
     # 聚合查询

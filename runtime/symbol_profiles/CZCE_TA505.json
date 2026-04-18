@@ -1,0 +1,37 @@
+{
+  "symbol": "CZCE.TA505",
+  "volatility_3m": 0.06589038018165372,
+  "volatility_1y": 0.037434797292511784,
+  "volatility_5y": 0.03178175907890047,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 0.0021852953950268917,
+  "trend_strength_1y": 0.0003680130129524037,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": 0.009900107051507855,
+  "autocorr_1y": -0.025098834230598013,
+  "skewness": -4.111522516688254,
+  "kurtosis": 1332.9641876145408,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.76:8105)",
+    "calculation_time": "2026-04-17 22:54:33",
+    "data_start_date": "2021-04-19T01:00:00",
+    "data_end_date": "2026-04-08T14:59:00",
+    "data_points_3m": 17355,
+    "data_points_1y": 80700,
+    "data_points_5y": 411420,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.7887835331385624,
+    "volatility": 0.7719588328464062,
+    "trend": 0.7,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.11993138807734366,
+    "warnings": [
+      "特征不稳定: 波动率3M=0.0659 vs 1Y=0.0374, 趋势3M=0.0022 vs 1Y=0.0004"
+    ]
+  }
+}

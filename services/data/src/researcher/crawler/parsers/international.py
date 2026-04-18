@@ -48,28 +48,23 @@ def parse_kitco_gold(tree: lxml_html.HtmlElement, url: str) -> Dict[str, Any]:
     """Kitco 贵金属新闻 — 多文章提取"""
     articles = []
     try:
-        items = tree.xpath(
-            "//div[contains(@class,'article-list')]//article | "
-            "//div[contains(@class,'post')]//article | "
-            "//article"
-        )
-        for item in items[:15]:
-            a_tags = item.xpath(".//h2//a | .//h3//a | .//a[contains(@class,'title')]")
-            if not a_tags:
-                a_tags = item.xpath(".//a")
-            if not a_tags:
+        # 优先匹配 /news/article/ 路径（最精准）
+        items = tree.xpath("//a[contains(@href,'/news/article/')]")
+        # 备用：匹配任何含实质内容的 /news/ 链接
+        if not items:
+            items = tree.xpath("//a[contains(@href,'/news/') and string-length(normalize-space(.)) > 15]")
+        seen = set()
+        for item in items:
+            title = item.text_content().strip()
+            href = item.get("href", "")
+            if not title or len(title) < 10 or title in seen:
                 continue
-            title = a_tags[0].text_content().strip()
-            href = a_tags[0].get("href", "")
+            seen.add(title)
             if href and not href.startswith("http"):
                 href = "https://www.kitco.com" + href
-            snippet = " ".join(item.xpath(".//p//text()"))[:300]
-            if title and len(title) > 5:
-                articles.append({"title": title[:120], "content": snippet or title, "url": href or url, "published_at": None})
-        if not articles:
-            title = "".join(tree.xpath("//h1//text()")).strip() or "Kitco Gold"
-            content = " ".join(tree.xpath("//article//p//text()"))[:500]
-            articles.append({"title": title, "content": content or title, "url": url, "published_at": None})
+            articles.append({"title": title[:120], "content": title, "url": href or url, "published_at": None})
+            if len(articles) >= 15:
+                break
     except Exception as exc:
         logger.debug("parse_kitco_gold 解析异常: %s", exc)
     return {"title": "Kitco Gold", "content": "", "published_at": None, "articles": articles}

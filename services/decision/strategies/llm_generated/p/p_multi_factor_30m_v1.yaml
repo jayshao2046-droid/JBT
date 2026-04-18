@@ -1,0 +1,74 @@
+name: "p_multi_factor_30m_v1"
+description: "基于30分钟周期构建棕榈油日内多因子共振策略，采用MACD、CCI、ATR及VolumeRatio进行信号过滤与风控。"
+version: "1.0"
+category: "intraday_momentum"
+
+symbols:
+  - "DCE.p2605"
+
+timeframe_minutes: 30
+
+factors:
+  - factor_name: "MACD"
+    weight: 0.3
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+
+  - factor_name: "CCI"
+    weight: 0.3
+    params:
+      period: 14
+
+  - factor_name: "ATR"
+    weight: 0.2
+    params:
+      period: 14
+
+  - factor_name: "VolumeRatio"
+    weight: 0.2
+    params:
+      period: 20
+
+market_filter:
+  enabled: true
+  conditions:
+    - "atr > 0.002 * close"
+    - "volume_ratio > 1.0"
+
+signal:
+  long_condition: "macd_hist > 0 and cci > 100 and atr > 0.003 * close and volume_ratio > 1.2"
+  short_condition: "macd_hist < 0 and cci < -100 and atr > 0.003 * close and volume_ratio > 1.2"
+  confirm_bars: 1
+
+position_fraction: 0.08
+position_adjustment:
+  method: "atr_scaling"
+  base_position: 0.08
+  atr_period: 14
+  atr_multiplier: 1.0
+
+transaction_costs:
+  slippage_per_unit: 1
+  commission_per_lot_round_turn: 8
+
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 160
+  max_drawdown_pct: 0.008
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+
+stop_loss:
+  type: "atr"
+  atr_multiplier: 1.5
+  atr_period: 14
+
+take_profit:
+  type: "atr"
+  atr_multiplier: 2.5
+  atr_period: 14
+
+tags: ["v1", "intraday", "30m", "DCE", "palm_oil", "multi_factor"]

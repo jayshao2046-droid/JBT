@@ -1,0 +1,33 @@
+# Alienware 部署指令（手动执行）
+# 请在 Alienware 上打开 PowerShell 或 CMD，逐行执行
+
+## 1. 进入 JBT 目录
+cd %USERPROFILE%\JBT
+
+## 2. 停止现有进程（如果有）
+taskkill /F /IM python.exe /FI "WINDOWTITLE eq *sim-trading*"
+taskkill /F /IM python.exe /FI "WINDOWTITLE eq *main.py*"
+
+## 3. 启动 sim-trading（带心跳报告）
+start "sim-trading" python services\sim-trading\src\main.py
+
+## 4. 等待 5 秒
+timeout /t 5
+
+## 5. 启动订单追踪
+start "order-trace" python scripts\trace_order_source.py
+
+## 6. 启动 CTP 断联诊断
+start "ctp-diagnosis" python scripts\diagnose_ctp_disconnect.py
+
+## 7. 查看进程
+tasklist | findstr python.exe
+
+## 完成！
+echo 部署完成！
+echo.
+echo 心跳报告: 每 2 小时整点推送（00:00-08:00 静默）
+echo 订单追踪: 日志在 C:\temp\order_trace.jsonl
+echo CTP 诊断: 日志在 C:\temp\ctp_disconnect_diagnosis.jsonl
+echo.
+echo 下一个心跳时间: 22:00

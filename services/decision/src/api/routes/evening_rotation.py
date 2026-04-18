@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from ...research.evening_rotation import EveningRotator
 
-router = APIRouter(prefix="/api/v1/stock/rotation", tags=["rotation"])
+router = APIRouter(prefix="/rotation", tags=["rotation"])
 
 # 全局单例
 _rotator = EveningRotator()

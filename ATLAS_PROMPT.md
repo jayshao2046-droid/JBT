@@ -491,3 +491,90 @@
 - ⏳ push to GitHub（含 TASK-0126 + 002 两个新 commit，等用户确认后统一 push）
 
 **等待**：用户确认本次 A1/A2 修复结果
+
+---
+
+## 批次日志 | 2026-04-18 | Atlas
+
+**任务**：Alienware 研究员三项修复 — 交接至 Alienware Copilot
+
+**已完成**：
+- ✅ 三项问题根因诊断完成（自启失败/报告质量差/Studio 不消费）
+- ✅ 修复任务交接单创建：`docs/handoffs/ALIENWARE-RESEARCHER-REPAIR-20260418.md`
+- ✅ SCP 交付至 Alienware `C:\Users\17621\jbt\docs\handoffs\`，文件到达已确认
+- ✅ 交接单包含三项修复的详细步骤、代码示例、验收标准和维修日志模板
+
+**交接内容**：
+| # | 问题 | 严重度 | 修复方向 |
+|---|------|--------|---------|
+| 1 | 开机自启失败（LogonType=Interactive） | P0 | 重建任务计划为 S4U + 排查崩溃循环 |
+| 2 | 报告内容为空/占位符 | P1 | 爬虫解析器修复 + 质量门槛 + 确保 LLM 分析 |
+| 3 | Studio evaluate 返回 evaluated_count=0 | P0 | 推送 payload 适配 ReportBatchRequest schema |
+
+**Alienware Copilot 须知**：
+- 执行顺序：修复 1 → 修复 3 → 修复 2
+- 完成后更新交接单底部「维修日志」节
+- 每项修复记录执行时间、修改文件、验收结果
+
+**等待**：Alienware Copilot 执行修复并回写维修日志
+
+---
+
+## 批次日志 | 2026-04-18 | Atlas
+
+**任务**：Alienware 研究员三项修复 — 收口
+
+**已完成**：
+- ✅ Alienware Copilot 完成 4 项代码修改（S4U 注册 + 质量门槛 + 契约对齐 + staging.py 笔误）
+- ✅ Atlas 远程执行服务切换：禁用 watchdog → kill PID 33048 → S4U 启动 → PID 18404 监听 8199
+- ✅ 健康检查通过：`{"status":"ok","model":"qwen3:14b"}`
+- ✅ Mini 连接 ESTABLISHED
+- ✅ Watchdog 恢复启用
+- ✅ 交接单最终状态已回写
+- ✅ TASK-U0-20260417-007 追加 6.7 修复完成记录
+
+**TASK-U0-20260417-007 最终状态：✅ 全部收口（三项修复 + 服务切换 + 运维闭环）**
+
+**待开盘验证**：完整报告生成 / qwen3 评级 / 飞书通知（不阻塞收口）
+
+---
+
+## 批次日志 | 2026-04-19 | Atlas
+
+**任务**：TASK-U0-20260418-002 数据链路架构改造 — 部署收口
+
+### 背景
+
+数据链路双轨改造：Alienware 研究员切 tushare 盘后日K（16:00触发），Studio Decision 切 tqsdk 盘中分钟K。
+
+### 已完成
+
+- ✅ **代码修改**（MacBook 本地，4文件 ast.parse 通过）：
+  - `kline_analyzer.py`：移除 Mini API，改 tushare 拉取日K + `_convert_to_tushare_code()`
+  - `config.py`：新增 `TUSHARE_TOKEN` / `DAILY_KLINE_TRIGGER_HOUR=16` / `DAILY_KLINE_COUNT=60`
+  - `scheduler.py`：移除 900s 盘中轮询，改 16:00 盘后触发
+  - `pipeline.py`（decision）：tqsdk 分钟K主路径 + Mini API fallback
+- ✅ **Alienware 环境配置**：
+  - `.env.researcher` 追加 TUSHARE_TOKEN ✅
+  - `start_researcher.bat` 重写（set TUSHARE_TOKEN 在 python 之前）✅
+  - tushare 包安装 ✅
+  - 3 个 researcher 文件 SCP 部署 ✅
+  - wmic 后台启动服务（用户在 Alienware 本地确认 8199 监听）✅
+- ✅ **Studio Decision 部署**：
+  - `pipeline.py` SCP 到 Studio ✅
+  - 发现并修复 `researcher_qwen3_scorer.py` 缺失（从 `researcher_phi4_scorer.py` 复制）
+  - `docker restart JBT-DECISION-8104` → **healthy** ✅
+- ✅ **交接单**：`docs/handoffs/ALIENWARE-HANDOFF.md` 已 SCP 到 Alienware ✅
+
+### 用户确认
+
+- ✅ Alienware 侧执行确认（researcher 8199 监听正常）
+- ✅ Studio Decision 8104 healthy
+- ✅ Jay.S 最终确认
+
+### 待开盘验证
+
+- 下一个交易日（周一）16:00 观察 Alienware `[DAILY-KLINE]` 触发
+- 盘中观察 Decision tqsdk 分钟K拉取日志
+
+**TASK-U0-20260418-002 状态：✅ 部署完成，待开盘验证**

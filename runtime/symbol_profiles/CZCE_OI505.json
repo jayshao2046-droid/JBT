@@ -1,0 +1,37 @@
+{
+  "symbol": "CZCE.OI505",
+  "volatility_3m": 0.023035418639987093,
+  "volatility_1y": 0.018341895216558227,
+  "volatility_5y": 0.02425224430544936,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 0.000599799019818685,
+  "trend_strength_1y": 1.43146994618923e-06,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": -0.034085767416981494,
+  "autocorr_1y": -0.035466502859282,
+  "skewness": 2.534960885635718,
+  "kurtosis": 499.0344742089531,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.76:8105)",
+    "calculation_time": "2026-04-17 22:54:56",
+    "data_start_date": "2021-04-19T01:00:00",
+    "data_end_date": "2026-04-08T14:59:00",
+    "data_points_3m": 17355,
+    "data_points_1y": 76831,
+    "data_points_5y": 407551,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.897488990275985,
+    "volatility": 0.9232327406517113,
+    "trend": 0.8204897350382512,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.5728707928166044,
+    "warnings": [
+      "特征不稳定: 波动率3M=0.0230 vs 1Y=0.0183, 趋势3M=0.0006 vs 1Y=0.0000"
+    ]
+  }
+}

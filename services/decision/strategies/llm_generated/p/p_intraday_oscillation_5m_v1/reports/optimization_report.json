@@ -1,0 +1,5 @@
+{
+  "error": "数据获取失败 DCE.p0: Client error '404 Not Found' for url 'http://192.168.31.76:8105/api/v1/bars?symbol=DCE.p0&start=2022-01-01&end=2024-05-26&interval=5'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404",
+  "saved_at": "2026-04-18T23:14:46.778537",
+  "report_type": "optimization"
+}

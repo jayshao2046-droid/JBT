@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from src.collectors.base import BaseCollector
+from collectors.base import BaseCollector
 
 
 class RSSCollector(BaseCollector):
@@ -72,7 +72,7 @@ class RSSCollector(BaseCollector):
             return self._mock_records(feed_map=feed_map, as_of=as_of)
         try:
             # 公开国际源需走代理（CNBC/Reuters/Bloomberg/FT/WSJ/Investing/MarketWatch）
-            from src.utils.proxy import overseas_proxy_env
+            from utils.proxy import overseas_proxy_env
             with overseas_proxy_env():
                 records = self._fetch_live(feed_map=feed_map, max_items=max_items, as_of=as_of)
         except Exception as exc:

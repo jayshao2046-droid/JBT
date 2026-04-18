@@ -171,24 +171,32 @@ async def _report_scheduler():
 
 
 async def _heartbeat_scheduler():
-    """每 2 小时整点触发心跳健康报告推送到飞书。"""
+    """每 2 小时整点触发心跳健康报告推送到飞书（00:00-08:00 静默）。"""
     import asyncio
     from datetime import datetime, timedelta
 
-    logger.info("[heartbeat] scheduler started, interval=2h")
+    logger.info("[heartbeat] scheduler started, interval=2h, silent=00:00-08:00")
 
-    # 等待到下一个整点（0/2/4/6/8/10/12/14/16/18/20/22）
+    # 等待到下一个整点（8/10/12/14/16/18/20/22，跳过 0/2/4/6）
     while True:
         now = datetime.now()
         current_hour = now.hour
 
-        # 计算下一个 2 小时整点
+        # 计算下一个 2 小时整点（跳过 00:00-08:00）
         next_hour = ((current_hour // 2) * 2 + 2) % 24
+
+        # 如果落在静默时段（0/2/4/6），跳到 8 点
+        if next_hour in [0, 2, 4, 6]:
+            next_hour = 8
+
         target = now.replace(hour=next_hour, minute=0, second=0, microsecond=0)
 
-        # 如果跨天，加一天
-        if next_hour < current_hour:
+        # 如果跨天或已过当前时间，加一天
+        if target <= now:
             target += timedelta(days=1)
+            # 跨天后如果是静默时段，跳到 8 点
+            if target.hour in [0, 2, 4, 6]:
+                target = target.replace(hour=8, minute=0, second=0, microsecond=0)
 
         wait_seconds = (target - now).total_seconds()
         logger.info("[heartbeat] next report at %s (%.0f seconds)", target.strftime("%Y-%m-%d %H:%M:%S"), wait_seconds)

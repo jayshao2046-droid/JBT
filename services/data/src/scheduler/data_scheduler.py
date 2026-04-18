@@ -958,6 +958,22 @@ def job_overseas_minute_close_summary(config: dict[str, Any]) -> None:
     logger.info("外盘分钟K线 session 已重置")
 
 
+def job_stock_daily(config: dict[str, Any]) -> None:
+    """A股全量日线 — 每日 16:00（收盘后30分钟），全市场一次性采集 ~5500 只。
+
+    落盘: DATA_STORAGE_ROOT/stock_daily/YYYYMM.parquet（按月分文件）
+    同时更新 stock_daily/index/ 下的6个主要指数。
+    """
+    _calendar.refresh()
+    ok, reason = _calendar.is_cn_trading_day(datetime.now())
+    if not ok:
+        logger.info("跳过A股日线采集: %s", reason)
+        return
+    from scheduler.pipeline import run_stock_daily_pipeline
+    today = datetime.now().strftime("%Y%m%d")
+    _safe_run("A股日线", run_stock_daily_pipeline, trade_date=today, config=config)
+
+
 def job_stock_minute(config: dict[str, Any]) -> None:
     """A股分钟K线 — 每2分钟, 仅A股交易时段。"""
     if not STOCK_MINUTE_ENABLED:
@@ -1669,6 +1685,11 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
     #     job_overseas_minute_close_summary, CronTrigger(hour=5, minute=5),
     #     args=[config], id="overseas_minute_close_summary", name="外盘分钟K线收盘摘要",
     # )
+    # A股全量日线: 16:00 收盘后30分钟采集（交易日）
+    scheduler.add_job(
+        job_stock_daily, CronTrigger(hour=16, minute=0, day_of_week="mon-fri"),
+        args=[config], id="stock_daily", name="A股全量日线",
+    )
     if STOCK_MINUTE_ENABLED:
         scheduler.add_job(
             job_stock_minute, IntervalTrigger(minutes=2),

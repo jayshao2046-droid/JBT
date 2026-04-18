@@ -20,7 +20,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
-from src.collectors.base import BaseCollector
+from collectors.base import BaseCollector
 
 
 # ── yfinance 分钟级品种 (20+1) ──────────────────────────
@@ -155,7 +155,7 @@ class OverseasMinuteCollector(BaseCollector):
         interval: str | None = None,
         as_of: str | None = None,
     ) -> list[dict[str, Any]]:
-        from src.utils.proxy import overseas_proxy_env
+        from utils.proxy import overseas_proxy_env
 
         symbol_list = symbols or self.symbols
         cur_period = period or self.period
@@ -587,5 +587,24 @@ class OverseasMinuteCollector(BaseCollector):
                     )
             except Exception as exc:
                 self.logger.warning("日线采集失败 %s: %s", em_code, exc)
+
+        return records
+
+    def collect_yfinance_daily(
+        self,
+        *,
+        symbols: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """采集 yfinance 品种的日线数据 (COMEX/NYMEX/CBOT/ICE/CME)."""
+        symbol_list = symbols or list(YFINANCE_MINUTE_MAP.keys())
+        records, failed = self._fetch_yfinance(
+            symbol_list=symbol_list,
+            period="5d",  # 最近5天，确保覆盖周末
+            interval="1d",
+            as_of=None,
+        )
+
+        if failed:
+            self.logger.warning("yfinance 日线采集失败品种: %s", failed)
 
         return records

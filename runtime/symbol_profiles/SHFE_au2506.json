@@ -1,0 +1,35 @@
+{
+  "symbol": "SHFE.au2506",
+  "volatility_3m": 0.04219978591038104,
+  "volatility_1y": 0.02421783682707583,
+  "volatility_5y": 0.01423623204565965,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 0.00034712533173872606,
+  "trend_strength_1y": 0.0003537322764689491,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": -0.03688133061986157,
+  "autocorr_1y": -0.023349758320918162,
+  "skewness": 2.3375667088540513,
+  "kurtosis": 959.4578958506828,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.76:8105)",
+    "calculation_time": "2026-04-17 22:52:24",
+    "data_start_date": "2021-04-19T01:00:00",
+    "data_end_date": "2026-04-08T16:00:00",
+    "data_points_3m": 27496,
+    "data_points_1y": 128851,
+    "data_points_5y": 657181,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.9101061496668885,
+    "volatility": 0.7772474575862881,
+    "trend": 0.9980179165809331,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.625442290278702,
+    "warnings": []
+  }
+}

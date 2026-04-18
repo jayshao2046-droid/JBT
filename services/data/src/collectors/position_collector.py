@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from src.collectors.base import BaseCollector
+from collectors.base import BaseCollector
 
 
 class PositionCollector(BaseCollector):

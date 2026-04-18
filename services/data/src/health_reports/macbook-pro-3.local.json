@@ -1,0 +1,95 @@
+{
+  "device": "macbook-pro-3.local",
+  "device_label": "macbook-pro-3.local",
+  "ts": "2026-04-18T00:43:40.496740+08:00",
+  "ts_display": "2026-04-18 00:43",
+  "cpu": {
+    "cores": 10,
+    "usage_percent": 20.7
+  },
+  "memory": {
+    "total_mb": 16384,
+    "used_mb": 12873,
+    "used_percent": 78.6
+  },
+  "disk": [
+    {
+      "mount": "/",
+      "total": "460Gi",
+      "used": "12Gi",
+      "avail": "100Gi",
+      "used_percent": 11.0
+    },
+    {
+      "mount": "/System/Volumes/Data",
+      "total": "460Gi",
+      "used": "328Gi",
+      "avail": "100Gi",
+      "used_percent": 77.0
+    }
+  ],
+  "gpu": [
+    {
+      "name": "Apple M1 Pro",
+      "util_percent": -1,
+      "temp_c": -1
+    }
+  ],
+  "services": {
+    "vpn": "未部署",
+    "mihomo": "未部署",
+    "proxy_overseas": "未部署",
+    "collectors": 0
+  },
+  "parquet": {
+    "exists": false,
+    "note": "数据在 Mini"
+  },
+  "processes_high": [
+    {
+      "pid": 54813,
+      "cmd": "/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper (Renderer).app/Contents/MacOS/Code Helper (Renderer",
+      "mem_mb": 1325,
+      "cpu_percent": 0.5
+    },
+    {
+      "pid": 76787,
+      "cmd": "/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper (Renderer).app/Contents/MacOS/Code Helper (Renderer",
+      "mem_mb": 1011,
+      "cpu_percent": 10.6
+    },
+    {
+      "pid": 1694,
+      "cmd": "/System/Library/Frameworks/Virtualization.framework/Versions/A/XPCServices/com.apple.Virtualization.VirtualMachine.xpc/C",
+      "mem_mb": 384,
+      "cpu_percent": 2.2
+    },
+    {
+      "pid": 76716,
+      "cmd": "/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper (Plugin).app/Contents/MacOS/Code Helper (Plugin) --",
+      "mem_mb": 245,
+      "cpu_percent": 0.3
+    },
+    {
+      "pid": 901,
+      "cmd": "/Library/Input Methods/WeType.app/Contents/MacOS/WeType",
+      "mem_mb": 221,
+      "cpu_percent": 0.0
+    }
+  ],
+  "alarms": [
+    {
+      "metric": "内存",
+      "level": "P1",
+      "value": "78.6%",
+      "rule": ">=75%"
+    }
+  ],
+  "has_p0": false,
+  "has_p1": true,
+  "collector_freshness": [],
+  "collector_alarms": [],
+  "collector_recovered": [],
+  "_alarm_state_updated": {},
+  "remediate_attempts": []
+}
