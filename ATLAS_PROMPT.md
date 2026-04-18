@@ -629,3 +629,13 @@ Mini 采集 → context API (/api/v1/context/macro,volatility,shipping,sentiment
   - 审计材料：`docs/tasks/TASK-U0-20260419-009-*.md`、`docs/reviews/REVIEW-U0-20260419-009.md`、`docs/locks/lock-U0-20260419-009.md`
   - 遗留 P0：TqSdk 参数覆盖（TASK-0127）需标准流程单独建任务修复
   - 待执行：git commit 审计材料 + push origin/main + 两地同步
+- 2026-04-19：**TASK-U0-20260419-009 追加批次：decision 架构闭环 14 项 ✅**（Jay.S 确认采纳所有架构建议后 U0 直修）
+  - 仅 decision 单服务，新建 3 + 修改 8 = 11 文件
+  - P0：lifecycle degraded/recycled 闭环 | Sharpe 衰减监控 StrategyMonitor | Optuna best_params 写回 YAML | KQ_m_ 合约格式修复 | ResearchStore 评分存储 + 4 GET 端点
+  - P1：宏观研判注入 pipeline/gate_reviewer | 特征批量刷新 refresh_all_features | XGBoost 信号过滤集成 | pipeline/gate_reviewer 审计日志
+  - P2：归档归因 record_archive_attribution | 策略池容量检查 | 回炉再调优 reoptimize_recycled
+  - 自校验：11 文件 ast.parse 全通过；ResearchStore/StrategyMonitor/LifecycleStatus 功能验证 OK
+  - R3 遗留（TqSdk 参数覆盖）已在修复 7e 中解决
+  - 审计材料已补齐：task + review + lock + handoff + prompt
+  - 总计 17 文件（data 3 + decision 14）全部 🔒 locked
+  - 待执行：独立 commit + push + 两地同步
