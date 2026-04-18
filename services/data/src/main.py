@@ -55,6 +55,7 @@ STOCK_PURE_DIGITS_PATTERN = re.compile(r"^\d{6}$")
 STOCK_PREFIX_PATTERN = re.compile(r"(?i)^(SH|SZ)(\d{6})$")
 STOCK_SUFFIX_PATTERN = re.compile(r"(?i)^(\d{6})\.(SH|SZ)$")
 STOCK_MINUTE_SUBDIR = "stock_minute"
+STOCK_DAILY_SUBDIR = "stock_daily"
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_FILE = SERVICE_ROOT / "configs" / "settings.yaml"
 SCHEDULE_FILE = SERVICE_ROOT / "configs" / "collection_schedules.yaml"
@@ -350,7 +351,7 @@ def get_stock_bars(
         raise HTTPException(status_code=422, detail="end must be greater than or equal to start")
 
     stock_code = _parse_stock_symbol(symbol)
-    frame = _load_stock_frame(stock_code)
+    frame = _load_stock_daily_frame(stock_code)
 
     filtered = frame.loc[
         (frame["datetime"] >= parsed_start.timestamp)
@@ -364,7 +365,7 @@ def get_stock_bars(
     return {
         "requested_symbol": symbol,
         "resolved_symbol": stock_code,
-        "source_kind": "stock_minute",
+        "source_kind": "stock_daily",
         "timeframe_minutes": timeframe_minutes,
         "count": len(bars),
         "bars": bars,
@@ -382,6 +383,10 @@ def _minute_root() -> Path:
 
 def _stock_minute_root() -> Path:
     return _storage_root() / STOCK_MINUTE_SUBDIR
+
+
+def _stock_daily_root() -> Path:
+    return _storage_root() / STOCK_DAILY_SUBDIR
 
 
 def _parse_stock_symbol(raw_symbol: str) -> str:
@@ -423,6 +428,88 @@ def _load_stock_frame(stock_code: str) -> pd.DataFrame:
             status_code=500,
             detail=f"failed to load stock data for {stock_code}: {exc}",
         ) from exc
+
+
+def _load_stock_daily_frame(stock_code: str) -> pd.DataFrame:
+    stock_daily_root = _stock_daily_root()
+    if not stock_daily_root.is_dir():
+        raise HTTPException(
+            status_code=404,
+            detail=f"no stock daily data root found for {stock_code}",
+        )
+
+    frames: list[pd.DataFrame] = []
+
+    # 优先读取按股票单独落盘的 daily.parquet
+    for suffix in ("SH", "SZ"):
+        daily_file = stock_daily_root / f"{stock_code}_{suffix}" / "daily.parquet"
+        if daily_file.is_file():
+            frames.append(_normalize_stock_daily_frame(pd.read_parquet(daily_file), stock_code))
+
+    # 若没有按股票落盘，再尝试读取按月全市场文件（如 202604.parquet）
+    if not frames:
+        month_files = sorted(path for path in stock_daily_root.glob("*.parquet") if path.is_file())
+        for month_file in month_files:
+            normalized = _normalize_stock_daily_frame(pd.read_parquet(month_file), stock_code)
+            if not normalized.empty:
+                frames.append(normalized)
+
+    if not frames:
+        raise HTTPException(
+            status_code=404,
+            detail=f"no stock daily data found for {stock_code}",
+        )
+
+    combined = pd.concat(frames, ignore_index=True)
+    if combined.empty:
+        raise HTTPException(
+            status_code=404,
+            detail=f"no stock daily bars found for {stock_code}",
+        )
+
+    return combined.sort_values("datetime").drop_duplicates(
+        subset=["datetime"],
+        keep="last",
+    ).reset_index(drop=True)
+
+
+def _normalize_stock_daily_frame(frame: pd.DataFrame, stock_code: str) -> pd.DataFrame:
+    normalized = frame.copy()
+
+    if "ts_code" in normalized.columns:
+        code_mask = normalized["ts_code"].astype(str).str.upper().str.startswith(f"{stock_code}.")
+        normalized = normalized.loc[code_mask].copy()
+
+    if normalized.empty:
+        return pd.DataFrame(columns=BAR_COLUMNS)
+
+    if "datetime" not in normalized.columns:
+        if "trade_date" in normalized.columns:
+            normalized["datetime"] = pd.to_datetime(normalized["trade_date"].astype(str), errors="coerce")
+        elif "date" in normalized.columns:
+            normalized["datetime"] = pd.to_datetime(normalized["date"].astype(str), errors="coerce")
+
+    if "volume" not in normalized.columns and "vol" in normalized.columns:
+        normalized["volume"] = normalized["vol"]
+
+    if "open_interest" not in normalized.columns:
+        normalized["open_interest"] = 0.0
+
+    missing_columns = [column for column in ("datetime", "open", "high", "low", "close", "volume") if column not in normalized.columns]
+    if missing_columns:
+        raise ValueError(f"missing required stock daily columns: {', '.join(missing_columns)}")
+
+    normalized = normalized.loc[:, BAR_COLUMNS].copy()
+    normalized["datetime"] = pd.to_datetime(normalized["datetime"], errors="coerce")
+    if getattr(normalized["datetime"].dt, "tz", None) is not None:
+        normalized["datetime"] = normalized["datetime"].dt.tz_convert(None)
+
+    for column in BAR_COLUMNS[1:]:
+        normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
+
+    normalized[["volume", "open_interest"]] = normalized[["volume", "open_interest"]].fillna(0.0)
+    normalized = normalized.dropna(subset=["datetime", "open", "high", "low", "close"])
+    return normalized.reset_index(drop=True)
 
 
 def _list_available_symbols() -> list[str]:
