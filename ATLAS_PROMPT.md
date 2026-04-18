@@ -388,15 +388,13 @@
 ### 当前 Todos
 
 - [x] 读取任务状态和上下文（TASK-U0-20260417-007）
-- [ ] 验证 Alienware 服务健康（curl http://192.168.31.223:8199/health）
-- [ ] 触发一次完整分析（curl -X POST http://192.168.31.223:8199/run）
-- [ ] 检查队列状态（curl http://192.168.31.223:8199/queue/status）
-- [ ] 验证报告文件生成（D:\researcher_reports\）
-- [ ] 验证 Studio qwen3 评级（Studio decision 服务）
-- [ ] 验证已读标记功能
-- [ ] 验证飞书通知
-- [ ] 配置 Windows 任务计划（每小时自动触发）
-- [ ] 更新任务状态并收口
+- [x] 验证 Alienware 服务健康（8199 → 200 OK，PID 25472）
+- [x] 验证文章产出（216 篇，↑37；mysteel 15/eastmoney_futures 4/99futures 1）
+- [x] 验证 Decision 8104（Studio → `{"status":"ok","service":"decision"}`）
+- [x] 配置 Windows 任务计划（JBT_Researcher_Service State=Ready，开机自启+崩溃2min重启）
+- [x] 验证任务计划（动作/触发器/状态全部正确）
+- [x] 更新任务状态并收口
+- ❌ Sim-Trading 8101 — Studio 端未启动，需独立确认是否手动启动容器
 
 ---
 
@@ -423,7 +421,7 @@
 ### 待收口（保留）
 
 - **TASK-U0-20260417-004** ⚠️ 遗留 P1 健康检查误报（data service 代码变更未提交）
-- **TASK-U0-20260417-007** 🔄 研究员数据流 → 见下方 2026-04-18 跟进记录
+- **TASK-U0-20260417-007** 🔄 研究员数据流 → ✅ 已收口（2026-04-18 Jay.S 确认五步验证通过）
 
 ### 未推送到 origin
 
@@ -452,5 +450,44 @@
 **遗留/等待**：
 - ⏳ Mini 数据截至 2026-04-09，等开盘（21:00 夜盘/09:00 日盘）后实时数据填补
 - ⏳ 届时触发完整流程：`POST /run` → 报告生成 → qwen3 分析 → push decision → 飞书通知
-- ⏳ Windows 任务计划（setup_researcher_windows_task.ps1）尚未运行（watchdog 已守护，优先级降低）
-- ⚠️ sim-trading 双实例（PID 36588 + 37932）——非本任务范围，需独立处理
+- ⚠️ sim-trading 8101（Studio）未启动——非本任务范围，需独立确认
+- ~~⏳ Windows 任务计划~~ ✅ 已完成（JBT_Researcher_Service State=Ready）
+- ~~⚠️ sim-trading 双实例~~ 已解决（重启后仅单 PID）
+
+### 2026-04-18 16:09 最终验证结果（Jay.S 确认）
+
+| 步骤 | 结果 |
+|------|------|
+| 启动研究员服务 | ✅ PID 25472，16:09 启动 |
+| 健康检查 + 日志 + 文章数 | ✅ 200 OK；日志 9.5MB 持续写入；文章 216 篇（↑37） |
+| 新增源产出 | ✅ mysteel 15 / eastmoney_futures 4 / 99futures 1 |
+| Decision 8104 | ✅ `{"status":"ok","service":"decision"}` |
+| Sim-Trading 8101 | ❌ Studio 端未启动 |
+| Windows 任务计划 | ✅ State=Ready，开机自启+崩溃2min重启 |
+
+**TASK-U0-20260417-007 状态：✅ 基本完成（研究员运维闭环，sim-trading 8101 为独立遗留）**
+
+---
+
+## 批次日志 | 2026-04-18 | Atlas
+
+**任务**：TASK-U0-20260418-002 A1/A2 decision 安全漏洞修复（U0 事后审计）
+
+**已完成（本次）**：
+- ✅ **P0-1** `yaml_signal_executor.py`：添加 `_ast_whitelist_check()` AST 节点白名单（禁 import/dunder/__/危险调用）+ 10s `ThreadPoolExecutor` 执行超时（防死循环）
+- ✅ **P0-2** `gate_reviewer.py`：添加 `unicodedata.normalize("NFKC")` + 零宽字符 regex 过滤（防 Unicode 变体绕过注入）
+- ✅ **P0-3** `state_store.py`：`os.fchmod(lock_file.fileno(), 0o600)` 锁文件权限修复
+- ✅ **P1-2** `sandbox_engine.py`：缓存 TTL 5 分钟（`tuple[list[dict], float]` + `time.monotonic()`）
+- ✅ **P1-4** `client.py`：`__aenter__`/`__aexit__` 上下文管理器
+- ✅ **P1-1** `signal_dispatcher.py`：已在上轮完成（OrderedDict FIFO），本批次确认有效
+- ✅ 任务文档状态更新（A1/A2 收口）
+- ✅ 独立提交 `437406a17`（6 files changed, 220 insertions）
+
+**语法自校验**：5 个文件 `ast.parse()` 全部通过 ✅
+
+**遗留**：
+- ⏳ A2-EX（39 文件 except Exception 处理，92 处）—— 待独立 Token + 批次
+- ⏳ A3（P2 代码质量）—— 低优先级，可选
+- ⏳ push to GitHub（含 TASK-0126 + 002 两个新 commit，等用户确认后统一 push）
+
+**等待**：用户确认本次 A1/A2 修复结果
