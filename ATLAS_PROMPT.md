@@ -578,3 +578,40 @@
 - 盘中观察 Decision tqsdk 分钟K拉取日志
 
 **TASK-U0-20260418-002 状态：✅ 部署完成，待开盘验证**
+
+---
+
+## 批次日志 | 2026-04-19 | Atlas
+
+**任务**：Mini context API 全链路部署收口（接续上一 session）
+
+### 背景
+
+上一 session 完成了四层代码实现（context_route.py / mini_client.py / scheduler.py / researcher_evaluate.py），git commit `0bc5c183c`，Alienware 两文件已部署，但 Mini `context_route.py` 尚未部署，Alienware 研究员服务未重启。
+
+### 已完成（本次）
+
+- ✅ **Mini `context_route.py` 部署**：
+  - SCP 到 Mini 宿主机 `/Users/jaybot/JBT/services/data/src/api/routes/context_route.py`
+  - `docker cp` 到 `JBT-DATA-8105:/app/services/data/src/api/routes/context_route.py`
+  - `docker restart JBT-DATA-8105` → 容器重启 ✅（健康检查 `health: starting`）
+- ✅ **Mini context API 端点验证**：`GET /api/v1/context/macro?days=3` → 200，返回真实宏观数据（AU unemployment 等），端点正常
+- ✅ **Alienware 研究员服务重启**：
+  - 停止旧进程（PID 67356）
+  - `schtasks /Run /TN JBT_Researcher_Service` → 任务计划触发成功
+  - 新进程启动（3 个 Python 进程确认）
+
+### 数据流闭环
+
+```
+Mini 采集 → context API (/api/v1/context/macro,volatility,shipping,sentiment,rss)
+            → MiniClient.get_context_data()
+            → scheduler._refresh_mini_context() [60min TTL]
+            → _analyze_mini_context() [LLM宏观分析]
+            → 单文章 prompt 注入宏观背景
+            → _push_rich_report_to_decision() [含 macro_report]
+            → Studio decision /api/v1/evaluate [researcher_evaluate.py]
+            → 飞书宏观分析卡片
+```
+
+**状态：✅ 全链路部署完成，待下一研究周期自动触发验证**
