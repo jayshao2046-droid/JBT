@@ -42,7 +42,7 @@ from typing import Any, Optional
 
 import yaml
 
-from services.decision.src.llm.openai_client import OpenAICompatibleClient
+from ..llm.openai_client import OpenAICompatibleClient
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +177,16 @@ no_overnight: true
             for factor in strategy_design['recommended_factors']
         ])
 
-        return f"""将以下策略逻辑转化为 JBT 标准 YAML 配置文件。
+        # 读取 TqSDK 标准模板
+        template_path = Path(__file__).parent / "templates" / "strategy_template.yaml"
+        try:
+            with open(template_path, "r", encoding="utf-8") as f:
+                template_content = f.read()
+        except FileNotFoundError:
+            logger.warning(f"模板文件不存在: {template_path}，使用内置示例")
+            template_content = self._get_fallback_template()
+
+        return f"""将以下策略逻辑转化为 JBT 标准 YAML 配置文件（符合 TqSDK 回测格式）。
 
 【策略信息】
 - 策略名称: {strategy_design['strategy_name']}
@@ -198,93 +207,142 @@ no_overnight: true
 {strategy_design['risk_management']}
 
 【关键要求】
-1. 严格按照 JBT YAML 格式输出
-2. 为每个因子配置合理的参数（基于因子特性）
-3. 将入场/出场逻辑转化为 long_condition 和 short_condition
-4. **信号条件语法规则**：
-   - 因子名称自动转为小写变量（ATR → atr, ADX → adx, OBV → obv）
+1. **严格按照下方的 TqSDK 标准模板格式输出**
+2. **必须包含的字段**：
+   - version: 版本号（如 "1.0"）
+   - category: 策略分类（trend_following / mean_reversion / breakout / arbitrage / intraday_momentum）
+   - factors[].weight: 因子权重（0-1，总和为1.0）
+   - market_filter.enabled: 市场过滤开关（true/false）
+   - position_adjustment: 动态仓位调整配置
+   - **stop_loss: 止损配置（必须包含，使用 ATR 动态止损）**
+     * type: "atr"
+     * atr_multiplier: 1.5（默认值，可根据品种波动率调整为 1.2-2.0）
+     * atr_period: 14（默认值）
+   - **take_profit: 止盈配置（必须包含，使用 ATR 动态止盈）**
+     * type: "atr"
+     * atr_multiplier: 2.5（默认值，可根据品种波动率调整为 2.0-3.0）
+     * atr_period: 14（默认值）
+   - risk.force_close_day: 日盘强制平仓时间（如 "14:55"）
+   - risk.force_close_night: 夜盘强制平仓时间（如 "22:55"，无夜盘可删除）
+   - tags: 标签列表（如 ["v1", "trend", "5m"]）
+
+3. **信号条件语法规则**：
+   - 因子名称自动转为小写变量（ATR → atr, ADX → adx, MACD → macd_hist）
    - 只能使用简单的比较表达式，不支持函数调用
    - 可用的内置变量：close, open, high, low, volume
    - 可用的运算符：>, <, >=, <=, ==, and, or
    - 正确示例：
-     * "atr > 0.015 * close and adx > 25"
-     * "close > open and volume > 10000"
-     * "obv > 0 and adx > 20"
+     * "macd_hist > 0 and rsi > 50 and rsi_slope > 0"
+     * "atr > 0.005 * close and adx > 20"
+     * "close > open and volume_ratio > 1.2"
    - 错误示例（不要使用）：
      * "atr > high(-20)" ❌ 不支持函数调用
      * "obv > obv(-1)" ❌ 不支持历史值引用
      * "atr < sma(atr, 10)" ❌ 不支持函数调用
-5. 配置合理的风险参数（止损、日内止损、最大回撤）
-6. **【关键】市场过滤条件必须比入场条件更宽松**：
-   - 市场过滤是全局前置条件，应该比开仓条件阈值更低
-   - 如果入场条件是 "atr > 0.008 * close"，市场过滤应该是 "atr > 0.002 * close"（更低）
-   - 如果入场条件是 "volume_ratio > 1.3"，市场过滤应该是 "volume_ratio > 0.9"（更低）
-   - 如果策略设计中提到"移除市场过滤"或"放宽市场过滤"，必须同步更新 market_filter
-   - 避免市场过滤与出场条件逻辑冲突（如市场过滤要求 volume_ratio > 1.0，出场条件是 volume_ratio < 0.95）
-7. **重要**：所有数值必须是具体的数字，不要使用模板语法如 {{{{ }}}}
-8. **重要**：position_fraction 必须是 0.05-0.2 之间的具体数值（如 0.1）
-9. **重要**：stop_loss_yuan 必须是具体数值（如 800-1500）
-10. **重要**：使用主力合约代码（如 SHFE.ru2505），不要使用指数合约（如 SHFE.ru0）
 
-【YAML 格式示例】
-```yaml
-name: rb_volatility_breakout_001
-description: 基于波动率突破 + 持仓量异动的趋势跟踪策略
+4. **市场过滤条件必须比入场条件更宽松**：
+   - 市场过滤是全局前置条件，应该比开仓条件阈值更低
+   - 如果入场条件是 "atr > 0.008 * close"，市场过滤应该是 "atr > 0.005 * close"（更低）
+   - 如果入场条件是 "adx > 25"，市场过滤应该是 "adx > 20"（更低）
+
+5. **止损止盈使用 ATR 倍数，不是固定金额**：
+   - 正确：stop_loss.atr_multiplier: 1.5
+   - 错误：stop_loss_yuan: 1000 ❌（TqSDK 不支持）
+
+6. **强制平仓时间使用具体时间点**：
+   - 正确：risk.force_close_day: "14:55"
+   - 错误：risk.time_to_exit_bars: 12 ❌（TqSDK 不支持）
+
+7. **所有数值必须是具体的数字**，不要使用模板语法如 {{{{ }}}}
+
+8. **使用主力合约代码**（如 SHFE.rb2505），不要使用指数合约（如 SHFE.rb0）
+
+9. **因子权重总和应为 1.0**，合理分配各因子的权重
+
+10. **必须包含 transaction_costs**（交易成本），否则无法进入 TqSDK 回测
+
+【TqSDK 标准 YAML 模板】
+{template_content}
+
+【严禁】
+- 不要输出任何解释或注释（模板中的注释可以保留）
+- 不要使用 markdown 代码块标记
+- 只输出纯 YAML
+- **严禁在signal条件中创造新变量**：
+  * 禁止：atr_20_high, atr_10_sma, obv_prev, rsi_ma, macd_prev 等
+  * 只能使用：因子输出字段（见模板中的因子字段名列表）+ 内置变量（close, open, high, low, volume）+ 数值常量
+  * 正确示例：macd_hist > 0, rsi > 50, atr > 0.005 * close, volume_ratio > 1.2
+- **严禁使用固定金额的止损止盈**（stop_loss_yuan, take_profit_yuan），必须使用 ATR 倍数
+- **严禁省略 stop_loss 和 take_profit 配置**：每个策略必须包含这两个字段，即使策略设计中未明确提及，也要使用默认值（stop_loss.atr_multiplier: 1.5, take_profit.atr_multiplier: 2.5）
+"""
+
+    def _get_fallback_template(self) -> str:
+        """获取内置的后备模板（TqSDK 格式）"""
+        return """name: "FC-XXX_strategy_name"
+description: "策略描述"
+version: "1.0"
+category: "trend_following"
 
 symbols:
-  - SHFE.rb2505
+  - "SHFE.rb2505"
 
 timeframe_minutes: 120
 
 factors:
-  - factor_name: ATR
+  - factor_name: "MACD"
+    weight: 0.4
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+  - factor_name: "RSI"
+    weight: 0.3
     params:
       period: 14
-  - factor_name: ADX
+  - factor_name: "ATR"
+    weight: 0.3
     params:
       period: 14
-  - factor_name: OBV
-    params: {{}}
-
-signal:
-  long_condition: "atr > 0.015 * close and adx > 25 and obv > 0"
-  short_condition: "atr < 0.008 * close or adx < 20"
-  confirm_bars: 2
-
-# 注意：
-# - 因子名称小写后直接使用：ATR → atr, ADX → adx, OBV → obv
-# - 只能与数值或内置变量（close/open/high/low/volume）比较
-# - 不要创造新变量如 atr_20_high, obv_prev, atr_10_sma 等
-# - 这些条件会被LLM转换为Python代码，必须是简单的比较表达式
 
 market_filter:
+  enabled: true
   conditions:
-    - "atr > 0.002 * close"    # 必须比入场条件更宽松
-    - "adx > 15"                # 必须比入场条件更宽松
-    - "volume_ratio > 0.8"      # 必须比入场条件更宽松
+    - "atr > 0.005 * close"
+    - "adx > 20"
 
-risk:
-  stop_loss_yuan: 1000
-  daily_loss_limit_yuan: 2000
-  max_drawdown_pct: 0.015
+signal:
+  long_condition: "macd_hist > 0 and rsi > 50 and rsi_slope > 0"
+  short_condition: "macd_hist < 0 and rsi < 50 and rsi_slope < 0"
+  confirm_bars: 1
 
-position_fraction: 0.1
+position_fraction: 0.08
+position_adjustment:
+  method: "atr_scaling"
+  base_position: 0.08
+  atr_period: 14
+  atr_multiplier: 1.0
 
 transaction_costs:
   slippage_per_unit: 1
   commission_per_lot_round_turn: 5
 
-no_overnight: true
-```
+risk:
+  daily_loss_limit_yuan: 2000
+  per_symbol_fuse_yuan: 160
+  max_drawdown_pct: 0.008
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
 
-【严禁】
-- 不要输出任何解释
-- 不要使用 markdown 代码块标记
-- 只输出纯 YAML
-- **严禁在signal条件中创造新变量**：
-  * 禁止：atr_20_high, atr_10_sma, obv_prev, rsi_ma, macd_prev 等
-  * 只能使用：因子小写名称（atr, adx, obv）+ 内置变量（close, open, high, low, volume）+ 数值常量
-  * 正确示例：atr > 0.02 * close, adx > 25, obv > 0, volume > 10000
+stop_loss:
+  atr_multiplier: 1.5
+  type: "atr"
+
+take_profit:
+  atr_multiplier: 2.5
+  type: "atr"
+
+tags: ["v1", "trend", "120m"]
 """
 
     def _extract_yaml(self, content: str) -> Optional[str]:
