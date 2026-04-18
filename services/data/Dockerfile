@@ -16,18 +16,18 @@ ENV TZ=Asia/Shanghai
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Python deps + supervisor via pip
-COPY requirements.txt .
+COPY services/data/requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir supervisor && \
     pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # Application code
-COPY src/ ./services/data/src/
-COPY tests/ ./services/data/tests/
-COPY configs/ ./services/data/configs/
+COPY services/data/src/ ./services/data/src/
+COPY services/data/tests/ ./services/data/tests/
+COPY services/data/configs/ ./services/data/configs/
 
 # Supervisord config
-COPY supervisord.conf /etc/supervisor/conf.d/jbt-data.conf
+COPY services/data/supervisord.conf /etc/supervisor/conf.d/jbt-data.conf
 
 # Data directories (will be mounted as volume in production)
 RUN mkdir -p /data/parquet /data/logs /data/cache /data/backup \
@@ -36,7 +36,7 @@ RUN mkdir -p /data/parquet /data/logs /data/cache /data/backup \
 ENV PYTHONPATH=/app
 ENV JBT_SERVICE_NAME=jbt-data
 ENV JBT_SERVICE_PORT=8105
-ENV DATA_STORAGE_ROOT=/data
+ENV DATA_STORAGE_ROOT=/data/data
 ENV JBT_DATA_LOG_DIR=/data/logs
 
 EXPOSE 8105

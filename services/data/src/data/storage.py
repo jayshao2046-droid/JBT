@@ -6,13 +6,14 @@ Import paths updated: services.data.src.utils → src.utils
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 import re
 
 import os
 
-from src.utils.exceptions import StorageError
+from utils.exceptions import StorageError
 
 try:
     import duckdb  # type: ignore
@@ -66,6 +67,12 @@ class ParquetStorage:
         try:
             file_path = self._build_file_path(data_type=data_type, symbol=symbol)
             rows = [dict(item) for item in records]
+            # Serialize nested dicts/lists to JSON strings so pyarrow
+            # does not attempt struct schema inference on mixed-type payloads.
+            for row in rows:
+                for k, v in row.items():
+                    if isinstance(v, (dict, list)):
+                        row[k] = json.dumps(v, ensure_ascii=False, default=str)
             if sort_by is not None:
                 keys = [sort_by] if isinstance(sort_by, str) else list(sort_by)
                 rows = sorted(rows, key=lambda item: tuple(item.get(k) for k in keys))
@@ -73,7 +80,11 @@ class ParquetStorage:
             incoming_table = pa.Table.from_pylist(rows)
             if mode == "a" and file_path.exists():
                 existing_table = pq.read_table(file_path)
-                table = pa.concat_tables([existing_table, incoming_table], promote_options="default")
+                try:
+                    table = pa.concat_tables([existing_table, incoming_table], promote_options="default")
+                except (pa.lib.ArrowTypeError, pa.lib.ArrowInvalid):
+                    # Schema changed (e.g. payload struct → JSON string); overwrite
+                    table = incoming_table
             else:
                 table = incoming_table
 

@@ -87,7 +87,7 @@ DATA_RULES: dict[str, dict] = {
     "volatility_qvix": {"dir": DATA_ROOT / "volatility_index",      "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "QVIX波动率"},
     "shipping":        {"dir": DATA_ROOT / "shipping",              "max_age_h": 26,  "trading_only": False, "weekend_skip": False, "label": "海运运费"},
     "tushare":         {"dir": DATA_ROOT / "tushare",               "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "Tushare日线"},
-    "weather":         {"dir": DATA_ROOT / "weather",               "max_age_h": 14,  "trading_only": False, "weekend_skip": False, "label": "天气", "paused_reason": "采集管道待实现"},
+    "weather":         {"dir": DATA_ROOT / "weather",               "max_age_h": 14,  "trading_only": False, "weekend_skip": False, "label": "天气"},
     "sentiment":       {"dir": DATA_ROOT / "sentiment",             "max_age_h": 26,  "trading_only": False, "weekend_skip": False, "label": "情绪指数"},
     "forex":           {"dir": DATA_ROOT / "forex",                 "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "外汇日线"},
     "cftc":            {"dir": DATA_ROOT / "cftc",                  "max_age_h": 200, "trading_only": False, "weekend_skip": False, "label": "CFTC持仓"},
@@ -251,37 +251,34 @@ def get_gpu_info() -> list[dict]:
 
 
 def get_high_mem_processes(top_n: int = 5) -> list[dict]:
-    """占用内存最高的进程。"""
+    """占用内存最高的进程（使用 psutil，兼容容器环境）。"""
     procs = []
     try:
-        out = subprocess.check_output(
-            ["ps", "aux", "--sort=-rss"] if platform.system() != "Darwin" else ["ps", "aux"],
-            text=True, timeout=10,
-        )
-        lines = out.strip().splitlines()[1:]  # skip header
+        import psutil
         items = []
-        for line in lines:
-            parts = line.split(None, 10)
-            if len(parts) >= 11:
-                try:
-                    cpu_pct = float(parts[2])
-                    mem_pct = float(parts[3])
-                    rss_kb = int(parts[5])
-                    cmd = parts[10][:120]
-                    items.append((rss_kb, cpu_pct, mem_pct, cmd, int(parts[1])))
-                except (ValueError, IndexError):
-                    pass
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'memory_info', 'cpu_percent']):
+            try:
+                mem_info = proc.info.get('memory_info')
+                if mem_info:
+                    rss_kb = mem_info.rss // 1024
+                    cpu_pct = proc.info.get('cpu_percent') or 0.0
+                    cmdline = proc.info.get('cmdline') or []
+                    cmd = ' '.join(cmdline)[:120] if cmdline else proc.info.get('name', '')
+                    pid = proc.info.get('pid', 0)
+                    items.append((rss_kb, cpu_pct, cmd, pid))
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
         items.sort(key=lambda x: x[0], reverse=True)
-        for rss_kb, cpu_pct, mem_pct, cmd, pid in items[:top_n]:
+        for rss_kb, cpu_pct, cmd, pid in items[:top_n]:
             procs.append({
                 "pid": pid,
                 "cmd": cmd,
                 "mem_mb": rss_kb // 1024,
                 "cpu_percent": cpu_pct,
             })
-    except subprocess.TimeoutExpired:
-        pass
-    except (subprocess.SubprocessError, ValueError) as e:
+    except ImportError:
+        logger.warning("psutil not available, skipping high memory processes")
+    except Exception as e:
         logger.warning(f"Failed to get high memory processes: {e}")
     return procs
 
@@ -331,7 +328,7 @@ def get_service_status() -> dict:
     # 代理境外连通性测试（仅 Mini）
     if IS_MINI:
         try:
-            from src.utils.proxy import check_overseas_targets, is_proxy_alive
+            from utils.proxy import check_overseas_targets, is_proxy_alive
             if is_proxy_alive():
                 proxy_results = check_overseas_targets()
                 ok_count = sum(1 for r in proxy_results if r["ok"])
@@ -358,17 +355,22 @@ def get_service_status() -> dict:
     else:
         services["proxy_overseas"] = "未部署"
 
-    # 采集器进程数
+    # 采集器进程数（使用 psutil 替代 ps 命令，兼容容器环境）
     collector_count = 0
     try:
-        out = subprocess.check_output(["ps", "aux"], text=True, timeout=10)
-        for line in out.splitlines():
-            if "python" in line and ("collect" in line or "scheduler" in line):
-                if "health_check" not in line and "aggregate" not in line:
-                    collector_count += 1
-    except subprocess.TimeoutExpired:
-        pass
-    except (subprocess.SubprocessError, ValueError) as e:
+        import psutil
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline = proc.info.get('cmdline') or []
+                cmdline_str = ' '.join(cmdline)
+                if 'python' in cmdline_str and ('collect' in cmdline_str or 'scheduler' in cmdline_str):
+                    if 'health_check' not in cmdline_str and 'aggregate' not in cmdline_str:
+                        collector_count += 1
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+    except ImportError:
+        logger.warning("psutil not available, skipping collector count")
+    except Exception as e:
         logger.warning(f"Failed to count collector processes: {e}")
     services["collectors"] = collector_count
 
@@ -478,6 +480,33 @@ def get_collector_freshness() -> list[dict[str, Any]]:
                             existing_dirs.append(sd)
             except OSError as e:
                 logger.warning(f"Failed to scan futures directories: {e}")
+
+        # tushare: 新 pipeline 写入 {交易所}.{合约}/futures_holding|wsr|settle|daily/，动态发现
+        if name == "tushare":
+            _exchange_re = re.compile(r'^(SHFE|DCE|CZCE|INE|GFEX|CFFEX)\.')
+            try:
+                for d in DATA_ROOT.iterdir():
+                    if d.is_dir() and _exchange_re.match(d.name):
+                        # 检查 futures_holding, futures_wsr, futures_settle, futures_daily 四个子目录
+                        for subdir_name in ["futures_holding", "futures_wsr", "futures_settle", "futures_daily"]:
+                            sd = d / subdir_name
+                            if sd.exists():
+                                existing_dirs.append(sd)
+            except OSError as e:
+                logger.warning(f"Failed to scan tushare directories: {e}")
+
+        # position_weekly/position_daily: 可能存储在品种独立目录
+        if name in ("position_weekly", "position_daily"):
+            _exchange_re = re.compile(r'^(SHFE|DCE|CZCE|INE|GFEX|CFFEX)\.')
+            try:
+                for d in DATA_ROOT.iterdir():
+                    if d.is_dir() and _exchange_re.match(d.name):
+                        # 检查 position 子目录
+                        sd = d / "position"
+                        if sd.exists():
+                            existing_dirs.append(sd)
+            except OSError as e:
+                logger.warning(f"Failed to scan position directories: {e}")
 
         if not existing_dirs:
             results.append({
@@ -678,8 +707,8 @@ def send_p0_alert(report: dict) -> None:
         return
 
     try:
-        from src.notify import card_templates as ct
-        from src.notify.feishu import FeishuSender
+        from notify import card_templates as ct
+        from notify.feishu import FeishuSender
 
         alarm_lines = "\n".join(f"  - {a['metric']}: {a['value']} ({a['rule']})" for a in p0_list)
         ops_base = os.environ.get("DATA_OPS_URL", "http://localhost:8105")
@@ -705,7 +734,7 @@ def send_p0_alert(report: dict) -> None:
         print(f"[飞书] P0 告警发送失败: {e}")
         # 回退: 直接使用 FeishuSender 发送原始卡片
         try:
-            from src.notify.feishu import FeishuSender
+            from notify.feishu import FeishuSender
             sender = FeishuSender()
             now_str = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M")
             alarm_lines = "\n".join(f"  - {a['metric']}: {a['value']} ({a['rule']})" for a in p0_list)
@@ -733,7 +762,7 @@ def send_remediation_confirm(report: dict, remediation_results: list) -> None:
         return
 
     try:
-        from src.notify.feishu import FeishuSender
+        from notify.feishu import FeishuSender
         sender = FeishuSender()
 
         all_ok = all(r.get("result") == "成功" for r in remediation_results)
@@ -777,8 +806,8 @@ def send_collector_alert(
         return
 
     try:
-        from src.notify import card_templates as ct
-        from src.notify.feishu import FeishuSender
+        from notify import card_templates as ct
+        from notify.feishu import FeishuSender
         sender = FeishuSender()
 
         for level in ("P0", "P1"):
@@ -813,8 +842,8 @@ def send_recovery_notice(
         return
 
     try:
-        from src.notify import card_templates as ct
-        from src.notify.feishu import FeishuSender
+        from notify import card_templates as ct
+        from notify.feishu import FeishuSender
         sender = FeishuSender()
 
         recovered_names = [s.get("label", s.get("name", "")) for s in recovered]
@@ -841,7 +870,7 @@ def send_proxy_alert(services: dict) -> None:
         return
 
     try:
-        from src.notify.feishu import FeishuSender
+        from notify.feishu import FeishuSender
         sender = FeishuSender()
 
         now_str = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M")

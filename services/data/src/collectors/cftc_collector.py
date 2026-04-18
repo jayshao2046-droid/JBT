@@ -10,24 +10,22 @@ import time
 from datetime import datetime
 from typing import Any
 
-from src.collectors.base import BaseCollector
+from collectors.base import BaseCollector
 
 
-# AkShare CFTC 品种映射
-# macro_usa_cftc_nc_report(symbol)  — 非商业(投机)持仓报告
-# macro_usa_cftc_c_report(symbol)   — 商业(套保)持仓报告
-# macro_usa_cftc_merchant_currency_holding_all — 全球商业货币持仓
+# AkShare CFTC 品种映射（akshare ≥ 1.18 宽格式 API）
+# macro_usa_cftc_merchant_goods_holding() — 商品持仓（商业）
+# macro_usa_cftc_c_holding()             — 商品持仓（商业，同上）
+# 列名格式: "{品种}-多头仓位" / "{品种}-空头仓位" / "{品种}-净仓位"
 CFTC_SYMBOLS = {
-    "cftc_gold":    {"name": "黄金", "ak_symbol": "黄金"},
-    "cftc_silver":  {"name": "白银", "ak_symbol": "白银"},
-    "cftc_copper":  {"name": "铜", "ak_symbol": "铜"},
-    "cftc_crude":   {"name": "原油", "ak_symbol": "原油"},
-    "cftc_natgas":  {"name": "天然气", "ak_symbol": "天然气"},
-    "cftc_corn":    {"name": "玉米", "ak_symbol": "玉米"},
-    "cftc_soy":     {"name": "大豆", "ak_symbol": "大豆"},
-    "cftc_wheat":   {"name": "小麦", "ak_symbol": "小麦"},
-    "cftc_sp500":   {"name": "S&P500", "ak_symbol": "S&P500"},
-    "cftc_nasdaq":  {"name": "NASDAQ", "ak_symbol": "NASDAQ"},
+    "cftc_gold":    {"name": "黄金", "col_prefix": "黄金"},
+    "cftc_silver":  {"name": "白银", "col_prefix": "白银"},
+    "cftc_crude":   {"name": "原油", "col_prefix": "纽约原油"},
+    "cftc_natgas":  {"name": "天然气", "col_prefix": "纽约天然气"},
+    "cftc_corn":    {"name": "玉米", "col_prefix": "玉米"},
+    "cftc_soy":     {"name": "大豆", "col_prefix": "大豆"},
+    "cftc_cotton":  {"name": "棉花", "col_prefix": "棉花"},
+    "cftc_sugar":   {"name": "原糖", "col_prefix": "原糖"},
 }
 
 DEFAULT_INDICATORS = list(CFTC_SYMBOLS.keys())
@@ -69,70 +67,45 @@ class CftcCollector(BaseCollector):
         records: list[dict[str, Any]] = []
         timestamp = as_of or datetime.utcnow().replace(microsecond=0).isoformat()
 
+        # akshare ≥ 1.18: 批量宽格式 API，一次获取全部品种
+        df = ak.macro_usa_cftc_merchant_goods_holding()
+        time.sleep(0.5)
+        if df is None or df.empty:
+            raise RuntimeError("macro_usa_cftc_merchant_goods_holding returned empty")
+
+        rows = df if full_history else df.tail(30)
+
         for ind in indicator_list:
             meta = CFTC_SYMBOLS.get(ind)
             if not meta:
                 self.logger.warning("cftc: unknown indicator %s", ind)
                 continue
-            ak_symbol = meta["ak_symbol"]
+            prefix = meta["col_prefix"]
+            long_col = f"{prefix}-多头仓位"
+            short_col = f"{prefix}-空头仓位"
+            net_col = f"{prefix}-净仓位"
 
-            # 非商业(投机)持仓
-            try:
-                df = ak.macro_usa_cftc_nc_report(symbol=ak_symbol)
-                time.sleep(0.5)
-                if df is not None and not df.empty:
-                    rows = df if full_history else df.tail(30)
-                    date_col = next((c for c in ("日期", "date") if c in df.columns), None)
-                    for _, row in rows.iterrows():
-                        row_ts = str(row[date_col]) if date_col else timestamp
-                        records.append({
-                            "source_type": "cftc",
-                            "symbol_or_indicator": ind,
-                            "timestamp": row_ts,
-                            "payload": {
-                                "indicator": ind,
-                                "name": meta["name"],
-                                "report_type": "non_commercial",
-                                "long": _to_float(row, "多头"),
-                                "short": _to_float(row, "空头"),
-                                "net": _to_float(row, "净多"),
-                                "long_chg": _to_float(row, "多头变化"),
-                                "short_chg": _to_float(row, "空头变化"),
-                                "mode": "live",
-                            },
-                        })
-                    self.logger.info("cftc nc fetched: %s rows=%d", ind, len(rows))
-            except Exception as exc:
-                self.logger.warning("cftc nc fetch failed for %s: %s", ind, exc)
+            if long_col not in df.columns:
+                self.logger.warning("cftc: column %s not found in API response", long_col)
+                continue
 
-            # 商业(套保)持仓
-            try:
-                df = ak.macro_usa_cftc_c_report(symbol=ak_symbol)
-                time.sleep(0.5)
-                if df is not None and not df.empty:
-                    rows = df if full_history else df.tail(30)
-                    date_col = next((c for c in ("日期", "date") if c in df.columns), None)
-                    for _, row in rows.iterrows():
-                        row_ts = str(row[date_col]) if date_col else timestamp
-                        records.append({
-                            "source_type": "cftc",
-                            "symbol_or_indicator": ind,
-                            "timestamp": row_ts,
-                            "payload": {
-                                "indicator": ind,
-                                "name": meta["name"],
-                                "report_type": "commercial",
-                                "long": _to_float(row, "多头"),
-                                "short": _to_float(row, "空头"),
-                                "net": _to_float(row, "净多"),
-                                "long_chg": _to_float(row, "多头变化"),
-                                "short_chg": _to_float(row, "空头变化"),
-                                "mode": "live",
-                            },
-                        })
-                    self.logger.info("cftc c fetched: %s rows=%d", ind, len(rows))
-            except Exception as exc:
-                self.logger.warning("cftc c fetch failed for %s: %s", ind, exc)
+            for _, row in rows.iterrows():
+                row_ts = str(row["日期"]) if "日期" in df.columns else timestamp
+                records.append({
+                    "source_type": "cftc",
+                    "symbol_or_indicator": ind,
+                    "timestamp": row_ts,
+                    "payload": {
+                        "indicator": ind,
+                        "name": meta["name"],
+                        "report_type": "commercial",
+                        "long": _to_float(row, long_col),
+                        "short": _to_float(row, short_col),
+                        "net": _to_float(row, net_col),
+                        "mode": "live",
+                    },
+                })
+            self.logger.info("cftc fetched: %s rows=%d", ind, len(rows))
 
         if not records:
             raise RuntimeError("all CFTC indicators fetch failed")

@@ -13,7 +13,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from src.utils.logger import get_logger
+from utils.logger import get_logger
 
 logger = get_logger("data.heartbeat")
 
@@ -115,20 +115,25 @@ class DeviceHealthReporter:
         mem_pct = psutil.virtual_memory().percent
         disk_pct = psutil.disk_usage("/").percent
 
-        # 进程状态 — 通过 ps aux 检测 JBT 进程（与 job_heartbeat 对齐）
-        import subprocess
+        # 进程状态 — 通过 psutil 检测 JBT 进程（容器内无 ps 命令）
         procs: list[dict] = []
         try:
-            ps_out = subprocess.run(
-                ["ps", "aux"], capture_output=True, text=True, timeout=10,
-            ).stdout
-            for label, keyword in [
+            _JBT_PROC_KEYWORDS = [
                 ("数据采集调度", "data_scheduler"),
-                ("数据 API",     "src.main"),
-            ]:
-                procs.append({"label": label, "ok": keyword in ps_out, "uptime": ""})
+                ("数据 API",     "uvicorn"),
+            ]
+            for label, keyword in _JBT_PROC_KEYWORDS:
+                found = False
+                for proc in psutil.process_iter(['pid', 'cmdline']):
+                    try:
+                        cmdline = ' '.join(proc.info.get('cmdline') or [])
+                        if keyword in cmdline:
+                            found = True
+                            break
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+                procs.append({"label": label, "ok": found, "uptime": ""})
         except Exception as e:
-            # P2-1 修复：记录异常详情
             logger.warning(f"Failed to check process status: {e}")
 
         # 网络延迟
@@ -159,8 +164,8 @@ class DeviceHealthReporter:
             return
 
         try:
-            from src.notify import card_templates as ct
-            from src.notify.feishu import FeishuSender
+            from notify import card_templates as ct
+            from notify.feishu import FeishuSender
 
             card = ct.device_health_card(
                 cpu_pct=cpu_pct,

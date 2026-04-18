@@ -47,6 +47,9 @@ sys.path.insert(0, str(PROJECT_ROOT))
 _env_file = PROJECT_ROOT.parent / ".env"
 if not _env_file.exists():
     _env_file = PROJECT_ROOT / ".env"  # fallback
+if not _env_file.exists():
+    # Docker 容器内：整个 jbt 挂载到 /data，.env 在 /data/services/data/.env
+    _env_file = Path("/data/services/data/.env")
 if _env_file.exists():
     for _line in _env_file.read_text().splitlines():
         _line = _line.strip()
@@ -54,9 +57,9 @@ if _env_file.exists():
             _k, _v = _line.split("=", 1)
             os.environ.setdefault(_k.strip(), _v.strip())
 
-from src.utils.config import get_config
-from src.utils.logger import get_logger
-from src.utils.trading_calendar import GlobalTradingCalendar, MarketSnapshot
+from utils.config import get_config
+from utils.logger import get_logger
+from utils.trading_calendar import GlobalTradingCalendar, MarketSnapshot
 
 # ─────────────────────────────────────────────
 # 全局状态
@@ -138,7 +141,7 @@ def get_factor_notifier() -> Any:
     class _FactorNotifier:
         def send_session_summary(self, session: str) -> bool:
             try:
-                from src.notify.dispatcher import (
+                from notify.dispatcher import (
                     DataEvent, NotifyType, get_dispatcher,
                 )
                 dispatcher = get_dispatcher()
@@ -162,7 +165,7 @@ def get_sla_tracker() -> Any:
     class _SlaTracker:
         def send_daily_sla_report(self) -> bool:
             try:
-                from src.notify.dispatcher import (
+                from notify.dispatcher import (
                     DataEvent, NotifyType, get_dispatcher,
                 )
                 import json
@@ -233,7 +236,7 @@ def _get_dispatcher() -> Any:
     global _dispatcher
     if _dispatcher is None:
         try:
-            from src.notify.dispatcher import get_dispatcher
+            from notify.dispatcher import get_dispatcher
             _dispatcher = get_dispatcher()
         except Exception as exc:
             logger.warning("NotifierDispatcher 初始化失败: %s", exc)
@@ -296,7 +299,7 @@ def _emit_market_transition_notifications() -> None:
         return
 
     try:
-        from src.notify.dispatcher import DataEvent, NotifyType
+        from notify.dispatcher import DataEvent, NotifyType
         _calendar.refresh()
         cur = _calendar.snapshot(datetime.now())
         transitions = _calendar.detect_transitions(_last_snapshot, cur)
@@ -435,7 +438,7 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
     # 发送启动通知（排除 24h 连续采集器）
     if d and not silent:
         try:
-            from src.notify.dispatcher import DataEvent, NotifyType
+            from notify.dispatcher import DataEvent, NotifyType
             d.dispatch(DataEvent(
                 event_code="collector_start",
                 title=f"{name} 启动",
@@ -490,7 +493,7 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
         # 发送失败告警（所有采集器都发）
         if d:
             try:
-                from src.notify.dispatcher import DataEvent, NotifyType
+                from notify.dispatcher import DataEvent, NotifyType
                 d.dispatch(DataEvent(
                     event_code="collector_failed",
                     title=f"{name} 采集失败",
@@ -667,7 +670,7 @@ def job_minute_kline(config: dict[str, Any]) -> None:
     if not _is_trading_session():
         return
 
-    from src.scheduler.pipeline import run_minute_pipeline
+    from scheduler.pipeline import run_minute_pipeline
     import time as _time
 
     symbols = _get_domestic_symbols()
@@ -702,7 +705,7 @@ def job_minute_kline(config: dict[str, Any]) -> None:
         d = _get_dispatcher()
         if d:
             try:
-                from src.notify.dispatcher import DataEvent, NotifyType
+                from notify.dispatcher import DataEvent, NotifyType
                 d.dispatch(DataEvent(
                     event_code="domestic_minute_consecutive_zero",
                     title=f"国内期货分钟K线连续 {consecutive} 轮 0产出",
@@ -743,7 +746,7 @@ def _domestic_minute_close_summary(session_name: str) -> None:
     d = _get_dispatcher()
     if d:
         try:
-            from src.notify.dispatcher import DataEvent, NotifyType
+            from notify.dispatcher import DataEvent, NotifyType
             d.dispatch(DataEvent(
                 event_code="domestic_minute_session_close",
                 title=f"{status_icon} 国内期货分钟K线{session_name}摘要 完整度 {completeness}%",
@@ -789,7 +792,7 @@ def job_daily_kline(config: dict[str, Any]) -> None:
     if not ok:
         logger.info("跳过日线K线: %s", reason)
         return
-    from src.scheduler.pipeline import run_daily_pipeline
+    from scheduler.pipeline import run_daily_pipeline
     symbols = _get_domestic_symbols()
     _safe_run("日线K线", run_daily_pipeline, symbols=symbols, config=config)
 
@@ -808,7 +811,7 @@ def job_overseas_kline(config: dict[str, Any]) -> None:
     if not ok:
         logger.info("跳过外盘日线(美/欧): %s (ref=%s)", reason, ref_now.strftime("%Y-%m-%d"))
         return
-    from src.scheduler.pipeline import run_overseas_daily_pipeline
+    from scheduler.pipeline import run_overseas_daily_pipeline
     # 过滤掉 LME 品种（由 job_overseas_kline_lme 处理）
     all_syms = _get_overseas_symbols()
     us_syms = [s for s in all_syms if not s.startswith("LME.")]
@@ -829,7 +832,7 @@ def job_overseas_kline_lme(config: dict[str, Any]) -> None:
     if not ok:
         logger.info("跳过LME金属日线: %s (ref=%s)", reason, ref_now.strftime("%Y-%m-%d"))
         return
-    from src.scheduler.pipeline import run_overseas_daily_pipeline
+    from scheduler.pipeline import run_overseas_daily_pipeline
     lme_syms = [s for s in _get_overseas_symbols() if s.startswith("LME.")]
     _safe_run("LME金属日线", run_overseas_daily_pipeline, symbols=lme_syms, config=config)
 
@@ -846,7 +849,7 @@ def job_overseas_minute_yf(config: dict[str, Any]) -> None:
     if not _is_overseas_trading_hours():
         return
 
-    from src.scheduler.pipeline import run_overseas_minute_yf_pipeline
+    from scheduler.pipeline import run_overseas_minute_yf_pipeline
     import time as _time
 
     t0 = _time.time()
@@ -880,7 +883,7 @@ def job_overseas_minute_yf(config: dict[str, Any]) -> None:
         d = _get_dispatcher()
         if d:
             try:
-                from src.notify.dispatcher import DataEvent, NotifyType
+                from notify.dispatcher import DataEvent, NotifyType
                 d.dispatch(DataEvent(
                     event_code="overseas_minute_consecutive_zero",
                     title=f"外盘分钟K线连续 {consecutive} 轮 0产出",
@@ -925,7 +928,7 @@ def job_overseas_minute_close_summary(config: dict[str, Any]) -> None:
     d = _get_dispatcher()
     if d:
         try:
-            from src.notify.dispatcher import DataEvent, NotifyType
+            from notify.dispatcher import DataEvent, NotifyType
             d.dispatch(DataEvent(
                 event_code="overseas_minute_session_close",
                 title=f"{status_icon} 外盘分钟K线收盘摘要 完整度 {completeness}%",
@@ -962,7 +965,7 @@ def job_stock_minute(config: dict[str, Any]) -> None:
         return
     if not _is_stock_trading_session():
         return
-    from src.scheduler.pipeline import run_stock_minute_pipeline
+    from scheduler.pipeline import run_stock_minute_pipeline
     _safe_run("A股分钟K线", run_stock_minute_pipeline, config=config)
 
 
@@ -1028,7 +1031,7 @@ def job_tushare_futures(config: dict[str, Any]) -> None:
     if not ok:
         logger.info("跳过Tushare期货五合一: %s", reason)
         return
-    from src.scheduler.pipeline import run_tushare_futures_pipeline
+    from scheduler.pipeline import run_tushare_futures_pipeline
     today = datetime.now().strftime("%Y%m%d")
     ts_codes = _build_tushare_ts_codes()
     for ts_code in ts_codes:
@@ -1044,7 +1047,7 @@ def job_tushare_futures(config: dict[str, Any]) -> None:
 
 def job_macro(config: dict[str, Any]) -> None:
     """宏观数据 — 每日 09:00。"""
-    from src.scheduler.pipeline import run_macro_pipeline
+    from scheduler.pipeline import run_macro_pipeline
     _safe_run("宏观数据", run_macro_pipeline, config=config)
 
 
@@ -1055,25 +1058,25 @@ def job_position(config: dict[str, Any]) -> None:
     if not ok:
         logger.info("跳过持仓/仓单: %s", reason)
         return
-    from src.scheduler.pipeline import run_position_pipeline
+    from scheduler.pipeline import run_position_pipeline
     _safe_run("持仓仓单日报", run_position_pipeline, config=config)
 
 
 def job_news_api(config: dict[str, Any]) -> None:
     """新闻API — 每1分钟。"""
-    from src.scheduler.pipeline import run_news_api_pipeline
+    from scheduler.pipeline import run_news_api_pipeline
     _safe_run("新闻API", run_news_api_pipeline, config=config)
 
 
 def job_rss(config: dict[str, Any]) -> None:
     """RSS聚合 — 每10分钟。"""
-    from src.scheduler.pipeline import run_rss_pipeline
+    from scheduler.pipeline import run_rss_pipeline
     _safe_run("RSS聚合", run_rss_pipeline, config=config)
 
 
 def job_volatility(config: dict[str, Any]) -> None:
     """波动率 — 每日 17:00。"""
-    from src.scheduler.pipeline import run_volatility_pipeline
+    from scheduler.pipeline import run_volatility_pipeline
     _safe_run("波动率指数", run_volatility_pipeline, config=config)
 
 
@@ -1121,14 +1124,20 @@ def job_symbol_features(config: dict[str, Any]) -> None:
 
 def job_sentiment(config: dict[str, Any]) -> None:
     """情绪指数 — 每5分钟。"""
-    from src.scheduler.pipeline import run_sentiment_pipeline
+    from scheduler.pipeline import run_sentiment_pipeline
     _safe_run("情绪指数", run_sentiment_pipeline, config=config)
 
 
 def job_shipping(config: dict[str, Any]) -> None:
     """海运物流 — 每日 09:00。"""
-    from src.scheduler.pipeline import run_shipping_pipeline
+    from scheduler.pipeline import run_shipping_pipeline
     _safe_run("海运物流", run_shipping_pipeline, config=config)
+
+
+def job_weather(config: dict[str, Any]) -> None:
+    """天气数据 — 每日 06:30 + 18:30（Open-Meteo 免费免Key）。"""
+    from scheduler.pipeline import run_weather_pipeline
+    _safe_run("天气数据", run_weather_pipeline, config=config)
 
 
 def job_forex(config: dict[str, Any]) -> None:
@@ -1138,13 +1147,13 @@ def job_forex(config: dict[str, Any]) -> None:
     if not ok:
         logger.info("跳过外汇日线: %s", reason)
         return
-    from src.scheduler.pipeline import run_forex_pipeline
+    from scheduler.pipeline import run_forex_pipeline
     _safe_run("外汇日线", run_forex_pipeline, config=config)
 
 
 def job_cftc(config: dict[str, Any]) -> None:
     """CFTC持仓报告 — 每周六 10:00 (CFTC 周五发布)。"""
-    from src.scheduler.pipeline import run_cftc_pipeline
+    from scheduler.pipeline import run_cftc_pipeline
     _safe_run("CFTC持仓报告", run_cftc_pipeline, config=config)
 
 
@@ -1155,7 +1164,7 @@ def job_options(config: dict[str, Any]) -> None:
     if not ok:
         logger.info("跳过期权行情: %s", reason)
         return
-    from src.scheduler.pipeline import run_options_pipeline
+    from scheduler.pipeline import run_options_pipeline
     today = datetime.now().strftime("%Y%m%d")
     _safe_run("期权行情", run_options_pipeline, exchanges=["sse", "szse", "cffex"], trade_date=today, config=config)
 
@@ -1188,10 +1197,10 @@ def job_heartbeat(config: dict[str, Any]) -> None:
         import importlib.util
         import subprocess as _sp
 
-        # ── JBT 进程定义（通过 ps 检测实际进程）──────────────────────
+        # ── JBT 进程定义（通过 psutil 检测实际进程，容器内无 ps 命令）──
         _JBT_PROCS = [
             ("数据采集调度", "data_scheduler"),
-            ("数据 API",     "src.main"),
+            ("数据 API",     "uvicorn"),
         ]
 
         # ── 加载 health_check 模块 ────────────────────────────────────
@@ -1209,18 +1218,20 @@ def job_heartbeat(config: dict[str, Any]) -> None:
         mini_mem = float(mem.get("used_percent", 0.0))
         mini_disk = float(disks[0]["used_percent"]) if disks else 0.0
 
-        # ── 通过 ps 检测 JBT 进程 ─────────────────────────────────────
-        try:
-            ps_out = _sp.run(
-                ["ps", "aux"], capture_output=True, text=True, timeout=10,
-            ).stdout
-        except Exception:
-            ps_out = ""
-
-        mini_processes = [
-            {"label": label, "ok": keyword in ps_out}
-            for label, keyword in _JBT_PROCS
-        ]
+        # ── 通过 psutil 检测 JBT 进程（容器内无 ps 命令）──────────────
+        import psutil as _psutil
+        mini_processes = []
+        for label, keyword in _JBT_PROCS:
+            found = False
+            for proc in _psutil.process_iter(['pid', 'cmdline']):
+                try:
+                    cmdline = ' '.join(proc.info.get('cmdline') or [])
+                    if keyword in cmdline:
+                        found = True
+                        break
+                except (_psutil.NoSuchProcess, _psutil.AccessDenied):
+                    pass
+            mini_processes.append({"label": label, "ok": found})
 
         # ── 判断是否有异常 ─────────────────────────────────────────────
         has_issues = any(not s["ok"] and not s.get("skipped") for s in freshness)
@@ -1231,7 +1242,7 @@ def job_heartbeat(config: dict[str, Any]) -> None:
         d = _get_dispatcher()
         if d:
             try:
-                from src.notify import card_templates as ct
+                from notify import card_templates as ct
 
                 card = ct.device_health_card(
                     cpu_pct=mini_cpu,
@@ -1241,7 +1252,7 @@ def job_heartbeat(config: dict[str, Any]) -> None:
                     sources=freshness,
                     has_issues=has_issues,
                 )
-                from src.notify.feishu import FeishuSender
+                from notify.feishu import FeishuSender
                 sender = FeishuSender()
                 webhook = (
                     _os.environ.get("FEISHU_ALERT_WEBHOOK_URL")
@@ -1320,7 +1331,7 @@ def job_preread_daily(config: dict[str, Any]) -> None:
         logger.info("▶ 开始执行: 夜间预读投喂")
         import os
         from pathlib import Path
-        from src.scheduler.preread_generator import PrereadGenerator
+        from scheduler.preread_generator import PrereadGenerator
 
         storage_root = os.environ.get(
             "DATA_STORAGE_ROOT",
@@ -1333,7 +1344,7 @@ def job_preread_daily(config: dict[str, Any]) -> None:
         d = _get_dispatcher()
         if d:
             try:
-                from src.notify.dispatcher import DataEvent, NotifyType
+                from notify.dispatcher import DataEvent, NotifyType
                 if result["ready_flag"]:
                     # 成功通知
                     d.dispatch(DataEvent(
@@ -1387,7 +1398,7 @@ def job_preread_daily(config: dict[str, Any]) -> None:
         d = _get_dispatcher()
         if d:
             try:
-                from src.notify.dispatcher import DataEvent, NotifyType
+                from notify.dispatcher import DataEvent, NotifyType
                 d.dispatch(DataEvent(
                     event_code="preread_fail",
                     notify_type=NotifyType.PREREAD_FAIL,
@@ -1437,10 +1448,10 @@ def _run_researcher_segment(segment: str) -> None:
     try:
         logger.info("▶ 开始执行: 研究员-%s", segment)
         import asyncio
-        from src.researcher.scheduler import ResearcherScheduler
-        from src.researcher.notify.feishu_sender import ResearcherFeishuSender
-        from src.researcher.notify.email_sender import ResearcherEmailSender
-        from src.researcher.notify.card_templates import build_report_card, build_failure_card
+        from researcher.scheduler import ResearcherScheduler
+        from researcher.notify.feishu_sender import ResearcherFeishuSender
+        from researcher.notify.email_sender import ResearcherEmailSender
+        from researcher.notify.card_templates import build_report_card, build_failure_card
 
         scheduler = ResearcherScheduler()
         result = asyncio.run(scheduler.execute_segment(segment))
@@ -1451,7 +1462,7 @@ def _run_researcher_segment(segment: str) -> None:
 
         if result["success"]:
             # 成功：发送报告卡片
-            from src.researcher.reporter import Reporter
+            from researcher.reporter import Reporter
             reporter = Reporter()
             latest_report = reporter.get_latest_report()
             if latest_report:
@@ -1474,7 +1485,7 @@ def job_daily_email_report(config: dict[str, Any]) -> None:
     try:
         logger.info("▶ 开始执行: 邮件日报")
         import importlib.util
-        from src.notify.email_notify import EmailSender, build_daily_report_html
+        from notify.email_notify import EmailSender, build_daily_report_html
 
         # 加载 health_check 获取设备指标
         _hc_path = str(PROJECT_ROOT / "health" / "health_check.py")
@@ -1492,19 +1503,20 @@ def job_daily_email_report(config: dict[str, Any]) -> None:
              "age_str": s.get("age_str", "")} for s in freshness
         ]
 
-        # 进程状态 — 通过 ps 检测实际运行的 JBT 进程
-        import subprocess as _sp
-        try:
-            ps_out = _sp.run(["ps", "aux"], capture_output=True, text=True, timeout=10).stdout
-        except Exception:
-            ps_out = ""
-        procs = [
-            {"label": label, "ok": keyword in ps_out, "uptime": ""}
-            for label, keyword in [
-                ("数据调度", "data_scheduler"),
-                ("数据 API", "src.main"),
-            ]
-        ]
+        # 进程状态 — 通过 psutil 检测实际运行的 JBT 进程（容器内无 ps 命令）
+        import psutil as _psutil
+        procs = []
+        for label, keyword in [("数据调度", "data_scheduler"), ("数据 API", "uvicorn")]:
+            found = False
+            for proc in _psutil.process_iter(['pid', 'cmdline']):
+                try:
+                    cmdline = ' '.join(proc.info.get('cmdline') or [])
+                    if keyword in cmdline:
+                        found = True
+                        break
+                except (_psutil.NoSuchProcess, _psutil.AccessDenied):
+                    pass
+            procs.append({"label": label, "ok": found, "uptime": ""})
 
         ok_count = sum(1 for s in freshness if s.get("ok"))
         total = len(freshness)
@@ -1540,7 +1552,7 @@ def job_news_push_batch(config: dict[str, Any]) -> None:
     """新闻批量推送 — 每30分钟，汇总重大新闻推送飞书。"""
     try:
         logger.info("▶ 开始执行: 新闻批量推送")
-        from src.notify.news_pusher import NewsPusher
+        from notify.news_pusher import NewsPusher
         pusher = NewsPusher()
         sync_stats = pusher.sync_from_storage(limit_per_source=NEWS_STORAGE_SYNC_LIMIT_PER_SOURCE)
         stats = pusher.flush()
@@ -1723,6 +1735,15 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
     scheduler.add_job(
         job_options, CronTrigger(hour=15, minute=30, day_of_week="mon-fri"),
         args=[config], id="options_daily", name="期权行情",
+    )
+    # 天气数据: 06:30 + 18:30（Open-Meteo 免费免Key，每日两次更新）
+    scheduler.add_job(
+        job_weather, CronTrigger(hour=6, minute=30),
+        args=[config], id="weather_morning", name="天气数据(晨)",
+    )
+    scheduler.add_job(
+        job_weather, CronTrigger(hour=18, minute=30),
+        args=[config], id="weather_evening", name="天气数据(晚)",
     )
     # ── 采集监控通知 ──
     # [DEPRECATED] 每日采集汇总: 23:00 — 已被 2h 心跳卡片替代
