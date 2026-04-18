@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from llm.openai_client import OpenAICompatibleClient
+from ..llm.openai_client import OpenAICompatibleClient
 
 logger = logging.getLogger(__name__)
 
@@ -394,6 +394,29 @@ class ThreeTierOptimizer:
                             params[k] = float(new_value)
                             logger.info(f"  - {factor_name}.{k}: {params[k]}")
                             break
+
+        # P1-1 修复：同步更新 market_filter conditions 中的数值参数
+        market_filter = new_strategy.get("market_filter", {})
+        conditions = market_filter.get("conditions", [])
+        if conditions and changes:
+            import re as _re
+            updated_conditions = []
+            for cond in conditions:
+                new_cond = cond
+                for key, value_info in changes.items():
+                    if isinstance(value_info, dict) and "to" in value_info:
+                        new_val = value_info["to"]
+                    else:
+                        new_val = value_info
+                    # 匹配 "key > 0.006" 或 "key < 1.5" 等模式
+                    pattern = _re.compile(
+                        rf"({_re.escape(key)}\s*[><=!]+\s*)(\d+\.?\d*)", _re.IGNORECASE
+                    )
+                    new_cond = pattern.sub(rf"\g<1>{float(new_val)}", new_cond)
+                updated_conditions.append(new_cond)
+            if updated_conditions != conditions:
+                market_filter["conditions"] = updated_conditions
+                logger.info("  - market_filter conditions 已同步更新: %s", updated_conditions)
 
         self.total_cost += self.COST_PER_CALL[self.coder_model]
 

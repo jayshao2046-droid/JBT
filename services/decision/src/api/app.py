@@ -128,7 +128,7 @@ def create_app() -> FastAPI:
     app.include_router(llm_router)
     # Decision Web routes
     app.include_router(decision_web_router)
-    app.include_router(factor_router)
+    app.include_router(factor_router, prefix="/api/v1")
 
     return app
 
