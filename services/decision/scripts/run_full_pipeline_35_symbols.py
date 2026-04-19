@@ -260,6 +260,13 @@ class PipelineProgress:
         self.data["current_symbol"] = None
         self.save()
 
+    def reset_symbol(self, symbol: str):
+        if symbol in self.data["completed_symbols"]:
+            self.data["completed_symbols"].remove(symbol)
+        if self.data.get("current_symbol") == symbol:
+            self.data["current_symbol"] = None
+        self.save()
+
 
 async def process_one_strategy(
     symbol: str,
@@ -275,6 +282,8 @@ async def process_one_strategy(
     end_date: str,
     idx: int,
     total: int,
+    run_tqsdk: bool = True,
+    previous_params: dict | None = None,
 ) -> dict[str, Any]:
     """处理单个策略的完整流程"""
 
@@ -297,6 +306,29 @@ async def process_one_strategy(
         with open(yaml_path, "r", encoding="utf-8") as f:
             strategy = yaml.safe_load(f)
 
+        # 自动补全夜盘品种必需字段 risk.force_close_night
+        _night_commodities = {
+            "rb", "hc", "i", "j", "jm", "cu", "al", "zn", "ni", "ss",
+            "au", "ag", "sc", "fu", "bu", "ru", "sp", "eb", "pg",
+            "p", "y", "m", "a", "c", "cs", "l", "v", "pp", "ma", "ta", "eg",
+        }
+        _symbols = strategy.get("symbols", [])
+        _is_night = False
+        for _sym in _symbols:
+            _commodity = _sym.split(".")[-1] if "." in _sym else _sym
+            _commodity = "".join([ch for ch in _commodity if ch.isalpha()]).lower()
+            if _commodity in _night_commodities:
+                _is_night = True
+                break
+        if _is_night:
+            risk_section = strategy.setdefault("risk", {})
+            if not risk_section.get("force_close_night"):
+                risk_section["force_close_night"] = "22:55"
+                # 写回 YAML 文件
+                with open(yaml_path, "w", encoding="utf-8") as f:
+                    yaml.dump(strategy, f, allow_unicode=True, default_flow_style=False)
+                logger.info(f"  ✓ 自动补全 risk.force_close_night=22:55（夜盘品种）")
+
         # 预检: 基本字段校验
         preflight_errors = _preflight_check(strategy, strategy_name)
         if preflight_errors:
@@ -309,68 +341,147 @@ async def process_one_strategy(
             )
             return result
 
-        # 1. 调优（带重试）
-        logger.info(f"  [1/5] 开始调优...")
-        opt_result = None
-        for attempt in range(MAX_RETRIES):
+        # 1. 调优
+        if previous_params:
+            logger.info(f"  [1/5] Warm-start 调优（基于上轮最优参数）...")
+            opt_result = await optimizer.reoptimize_recycled(
+                strategy, start_date, end_date, previous_params,
+            )
+        else:
+            logger.info(f"  [1/5] 首轮调优...")
             opt_result = await optimizer.optimize(strategy, start_date, end_date)
-            if "error" not in opt_result:
-                break
-            logger.warning(f"  调优第 {attempt + 1} 次失败: {opt_result.get('error')}")
+
+        # 1a. 零交易诊断 → 放宽条件 → 重试（仅首轮，最多 1 次）
+        if opt_result.get("error") == "zero_trades" and not previous_params:
+            diagnosis = opt_result["zero_trades_diagnosis"]
+            logger.warning(f"  ⚠ 零交易诊断: {diagnosis['diagnosis_text']}")
+            relaxations = diagnosis.get("suggested_relaxations", {})
+            if relaxations:
+                critic_json = {"solution": {"changes": relaxations}}
+                strategy = YAMLSignalExecutor._apply_critic_suggestions(
+                    strategy, critic_json,
+                )
+                import yaml as _yaml_relax
+                with open(yaml_path, "w", encoding="utf-8") as f:
+                    _yaml_relax.dump(strategy, f, allow_unicode=True, default_flow_style=False)
+                logger.info(f"  🔧 已放宽条件，重试调优...")
+                opt_result = await optimizer.optimize(strategy, start_date, end_date)
+
+        # 1b. 其他错误重试（非零交易类）
+        if "error" in opt_result and opt_result.get("error") != "zero_trades":
+            for attempt in range(1, MAX_RETRIES):
+                opt_result = await optimizer.optimize(strategy, start_date, end_date)
+                if "error" not in opt_result:
+                    break
+                logger.warning(f"  调优第 {attempt + 1} 次失败: {opt_result.get('error')}")
+
         result["optimization"] = opt_result
         evidence_mgr.save_optimization_report(symbol, strategy_name, opt_result)
 
-        # 1b. 将 Optuna 最优参数写回 YAML（P0 修复：防止 TqSdk 仍用原始参数）
+        # 1c. 调优完全失败 → 早退（不浪费后续回测 / TqSdk / 评分）
+        if "error" in opt_result:
+            fail_msg = f"调优失败: {opt_result.get('error')}"
+            diag = opt_result.get("zero_trades_diagnosis")
+            if diag:
+                fail_msg += f" | {diag['diagnosis_text']}"
+            result["status"] = "failed"
+            result["error"] = fail_msg
+            evidence_mgr.save_failure_report(
+                symbol, strategy_name, "optimization", fail_msg,
+                run_id=result["run_id"],
+            )
+            logger.warning(f"  ✗ {fail_msg}")
+            return result
+
+        # 1d. 将 Optuna 最优参数写回 YAML（保证 TqSdk / Step2 使用已调优参数）
         best_params = opt_result.get("best_params") if opt_result else None
         if best_params:
             try:
                 import yaml as _yaml
                 with open(yaml_path, "r", encoding="utf-8") as f:
                     strategy_data = _yaml.safe_load(f)
-                if "parameters" in strategy_data:
+                updated_keys: list[str] = []
+                # 写回 factors[i].params（LLM 生成 YAML 的标准存储位置）
+                for factor in strategy_data.get("factors", []):
                     for k, v in best_params.items():
-                        if k in strategy_data["parameters"]:
-                            strategy_data["parameters"][k] = v
-                    with open(yaml_path, "w", encoding="utf-8") as f:
-                        _yaml.dump(strategy_data, f, allow_unicode=True, default_flow_style=False)
-                    logger.info(f"  ✓ Optuna 最优参数已写回 YAML: {list(best_params.keys())}")
-                    # 重新加载 strategy 以使用新参数
-                    strategy = strategy_data
+                        if k in factor.get("params", {}):
+                            factor["params"][k] = v
+                            updated_keys.append(k)
+                # 写回顶层 stop_loss / take_profit 的 atr_multiplier
+                for section, mult_key in (("stop_loss", "stop_atr_mult"), ("take_profit", "take_atr_mult")):
+                    if mult_key in best_params and isinstance(strategy_data.get(section), dict):
+                        strategy_data[section]["atr_multiplier"] = best_params[mult_key]
+                        updated_keys.append(mult_key)
+                # 写回顶层 position_fraction
+                if "position_fraction" in best_params:
+                    strategy_data["position_fraction"] = best_params["position_fraction"]
+                    updated_keys.append("position_fraction")
+                with open(yaml_path, "w", encoding="utf-8") as f:
+                    _yaml.dump(strategy_data, f, allow_unicode=True, default_flow_style=False)
+                logger.info(f"  ✓ Optuna 最优参数已写回 YAML: {updated_keys}")
+                strategy = strategy_data  # 同步内存对象
             except Exception as e:
                 logger.warning(f"  ⚠ 参数写回 YAML 失败: {e}")
 
-        # 2. 本地回测
-        logger.info(f"  [2/5] 本地回测...")
-        local_result = await executor.execute(strategy, start_date, end_date)
+        # 2. 本地回测（复用 Optuna 已验证的代码，避免重复调用 LLM）
+        generated_code = opt_result.get("generated_code")
+        logger.info(f"  [2/5] 本地回测...{'（复用 Optuna 代码）' if generated_code else ''}")
+        local_result = await executor.execute(strategy, start_date, end_date, params_override=best_params, cached_code=generated_code)
         result["local_backtest"] = local_result.to_dict()
         evidence_mgr.save_local_backtest_report(symbol, strategy_name, local_result.to_dict())
 
-        # 2b. XGBoost 信号过滤（收集特征并过滤低质量信号）
+        # 2b. XGBoost 信号过滤训练（用本轮交易记录学习哪些特征组合更可能盈利）
         try:
             from src.research.xgboost_signal_filter import XGBoostSignalFilter
-            xgb_filter = XGBoostSignalFilter()
-            trade_features = local_result.to_dict().get("trade_features", [])
-            if trade_features and len(trade_features) >= 20:
-                xgb_filter.train(trade_features)
-                filtered_count = xgb_filter.filter_signals(trade_features)
-                result["xgboost_filter"] = {
-                    "total_trades": len(trade_features),
-                    "filtered": filtered_count,
-                    "pass_rate": f"{(len(trade_features) - filtered_count) / len(trade_features) * 100:.1f}%",
-                }
-                logger.info(f"  XGBoost 过滤: {filtered_count}/{len(trade_features)} 笔被过滤")
+            xgb_filter = XGBoostSignalFilter(symbol=symbol, strategy_name=strategy_name)
+            # 从 result.trades 获取原始交易记录（含开仓特征快照），而非 to_dict()
+            raw_trades = local_result.trades
+            if raw_trades:
+                X, y = xgb_filter.collect_trade_features(raw_trades)
+                if len(X) >= xgb_filter.min_samples:
+                    train_report = xgb_filter.train(X, y)
+                    result["xgboost_filter"] = {
+                        "status": "trained",
+                        "n_samples": int(len(X)),
+                        "train_accuracy": train_report.get("train_accuracy"),
+                        "n_positive": train_report.get("n_positive"),
+                        "n_negative": train_report.get("n_negative"),
+                    }
+                    logger.info(
+                        f"  XGBoost 训练完成: {len(X)} 样本, "
+                        f"准确率 {train_report.get('train_accuracy', 0):.2%}"
+                    )
+                else:
+                    result["xgboost_filter"] = {
+                        "status": "skipped",
+                        "reason": f"样本不足 ({len(X)} < {xgb_filter.min_samples})",
+                    }
             else:
-                result["xgboost_filter"] = {"status": "skipped", "reason": "交易特征不足"}
+                result["xgboost_filter"] = {"status": "skipped", "reason": "无交易记录"}
         except Exception as e:
             logger.warning(f"  XGBoost 过滤跳过: {e}")
             result["xgboost_filter"] = {"status": "error", "reason": str(e)}
 
-        # 3. TqSdk 回测
-        logger.info(f"  [3/5] TqSdk 回测...")
-        task_id = await tqsdk_client.submit_backtest(yaml_path, start_date, end_date)
-        tqsdk_result = await tqsdk_client.poll_result(task_id)
-        result["tqsdk_backtest"] = tqsdk_result
-        evidence_mgr.save_tqsdk_backtest_report(symbol, strategy_name, tqsdk_result)
+        # 3. TqSdk 回测（可选）— 使用当前日期往前推 2 年作为回测区间
+        #    TqSdk 失败不应阻断整个策略流程（评分 / 归档仍可基于本地回测继续）
+        if run_tqsdk:
+            from datetime import timedelta
+            tqsdk_end = datetime.now().strftime("%Y-%m-%d")
+            tqsdk_start = (datetime.now() - timedelta(days=730)).strftime("%Y-%m-%d")
+            logger.info(f"  [3/5] TqSdk 回测（{tqsdk_start} ~ {tqsdk_end}）...")
+            try:
+                task_id = await tqsdk_client.submit_backtest(yaml_path, tqsdk_start, tqsdk_end)
+                tqsdk_result = await tqsdk_client.poll_result(task_id)
+                result["tqsdk_backtest"] = tqsdk_result
+                evidence_mgr.save_tqsdk_backtest_report(symbol, strategy_name, tqsdk_result)
+            except Exception as e:
+                logger.warning(f"  ⚠ TqSdk 回测失败（非阻断）: {e}")
+                tqsdk_result = {"status": "failed", "error": str(e)}
+                result["tqsdk_backtest"] = tqsdk_result
+        else:
+            logger.info(f"  [3/5] TqSdk 回测跳过（仅最终轮执行）")
+            tqsdk_result = {"status": "skipped", "reason": "final_round_only"}
+            result["tqsdk_backtest"] = tqsdk_result
 
         # 4. 评分
         logger.info(f"  [4/5] 策略评分...")
@@ -449,6 +560,7 @@ async def generate_strategies_for_symbol(
     data_url: str,
     ollama_url: str,
     evidence_mgr: EvidenceManager,
+    max_generate_strategies: int = 0,
 ) -> list[Path]:
     """为单个品种生成策略矩阵
 
@@ -475,9 +587,17 @@ async def generate_strategies_for_symbol(
 
     # CZCE 品种列表
     CZCE_COMMODITIES = {"cf", "sr", "ma", "ta", "ap", "cy", "fg", "oi", "rm", "rs", "sf", "sm", "wh", "zc", "eg"}
+    # SHFE 品种列表
+    SHFE_COMMODITIES = {"rb", "hc", "cu", "al", "zn", "ni", "ss", "au", "ag", "sc", "fu", "bu", "ru", "sp", "sn", "pb"}
 
     # 确定交易所前缀
-    exchange_prefix = "CZCE" if symbol.lower() in CZCE_COMMODITIES else "DCE"
+    sym_lower = symbol.lower()
+    if sym_lower in CZCE_COMMODITIES:
+        exchange_prefix = "CZCE"
+    elif sym_lower in SHFE_COMMODITIES:
+        exchange_prefix = "SHFE"
+    else:
+        exchange_prefix = "DCE"
     symbol_with_exchange = f"{exchange_prefix}.{symbol.upper() if exchange_prefix == 'CZCE' else symbol}"
 
     # 1. 品种特征分析
@@ -504,6 +624,9 @@ async def generate_strategies_for_symbol(
 
     yaml_files = []
     for template in applicable_templates:
+        if max_generate_strategies > 0 and len(yaml_files) >= max_generate_strategies:
+            logger.info(f"  达到生成上限: {max_generate_strategies}，停止继续生成")
+            break
         strategy_name = f"{symbol}_{template['name_suffix']}"
         yaml_path = output_dir / f"{strategy_name}.yaml"
 
@@ -528,6 +651,8 @@ async def generate_strategies_for_symbol(
 - exit_logic: 做多出场条件
 - short_entry_logic: 做空入场条件
 - short_exit_logic: 做空出场条件
+- risk_management: 风险管理方案（止损止盈规则）
+- recommended_factors: 推荐使用的技术指标列表
 """
 
             # 调用 LLM 设计策略
@@ -623,6 +748,7 @@ async def process_one_symbol(
         data_url=args.data_url,
         ollama_url=args.ollama_url,
         evidence_mgr=evidence_mgr,
+        max_generate_strategies=max(0, int(getattr(args, "max_strategies", 0))),
     )
 
     if not yaml_files:
@@ -635,12 +761,23 @@ async def process_one_symbol(
             "results": [],
         }
 
+    if args.max_strategies and args.max_strategies > 0:
+        yaml_files = yaml_files[: args.max_strategies]
+
+    iterations = max(1, int(getattr(args, "strategy_iterations", 1)))
+    if iterations > 1 and yaml_files:
+        yaml_files = [yaml_files[0]] * iterations
+
     progress.start_symbol(symbol, len(yaml_files))
 
     # 逐个处理策略
     results = []
+    previous_best_params = None
     for idx, yaml_path in enumerate(yaml_files, 1):
-        template = STRATEGY_TEMPLATES[idx - 1]
+        template = STRATEGY_TEMPLATES[0] if iterations > 1 else STRATEGY_TEMPLATES[idx - 1]
+        run_tqsdk = True
+        if getattr(args, "tqsdk_mode", "every-round") == "final-only":
+            run_tqsdk = idx == len(yaml_files)
         result = await process_one_strategy(
             symbol=symbol,
             template=template,
@@ -655,7 +792,13 @@ async def process_one_symbol(
             end_date=args.end,
             idx=idx,
             total=len(yaml_files),
+            run_tqsdk=run_tqsdk,
+            previous_params=previous_best_params if iterations > 1 else None,
         )
+        # 追踪最优参数供下一轮 warm-start
+        opt = result.get("optimization", {})
+        if opt and opt.get("best_params"):
+            previous_best_params = opt["best_params"]
         results.append(result)
         progress.complete_strategy()
 
@@ -702,6 +845,10 @@ async def main():
     parser.add_argument("--end", default="2024-12-31")
     parser.add_argument("--n-trials", type=int, default=100)
     parser.add_argument("--symbols", nargs="+", help="指定品种（默认全部 35 个）")
+    parser.add_argument("--max-strategies", type=int, default=0, help="每个品种最多处理的策略数（0=不限制）")
+    parser.add_argument("--strategy-iterations", type=int, default=1, help="单策略重复调优轮数（>1 时仅使用首个策略）")
+    parser.add_argument("--tqsdk-mode", choices=["every-round", "final-only"], default="every-round", help="TqSdk 执行时机")
+    parser.add_argument("--force-rerun-symbols", nargs="*", default=[], help="强制重跑的品种（会清除进度完成标记）")
     args = parser.parse_args()
 
     symbols = args.symbols or SYMBOLS_35
@@ -715,6 +862,10 @@ async def main():
     logger.info("=" * 80)
 
     progress = PipelineProgress(PROGRESS_FILE)
+
+    force_symbols = set(args.force_rerun_symbols or [])
+    for symbol in force_symbols:
+        progress.reset_symbol(symbol)
 
     all_results = []
     for symbol in symbols:
@@ -736,7 +887,10 @@ async def main():
     logger.info(f"总策略数: {total_strategies}")
     logger.info(f"成功: {total_completed}")
     logger.info(f"失败: {total_failed}")
-    logger.info(f"成功率: {total_completed / total_strategies * 100:.1f}%")
+    if total_strategies > 0:
+        logger.info(f"成功率: {total_completed / total_strategies * 100:.1f}%")
+    else:
+        logger.info("成功率: N/A（无策略生成）")
 
     logger.info("\n🎉 35 品种流水线全部完成！")
 

@@ -374,10 +374,12 @@ class SignalBacktestResult:
     equity_curve: list = field(default_factory=list)
     generated_code: str = ""
     error: str = ""
+    trades: list = field(default_factory=list)  # 原始交易记录（含 features），供 XGBoost 训练
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d.pop("equity_curve", None)  # 不序列化 equity_curve（太大）
+        d.pop("trades", None)        # 不序列化 trades（太大），通过 .trades 直接访问
         return d
 
 
@@ -553,6 +555,7 @@ class YAMLSignalExecutor:
         start_date: str,
         end_date: str,
         params_override: Optional[dict] = None,
+        cached_code: Optional[str] = None,
     ) -> SignalBacktestResult:
         """执行 YAML 策略回测（含 qwen3 代码生成）。
 
@@ -561,6 +564,7 @@ class YAMLSignalExecutor:
             start_date: 回测起始日期 YYYY-MM-DD
             end_date: 回测结束日期 YYYY-MM-DD
             params_override: 覆盖 YAML 中的因子参数（用于优化 trial）
+            cached_code: Optuna 已验证的代码（若提供则跳过 LLM 生成）
         """
         strategy_id = strategy.get("name", "unknown")
         symbol = self._extract_symbol(strategy)
@@ -574,9 +578,13 @@ class YAMLSignalExecutor:
         if len(bars) < 50:
             return self._fail(strategy_id, f"数据不足: {symbol} 仅 {len(bars)} 根 K 线")
 
-        code, error = await self._generate_signal_code(strategy, params_override)
-        if error:
-            return self._fail(strategy_id, error)
+        if cached_code:
+            logger.info("使用 Optuna 缓存代码（跳过 LLM 生成）: %s", strategy_id)
+            code = cached_code
+        else:
+            code, error = await self._generate_signal_code(strategy, params_override)
+            if error:
+                return self._fail(strategy_id, error)
 
         # 信号可行性校验：先跑一次全量数据，信号全 0 则重新生成
         feasible, signals_preview = self._validate_signal_feasibility(
@@ -713,12 +721,10 @@ class YAMLSignalExecutor:
 
             # qwen3 审核
             audit_ok, audit_reason = await self._audit_code(strategy, code)
-            if audit_ok:
-                logger.info("策略 %s 代码生成通过审核（attempt %d）", strategy.get("name"), attempt + 1)
-                return code, ""
-
-            if attempt < self.MAX_RETRY:
-                logger.warning("qwen3 审核拒绝 attempt %d: %s，重试...", attempt + 1, audit_reason)
+            if not audit_ok:
+                if attempt < self.MAX_RETRY:
+                    logger.warning("qwen3 审核拒绝 attempt %d: %s，重试...", attempt + 1, audit_reason)
+                    feedback = audit_reason
                 feedback = audit_reason
                 continue
 
@@ -855,7 +861,14 @@ def compute_signals(bars: list, params: dict) -> list:
     - Short entry when: {short_cond}
     - confirm_bars={confirm_bars}: signal must be consistent for N bars before confirming
     - Use ONLY the pre-built ta_* functions + Python stdlib + math module (NO pandas, NO numpy, NO ta-lib)
+    - DO NOT use any import statements! math and all ta_* functions are pre-injected into scope.
     - Return exactly len(bars) integers
+
+    NUMERIC PRECISION RULE (数值精度 — 极其重要!):
+    - market_filter conditions 中的数值必须与 YAML 完全一致，禁止自行换算或四舍五入
+    - 例如 YAML 写 'atr > 0.0006 * close'，代码必须写 atr_i > 0.0006 * close_i
+    - 绝对禁止将 0.0006 写成 0.006 或 0.06 — 这会导致零交易!
+    - 所有阈值直接从 market_filter conditions 字符串中提取，不做任何数量级变换
 
     OPTIMIZATION GUIDANCE (if feedback provided):
     - If trade count is too low: consider relaxing filter thresholds (ATR/ADX/volume_ratio)
@@ -941,12 +954,22 @@ Short condition: {signal.get("short_condition", "")}
 Generated code:
 {code[:3000]}
 
-AUDIT QUESTION: Does this code try to access bars[i]["MACD"], bars[i]["RSI"], bars[i]["EMA"], or ANY key other than the 6 allowed keys (datetime, open, high, low, close, volume)?
+AUDIT CHECKLIST (check ALL items, FAIL on ANY violation):
+1. Does the code access bars[i]["MACD"], bars[i]["RSI"], bars[i]["EMA"], bars[i]["EMA_Cross"],
+   bars[i]["ADX"], bars[i]["ATR"], or ANY key other than the 6 allowed keys
+   (datetime, open, high, low, close, volume)?
+   → If YES: FAIL
+2. Does the code reference column names like 'EMA_Cross', 'MACD_hist', 'RSI' as if
+   they are pre-existing DataFrame columns or dict keys in bars?
+   → If YES: FAIL
+3. Are ALL technical indicators (MACD, RSI, EMA, SMA, ATR, ADX, etc.) computed using
+   ta_* functions (ta_macd, ta_rsi, ta_ema, ta_sma, ta_atr, ta_adx, etc.)?
+   → If NOT all computed via ta_*: FAIL
 
-If YES (accessing invalid keys like "MACD", "RSI", etc.): Reply "FAIL: accesses invalid bars keys"
-If NO (only accesses the 6 valid keys): Reply "PASS"
+If ALL checks pass: Reply "PASS"
+If ANY check fails: Reply "FAIL: <specific reason>"
 
-Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct access to bars[i]["MACD"] is wrong."""
+Note: Using ta_macd(), ta_rsi(), ta_ema() etc. is CORRECT. Only direct access to bars[i]["MACD"] or assuming bars has pre-computed indicator columns is wrong."""
 
         messages = [
             {"role": "system", "content": "You are a strict quantitative code auditor. Be concise and direct."},
@@ -1081,6 +1104,10 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
             params.update(params_override)
 
         # P0-1 修复：AST 白名单安全检查
+        # 自动剥离安全的 import 语句（math 已在沙箱中预注入）
+        import re as _re
+        code = _re.sub(r'^\s*import\s+math\s*$', '', code, flags=_re.MULTILINE)
+        code = _re.sub(r'^\s*from\s+math\s+import\s+.*$', '', code, flags=_re.MULTILINE)
         try:
             _ast_whitelist_check(code)
         except ValueError as _ast_err:
@@ -1099,7 +1126,7 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
             return _compute(bars, params)
 
         try:
-            logger.info("生成的信号函数代码:\n%s...", code[:500])
+            logger.debug("生成的信号函数代码:\n%s...", code[:500])
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
                 _fut = _pool.submit(_run_exec)
                 try:
@@ -1318,6 +1345,7 @@ Note: Using ta_macd(), ta_rsi(), ta_ema() functions is CORRECT. Only direct acce
             bars_count=len(bars),
             equity_curve=equity_curve,
             generated_code=code,
+            trades=trades,  # 含 features 字段，供 XGBoost 训练
         )
 
     # ------------------------------------------------------------------
