@@ -575,6 +575,24 @@ class _ManualTargetPos:
         self._symbol = symbol
         self._account = account
         self._target: int = 0
+        self._trading_symbol: str = self._resolve_trading_symbol()
+
+    def _resolve_trading_symbol(self) -> str:
+        """Resolve the actual tradable contract.  Continuous main-contract
+        symbols like ``KQ.m@CZCE.CF`` cannot be used for order placement
+        in TqSim; the real underlying (e.g. ``CZCE.CF505``) must be used."""
+        try:
+            quote = self._api.get_quote(self._symbol)
+            underlying = getattr(quote, "underlying_symbol", None)
+            if underlying and isinstance(underlying, str) and underlying.strip():
+                return underlying.strip()
+        except Exception:
+            pass
+        return self._symbol
+
+    @property
+    def trading_symbol(self) -> str:
+        return self._trading_symbol
 
     # ── public interface (same as TargetPosTask) ──────────────────
     def set_target_volume(self, volume: int) -> None:
@@ -585,7 +603,11 @@ class _ManualTargetPos:
 
     # ── internals ─────────────────────────────────────────────────
     def _sync_position(self) -> None:
-        pos = self._api.get_position(self._symbol)
+        # Refresh underlying in case of main-contract rollover
+        self._trading_symbol = self._resolve_trading_symbol()
+        tsym = self._trading_symbol
+
+        pos = self._api.get_position(tsym)
         current_long = int(getattr(pos, "pos_long", 0) or 0)
         current_short = int(getattr(pos, "pos_short", 0) or 0)
         current_net = current_long - current_short
@@ -593,7 +615,7 @@ class _ManualTargetPos:
         if delta == 0:
             return
 
-        quote = self._api.get_quote(self._symbol)
+        quote = self._api.get_quote(tsym)
 
         if delta > 0:
             # Buy direction: close short first, then open long
@@ -601,14 +623,14 @@ class _ManualTargetPos:
             if to_close > 0:
                 price = self._buy_price(quote)
                 self._api.insert_order(
-                    self._symbol, "BUY", "CLOSE", to_close,
+                    tsym, "BUY", "CLOSE", to_close,
                     limit_price=price, account=self._account,
                 )
                 delta -= to_close
             if delta > 0:
                 price = self._buy_price(quote)
                 self._api.insert_order(
-                    self._symbol, "BUY", "OPEN", delta,
+                    tsym, "BUY", "OPEN", delta,
                     limit_price=price, account=self._account,
                 )
         else:
@@ -618,14 +640,14 @@ class _ManualTargetPos:
             if to_close > 0:
                 price = self._sell_price(quote)
                 self._api.insert_order(
-                    self._symbol, "SELL", "CLOSE", to_close,
+                    tsym, "SELL", "CLOSE", to_close,
                     limit_price=price, account=self._account,
                 )
                 abs_delta -= to_close
             if abs_delta > 0:
                 price = self._sell_price(quote)
                 self._api.insert_order(
-                    self._symbol, "SELL", "OPEN", abs_delta,
+                    tsym, "SELL", "OPEN", abs_delta,
                     limit_price=price, account=self._account,
                 )
 
@@ -717,10 +739,14 @@ class FixedTemplateStrategy(ABC):
         # min_lot > 1 (e.g. DCE.l2605, DCE.v2605).  The backtest
         # simulator fills orders instantly, so TargetPosTask's smart
         # order splitting provides no benefit.
-        self._artifacts.notes.append(f"target_pos=manual_order({sym})")
-        return _ManualTargetPos(
+        mtp = _ManualTargetPos(
             api=self.session.api, symbol=sym, account=self.session.account,
         )
+        self._artifacts.notes.append(
+            f"target_pos=manual_order({sym})->trading={mtp.trading_symbol}"
+        )
+        self._position_symbol: str = mtp.trading_symbol
+        return mtp
 
     def append_note(self, message: str) -> None:
         if message:

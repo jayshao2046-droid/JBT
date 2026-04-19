@@ -560,6 +560,12 @@ class GenericStrategy(FixedTemplateStrategy):
                 for key, value in indicator_row.items():
                     if key != "timestamp":
                         row[key] = value
+                # 兼容 LLM YAML 点号访问：如 bollinger.middle → row['bollinger.middle']
+                if hasattr(indicator, 'name') and isinstance(indicator.name, str):
+                    prefix = indicator.name
+                    for key, value in indicator_row.items():
+                        if key != "timestamp":
+                            row[f"{prefix}.{key}"] = value
 
         for row in merged_rows:
             factor_scores: List[float] = []
@@ -769,8 +775,9 @@ class GenericStrategy(FixedTemplateStrategy):
         get_position = getattr(self.session.api, "get_position", None)
         if not callable(get_position):
             return 0
+        sym = getattr(self, "_position_symbol", None) or self.runtime_context.symbol
         try:
-            position_snapshot = get_position(self.runtime_context.symbol, account=self.session.account)
+            position_snapshot = get_position(sym, account=self.session.account)
         except Exception:
             return 0
         return self._extract_position(position_snapshot)
