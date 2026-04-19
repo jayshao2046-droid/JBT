@@ -89,6 +89,28 @@ class ResearcherEmailSender:
         subject = f"[JBT 数据研究员] {date} 晚报"
         return self.send_html(subject, html_content)
 
+    # ── 4段日报 ──────────────────────────────────────────────────────────
+
+    def send_night_report(self, date: str, html_content: str) -> bool:
+        """08:00 发送：汇总 00:00~07:59 夜间动态"""
+        subject = f"[JBT 数据研究员] {date} 夜间报 (00-08)"
+        return self.send_html(subject, html_content)
+
+    def send_morning_session_report(self, date: str, html_content: str) -> bool:
+        """13:00 发送：汇总 08:00~12:59 上午行情"""
+        subject = f"[JBT 数据研究员] {date} 上午报 (08-13)"
+        return self.send_html(subject, html_content)
+
+    def send_afternoon_report(self, date: str, html_content: str) -> bool:
+        """20:00 发送：汇总 13:00~19:59 下午行情"""
+        subject = f"[JBT 数据研究员] {date} 下午报 (13-20)"
+        return self.send_html(subject, html_content)
+
+    def send_evening_session_report(self, date: str, html_content: str) -> bool:
+        """00:00 发送：汇总 20:00~23:59 夜盘"""
+        subject = f"[JBT 数据研究员] {date} 夜盘报 (20-24)"
+        return self.send_html(subject, html_content)
+
     def _log_failure(self, error: str, subject: str):
         """记录发送失败到本地日志"""
         failure_record = {
