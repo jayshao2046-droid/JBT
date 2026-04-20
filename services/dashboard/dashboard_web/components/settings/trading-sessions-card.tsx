@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Clock, Save, RefreshCw, Moon, Sun, Sunset } from 'lucide-react'
-import { tradingSessionsApi, tradingConfigApi, type TradingSession } from '@/lib/api/settings'
+import { tradingSessionsApi, tradingConfigApi, simControlApi, type TradingSession } from '@/lib/api/settings'
 
 const SESSION_ICONS: Record<string, React.ReactNode> = {
   night: <Moon className="w-4 h-4 text-blue-400" />,
@@ -44,17 +44,27 @@ export function TradingSessionsCard() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<Record<string | number, boolean>>({})
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [simConnected, setSimConnected] = useState<boolean | null>(null)
+  const [origAutoTrading, setOrigAutoTrading] = useState<boolean>(true)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [sess, cfg] = await Promise.all([
+      // 并行加载：dashboard DB 配置 + 真实 sim-trading 状态
+      const [sess, cfg, simState] = await Promise.all([
         tradingSessionsApi.list(),
         tradingConfigApi.get(),
+        simControlApi.getState(),
       ])
       setSessions(sess)
+      // auto_trading_enabled 优先读真实 sim-trading 状态
+      const autoTrading = simState !== null
+        ? simState.trading_enabled
+        : (cfg.auto_trading_enabled === 'true')
+      setSimConnected(simState !== null)
+      setOrigAutoTrading(autoTrading)
       setConfig({
-        auto_trading_enabled: cfg.auto_trading_enabled === 'true',
+        auto_trading_enabled: autoTrading,
         pre_market_enabled: cfg.pre_market_enabled === 'true',
         post_market_enabled: cfg.post_market_enabled === 'true',
         pre_market_minutes: parseInt(cfg.pre_market_minutes ?? '30', 10),
@@ -96,7 +106,16 @@ export function TradingSessionsCard() {
         const s = sessions.find(x => x.id === id)
         return s ? saveSession(s) : Promise.resolve()
       }))
-      // 保存全局配置
+      // 若 auto_trading_enabled 发生变化，调用真实 sim-trading API
+      if (config.auto_trading_enabled !== origAutoTrading) {
+        if (config.auto_trading_enabled) {
+          await simControlApi.resume()
+        } else {
+          await simControlApi.pause('用户手动关闭自动交易')
+        }
+        setOrigAutoTrading(config.auto_trading_enabled)
+      }
+      // 同步保存 dashboard DB 配置
       await tradingConfigApi.update({
         auto_trading_enabled: config.auto_trading_enabled,
         pre_market_enabled: config.pre_market_enabled,
@@ -134,6 +153,12 @@ export function TradingSessionsCard() {
           <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-1.5">
             <Clock className="w-4 h-4 text-orange-500" />
             交易控制
+            {simConnected !== null && (
+              <span className={`flex items-center gap-1 text-[10px] font-normal ml-1 ${simConnected ? 'text-green-400' : 'text-muted-foreground'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${simConnected ? 'bg-green-400' : 'bg-muted-foreground'}`} />
+                {simConnected ? 'Alienware 在线' : 'Alienware 离线'}
+              </span>
+            )}
           </CardTitle>
           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={load} title="刷新">
             <RefreshCw className="w-3 h-3" />

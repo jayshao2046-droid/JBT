@@ -22,6 +22,7 @@ import { useAuth } from '@/lib/auth-context';
 import { PermissionsDialog } from '@/components/settings/permissions-dialog';
 import { TradingSessionsCard } from '@/components/settings/trading-sessions-card';
 import { TradingCalendarCard } from '@/components/settings/trading-calendar-card';
+import { NotificationsCard } from '@/components/settings/notifications-card';
 import {
   Trash2,
   UserPlus,
@@ -624,59 +625,7 @@ export default function SettingsPage() {
 
         {/* 通知配置 Tab */}
         <TabsContent value="notifications" className="space-y-4">
-          <Card className="bg-transparent backdrop-blur-sm border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground">通知配置</CardTitle>
-              <CardDescription className="text-muted-foreground">配置飞书和邮件通知</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="feishu-webhook" className="text-foreground">飞书 Webhook</Label>
-                <Input
-                  id="feishu-webhook"
-                  value={settings.notifications.feishu_webhook}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      notifications: { ...settings.notifications, feishu_webhook: e.target.value },
-                    })
-                  }
-                  placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."
-                  className="bg-background border-input text-foreground"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email-smtp" className="text-foreground">SMTP 服务器</Label>
-                <Input
-                  id="email-smtp"
-                  value={settings.notifications.smtp_server}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      notifications: { ...settings.notifications, smtp_server: e.target.value },
-                    })
-                  }
-                  placeholder="smtp.example.com"
-                  className="bg-background border-input text-foreground"
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label className="text-foreground">启用告警通知</Label>
-                <Switch
-                  checked={settings.notifications.alert_enabled}
-                  onCheckedChange={(checked) =>
-                    setSettings({
-                      ...settings,
-                      notifications: { ...settings.notifications, alert_enabled: checked },
-                    })
-                  }
-                />
-              </div>
-              <Button onClick={handleNotificationSave} disabled={saving}>
-                {saving ? '保存中...' : '保存配置'}
-              </Button>
-            </CardContent>
-          </Card>
+          <NotificationsCard />
         </TabsContent>
 
         {/* 服务管理 Tab */}

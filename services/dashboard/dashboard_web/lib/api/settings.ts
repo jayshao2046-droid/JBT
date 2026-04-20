@@ -43,6 +43,7 @@ export interface CalendarEntry {
   type: CalendarEntryType
   label: string
   note: string
+  trading_enabled: boolean
   created_at: string
 }
 
@@ -225,4 +226,99 @@ export const calendarApi = {
 
   remove: (id: number) =>
     dashFetch<{ success: boolean }>(`/trading/calendar/${id}`, { method: "DELETE" }),
+}
+
+// ── sim-trading 实时控制（经 Next.js server route 注入 X-API-Key）──────────
+export const simControlApi = {
+  getState: () => apiFetch<{
+    trading_enabled: boolean
+    active_preset: string
+    paused_reason: string | null
+    ctp_md_connected: boolean
+    ctp_td_connected: boolean
+  }>("/api/sim-trading/api/v1/system/state").catch(() => null),
+
+  pause: (reason = "用户手动暂停") =>
+    fetch("/api/sim-control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "pause", reason }),
+    }).then(r => r.json()),
+
+  resume: () =>
+    fetch("/api/sim-control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "resume" }),
+    }).then(r => r.json()),
+}
+
+// ── 通知配置 API ──────────────────────────────────────────
+export interface ServiceNotifConfig {
+  service: string
+  display_name: string
+  feishu_webhook: string
+  feishu_enabled: boolean
+  smtp_host: string
+  smtp_port: number
+  smtp_username: string
+  smtp_password_set: boolean
+  smtp_to_addrs: string
+  smtp_enabled: boolean
+  updated_at: string
+}
+
+export interface NotificationRule {
+  id: number
+  service: string
+  name: string
+  rule_type: "alarm_p0" | "alarm_p1" | "alarm_p2" | "trade" | "info" | "news" | "notify"
+  color: "red" | "orange" | "yellow" | "grey" | "blue" | "wathet" | "turquoise"
+  content_template: string
+  enabled: boolean
+  sort_order: number
+  created_at: string
+}
+
+export const notificationApi = {
+  listConfigs: () =>
+    dashFetch<ServiceNotifConfig[]>("/notifications/configs"),
+
+  updateConfig: (service: string, data: {
+    feishu_webhook: string
+    feishu_enabled: boolean
+    smtp_host: string
+    smtp_port: number
+    smtp_username: string
+    smtp_password: string
+    smtp_to_addrs: string
+    smtp_enabled: boolean
+  }) =>
+    dashFetch<{ success: boolean }>(`/notifications/configs/${service}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  testFeishu: (service: string) =>
+    dashFetch<{ success: boolean; result?: unknown }>(`/notifications/configs/${service}/test-feishu`, {
+      method: "POST",
+    }),
+
+  listRules: (service?: string) =>
+    dashFetch<NotificationRule[]>(`/notifications/rules${service ? `?service=${service}` : ""}`),
+
+  createRule: (data: Omit<NotificationRule, "id" | "sort_order" | "created_at">) =>
+    dashFetch<{ id: number; success: boolean }>("/notifications/rules", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateRule: (id: number, data: Omit<NotificationRule, "id" | "sort_order" | "created_at">) =>
+    dashFetch<{ success: boolean }>(`/notifications/rules/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteRule: (id: number) =>
+    dashFetch<{ success: boolean }>(`/notifications/rules/${id}`, { method: "DELETE" }),
 }

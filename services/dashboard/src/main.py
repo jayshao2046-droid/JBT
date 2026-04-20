@@ -131,9 +131,15 @@ def init_db():
             type TEXT NOT NULL DEFAULT 'holiday',
             label TEXT NOT NULL DEFAULT '',
             note TEXT NOT NULL DEFAULT '',
+            trading_enabled INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL
         )
     """)
+    # 迁移：为已存在的表补 trading_enabled 列
+    try:
+        cursor.execute("ALTER TABLE trading_calendar ADD COLUMN trading_enabled INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # column already exists
 
     # 初始化默认期货三时段
     cursor.execute("SELECT COUNT(*) FROM trading_sessions")
@@ -161,7 +167,134 @@ def init_db():
         cursor.execute("INSERT OR IGNORE INTO trading_config (key,value,updated_at) VALUES (?,?,?)",
                        (k, v, datetime.now().isoformat()))
 
-    # 创建默认管理员账户 admin/admin123
+    # 预置 2026 年中国大陆期货市场节假日（仅首次）
+    cursor.execute("SELECT COUNT(*) FROM trading_calendar WHERE date LIKE '2026-%'")
+    if cursor.fetchone()[0] == 0:
+        now_str = datetime.now().isoformat()
+        # (date, type, label, note, trading_enabled)
+        cn_2026 = [
+            # 元旦
+            ("2026-01-01", "holiday", "元旦", "", 0),
+            ("2026-01-02", "holiday", "元旦假期", "", 0),
+            ("2026-01-03", "holiday", "元旦假期", "", 0),
+            # 春节（2026年CNY = 2月17日）
+            ("2026-02-15", "holiday", "春节假期", "", 0),
+            ("2026-02-16", "holiday", "春节假期", "", 0),
+            ("2026-02-17", "holiday", "春节（大年初一）", "", 0),
+            ("2026-02-18", "holiday", "春节假期", "", 0),
+            ("2026-02-19", "holiday", "春节假期", "", 0),
+            ("2026-02-20", "holiday", "春节假期", "", 0),
+            ("2026-02-21", "holiday", "春节假期", "", 0),
+            # 春节补班
+            ("2026-02-08", "workday", "春节前补班", "", 1),
+            ("2026-02-28", "workday", "春节后补班", "", 1),
+            # 清明节
+            ("2026-04-04", "holiday", "清明节", "", 0),
+            ("2026-04-05", "holiday", "清明节假期", "", 0),
+            ("2026-04-06", "holiday", "清明节假期", "", 0),
+            # 劳动节
+            ("2026-05-01", "holiday", "劳动节", "", 0),
+            ("2026-05-02", "holiday", "劳动节假期", "", 0),
+            ("2026-05-03", "holiday", "劳动节假期", "", 0),
+            ("2026-05-04", "holiday", "劳动节假期", "", 0),
+            ("2026-05-05", "holiday", "劳动节假期", "", 0),
+            # 劳动节补班
+            ("2026-04-26", "workday", "劳动节前补班", "", 1),
+            # 端午节（2026年6月20日）
+            ("2026-06-19", "holiday", "端午节假期", "", 0),
+            ("2026-06-20", "holiday", "端午节", "", 0),
+            ("2026-06-21", "holiday", "端午节假期", "", 0),
+            # 中秋节+国庆节
+            ("2026-10-01", "holiday", "国庆节", "", 0),
+            ("2026-10-02", "holiday", "国庆节假期", "", 0),
+            ("2026-10-03", "holiday", "国庆节假期", "", 0),
+            ("2026-10-04", "holiday", "中秋节", "", 0),
+            ("2026-10-05", "holiday", "国庆节假期", "", 0),
+            ("2026-10-06", "holiday", "国庆节假期", "", 0),
+            ("2026-10-07", "holiday", "国庆节假期", "", 0),
+            # 国庆补班
+            ("2026-09-27", "workday", "国庆节前补班", "", 1),
+            ("2026-10-10", "workday", "国庆节后补班", "", 1),
+        ]
+        cursor.executemany(
+            "INSERT OR IGNORE INTO trading_calendar (date,type,label,note,trading_enabled,created_at) VALUES (?,?,?,?,?,?)",
+            [(d, t, l, n, te, now_str) for d, t, l, n, te in cn_2026]
+        )
+
+    # 通知配置表（每个服务一行）
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS notification_configs (
+            service TEXT PRIMARY KEY,
+            feishu_webhook TEXT NOT NULL DEFAULT '',
+            feishu_enabled INTEGER NOT NULL DEFAULT 1,
+            smtp_host TEXT NOT NULL DEFAULT '',
+            smtp_port INTEGER NOT NULL DEFAULT 465,
+            smtp_username TEXT NOT NULL DEFAULT '',
+            smtp_password TEXT NOT NULL DEFAULT '',
+            smtp_to_addrs TEXT NOT NULL DEFAULT '',
+            smtp_enabled INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT ''
+        )
+    """)
+
+    # 通知规则表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS notification_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            service TEXT NOT NULL,
+            name TEXT NOT NULL,
+            rule_type TEXT NOT NULL,
+            color TEXT NOT NULL DEFAULT 'turquoise',
+            content_template TEXT NOT NULL DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+
+    # 种子：各服务默认通知配置
+    cursor.execute("SELECT COUNT(*) FROM notification_configs")
+    if cursor.fetchone()[0] == 0:
+        now_str = datetime.now().isoformat()
+        default_services = ["sim-trading", "data", "decision", "backtest"]
+        cursor.executemany(
+            "INSERT OR IGNORE INTO notification_configs (service, updated_at) VALUES (?, ?)",
+            [(s, now_str) for s in default_services]
+        )
+
+    # 种子：默认通知规则（首次初始化）
+    cursor.execute("SELECT COUNT(*) FROM notification_rules")
+    if cursor.fetchone()[0] == 0:
+        now_str = datetime.now().isoformat()
+        default_rules = [
+            # sim-trading
+            ("sim-trading", "CTP 断线告警",   "alarm_p1", "orange",    "CTP 连接中断: {reason}",        1, 0),
+            ("sim-trading", "强制平仓告警",   "alarm_p0", "red",       "触发强制平仓: {reason}",        1, 1),
+            ("sim-trading", "成交回报",       "trade",    "grey",      "订单成交: {symbol} {volume}手", 1, 2),
+            ("sim-trading", "系统启停",       "notify",   "turquoise", "服务启动/停止通知",             1, 3),
+            ("sim-trading", "日报汇总",       "info",     "blue",      "每日交易汇总报告",              1, 4),
+            # data
+            ("data", "采集失败告警",  "alarm_p1", "orange",    "数据采集器异常: {collector}",   1, 0),
+            ("data", "新闻推送",      "news",     "wathet",    "财经新闻推送: {title}",         1, 1),
+            ("data", "采集器状态",    "notify",   "turquoise", "采集器运行状态更新",             1, 2),
+            ("data", "日报汇总",      "info",     "blue",      "数据采集日报",                  1, 3),
+            # decision
+            ("decision", "策略信号生成", "info",     "blue",      "信号生成: {strategy} {symbol}", 1, 0),
+            ("decision", "LLM 分析完成", "info",     "blue",      "研究员分析报告完成",            1, 1),
+            ("decision", "风控告警",     "alarm_p1", "orange",    "决策风控预警: {reason}",       1, 2),
+            ("decision", "信号审批",     "notify",   "turquoise", "待审批信号通知",               1, 3),
+            # backtest
+            ("backtest", "回测完成",     "notify", "turquoise", "回测任务完成: {task_id}", 1, 0),
+            ("backtest", "回测失败",     "alarm_p1", "orange",  "回测任务异常: {reason}", 1, 1),
+            ("backtest", "参数优化完成", "info",   "blue",      "参数优化结果: {task_id}", 1, 2),
+        ]
+        cursor.executemany(
+            "INSERT INTO notification_rules (service,name,rule_type,color,content_template,enabled,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            [(s, n, rt, c, ct, e, so, now_str, now_str) for s, n, rt, c, ct, e, so in default_rules]
+        )
+
+
     cursor.execute("SELECT COUNT(*) FROM users WHERE username = 'admin'")
     if cursor.fetchone()[0] == 0:
         admin_hash = hashlib.sha256("admin123".encode()).hexdigest()
@@ -592,12 +725,12 @@ async def get_trading_calendar(year: Optional[int] = None, current_user: dict = 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     if year:
-        cursor.execute("SELECT id,date,type,label,note,created_at FROM trading_calendar WHERE date LIKE ? ORDER BY date", (f"{year}-%",))
+        cursor.execute("SELECT id,date,type,label,note,trading_enabled,created_at FROM trading_calendar WHERE date LIKE ? ORDER BY date", (f"{year}-%",))
     else:
-        cursor.execute("SELECT id,date,type,label,note,created_at FROM trading_calendar ORDER BY date DESC LIMIT 200")
+        cursor.execute("SELECT id,date,type,label,note,trading_enabled,created_at FROM trading_calendar ORDER BY date DESC LIMIT 200")
     rows = cursor.fetchall()
     conn.close()
-    return [{"id":r[0],"date":r[1],"type":r[2],"label":r[3],"note":r[4],"created_at":r[5]} for r in rows]
+    return [{"id":r[0],"date":r[1],"type":r[2],"label":r[3],"note":r[4],"trading_enabled":bool(r[5]),"created_at":r[6]} for r in rows]
 
 
 class CalendarEntryRequest(BaseModel):
@@ -605,6 +738,7 @@ class CalendarEntryRequest(BaseModel):
     type: str = "holiday"   # holiday | workday | early_close
     label: str = ""
     note: str = ""
+    trading_enabled: bool = False
 
 
 @app.post("/api/v1/trading/calendar")
@@ -618,8 +752,8 @@ async def add_calendar_entry(req: CalendarEntryRequest, admin: dict = Depends(re
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "INSERT INTO trading_calendar (date,type,label,note,created_at) VALUES (?,?,?,?,?)",
-            (req.date, req.type, req.label, req.note, datetime.now().isoformat())
+            "INSERT INTO trading_calendar (date,type,label,note,trading_enabled,created_at) VALUES (?,?,?,?,?,?)",
+            (req.date, req.type, req.label, req.note, 1 if req.trading_enabled else 0, datetime.now().isoformat())
         )
         entry_id = cursor.lastrowid
         conn.commit()
@@ -627,7 +761,7 @@ async def add_calendar_entry(req: CalendarEntryRequest, admin: dict = Depends(re
         conn.close()
         raise HTTPException(status_code=400, detail="该日期已存在日历条目")
     conn.close()
-    return {"id": entry_id, "date": req.date, "type": req.type, "label": req.label, "note": req.note}
+    return {"id": entry_id, "date": req.date, "type": req.type, "label": req.label, "note": req.note, "trading_enabled": req.trading_enabled}
 
 
 @app.put("/api/v1/trading/calendar/{entry_id}")
@@ -642,8 +776,8 @@ async def update_calendar_entry(entry_id: int, req: CalendarEntryRequest, admin:
         conn.close()
         raise HTTPException(status_code=404, detail="条目不存在")
     cursor.execute(
-        "UPDATE trading_calendar SET date=?,type=?,label=?,note=? WHERE id=?",
-        (req.date, req.type, req.label, req.note, entry_id)
+        "UPDATE trading_calendar SET date=?,type=?,label=?,note=?,trading_enabled=? WHERE id=?",
+        (req.date, req.type, req.label, req.note, 1 if req.trading_enabled else 0, entry_id)
     )
     conn.commit()
     conn.close()
@@ -663,6 +797,233 @@ async def delete_calendar_entry(entry_id: int, admin: dict = Depends(require_adm
 @app.get("/health")
 async def health():
     return {"status": "healthy", "service": SERVICE_NAME, "version": SERVICE_VERSION}
+
+
+# ── 通知配置 API ──────────────────────────────────────────
+
+_SERVICE_LABELS = {
+    "sim-trading": "模拟交易",
+    "data":        "数据服务",
+    "decision":    "决策引擎",
+    "backtest":    "回测系统",
+}
+
+class NotificationConfigRequest(BaseModel):
+    feishu_webhook: str = ""
+    feishu_enabled: bool = True
+    smtp_host: str = ""
+    smtp_port: int = 465
+    smtp_username: str = ""
+    smtp_password: str = ""   # 空字符串 = 保留原密码
+    smtp_to_addrs: str = ""
+    smtp_enabled: bool = False
+
+
+class NotificationRuleRequest(BaseModel):
+    service: str
+    name: str
+    rule_type: str   # alarm_p0/alarm_p1/alarm_p2/trade/info/news/notify
+    color: str = "turquoise"
+    content_template: str = ""
+    enabled: bool = True
+
+
+def _row_to_config(row: tuple) -> dict:
+    # service, feishu_webhook, feishu_enabled, smtp_host, smtp_port,
+    # smtp_username, smtp_password, smtp_to_addrs, smtp_enabled, updated_at
+    return {
+        "service":          row[0],
+        "display_name":     _SERVICE_LABELS.get(row[0], row[0]),
+        "feishu_webhook":   row[1],
+        "feishu_enabled":   bool(row[2]),
+        "smtp_host":        row[3],
+        "smtp_port":        row[4],
+        "smtp_username":    row[5],
+        "smtp_password_set": bool(row[6]),  # 不返回明文密码
+        "smtp_to_addrs":    row[7],
+        "smtp_enabled":     bool(row[8]),
+        "updated_at":       row[9],
+    }
+
+
+@app.get("/api/v1/notifications/configs")
+async def list_notification_configs(current_user: dict = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT service,feishu_webhook,feishu_enabled,smtp_host,smtp_port,"
+        "smtp_username,smtp_password,smtp_to_addrs,smtp_enabled,updated_at "
+        "FROM notification_configs ORDER BY service"
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [_row_to_config(r) for r in rows]
+
+
+@app.put("/api/v1/notifications/configs/{service}")
+async def update_notification_config(
+    service: str,
+    req: NotificationConfigRequest,
+    admin: dict = Depends(require_admin),
+):
+    if service not in _SERVICE_LABELS:
+        raise HTTPException(status_code=400, detail=f"未知服务: {service}")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    # 若密码为空则保留原密码
+    if req.smtp_password:
+        cursor.execute(
+            "UPDATE notification_configs SET feishu_webhook=?,feishu_enabled=?,"
+            "smtp_host=?,smtp_port=?,smtp_username=?,smtp_password=?,smtp_to_addrs=?,"
+            "smtp_enabled=?,updated_at=? WHERE service=?",
+            (req.feishu_webhook, 1 if req.feishu_enabled else 0,
+             req.smtp_host, req.smtp_port, req.smtp_username, req.smtp_password,
+             req.smtp_to_addrs, 1 if req.smtp_enabled else 0,
+             datetime.now().isoformat(), service)
+        )
+    else:
+        cursor.execute(
+            "UPDATE notification_configs SET feishu_webhook=?,feishu_enabled=?,"
+            "smtp_host=?,smtp_port=?,smtp_username=?,smtp_to_addrs=?,"
+            "smtp_enabled=?,updated_at=? WHERE service=?",
+            (req.feishu_webhook, 1 if req.feishu_enabled else 0,
+             req.smtp_host, req.smtp_port, req.smtp_username,
+             req.smtp_to_addrs, 1 if req.smtp_enabled else 0,
+             datetime.now().isoformat(), service)
+        )
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+@app.post("/api/v1/notifications/configs/{service}/test-feishu")
+async def test_feishu(service: str, admin: dict = Depends(require_admin)):
+    if service not in _SERVICE_LABELS:
+        raise HTTPException(status_code=400, detail=f"未知服务: {service}")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT feishu_webhook FROM notification_configs WHERE service=?", (service,))
+    row = cursor.fetchone()
+    conn.close()
+    webhook = (row[0] if row else "").strip()
+    if not webhook or not webhook.startswith("http"):
+        raise HTTPException(status_code=400, detail="Feishu Webhook 未配置")
+
+    import urllib.request as urlreq
+    payload = {
+        "msg_type": "interactive",
+        "card": {
+            "header": {
+                "title": {"tag": "plain_text", "content": "📣 [DEV-NOTIFY] 测试通知"},
+                "template": "turquoise",
+            },
+            "elements": [
+                {"tag": "div", "text": {"tag": "lark_md", "content":
+                    f"来自 **JBT Dashboard** 的测试通知\n服务：{_SERVICE_LABELS[service]}"}},
+                {"tag": "note", "elements": [
+                    {"tag": "plain_text", "content": f"JBT Dashboard | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"}
+                ]},
+            ],
+        },
+    }
+    data = json.dumps(payload).encode()
+    req_obj = urlreq.Request(webhook, data=data, headers={"Content-Type": "application/json"})
+    try:
+        with urlreq.urlopen(req_obj, timeout=10) as resp:
+            result = json.loads(resp.read())
+            ok = result.get("StatusCode", result.get("code", -1)) == 0
+            return {"success": ok, "result": result}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Feishu 请求失败: {e}")
+
+
+@app.get("/api/v1/notifications/rules")
+async def list_notification_rules(
+    service: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    if service:
+        cursor.execute(
+            "SELECT id,service,name,rule_type,color,content_template,enabled,sort_order,created_at "
+            "FROM notification_rules WHERE service=? ORDER BY sort_order,id",
+            (service,)
+        )
+    else:
+        cursor.execute(
+            "SELECT id,service,name,rule_type,color,content_template,enabled,sort_order,created_at "
+            "FROM notification_rules ORDER BY service,sort_order,id"
+        )
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {"id": r[0], "service": r[1], "name": r[2], "rule_type": r[3],
+         "color": r[4], "content_template": r[5], "enabled": bool(r[6]),
+         "sort_order": r[7], "created_at": r[8]}
+        for r in rows
+    ]
+
+
+@app.post("/api/v1/notifications/rules", status_code=201)
+async def create_notification_rule(
+    req: NotificationRuleRequest,
+    admin: dict = Depends(require_admin),
+):
+    valid_types = {"alarm_p0","alarm_p1","alarm_p2","trade","info","news","notify"}
+    valid_colors = {"red","orange","yellow","grey","blue","wathet","turquoise"}
+    if req.rule_type not in valid_types:
+        raise HTTPException(status_code=400, detail=f"rule_type 必须为: {', '.join(valid_types)}")
+    if req.color not in valid_colors:
+        raise HTTPException(status_code=400, detail=f"color 必须为: {', '.join(valid_colors)}")
+    now = datetime.now().isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO notification_rules (service,name,rule_type,color,content_template,enabled,sort_order,created_at,updated_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (req.service, req.name, req.rule_type, req.color, req.content_template,
+         1 if req.enabled else 0, 99, now, now)
+    )
+    rule_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return {"id": rule_id, "success": True}
+
+
+@app.put("/api/v1/notifications/rules/{rule_id}")
+async def update_notification_rule(
+    rule_id: int,
+    req: NotificationRuleRequest,
+    admin: dict = Depends(require_admin),
+):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM notification_rules WHERE id=?", (rule_id,))
+    if cursor.fetchone()[0] == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="规则不存在")
+    cursor.execute(
+        "UPDATE notification_rules SET name=?,rule_type=?,color=?,content_template=?,enabled=?,updated_at=? WHERE id=?",
+        (req.name, req.rule_type, req.color, req.content_template,
+         1 if req.enabled else 0, datetime.now().isoformat(), rule_id)
+    )
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+@app.delete("/api/v1/notifications/rules/{rule_id}")
+async def delete_notification_rule(
+    rule_id: int,
+    admin: dict = Depends(require_admin),
+):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM notification_rules WHERE id=?", (rule_id,))
+    conn.commit()
+    conn.close()
+    return {"success": True}
 
 
 if __name__ == "__main__":
