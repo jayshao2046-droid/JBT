@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useDashboardData } from "@/hooks/use-dashboard-data"
+import { useDashboardKpis } from "@/hooks/use-dashboard-kpis"
 import { useServiceStatus } from "@/hooks/use-service-status"
 import { useToast } from "@/hooks/use-toast"
 import { KpiCard } from "@/components/dashboard/kpi-card"
@@ -31,7 +32,16 @@ export default function DashboardPage() {
   const { toast } = useToast()
   const { account, performance, risk, positions, signals, collectors, news, orders, loading, error, refetch } =
     useDashboardData()
+  const {
+    account: liveAccount,
+    performance: livePerformance,
+    risk: liveRisk,
+  } = useDashboardKpis()
   const serviceStatuses = useServiceStatus()
+
+  const accountSnapshot = liveAccount ?? account
+  const performanceSnapshot = livePerformance ?? performance
+  const riskSnapshot = liveRisk ?? risk
 
   const [manualOpenDialog, setManualOpenDialog] = useState(false)
   const [confirmSignalDialog, setConfirmSignalDialog] = useState<{ open: boolean; signal: StrategySignal | null }>({
@@ -157,53 +167,62 @@ export default function DashboardPage() {
   const kpiData = [
     {
       title: "总权益",
-      value: account?.equity || 0,
+      value: accountSnapshot?.equity || 0,
       icon: DollarSign,
-      change: performance ? `${performance.daily_pnl >= 0 ? "+" : ""}${performance.daily_pnl}` : undefined,
-      changeType: performance && performance.daily_pnl >= 0 ? ("positive" as const) : ("negative" as const),
+      change: performanceSnapshot
+        ? `${performanceSnapshot.daily_pnl >= 0 ? "+" : ""}${performanceSnapshot.daily_pnl}`
+        : undefined,
+      changeType:
+        performanceSnapshot && performanceSnapshot.daily_pnl >= 0
+          ? ("positive" as const)
+          : ("negative" as const),
       status: "success" as const,
     },
     {
       title: "可用资金",
-      value: account?.available || 0,
+      value: accountSnapshot?.available || 0,
       icon: TrendingUp,
       status: "default" as const,
     },
     {
       title: "浮动盈亏",
-      value: account?.float_pnl || 0,
+      value: accountSnapshot?.float_pnl || 0,
       icon: Activity,
-      changeType: account && account.float_pnl >= 0 ? ("positive" as const) : ("negative" as const),
-      status: account && account.float_pnl >= 0 ? ("success" as const) : ("danger" as const),
+      changeType:
+        accountSnapshot && accountSnapshot.float_pnl >= 0 ? ("positive" as const) : ("negative" as const),
+      status:
+        accountSnapshot && accountSnapshot.float_pnl >= 0 ? ("success" as const) : ("danger" as const),
     },
     {
       title: "保证金占用",
-      value: account?.margin || 0,
+      value: accountSnapshot?.margin || 0,
       icon: AlertTriangle,
-      progress: risk ? risk.position_usage * 100 : 0,
+      progress: riskSnapshot ? riskSnapshot.position_usage * 100 : 0,
       description: "占总权益",
-      status: risk && risk.position_usage > 0.8 ? ("danger" as const) : ("warning" as const),
+      status:
+        riskSnapshot && riskSnapshot.position_usage > 0.8 ? ("danger" as const) : ("warning" as const),
     },
   ]
 
   const riskMetrics = [
     {
       label: "保证金使用率",
-      value: risk ? Math.round(risk.position_usage * 100) : 0,
+      value: riskSnapshot ? Math.round(riskSnapshot.position_usage * 100) : 0,
       unit: "%",
-      status: risk && risk.position_usage > 0.8 ? ("danger" as const) : ("normal" as const),
+      status:
+        riskSnapshot && riskSnapshot.position_usage > 0.8 ? ("danger" as const) : ("normal" as const),
       description: "占总权益",
     },
     {
       label: "当日回撤",
-      value: risk ? Math.abs(risk.drawdown) : 0,
+      value: riskSnapshot ? Math.abs(riskSnapshot.drawdown) : 0,
       unit: "¥",
       status: "normal" as const,
       description: "最大回撤",
     },
     {
       label: "VaR风险值",
-      value: risk ? Math.abs(risk.var_1d) : 0,
+      value: riskSnapshot ? Math.abs(riskSnapshot.var_1d) : 0,
       unit: "¥",
       status: "normal" as const,
       description: "单日风险敞口",
@@ -263,12 +282,12 @@ export default function DashboardPage() {
           <div className="lg:col-span-3">
             <ChurnChart
               data={
-                performance
+                performanceSnapshot
                   ? [
-                      { metric: "日盈亏", value: performance.daily_pnl },
-                      { metric: "胜率", value: performance.win_rate },
-                      { metric: "盈亏比", value: performance.pnl_ratio },
-                      { metric: "交易次数", value: performance.total_trades },
+                      { metric: "日盈亏", value: performanceSnapshot.daily_pnl },
+                      { metric: "胜率", value: performanceSnapshot.win_rate },
+                      { metric: "盈亏比", value: performanceSnapshot.pnl_ratio },
+                      { metric: "交易次数", value: performanceSnapshot.total_trades },
                     ]
                   : []
               }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { simTradingApi } from "@/lib/api/sim-trading"
 import { fetchSignals } from "@/lib/api/decision"
 import { dataApi } from "@/lib/api/data"
@@ -27,11 +27,16 @@ export function useDashboardData() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const hasLoadedRef = useRef(false)
 
-  const fetchData = () => {
-    setLoading(true)
+  const fetchData = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!hasLoadedRef.current && !silent) {
+      setLoading(true)
+    }
+
     setError(null)
-    Promise.allSettled([
+
+    await Promise.allSettled([
       simTradingApi.getAccount().then(setAccount).catch(() => setAccount(null)),
       simTradingApi.getPerformance().then(setPerformance).catch(() => setPerformance(null)),
       simTradingApi.getRiskL1().then(setRisk).catch(() => setRisk(null)),
@@ -73,23 +78,26 @@ export function useDashboardData() {
       .then((results) => {
         const failed = results.filter((r) => r.status === "rejected")
         if (failed.length > 0) {
-          console.error('Failed requests:', results.filter((r) => r.status === "rejected"))
+          console.error("Failed requests:", results.filter((r) => r.status === "rejected"))
           setError(`${failed.length} 个数据接口加载失败`)
         }
         setLastUpdate(new Date())
       })
       .catch((err) => {
-        console.error('Fetch data error:', err)
-        setError('数据加载失败')
+        console.error("Fetch data error:", err)
+        setError("数据加载失败")
       })
-      .finally(() => setLoading(false))
-  }
+      .finally(() => {
+        if (!hasLoadedRef.current) {
+          setLoading(false)
+          hasLoadedRef.current = true
+        }
+      })
+  }, [])
 
   useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 30000)
-    return () => clearInterval(interval)
-  }, [])
+    void fetchData()
+  }, [fetchData])
 
   return {
     account,
@@ -103,6 +111,6 @@ export function useDashboardData() {
     loading,
     error,
     lastUpdate,
-    refetch: fetchData
+    refetch: () => fetchData({ silent: true })
   }
 }

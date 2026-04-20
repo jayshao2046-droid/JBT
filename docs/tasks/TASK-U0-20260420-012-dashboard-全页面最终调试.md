@@ -154,6 +154,30 @@ NEXT_PUBLIC_BACKTEST_URL=http://192.168.31.245:8103
 - tag: `backup-auth-sidebar-20260420-220843`
 - 最新 commit: `fe8ee3faf`
 
+### 自动刷新卡死修复（2026-04-20 深夜补充）
+
+| 修改类别 | 文件 | 内容 |
+|---------|------|------|
+| 头部对齐备份点 | `app-header.tsx`、`app-sidebar.tsx` | 已先独立提交为 `b06c8dc18`，用于回滚顶部线条/面包屑调整 |
+| 去掉首页整页自动刷新 | `hooks/use-dashboard-data.ts` | 移除 `setInterval(fetchData, 30000)`，首页不再每 30 秒整页轮询 |
+| refetch 改静默刷新 | `hooks/use-dashboard-data.ts` | `refetch()` 改为 silent 模式，不再切回整页 loading / Skeleton |
+| KPI 独立静默刷新 | `hooks/use-dashboard-kpis.ts` | 新增独立 KPI 轮询 hook，仅刷新 `account / performance / risk` |
+| 首页接入独立 KPI 数据源 | `app/(dashboard)/page.tsx` | KPI 卡片、收益图摘要、风险指标改用静默 KPI 快照，避免整页抖动 |
+
+### 本轮问题根因
+- 根因：首页 `useDashboardData` 每 30 秒执行一次整页级 `Promise.allSettled`，并先 `setLoading(true)`，导致页面重新进入 Skeleton/重建阶段；接口稍慢时会表现为页面卡死、无法点击。
+- 修复策略：移除首页整页轮询，只保留 KPI 级静默轮询；手动刷新和下单后的 `refetch` 也改为静默更新。
+
+### 本轮验证
+- ✅ `pnpm tsc --noEmit` 通过
+- ✅ `pnpm build` 通过
+- ✅ `use-dashboard-data.ts` 中已无 30 秒自动轮询
+- ✅ 首页 KPI 仍保留数据更新能力，但不再触发整页 loading 抖动
+
+### 本轮回滚点
+- 修复前备份 commit: `b06c8dc18`
+- 修复前 tag: `backup-dashboard-header-align-20260420-*`
+
 ## 验收标准
 
 - [ ] 所有 28 个页面加载正常
