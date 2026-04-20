@@ -219,7 +219,7 @@ async def login(req: LoginRequest):
 
     password_hash = hashlib.sha256(req.password.encode()).hexdigest()
     cursor.execute(
-        "SELECT id, username, role, created_at FROM users WHERE username = ? AND password_hash = ?",
+        "SELECT id, username, role, created_at FROM users WHERE LOWER(username) = LOWER(?) AND password_hash = ?",
         (req.username, password_hash)
     )
 
