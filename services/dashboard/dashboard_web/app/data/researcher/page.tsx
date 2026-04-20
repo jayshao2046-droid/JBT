@@ -24,8 +24,6 @@ export default function ResearcherPage() {
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 30000); // 每 30 秒刷新
-    return () => clearInterval(interval);
   }, []);
 
   const fetchStatus = async () => {
