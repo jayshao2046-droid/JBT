@@ -725,10 +725,10 @@ class YAMLSignalExecutor:
                 if attempt < self.MAX_RETRY:
                     logger.warning("qwen3 审核拒绝 attempt %d: %s，重试...", attempt + 1, audit_reason)
                     feedback = audit_reason
-                feedback = audit_reason
-                continue
+                    continue
+                return "", f"qwen3 审核失败（{self.MAX_RETRY + 1} 次后放弃）: {audit_reason}"
 
-            return "", f"qwen3 审核失败（{self.MAX_RETRY + 1} 次后放弃）: {audit_reason}"
+            return code, ""
 
         return "", "代码生成失败（未知原因）"
 
@@ -952,7 +952,7 @@ Long condition: {signal.get("long_condition", "")}
 Short condition: {signal.get("short_condition", "")}
 
 Generated code:
-{code[:3000]}
+{code}
 
 AUDIT CHECKLIST (check ALL items, FAIL on ANY violation):
 1. Does the code access bars[i]["MACD"], bars[i]["RSI"], bars[i]["EMA"], bars[i]["EMA_Cross"],

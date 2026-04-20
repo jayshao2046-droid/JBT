@@ -1,4 +1,4 @@
-# BotQuant Mini (Mac Mini M2) 全量数据采集配置
+# JBT Mini (Mac Mini M2) 全量数据采集配置
 # 部署设备: Mac Mini M2 8G/256G+2TB SSD — 24/7 持续运行采集端
 # 部署时间: 2026-03-20
 # 版本: v1.0
@@ -160,18 +160,19 @@ deployment_checklist:
     feishu: FEISHU_*_WEBHOOK_URL — 待配置           # ❌ 需填写 webhook URL
 
   data_sync:
-    local_to_mini: "rsync -avz ~/J_BotQuant/src mini-remote:~/J_BotQuant/"
-    configs: "rsync -avz ~/J_BotQuant/configs mini-remote:~/J_BotQuant/"
-    env: "scp ~/.env mini-remote:~/J_BotQuant/.env  (手动，包含隐私)"
+    local_to_mini: "rsync -avz ~/JBT/services/data/src mini-remote:~/jbt/services/data/"
+    configs: "rsync -avz ~/JBT/services/data/configs mini-remote:~/jbt/services/data/"
+    env: "scp .env mini-remote:~/jbt/services/data/.env  (手动，包含隐私)"
 
   startup:
     # crontab -e 添加:
-    # 30 09 * * 1-5 cd ~/J_BotQuant && .venv/bin/python3 scripts/domestic_minute_backfill.py
-    # */5 09-23 * * 1-5 cd ~/J_BotQuant && .venv/bin/python3 scripts/overseas_minute_backfill.py
-    # 0 17 * * 1-5 cd ~/J_BotQuant && .venv/bin/python3 -m src.data.collectors.volatility_collector
-    # 30 10 * * 1-5 cd ~/J_BotQuant && .venv/bin/python3 -m src.data.collectors.shipping_collector
-    # 30 20 * * 1-5 cd ~/J_BotQuant && .venv/bin/python3 scripts/check_data_completeness.py
-    # 0 21 * * 1-5 cd ~/J_BotQuant && .venv/bin/python3 scripts/aggregate_health_and_notify.py
+    # [DEPRECATED — 已迁移至 JBT Docker 调度器]
+    # 30 09 * * 1-5 cd ~/jbt && .venv/bin/python3 scripts/domestic_minute_backfill.py
+    # */5 09-23 * * 1-5 cd ~/jbt && .venv/bin/python3 scripts/overseas_minute_backfill.py
+    # 0 17 * * 1-5 cd ~/jbt && .venv/bin/python3 -m src.data.collectors.volatility_collector
+    # 30 10 * * 1-5 cd ~/jbt && .venv/bin/python3 -m src.data.collectors.shipping_collector
+    # 30 20 * * 1-5 cd ~/jbt && .venv/bin/python3 scripts/check_data_completeness.py
+    # 0 21 * * 1-5 cd ~/jbt && .venv/bin/python3 scripts/aggregate_health_and_notify.py
 
 # ═══════════════════════════════════════════════════════════════
 # 数据状态 (2026-03-20 更新)

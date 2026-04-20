@@ -142,7 +142,7 @@ monitor:
 
 # ===== 运行时端点 =====
 endpoints:
-  data_api_url: "${BOTQUANT_DATA_API_URL}"
-  decision_api_url: "${BOTQUANT_DECISION_API_URL}"
-  trading_host: "${BOTQUANT_TRADING_HOST}"
-  dashboard_port: "${BOTQUANT_DASHBOARD_PORT}"
+  data_api_url: "${JBT_DATA_API_URL}"
+  decision_api_url: "${JBT_DECISION_API_URL}"
+  trading_host: "${JBT_TRADING_HOST}"
+  dashboard_port: "${JBT_DASHBOARD_PORT}"

@@ -661,7 +661,7 @@ async def generate_strategies_for_symbol(
                 {"role": "user", "content": design_prompt},
             ]
 
-            response = await client.chat("gpt-5.4", messages, timeout=120.0)
+            response = await client.chat(os.getenv("ONLINE_RESEARCHER_MODEL", "gpt-5.4"), messages, timeout=120.0)
             if "error" in response:
                 logger.error(f"  ✗ 设计失败: {response['error']}")
                 continue
@@ -699,7 +699,7 @@ async def generate_strategies_for_symbol(
                     "factors": template["factors"],
                     "design_prompt": design_prompt,
                     "design_response": design,
-                    "model": "gpt-5.4",
+                    "model": os.getenv("ONLINE_RESEARCHER_MODEL", "gpt-5.4"),
                     "generated_at": datetime.now().isoformat(),
                     "yaml_path": str(yaml_path),
                 }

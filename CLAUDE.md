@@ -89,3 +89,32 @@
 - `workflow_status` — 查询当前活跃 token、启动链与治理规则摘要
 - `check_token_access` — 验证指定文件的 token 是否有效（写操作前必须调用）
 - `append_atlas_log` — 向 ATLAS_PROMPT.md 追加批次日志（仅当 ATLAS_PROMPT.md 在白名单中时有效）
+
+## 四设备连接规范（2026-04-20 Jay.S 确认，唯一权威来源）
+
+> 禁止使用下表以外的 IP、用户名或端口连接任何设备。内网默认直连本地 IP；外网优先蒲公英，次选 Tailscale。
+
+| 设备 | 角色 | 内网 IP | Tailscale | 蒲公英 | SSH 用户 | 主要服务 |
+|------|------|---------|-----------|--------|---------|--------|
+| **Mini** | 数据采集节点 | 192.168.31.74 | 100.83.139.52 | 172.16.0.49 | jaybot | data:8105, data-web:3004 |
+| **Alienware** | 交易执行 + 研究员节点 | 192.168.31.223 | 100.91.19.67 | — | 17621 | sim-trading:8101, researcher:8199 |
+| **Studio** | 决策/看板/回测主控 | 192.168.31.142 | 100.86.182.114 | 172.16.1.130 | jaybot | decision:8104, backtest:8103, dashboard:8106/3005 |
+| **Air** | 回测生产节点 | 192.168.31.245 | 100.118.65.55 | — | jayshao | backtest:8103, backtest-web:3001 |
+
+**SSH 快速参考**：
+```bash
+ssh jaybot@192.168.31.74       # Mini
+ssh 17621@192.168.31.223       # Alienware
+ssh jaybot@192.168.31.142      # Studio
+ssh jayshao@192.168.31.245     # Air
+```
+
+**代码同步（rsync，禁止 GitHub 中转）**：
+```bash
+# MacBook → Mini
+rsync -avz --delete /Users/jayshao/JBT/services/data/ jaybot@192.168.31.74:~/jbt/services/data/ --exclude="__pycache__" --exclude="*.pyc" --exclude=".env"
+# MacBook → Studio
+rsync -avz --delete /Users/jayshao/JBT/services/decision/ jaybot@192.168.31.142:~/jbt/services/decision/ --exclude="__pycache__" --exclude="*.pyc" --exclude=".env"
+# MacBook → Air
+rsync -avz --delete /Users/jayshao/JBT/services/backtest/ jayshao@192.168.31.245:~/jbt/services/backtest/ --exclude="__pycache__" --exclude="*.pyc" --exclude=".env"
+```

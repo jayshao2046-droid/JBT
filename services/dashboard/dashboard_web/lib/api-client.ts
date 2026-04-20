@@ -9,10 +9,10 @@
  */
 
 const API_BASE_URLS = {
-  simTrading: process.env.NEXT_PUBLIC_SIM_TRADING_API || 'http://localhost:8101',
-  backtest: process.env.NEXT_PUBLIC_BACKTEST_API || 'http://localhost:8103',
-  decision: process.env.NEXT_PUBLIC_DECISION_API || 'http://localhost:8104',
-  data: process.env.NEXT_PUBLIC_DATA_API || 'http://localhost:8105',
+  simTrading: process.env.NEXT_PUBLIC_SIM_TRADING_URL || 'http://localhost:8101',
+  backtest: process.env.NEXT_PUBLIC_BACKTEST_URL || 'http://localhost:8103',
+  decision: process.env.NEXT_PUBLIC_DECISION_URL || 'http://localhost:8104',
+  data: process.env.NEXT_PUBLIC_DATA_URL || 'http://localhost:8105',
 }
 
 export type ServiceName = keyof typeof API_BASE_URLS

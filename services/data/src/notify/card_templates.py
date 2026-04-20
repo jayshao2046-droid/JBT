@@ -25,7 +25,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 
 CN_TZ = timezone(timedelta(hours=8))
-SERVICE_NAME = "BotQuant 资讯 | JBT data-service"
+SERVICE_NAME = "JBT data-service"
 
 # ── 统一颜色映射 ──────────────────────────────────────────
 _TEMPLATE_MAP: dict[str, tuple[str, str]] = {
@@ -211,7 +211,7 @@ def alert_card(
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header(f"JBQ {title}", template),
+            "header": _header(f"JBT {title}", template),
             "elements": elements,
         },
     }

@@ -2,7 +2,7 @@
 
 Migrated from Mini shell scripts:
 - _cleanup_botquandata.sh: remove old temp files and stale logs
-- cleanup_botquant_tmp.sh: clean /tmp leftovers
+- cleanup_data_tmp.sh: clean /tmp leftovers
 
 In JBT Docker, cleanup runs as a scheduled job.
 """

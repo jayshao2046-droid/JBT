@@ -1,0 +1,105 @@
+{
+  "strategy_name": "rb_trend_60m_v1",
+  "symbol": "rb",
+  "category": "trend_following",
+  "timeframe": 60,
+  "factors": [
+    "EMA",
+    "ADX",
+    "ATR"
+  ],
+  "design_prompt": "为 rb 品种设计一个 trend_following 策略。\n品种特征: 品种: rb（特征分析失败，使用保守参数）\n时间周期: 60 分钟\n核心因子: EMA, ADX, ATR\n策略描述: 60分钟EMA交叉+ADX趋势确认+ATR波动率过滤的低频趋势跟踪策略\n\n输出 JSON 格式的策略设计，包含：\n- strategy_name: rb_trend_60m_v1\n- logic_description: 策略逻辑描述\n- entry_logic: 做多入场条件\n- exit_logic: 做多出场条件\n- short_entry_logic: 做空入场条件\n- short_exit_logic: 做空出场条件\n- risk_management: 风险管理方案（止损止盈规则）\n- recommended_factors: 推荐使用的技术指标列表\n",
+  "design_response": {
+    "strategy_name": "rb_trend_60m_v1",
+    "logic_description": {
+      "market": "rb",
+      "timeframe": "60分钟",
+      "style": "低频趋势跟踪",
+      "core_factors": [
+        "EMA",
+        "ADX",
+        "ATR"
+      ],
+      "design_principle": "在60分钟级别使用中慢速EMA识别主趋势方向，利用ADX确认趋势强度，再通过ATR过滤过低或过高波动环境，避免震荡假突破与极端波动追单。由于品种特征分析失败，参数采用偏保守设置，以降低过度交易和噪音干扰。",
+      "default_parameters": {
+        "ema_fast": 20,
+        "ema_slow": 60,
+        "adx_period": 14,
+        "adx_threshold": 25,
+        "atr_period": 14,
+        "atr_vol_filter_min_ratio": 0.006,
+        "atr_vol_filter_max_ratio": 0.03,
+        "signal_confirm_bars": 1
+      }
+    },
+    "entry_logic": [
+      "1. 趋势方向：EMA20向上突破EMA60，或EMA20已在EMA60上方且两者斜率同时向上。",
+      "2. 趋势强度：ADX(14) > 25，且最近1-3根K线中ADX不下降，优先选择ADX上行阶段。",
+      "3. 方向确认：+DI > -DI。",
+      "4. 波动过滤：ATR(14)/Close 位于 0.6% ~ 3.0% 区间内；若低于下限，视为波动不足，不开仓；若高于上限，视为波动过大，不追单。",
+      "5. 价格确认：当前K线收盘价位于EMA20上方，且距离EMA20不超过1.0倍ATR，避免远离均线追涨。",
+      "6. 执行方式：满足以上条件后，于下一根K线开盘做多。"
+    ],
+    "exit_logic": [
+      "1. 趋势反转退出：EMA20下穿EMA60时，全部平多。",
+      "2. 趋势减弱退出：收盘价连续2根K线跌破EMA20，且ADX回落、+DI < -DI时，全部平多。",
+      "3. 波动止损退出：价格触发ATR初始止损或移动止损时，立即平多。",
+      "4. 保护性退出：若开仓后3根K线内价格未能向有利方向运行至少0.5倍ATR，且ADX未继续走强，可减仓或直接退出。",
+      "5. 极端波动退出：若单根K线逆向波动超过2.5倍ATR，可直接执行风控平仓。"
+    ],
+    "short_entry_logic": [
+      "1. 趋势方向：EMA20向下跌破EMA60，或EMA20已在EMA60下方且两者斜率同时向下。",
+      "2. 趋势强度：ADX(14) > 25，且最近1-3根K线中ADX不下降，优先选择ADX上行阶段。",
+      "3. 方向确认：-DI > +DI。",
+      "4. 波动过滤：ATR(14)/Close 位于 0.6% ~ 3.0% 区间内；若低于下限，视为波动不足，不开仓；若高于上限，视为波动过大，不追空。",
+      "5. 价格确认：当前K线收盘价位于EMA20下方，且距离EMA20不超过1.0倍ATR，避免远离均线追空。",
+      "6. 执行方式：满足以上条件后，于下一根K线开盘做空。"
+    ],
+    "short_exit_logic": [
+      "1. 趋势反转退出：EMA20上穿EMA60时，全部平空。",
+      "2. 趋势减弱退出：收盘价连续2根K线站上EMA20，且ADX回落、-DI < +DI时，全部平空。",
+      "3. 波动止损退出：价格触发ATR初始止损或移动止损时，立即平空。",
+      "4. 保护性退出：若开仓后3根K线内价格未能向有利方向运行至少0.5倍ATR，且ADX未继续走强，可减仓或直接退出。",
+      "5. 极端波动退出：若单根K线逆向波动超过2.5倍ATR，可直接执行风控平仓。"
+    ],
+    "risk_management": {
+      "position_sizing": [
+        "单笔风险建议控制在账户权益的0.5%~1.0%，保守建议使用0.75%。",
+        "按ATR进行头寸调整：仓位 = 单笔允许亏损金额 / (止损距离 × 合约乘数)。",
+        "同向连续信号不建议超过2次加仓，总风险敞口不超过账户权益的2%。"
+      ],
+      "stop_loss": {
+        "long_stop": "做多初始止损设为入场价下方1.8倍ATR，或最近2-3根K线摆动低点下方，两者取更远者。",
+        "short_stop": "做空初始止损设为入场价上方1.8倍ATR，或最近2-3根K线摆动高点上方，两者取更远者。",
+        "time_stop": "若开仓后3根K线内趋势未扩展且ADX未增强，可执行时间止损。"
+      },
+      "take_profit": {
+        "principle": "趋势策略以移动止盈为主，不设置过近的固定止盈，避免过早离场。",
+        "breakeven_rule": "浮盈达到2.0倍ATR后，止损上移/下移至开仓价附近，锁定不亏。",
+        "trailing_rule": "浮盈达到2.5倍ATR后，使用2.0~2.5倍ATR移动止损，或参考EMA20作为动态止盈线。",
+        "optional_partial_exit": "浮盈达到3.0倍ATR时可减仓30%~50%，剩余仓位继续趋势持有。"
+      },
+      "trade_filter": [
+        "ADX < 20时禁止开仓，避免震荡市频繁试错。",
+        "ATR/Close 低于0.6%时不开仓，避免无效波动。",
+        "ATR/Close 高于3.0%时不开仓，避免情绪化极端行情追单。"
+      ]
+    },
+    "recommended_factors": [
+      "EMA(20)",
+      "EMA(60)",
+      "ADX(14)",
+      "+DI / -DI",
+      "ATR(14)",
+      "ATR/Close 波动率比例",
+      "最近2-3根K线摆动高低点",
+      "EMA斜率",
+      "收盘价相对EMA20的位置"
+    ]
+  },
+  "model": "gpt-5.4",
+  "generated_at": "2026-04-19T12:58:34.492250",
+  "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/rb/rb_trend_60m_v1.yaml",
+  "saved_at": "2026-04-19T12:58:34.492600",
+  "report_type": "generation"
+}

@@ -663,10 +663,15 @@ class StrategyEvaluator:
             conclusion['suggestions'].append('提高入场阈值，提升胜率')
 
         # 根据风控参数给建议
-        if risk.get('daily_loss_pct', 0) > 0.005:
+        # risk_report 中字段可能是 {'value': x, 'pass': bool} 或直接是数值
+        daily_loss_raw = risk.get('daily_loss_pct', 0)
+        daily_loss_val = daily_loss_raw.get('value', 0) if isinstance(daily_loss_raw, dict) else daily_loss_raw
+        if daily_loss_val > 0.005:
             conclusion['warnings'].append('日亏损限制过宽松，建议收紧至 0.5%')
 
-        if risk.get('max_drawdown_pct', 0) > 0.015:
+        max_dd_raw = risk.get('max_drawdown_pct', 0)
+        max_dd_val = max_dd_raw.get('value', 0) if isinstance(max_dd_raw, dict) else max_dd_raw
+        if max_dd_val > 0.015:
             conclusion['warnings'].append('回撤阈值过宽松，建议收紧至 1.5%')
 
         return conclusion
@@ -798,10 +803,14 @@ class StrategyEvaluator:
 
     def _format_risk_report(self, report: dict) -> str:
         """格式化风控报告。"""
+        def _val(v):
+            """从 {'value': x, 'pass': bool} 或直接数值中提取值。"""
+            return v.get('value', 0) if isinstance(v, dict) else v
+
         lines = [
-            f"- 最大回撤阈值: {report.get('max_drawdown_pct', 0):.2%}",
-            f"- 日亏损限制: {report.get('daily_loss_limit_yuan', 0):.0f} 元 ({report.get('daily_loss_pct', 0):.2%})",
-            f"- 单品种熔断: {report.get('per_symbol_fuse_yuan', 0):.0f} 元 ({report.get('fuse_pct', 0):.2%})",
+            f"- 最大回撤阈值: {_val(report.get('max_drawdown_pct', 0)):.2%}",
+            f"- 日亏损限制: {_val(report.get('daily_loss_limit_yuan', 0)):.0f} 元 ({_val(report.get('daily_loss_pct', 0)):.2%})",
+            f"- 单品种熔断: {_val(report.get('per_symbol_fuse_yuan', 0)):.0f} 元 ({_val(report.get('fuse_pct', 0)):.2%})",
         ]
         return '\n'.join(lines)
 

@@ -110,7 +110,7 @@ class TqSdkBacktestClient:
             raise TqSdkBacktestError("YAML 缺少 symbols 字段")
 
         payload = {
-            "strategy_id": "generic",  # 映射到 generic_formal_strategy_v1
+            "strategy_id": strategy_name,  # 使用实际策略名，与 import 注册名一致
             "strategy_name": strategy_name,
             "engine_type": "tqsdk",
             "start": start_date,

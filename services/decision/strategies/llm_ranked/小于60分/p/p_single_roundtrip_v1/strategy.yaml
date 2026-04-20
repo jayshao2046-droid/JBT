@@ -1,0 +1,34 @@
+name: p_single_roundtrip_v1
+description: 单策略两轮调优+tqsdk验证（棕榈油）
+symbols:
+  - DCE.p2605
+timeframe_minutes: 60
+factors:
+  - factor_name: ATR
+    params:
+      period: 14
+  - factor_name: VolumeRatio
+    params:
+      lookback_period: 20
+  - factor_name: Bollinger
+    params:
+      period: 20
+      std_dev: 2
+signal:
+  long_condition: atr > 0.0025 * close and volume_ratio > 1.1 and close > bollinger.middle
+  short_condition: close < bollinger.middle and volume_ratio < 0.95
+  confirm_bars: 1
+market_filter:
+  conditions:
+    - atr > 0.0015 * close
+risk:
+  stop_loss_yuan: 800
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+  daily_loss_limit: 0.004
+  max_drawdown: 0.02
+position_fraction: 0.08
+transaction_costs:
+  slippage_per_unit: 1
+  commission_per_lot_round_turn: 5

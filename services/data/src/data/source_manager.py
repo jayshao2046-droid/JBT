@@ -1,6 +1,6 @@
 """Manage failover between primary and secondary data sources.
 
-Migrated from legacy J_BotQuant/src/data/source_manager.py.
+Migrated from legacy codebase.
 Import paths updated: services.data.src.utils → src.utils
 """
 

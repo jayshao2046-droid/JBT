@@ -4,7 +4,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.botquant.data_scheduler</string>
+    <string>com.jbt.data_scheduler</string>
 
     <key>ProgramArguments</key>
     <array>

@@ -15,7 +15,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "JBT Data | 数据采集运维中控台",
-  description: "JBotQuant 量化数据采集与运维监控系统",
+  description: "JBT 量化数据采集与运维监控系统",
   generator: "v0.app",
 }
 

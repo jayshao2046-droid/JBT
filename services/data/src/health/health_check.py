@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""BotQuant 设备健康检查 — 采集 CPU/内存/磁盘/GPU/进程/服务状态，输出 JSON 并触发 P0 告警。
+"""JBT 设备健康检查 — 采集 CPU/内存/磁盘/GPU/进程/服务状态，输出 JSON 并触发 P0 告警。
 
 用法:
     .venv/bin/python3 scripts/health_check.py              # 正常检查
@@ -54,9 +54,12 @@ CFG = load_config()
 TH = CFG.get("thresholds", {})
 
 # --------------- 设备识别 ---------------
-_hostname = (os.environ.get("BOTQUANT_DEVICE") or socket.gethostname()).lower()
+_hostname = (os.environ.get("JBT_DEVICE") or socket.gethostname()).lower()
 IS_MINI = "mini" in _hostname or "jbotm" in _hostname
 IS_STUDIO = "studio" in _hostname or "jbots" in _hostname
+# 数据服务仅部署在 Mini，容器内 hostname 为容器 ID，回退为 mini
+if not IS_MINI and not IS_STUDIO and os.environ.get("JBT_SERVICE_NAME") == "jbt-data":
+    IS_MINI = True
 DEVICE = "mini" if IS_MINI else ("studio" if IS_STUDIO else _hostname)
 LABEL = "Mini" if IS_MINI else ("Studio" if IS_STUDIO else _hostname)
 
@@ -313,7 +316,7 @@ def get_service_status() -> dict:
             )
             if p.returncode == 0 and p.stdout:
                 data = json.loads(p.stdout)
-                auto = data.get("proxies", {}).get("BotQuant-Auto", {})
+                auto = data.get("proxies", {}).get("JBT-Auto", {})
                 services["mihomo"] = f"正常 ({auto.get('now', '未知节点')})"
             else:
                 services["mihomo"] = "不可达"
@@ -1025,7 +1028,7 @@ def print_summary(report: dict) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="BotQuant 设备健康检查")
+    parser = argparse.ArgumentParser(description="JBT 设备健康检查")
     parser.add_argument("--test-p0", action="store_true", help="模拟 P0 告警（测试用）")
     args = parser.parse_args()
 

@@ -1,0 +1,8 @@
+{
+  "stage": "pipeline",
+  "error": "'>' not supported between instances of 'dict' and 'float'",
+  "context": {},
+  "saved_at": "2026-04-19T05:48:45.423112",
+  "report_type": "failure_pipeline",
+  "run_id": "20260419_054632"
+}

@@ -38,14 +38,24 @@ export const settingsApi = {
   // 获取完整系统设置
   getSettings: async (): Promise<SystemSettings> => {
     // 并行获取各服务的配置
-    const [simTradingState, dataHealth] = await Promise.all([
-      apiFetch<{
-        trading_enabled: boolean
-        active_preset: string
-        paused_reason: string | null
-      }>(`${SIM_TRADING_BASE}/system/state`).catch(() => null),
-      apiFetch<{ status: string }>(`${DATA_BASE}/health`).catch(() => null),
-    ])
+    const [simTradingState, dataHealth, dataNotifications, decisionHealth, backtestHealth] =
+      await Promise.all([
+        apiFetch<{
+          trading_enabled: boolean
+          active_preset: string
+          paused_reason: string | null
+        }>(`${SIM_TRADING_BASE}/system/state`).catch(() => null),
+        apiFetch<{ status: string }>(`${DATA_BASE}/health`).catch(() => null),
+        apiFetch<{
+          feishu_webhook: string
+          smtp_server: string
+          smtp_port: number
+          smtp_username: string
+          alert_enabled: boolean
+        }>(`${DATA_BASE}/settings/notifications`).catch(() => null),
+        apiFetch<{ status: string }>("/api/decision/api/health").catch(() => null),
+        apiFetch<{ status: string }>("/api/backtest/api/v1/health").catch(() => null),
+      ])
 
     return {
       account: {
@@ -58,9 +68,9 @@ export const settingsApi = {
         post_market_enabled: true,
       },
       notifications: {
-        feishu_webhook: "",
-        smtp_server: "",
-        alert_enabled: true,
+        feishu_webhook: dataNotifications?.feishu_webhook ?? "",
+        smtp_server: dataNotifications?.smtp_server ?? "",
+        alert_enabled: dataNotifications?.alert_enabled ?? true,
       },
       services: [
         {
@@ -69,11 +79,11 @@ export const settingsApi = {
         },
         {
           name: "回测系统",
-          status: "running",
+          status: backtestHealth?.status === "ok" ? "running" : "error",
         },
         {
           name: "决策引擎",
-          status: "running",
+          status: decisionHealth?.status === "ok" ? "running" : "error",
         },
         {
           name: "数据服务",
@@ -109,8 +119,17 @@ export const settingsApi = {
 
   // 更新通知设置
   updateNotifications: async (data: NotificationSettings): Promise<{ success: boolean }> => {
-    // Dashboard 只读，暂不实现写入
-    console.log("Notification update:", data)
+    await apiFetch<{ success: boolean }>(`${DATA_BASE}/settings/notifications`, {
+      method: "POST",
+      body: JSON.stringify({
+        feishu_webhook: data.feishu_webhook,
+        smtp_server: data.smtp_server,
+        smtp_port: 465,
+        smtp_username: "",
+        smtp_password: "",
+        alert_enabled: data.alert_enabled,
+      }),
+    })
     return { success: true }
   },
 

@@ -1,0 +1,373 @@
+{
+  "id": "45b409c3-5af8-4e72-876f-80f182c8a49a",
+  "task_id": "45b409c3-5af8-4e72-876f-80f182c8a49a",
+  "name": "p_single_roundtrip_v1",
+  "strategy": "p_single_roundtrip_v1",
+  "status": "completed",
+  "payload": {
+    "start": "2022-01-01",
+    "end": "2024-12-31",
+    "symbols": [
+      "DCE.p2605"
+    ],
+    "contract": "DCE.p2605",
+    "engine_type": "tqsdk",
+    "params": {},
+    "strategy": {
+      "id": "p_single_roundtrip_v1",
+      "description": "单策略两轮调优+tqsdk验证（棕榈油）",
+      "category": "",
+      "template_id": "generic_formal_strategy_v1",
+      "version": "",
+      "params": {
+        "position_fraction": 0.08,
+        "timeframe_minutes": 60,
+        "timeframe": 60
+      },
+      "symbols": [
+        "DCE.p2605"
+      ],
+      "factor_names": [
+        "ATR",
+        "VolumeRatio",
+        "Bollinger"
+      ],
+      "capital_params": {},
+      "signal": {
+        "confirm_bars": 1,
+        "long_condition": "atr > 0.0025 * close and volume_ratio > 1.1 and close > bollinger.middle",
+        "short_condition": "close < bollinger.middle and volume_ratio < 0.95"
+      },
+      "risk": {
+        "daily_loss_limit": 0.004,
+        "force_close_day": "14:55",
+        "force_close_night": "22:55",
+        "max_drawdown": 0.02,
+        "no_overnight": true,
+        "stop_loss_yuan": 800
+      },
+      "strategy_yaml_filename": "p_single_roundtrip_v1.yaml",
+      "formal_parser_error": null,
+      "execution_profile": {
+        "mode": "formal",
+        "label": "正式回测",
+        "template_id": "generic_formal_strategy_v1",
+        "formal_supported": true,
+        "formal_parser_error": null,
+        "formal_engine": {
+          "ready": true,
+          "auth_configured": true,
+          "backtest_mode": "online",
+          "registered_templates": [
+            "FC-224_v3_intraday_trend_cf605_5m",
+            "generic_formal_strategy_v1"
+          ],
+          "reason": "正式引擎已具备基础运行条件"
+        },
+        "reason": "策略模板 generic_formal_strategy_v1 已注册到正式引擎，且正式引擎基础条件已就绪。",
+        "evidence": [
+          "当前结果由 services/backtest/src/backtest/runner.py 正式引擎生成。",
+          "formal_status=completed",
+          "formal_report_path=45b409c3-5af8-4e72-876f-80f182c8a49a/report.json",
+          "正式引擎已注册模板: FC-224_v3_intraday_trend_cf605_5m, generic_formal_strategy_v1",
+          "当前策略 template_id: generic_formal_strategy_v1",
+          "正式引擎已具备基础运行条件"
+        ],
+        "engine_type": "tqsdk",
+        "executed_mode": "tqsdk",
+        "executed_label": "TqSdk 在线回测",
+        "executed_formal": true,
+        "can_execute_formal": true,
+        "executed_reason": "当前结果由 services/backtest/src/backtest/runner.py 正式引擎生成。"
+      }
+    },
+    "signal": {
+      "confirm_bars": 1,
+      "long_condition": "atr > 0.0025 * close and volume_ratio > 1.1 and close > bollinger.middle",
+      "short_condition": "close < bollinger.middle and volume_ratio < 0.95"
+    },
+    "risk": {
+      "daily_loss_limit": 0.004,
+      "force_close_day": "14:55",
+      "force_close_night": "22:55",
+      "max_drawdown": 0.02,
+      "no_overnight": true,
+      "stop_loss_yuan": 800
+    },
+    "timeframe": "60m",
+    "template_id": "generic_formal_strategy_v1"
+  },
+  "contracts": [
+    "DCE.p2605"
+  ],
+  "submitted_at": 1776549326,
+  "progress": 100,
+  "current_date": "2024-12-31",
+  "trades": [],
+  "equity_curve": [
+    {
+      "timestamp": "2026-04-19T05:55:26.860643+08:00",
+      "equity": 500000.0,
+      "drawdown": 0.0,
+      "position": 0,
+      "pnl": 0.0,
+      "cum_pnl": 0.0
+    }
+  ],
+  "error_message": null,
+  "source": "tqsdk_formal_engine",
+  "report_path": "45b409c3-5af8-4e72-876f-80f182c8a49a/report.json",
+  "execution_profile": {
+    "mode": "formal",
+    "label": "正式回测",
+    "template_id": "generic_formal_strategy_v1",
+    "formal_supported": true,
+    "formal_parser_error": null,
+    "formal_engine": {
+      "ready": true,
+      "auth_configured": true,
+      "backtest_mode": "online",
+      "registered_templates": [
+        "FC-224_v3_intraday_trend_cf605_5m",
+        "generic_formal_strategy_v1"
+      ],
+      "reason": "正式引擎已具备基础运行条件"
+    },
+    "reason": "策略模板 generic_formal_strategy_v1 已注册到正式引擎，且正式引擎基础条件已就绪。",
+    "evidence": [
+      "当前结果由 services/backtest/src/backtest/runner.py 正式引擎生成。",
+      "formal_status=completed",
+      "formal_report_path=45b409c3-5af8-4e72-876f-80f182c8a49a/report.json",
+      "正式引擎已注册模板: FC-224_v3_intraday_trend_cf605_5m, generic_formal_strategy_v1",
+      "当前策略 template_id: generic_formal_strategy_v1",
+      "正式引擎已具备基础运行条件"
+    ],
+    "engine_type": "tqsdk",
+    "executed_mode": "tqsdk",
+    "executed_label": "TqSdk 在线回测",
+    "executed_formal": true,
+    "can_execute_formal": true,
+    "executed_reason": "当前结果由 services/backtest/src/backtest/runner.py 正式引擎生成。"
+  },
+  "duration_seconds": 0,
+  "completion_logged": true,
+  "report_summary": "strategy=p_single_roundtrip_v1; symbol=DCE.p2605; timeframe=60m; window=2022-01-01~2024-12-31; initial_capital=500000.00; slippage_per_unit=1; commission_per_lot_round_turn=5; status=completed; final_equity=500000.00; total_trades=0; max_drawdown=0.000000",
+  "formal_report": {
+    "result_id": "ee8cd924-6683-4ecd-a302-8d50902a5250",
+    "job_id": "45b409c3-5af8-4e72-876f-80f182c8a49a",
+    "symbol": "DCE.p2605",
+    "strategy_template_id": "generic_formal_strategy_v1",
+    "strategy_yaml_filename": "p_single_roundtrip_v1.yaml",
+    "strategy_name": "p_single_roundtrip_v1",
+    "timeframe": "60m",
+    "start_date": "2022-01-01",
+    "end_date": "2024-12-31",
+    "initial_capital": 500000.0,
+    "transaction_costs": {
+      "slippage_per_unit": 1.0,
+      "commission_per_lot_round_turn": 5.0
+    },
+    "status": "completed",
+    "final_equity": 500000.0,
+    "max_drawdown": 0.0,
+    "total_trades": 0,
+    "equity_curve_path": "45b409c3-5af8-4e72-876f-80f182c8a49a/equity_curve.parquet",
+    "report_path": "45b409c3-5af8-4e72-876f-80f182c8a49a/report.json",
+    "completed_at": "2026-04-19T05:55:26.860643+08:00",
+    "performance_metrics": {
+      "total_return": 0.0,
+      "annualized_return": 0.0,
+      "sharpe_ratio": 0.0,
+      "max_drawdown": 0.0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "total_trades": 0,
+      "avg_trade_pnl": 0.0,
+      "max_consecutive_wins": 0,
+      "max_consecutive_losses": 0
+    },
+    "risk_summary": {
+      "source": "yaml",
+      "parameters": {
+        "daily_loss_limit": 0.004,
+        "force_close_day": "14:55",
+        "force_close_night": "22:55",
+        "max_drawdown": 0.02,
+        "no_overnight": true,
+        "stop_loss_yuan": 800
+      },
+      "violation_count": 0,
+      "breached_rules": [],
+      "max_observed_drawdown": 0.0,
+      "peak_position": 0,
+      "violations": []
+    },
+    "equity_curve": [
+      {
+        "timestamp": "2026-04-19T05:55:26.860643+08:00",
+        "equity": 500000.0,
+        "drawdown": 0.0,
+        "position": 0,
+        "pnl": 0.0,
+        "cum_pnl": 0.0
+      }
+    ],
+    "notes": [
+      "backtest_finished_during_setup",
+      "transaction_cost_slippage_applied=false",
+      "transaction_cost_commission_applied=5.0"
+    ],
+    "report_summary": "strategy=p_single_roundtrip_v1; symbol=DCE.p2605; timeframe=60m; window=2022-01-01~2024-12-31; initial_capital=500000.00; slippage_per_unit=1; commission_per_lot_round_turn=5; status=completed; final_equity=500000.00; total_trades=0; max_drawdown=0.000000",
+    "failure_reason": null,
+    "transaction_cost_summary": {
+      "total_trades": 0,
+      "slippage_per_unit": 1.0,
+      "commission_per_lot_round_turn": 5.0,
+      "total_slippage_estimated": 0.0,
+      "total_commission_estimated": 0.0,
+      "total_cost_estimated": 0.0,
+      "avg_cost_per_trade_estimated": null,
+      "note": "slippage 按每手双边（开仓+平仓）估算，commission 按每笔回合计"
+    },
+    "trades": [],
+    "tqsdk_snapshot": {
+      "account": {
+        "currency": "CNY",
+        "pre_balance": 500000.0,
+        "static_balance": 500000.0,
+        "balance": 500000.0,
+        "available": 500000.0,
+        "ctp_balance": null,
+        "ctp_available": null,
+        "float_profit": 0.0,
+        "position_profit": 0.0,
+        "close_profit": 0.0,
+        "frozen_margin": 0.0,
+        "margin": 0.0,
+        "frozen_commission": 0.0,
+        "commission": 0.0,
+        "frozen_premium": 0.0,
+        "premium": 0.0,
+        "deposit": 0.0,
+        "withdraw": 0.0,
+        "risk_ratio": 0.0,
+        "market_value": 0.0
+      },
+      "position": {
+        "exchange_id": "DCE",
+        "instrument_id": "p2605",
+        "pos_long_his": 0,
+        "pos_long_today": 0,
+        "pos_short_his": 0,
+        "pos_short_today": 0,
+        "volume_long_today": 0,
+        "volume_long_his": 0,
+        "volume_long": 0,
+        "volume_long_frozen_today": 0,
+        "volume_long_frozen_his": 0,
+        "volume_long_frozen": 0,
+        "volume_short_today": 0,
+        "volume_short_his": 0,
+        "volume_short": 0,
+        "volume_short_frozen_today": 0,
+        "volume_short_frozen_his": 0,
+        "volume_short_frozen": 0,
+        "open_price_long": null,
+        "open_price_short": null,
+        "open_cost_long": null,
+        "open_cost_short": null,
+        "position_price_long": null,
+        "position_price_short": null,
+        "position_cost_long": null,
+        "position_cost_short": null,
+        "float_profit_long": null,
+        "float_profit_short": null,
+        "float_profit": null,
+        "position_profit_long": null,
+        "position_profit_short": null,
+        "position_profit": null,
+        "margin_long": null,
+        "margin_short": null,
+        "margin": null,
+        "market_value_long": null,
+        "market_value_short": null,
+        "market_value": null,
+        "pos": 0,
+        "pos_long": 0,
+        "pos_short": 0
+      }
+    },
+    "yaml_snapshot_hash": "a9b99c948ce23da43496e707fb914e8860035ba4ceba020f9224b0d8d6dc9400"
+  },
+  "formal_notes": [
+    "backtest_finished_during_setup",
+    "transaction_cost_slippage_applied=false",
+    "transaction_cost_commission_applied=5.0"
+  ],
+  "risk_summary": {
+    "source": "yaml",
+    "parameters": {
+      "daily_loss_limit": 0.004,
+      "force_close_day": "14:55",
+      "force_close_night": "22:55",
+      "max_drawdown": 0.02,
+      "no_overnight": true,
+      "stop_loss_yuan": 800
+    },
+    "violation_count": 0,
+    "breached_rules": [],
+    "max_observed_drawdown": 0.0,
+    "peak_position": 0,
+    "violations": []
+  },
+  "transaction_costs": {
+    "slippage_per_unit": 1.0,
+    "commission_per_lot_round_turn": 5.0
+  },
+  "transaction_cost_summary": {
+    "total_trades": 0,
+    "slippage_per_unit": 1.0,
+    "commission_per_lot_round_turn": 5.0,
+    "total_slippage_estimated": 0.0,
+    "total_commission_estimated": 0.0,
+    "total_cost_estimated": 0.0,
+    "avg_cost_per_trade_estimated": null,
+    "note": "slippage 按每手双边（开仓+平仓）估算，commission 按每笔回合计"
+  },
+  "template_id": "generic_formal_strategy_v1",
+  "timeframe": "60m",
+  "totalReturn": 0.0,
+  "annualReturn": 0.0,
+  "maxDrawdown": 0.0,
+  "sharpeRatio": 0.0,
+  "winRate": 0.0,
+  "profitLossRatio": 0.0,
+  "totalTrades": 0,
+  "total_trades": 0,
+  "initialCapital": 500000.0,
+  "finalCapital": 500000.0,
+  "result": {
+    "totalReturn": 0.0,
+    "annualReturn": 0.0,
+    "maxDrawdown": 0.0,
+    "sharpeRatio": 0.0,
+    "winRate": 0.0,
+    "profitLossRatio": 0.0,
+    "totalTrades": 0
+  },
+  "tqsdk_stat": {
+    "symbol": "DCE.p2605",
+    "start_date": "2022-01-01",
+    "end_date": "2024-12-31",
+    "timeframe": 60,
+    "init_balance": 500000.0,
+    "balance": 500000.0,
+    "trading_days": 0,
+    "open_times": 0,
+    "close_times": 0,
+    "profit_volumes": 0,
+    "loss_volumes": 0
+  },
+  "saved_at": "2026-04-19T05:55:27.482807",
+  "report_type": "tqsdk_backtest"
+}

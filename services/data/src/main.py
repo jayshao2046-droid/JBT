@@ -256,6 +256,13 @@ try:
 except ImportError:
     pass  # 开发环境可能未安装所有依赖
 
+# 注册系统设置路由
+try:
+    from api.routes.settings_route import router as settings_router
+    app.include_router(settings_router)
+except ImportError:
+    pass  # 开发环境可能未安装所有依赖
+
 
 class ParsedTimeRange(NamedTuple):
     timestamp: pd.Timestamp
@@ -1003,7 +1010,7 @@ def _service_info() -> dict[str, Any]:
         "name": SERVICE_NAME,
         "version": SERVICE_VERSION,
         "python_version": platform.python_version(),
-        "runtime": os.getenv("BOTQUANT_DEVICE") or "data-service",
+        "runtime": os.getenv("JBT_DEVICE") or "data-service",
         "data_root": "DATA_STORAGE_ROOT",
         "api_port": int(os.getenv("JBT_SERVICE_PORT", os.getenv("SERVICE_PORT", "8105"))),
         "environment": os.getenv("JBT_ENV", os.getenv("ENV", "production")),
@@ -1588,19 +1595,19 @@ def ops_restart_collector(
 
     # 安全白名单
     _PLIST_MAP = {
-        "data_scheduler": "com.botquant.data_scheduler",
-        "news": "com.botquant.news",
-        "health": "com.botquant.health",
-        "futures_minute": "com.botquant.futures.minute",
-        "futures_eod": "com.botquant.futures.eod",
-        "overseas_minute": "com.botquant.overseas.minute",
-        "overseas_daily": "com.botquant.overseas.daily",
-        "macro": "com.botquant.macro",
-        "tushare": "com.botquant.tushare",
-        "sentiment": "com.botquant.sentiment",
-        "shipping": "com.botquant.shipping",
-        "stock_minute": "com.botquant.stock.minute",
-        "volatility_cboe": "com.botquant.volatility.cboe",
+        "data_scheduler": "com.jbt.data_scheduler",
+        "news": "com.jbt.news",
+        "health": "com.jbt.health",
+        "futures_minute": "com.jbt.futures.minute",
+        "futures_eod": "com.jbt.futures.eod",
+        "overseas_minute": "com.jbt.overseas.minute",
+        "overseas_daily": "com.jbt.overseas.daily",
+        "macro": "com.jbt.macro",
+        "tushare": "com.jbt.tushare",
+        "sentiment": "com.jbt.sentiment",
+        "shipping": "com.jbt.shipping",
+        "stock_minute": "com.jbt.stock.minute",
+        "volatility_cboe": "com.jbt.volatility.cboe",
     }
 
     plist_id = _PLIST_MAP.get(collector)

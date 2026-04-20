@@ -1,4 +1,4 @@
-# BotQuant RSS/新闻源配置
+# JBT RSS/新闻源配置
 # D134.4 产出 — 2026-03-20
 # 来源: D134.3 全量测试通过 (25/32, 4 skip-need-key, 3 WAF-blocked)
 # 更新标准: 只收录实测通过的源，并注明采集类型
@@ -10,7 +10,7 @@ policy:
   interval_reference: "2h"    # P2 参考信息（交易所公告/统计局数据）
   timeout_s: 12
   retry_max: 3
-  user_agent: "Mozilla/5.0 (compatible; BotQuantBot/1.0)"
+  user_agent: "Mozilla/5.0 (compatible; JBTBot/1.0)"
 
 # ── P0 实时资讯 — 高优先，需快速推送 ─────────────────────
 rss_p0:

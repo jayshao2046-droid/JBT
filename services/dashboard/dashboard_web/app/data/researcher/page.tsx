@@ -67,7 +67,7 @@ export default function ResearcherPage() {
             </span>
           </div>
           {status?.last_report_time && (
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-muted-foreground">
               最后报告: {new Date(status.last_report_time).toLocaleString()}
             </div>
           )}
@@ -80,15 +80,16 @@ export default function ResearcherPage() {
           {Object.entries(status.processes).map(([name, running]) => (
             <div
               key={name}
-              className="bg-white rounded-lg shadow p-4 border-l-4"
-              style={{
-                borderLeftColor: running ? "#10b981" : "#ef4444",
-              }}
+              className={`rounded-lg shadow p-4 border-l-4 ${
+                running
+                  ? "bg-green-500/10 border-green-500"
+                  : "bg-red-500/10 border-red-500"
+              }`}
             >
-              <div className="text-sm font-medium text-gray-600 mb-1">
+              <div className="text-sm font-medium text-muted-foreground mb-1">
                 {name.replace(/_/g, " ").toUpperCase()}
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-muted-foreground">
                 {running ? "运行中" : "已停止"}
               </div>
             </div>
@@ -98,21 +99,21 @@ export default function ResearcherPage() {
 
       {/* 统计信息 */}
       {status && (
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-card rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">统计信息</h2>
           <div className="grid grid-cols-3 gap-6">
             <div>
-              <div className="text-sm text-gray-600">总分析数</div>
+              <div className="text-sm text-muted-foreground">总分析数</div>
               <div className="text-2xl font-bold">{status.total_analyses}</div>
             </div>
             <div>
-              <div className="text-sm text-gray-600">运行进程</div>
+              <div className="text-sm text-muted-foreground">运行进程</div>
               <div className="text-2xl font-bold">
                 {Object.values(status.processes).filter(Boolean).length} / 5
               </div>
             </div>
             <div>
-              <div className="text-sm text-gray-600">系统状态</div>
+              <div className="text-sm text-muted-foreground">系统状态</div>
               <div className="text-2xl font-bold">
                 {status.running ? "正常" : "异常"}
               </div>
@@ -122,19 +123,19 @@ export default function ResearcherPage() {
       )}
 
       {/* 数据源管理 */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-card rounded-lg shadow p-6">
         <h2 className="text-xl font-semibold mb-4">数据源管理</h2>
         <SourceManager />
       </div>
 
       {/* 优先级调整 */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-card rounded-lg shadow p-6">
         <h2 className="text-xl font-semibold mb-4">品种优先级</h2>
         <PriorityAdjuster />
       </div>
 
       {/* 报告查看器 */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-card rounded-lg shadow p-6">
         <h2 className="text-xl font-semibold mb-4">最新报告</h2>
         <ReportViewer />
       </div>

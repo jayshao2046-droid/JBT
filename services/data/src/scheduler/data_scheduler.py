@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BotQuant 24h 数据调度主入口
+JBT 24h 数据调度主入口
 ===========================================
 在 Mini 上以守护进程方式运行，按 cron 调度 11 个数据采集管道。
 
@@ -305,6 +305,7 @@ def _emit_market_transition_notifications() -> None:
         transitions = _calendar.detect_transitions(_last_snapshot, cur)
 
         for tr in transitions:
+            logger.info("市场状态变更: %s %s→%s (%s)", tr.market, "开" if tr.from_open else "休", "开" if tr.to_open else "休", tr.reason)
             if tr.to_open:
                 title = f"{tr.market} 开盘采集开始"
                 event_code = "market_session_open"
@@ -1512,7 +1513,7 @@ def job_daily_email_report(config: dict[str, Any]) -> None:
         cpu = _mod.get_cpu_info()
         mem = _mod.get_memory_info()
         disks = _mod.get_disk_info()
-        freshness = _mod.get_collector_freshness() if _mod.IS_MINI else []
+        freshness = _mod.get_collector_freshness()
 
         sources_freshness = [
             {"label": s.get("label", s.get("name", "")), "ok": s.get("ok", False),
@@ -1585,14 +1586,8 @@ def job_news_push_batch(config: dict[str, Any]) -> None:
 
 
 def job_session_notify(config: dict[str, Any], session_name: str = "") -> None:
-    """交易时段开始通知。"""
-    n = _get_notifier(config)
-    if n:
-        try:
-            n.send_session_start(session_name)
-            logger.info("✅ 时段通知已发送: %s", session_name)
-        except Exception:
-            logger.error("❌ 时段通知发送失败:\n%s", traceback.format_exc())
+    """[DEPRECATED] 交易时段开始通知 — 已由 _emit_market_transition_notifications 替代。"""
+    logger.info("[DEPRECATED] job_session_notify 已停用，由市场状态监听替代")
 
 
 def job_nas_backup(config: dict[str, Any]) -> None:
@@ -1644,7 +1639,7 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
     )
 
     # [DEPRECATED LIFTED] 分钟内盘K线: 每2分钟，交易时段门控在函数内。
-    # 已迁回 JBT APScheduler，停用 com.botquant.futures.minute plist。
+    # 已迁回 JBT APScheduler，停用 com.jbt.futures.minute plist。
     # 通知策略: 盘中静默，连续3轮0产出发P2，日盘15:05/夜盘02:35发收盘摘要。
     scheduler.add_job(
         job_minute_kline, IntervalTrigger(minutes=2),
@@ -1867,7 +1862,7 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
     )
 
     logger.info("=" * 60)
-    logger.info("BotQuant 数据调度器启动 (APScheduler 模式)")
+    logger.info("JBT 数据调度器启动 (APScheduler 模式)")
     logger.info("已注册 %d 个任务", len(scheduler.get_jobs()))
     for job in scheduler.get_jobs():
         logger.info("  📋 %s [%s] → %s", job.name, job.id, job.trigger)
@@ -1919,7 +1914,7 @@ _FALLBACK_JOBS: list[tuple[str, Callable[..., Any], int | None, str | None]] = [
 def _run_with_sleep_loop(config: dict[str, Any]) -> None:
     """Fallback: 使用 time.sleep 循环调度。"""
     logger.info("=" * 60)
-    logger.info("BotQuant 数据调度器启动 (sleep-loop fallback 模式)")
+    logger.info("JBT 数据调度器启动 (sleep-loop fallback 模式)")
     logger.info("已注册 %d 个任务", len(_FALLBACK_JOBS))
     logger.info("=" * 60)
 
@@ -1968,7 +1963,7 @@ def _run_with_sleep_loop(config: dict[str, Any]) -> None:
 # 主入口
 # ─────────────────────────────────────────────
 def main() -> None:
-    parser = argparse.ArgumentParser(description="BotQuant 24h 数据调度器")
+    parser = argparse.ArgumentParser(description="JBT 24h 数据调度器")
     parser.add_argument("--daemon", action="store_true", help="守护进程模式（由 shell 脚本包装 nohup）")
     args = parser.parse_args()
 

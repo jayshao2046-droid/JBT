@@ -1,0 +1,65 @@
+category: trend_following
+description: 基于60分钟周期的EMA双均线交叉捕捉趋势方向，ADX指标确认趋势强度有效性，ATR指标动态衡量波动率并过滤震荡行情。
+factors:
+- factor_name: EMA_Cross
+  params:
+    fast: 27
+    slow: 153
+  weight: 0.3
+- factor_name: ADX
+  params:
+    period: 12
+  weight: 0.2
+- factor_name: ATR
+  params:
+    period: 12
+  weight: 0.3
+- factor_name: EMA
+  params:
+    period: 12
+  weight: 0.2
+market_filter:
+  conditions:
+  - adx > 15
+  - atr > 0.001 * close
+  enabled: true
+name: FC-ru_trend_60m_v1
+position_adjustment:
+  atr_multiplier: 1.0
+  atr_period: 14
+  base_position: 0.1
+  method: atr_scaling
+position_fraction: 0.035574049526399726
+risk:
+  daily_loss_limit_yuan: 2000
+  force_close_day: '14:55'
+  force_close_night: '22:55'
+  max_drawdown_pct: 0.008
+  no_overnight: true
+  per_symbol_fuse_yuan: 160
+signal:
+  confirm_bars: 1
+  long_condition: ema_cross > 0 and adx > 20 and atr > 0.0015 * close and close >
+    ema_slow
+  short_condition: ema_cross < 0 and adx > 20 and atr > 0.0015 * close and close <
+    ema_slow
+stop_loss:
+  atr_multiplier: 2.814054972861252
+  type: atr
+symbols:
+- SHFE.ru2505
+tags:
+- v1
+- trend
+- 60m
+- SHFE
+- ru
+- conservative
+take_profit:
+  atr_multiplier: 3.165865559879191
+  type: atr
+timeframe_minutes: 60
+transaction_costs:
+  commission_per_lot_round_turn: 8
+  slippage_per_unit: 1
+version: '1.0'

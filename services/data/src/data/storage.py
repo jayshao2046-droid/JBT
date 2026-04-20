@@ -1,6 +1,6 @@
 """Parquet-based storage utilities for data records.
 
-Migrated from legacy J_BotQuant/src/data/storage.py.
+Migrated from legacy codebase.
 Import paths updated: services.data.src.utils → src.utils
 """
 

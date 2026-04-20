@@ -84,7 +84,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center">
-        <p className="text-gray-400">加载中...</p>
+        <p className="text-muted-foreground">加载中...</p>
       </div>
     );
   }
@@ -92,7 +92,7 @@ export default function SettingsPage() {
   if (!settings) {
     return (
       <div className="p-6 flex items-center justify-center">
-        <p className="text-red-400">加载设置失败</p>
+        <p className="text-destructive">加载设置失败</p>
       </div>
     );
   }
@@ -100,12 +100,12 @@ export default function SettingsPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-white">系统设置</h1>
-        <p className="text-gray-400 mt-2">配置交易平台参数</p>
+        <h1 className="text-3xl font-bold text-foreground">系统设置</h1>
+        <p className="text-muted-foreground mt-2">配置交易平台参数</p>
       </div>
 
       <Tabs defaultValue="account" className="w-full">
-        <TabsList className="bg-gray-900">
+        <TabsList className="bg-muted">
           <TabsTrigger value="account">账户设置</TabsTrigger>
           <TabsTrigger value="trading">交易时段</TabsTrigger>
           <TabsTrigger value="notifications">通知配置</TabsTrigger>
@@ -113,14 +113,14 @@ export default function SettingsPage() {
         </TabsList>
 
         <TabsContent value="account" className="space-y-4">
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle className="text-white">账户信息</CardTitle>
-              <CardDescription className="text-gray-400">管理您的账户信息</CardDescription>
+              <CardTitle className="text-foreground">账户信息</CardTitle>
+              <CardDescription className="text-muted-foreground">管理您的账户信息</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="username" className="text-gray-300">用户名</Label>
+                <Label htmlFor="username" className="text-foreground">用户名</Label>
                 <Input
                   id="username"
                   value={settings.account.username}
@@ -130,11 +130,11 @@ export default function SettingsPage() {
                       account: { ...settings.account, username: e.target.value },
                     })
                   }
-                  className="bg-gray-800 border-gray-700 text-white"
+                  className="bg-background border-input text-foreground"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-gray-300">邮箱</Label>
+                <Label htmlFor="email" className="text-foreground">邮箱</Label>
                 <Input
                   id="email"
                   type="email"
@@ -145,7 +145,7 @@ export default function SettingsPage() {
                       account: { ...settings.account, email: e.target.value },
                     })
                   }
-                  className="bg-gray-800 border-gray-700 text-white"
+                  className="bg-background border-input text-foreground"
                 />
               </div>
               <Button onClick={handleAccountSave} disabled={saving}>
@@ -156,16 +156,16 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="trading" className="space-y-4">
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle className="text-white">交易时段控制</CardTitle>
-              <CardDescription className="text-gray-400">配置交易时段和自动开关</CardDescription>
+              <CardTitle className="text-foreground">交易时段控制</CardTitle>
+              <CardDescription className="text-muted-foreground">配置交易时段和自动开关</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-gray-300">启用自动交易</Label>
-                  <p className="text-sm text-gray-500">在交易时段自动启动交易</p>
+                  <Label className="text-foreground">启用自动交易</Label>
+                  <p className="text-sm text-muted-foreground">在交易时段自动启动交易</p>
                 </div>
                 <Switch
                   checked={settings.trading.auto_trading_enabled}
@@ -174,8 +174,8 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-gray-300">盘前准备</Label>
-                  <p className="text-sm text-gray-500">开盘前30分钟启动系统</p>
+                  <Label className="text-foreground">盘前准备</Label>
+                  <p className="text-sm text-muted-foreground">开盘前30分钟启动系统</p>
                 </div>
                 <Switch
                   checked={settings.trading.pre_market_enabled}
@@ -184,8 +184,8 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-gray-300">盘后清算</Label>
-                  <p className="text-sm text-gray-500">收盘后自动执行清算</p>
+                  <Label className="text-foreground">盘后清算</Label>
+                  <p className="text-sm text-muted-foreground">收盘后自动执行清算</p>
                 </div>
                 <Switch
                   checked={settings.trading.post_market_enabled}
@@ -197,14 +197,14 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-4">
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle className="text-white">通知配置</CardTitle>
-              <CardDescription className="text-gray-400">配置飞书和邮件通知</CardDescription>
+              <CardTitle className="text-foreground">通知配置</CardTitle>
+              <CardDescription className="text-muted-foreground">配置飞书和邮件通知</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="feishu-webhook" className="text-gray-300">飞书 Webhook</Label>
+                <Label htmlFor="feishu-webhook" className="text-foreground">飞书 Webhook</Label>
                 <Input
                   id="feishu-webhook"
                   value={settings.notifications.feishu_webhook}
@@ -215,11 +215,11 @@ export default function SettingsPage() {
                     })
                   }
                   placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."
-                  className="bg-gray-800 border-gray-700 text-white"
+                  className="bg-background border-input text-foreground"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email-smtp" className="text-gray-300">SMTP 服务器</Label>
+                <Label htmlFor="email-smtp" className="text-foreground">SMTP 服务器</Label>
                 <Input
                   id="email-smtp"
                   value={settings.notifications.smtp_server}
@@ -230,11 +230,11 @@ export default function SettingsPage() {
                     })
                   }
                   placeholder="smtp.example.com"
-                  className="bg-gray-800 border-gray-700 text-white"
+                  className="bg-background border-input text-foreground"
                 />
               </div>
               <div className="flex items-center justify-between">
-                <Label className="text-gray-300">启用告警通知</Label>
+                <Label className="text-foreground">启用告警通知</Label>
                 <Switch
                   checked={settings.notifications.alert_enabled}
                   onCheckedChange={(checked) =>
@@ -253,23 +253,23 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="services" className="space-y-4">
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle className="text-white">服务管理</CardTitle>
-              <CardDescription className="text-gray-400">管理各个服务的运行状态</CardDescription>
+              <CardTitle className="text-foreground">服务管理</CardTitle>
+              <CardDescription className="text-muted-foreground">管理各个服务的运行状态</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {settings.services.map((service) => (
-                <div key={service.name} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                <div key={service.name} className="flex items-center justify-between p-3 bg-muted rounded-lg">
                   <div>
-                    <p className="text-white font-medium">{service.name}</p>
+                    <p className="text-foreground font-medium">{service.name}</p>
                     <p
                       className={`text-sm ${
                         service.status === 'running'
-                          ? 'text-green-500'
+                          ? 'text-green-400'
                           : service.status === 'stopped'
-                          ? 'text-yellow-500'
-                          : 'text-red-500'
+                          ? 'text-yellow-400'
+                          : 'text-red-400'
                       }`}
                     >
                       {service.status === 'running' ? '运行中' : service.status === 'stopped' ? '已停止' : '错误'}

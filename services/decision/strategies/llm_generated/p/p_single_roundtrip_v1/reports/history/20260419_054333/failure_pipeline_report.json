@@ -1,0 +1,8 @@
+{
+  "stage": "pipeline",
+  "error": "YAML 验证失败: risk.force_close_day 必须为 14:55, risk.no_overnight 必须为 true",
+  "context": {},
+  "saved_at": "2026-04-19T05:44:54.561347",
+  "report_type": "failure_pipeline",
+  "run_id": "20260419_054333"
+}

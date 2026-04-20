@@ -1,0 +1,122 @@
+{
+  "strategy_name": "ru_trend_60m_v1",
+  "symbol": "ru",
+  "category": "trend_following",
+  "timeframe": 60,
+  "factors": [
+    "EMA",
+    "ADX",
+    "ATR"
+  ],
+  "design_prompt": "为 ru 品种设计一个 trend_following 策略。\n品种特征: 品种: ru（特征分析失败，使用保守参数）\n时间周期: 60 分钟\n核心因子: EMA, ADX, ATR\n策略描述: 60分钟EMA交叉+ADX趋势确认+ATR波动率过滤的低频趋势跟踪策略\n\n输出 JSON 格式的策略设计，包含：\n- strategy_name: ru_trend_60m_v1\n- logic_description: 策略逻辑描述\n- entry_logic: 做多入场条件\n- exit_logic: 做多出场条件\n- short_entry_logic: 做空入场条件\n- short_exit_logic: 做空出场条件\n- risk_management: 风险管理方案（止损止盈规则）\n- recommended_factors: 推荐使用的技术指标列表\n",
+  "design_response": {
+    "strategy_name": "ru_trend_60m_v1",
+    "logic_description": "基于60分钟周期的EMA双均线交叉捕捉趋势方向，ADX指标确认趋势强度有效性，ATR指标动态衡量波动率并过滤震荡行情。仅在趋势明确且波动率达标时入场，属于低频保守型趋势跟踪策略。",
+    "entry_logic": {
+      "description": "EMA快线上穿慢线，ADX确认趋势成立，ATR过滤低波动环境",
+      "conditions": [
+        "EMA_fast(12) 上穿 EMA_slow(26)",
+        "ADX(14) > 20，确认趋势存在",
+        "ATR(14) > ATR_MA(14, 20)，即当前ATR大于其20周期均值，确认波动率放大",
+        "收盘价站上 EMA_slow(26)"
+      ],
+      "confirm_bar": "信号出现后等待当根K线收盘确认，下一根K线开盘价入场"
+    },
+    "exit_logic": {
+      "description": "趋势减弱或均线死叉时平多仓",
+      "conditions": [
+        "EMA_fast(12) 下穿 EMA_slow(26)，趋势反转平仓",
+        "ADX(14) 从高位回落且 < 18，趋势衰竭平仓",
+        "触发止损或止盈价位平仓"
+      ]
+    },
+    "short_entry_logic": {
+      "description": "EMA快线下穿慢线，ADX确认趋势成立，ATR过滤低波动环境",
+      "conditions": [
+        "EMA_fast(12) 下穿 EMA_slow(26)",
+        "ADX(14) > 20，确认趋势存在",
+        "ATR(14) > ATR_MA(14, 20)，确认波动率放大",
+        "收盘价跌破 EMA_slow(26)"
+      ],
+      "confirm_bar": "信号出现后等待当根K线收盘确认，下一根K线开盘价入场"
+    },
+    "short_exit_logic": {
+      "description": "趋势减弱或均线金叉时平空仓",
+      "conditions": [
+        "EMA_fast(12) 上穿 EMA_slow(26)，趋势反转平仓",
+        "ADX(14) 从高位回落且 < 18，趋势衰竭平仓",
+        "触发止损或止盈价位平仓"
+      ]
+    },
+    "risk_management": {
+      "stop_loss": {
+        "method": "ATR动态止损",
+        "rule": "入场价 ± 2.0 × ATR(14)",
+        "description": "多单止损 = 入场价 - 2.0×ATR；空单止损 = 入场价 + 2.0×ATR"
+      },
+      "take_profit": {
+        "method": "ATR动态止盈",
+        "rule": "入场价 ± 3.0 × ATR(14)",
+        "description": "盈亏比目标1.5:1，多单止盈 = 入场价 + 3.0×ATR；空单止盈 = 入场价 - 3.0×ATR"
+      },
+      "trailing_stop": {
+        "method": "移动止损",
+        "rule": "盈利超过1.5×ATR后，止损上移至入场价（保本止损）；盈利超过2.5×ATR后，止损跟随最高/最低价 - 1.5×ATR"
+      },
+      "position_sizing": {
+        "method": "固定风险比例",
+        "rule": "单笔风险不超过账户权益的2%",
+        "formula": "手数 = (账户权益 × 2%) / (止损点数 × 合约乘数)"
+      },
+      "max_daily_loss": "单日最大亏损不超过账户权益的4%，触发后当日停止交易"
+    },
+    "recommended_factors": [
+      {
+        "name": "EMA_fast",
+        "params": {
+          "period": 12
+        },
+        "role": "快速均线，捕捉短期趋势方向"
+      },
+      {
+        "name": "EMA_slow",
+        "params": {
+          "period": 26
+        },
+        "role": "慢速均线，确认中期趋势方向"
+      },
+      {
+        "name": "ADX",
+        "params": {
+          "period": 14
+        },
+        "role": "趋势强度过滤，阈值20"
+      },
+      {
+        "name": "ATR",
+        "params": {
+          "period": 14
+        },
+        "role": "波动率衡量，用于止损止盈及入场过滤"
+      },
+      {
+        "name": "ATR_MA",
+        "params": {
+          "atr_period": 14,
+          "ma_period": 20
+        },
+        "role": "ATR均值，判断当前波动率是否高于平均水平"
+      }
+    ],
+    "timeframe": "60min",
+    "symbol": "ru",
+    "style": "conservative_trend_following",
+    "avg_holding_period": "3-10根K线（约3-10小时）",
+    "expected_trade_frequency": "每周2-4次"
+  },
+  "model": "claude-opus-4-6",
+  "generated_at": "2026-04-20T00:24:14.509940",
+  "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/ru/ru_trend_60m_v1.yaml",
+  "saved_at": "2026-04-20T00:24:14.510155",
+  "report_type": "generation"
+}

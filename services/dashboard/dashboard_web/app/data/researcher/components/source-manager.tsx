@@ -95,7 +95,7 @@ export default function SourceManager() {
       {sources.map((source) => (
         <div
           key={source.name}
-          className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+          className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
         >
           <div className="flex-1">
             <div className="flex items-center space-x-3">
@@ -103,27 +103,27 @@ export default function SourceManager() {
               <span
                 className={`px-2 py-1 text-xs rounded ${
                   source.type === "news"
-                    ? "bg-blue-100 text-blue-800"
-                    : "bg-green-100 text-green-800"
+                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                    : "bg-green-500/20 text-green-400 border border-green-500/30"
                 }`}
               >
                 {source.type}
               </span>
             </div>
-            <div className="text-sm text-gray-600 mt-1">{source.url}</div>
+            <div className="text-sm text-muted-foreground mt-1">{source.url}</div>
           </div>
 
           <div className="flex items-center space-x-4">
             {/* 采集间隔 */}
             <div className="flex items-center space-x-2">
-              <label className="text-sm text-gray-600">间隔(秒):</label>
+              <label className="text-sm text-muted-foreground">间隔(秒):</label>
               <input
                 type="number"
                 value={source.interval}
                 onChange={(e) =>
                   updateInterval(source.name, parseInt(e.target.value))
                 }
-                className="w-20 px-2 py-1 border rounded text-sm"
+                className="w-20 px-2 py-1 border rounded text-sm bg-background"
                 min="60"
                 step="60"
               />
@@ -134,8 +134,8 @@ export default function SourceManager() {
               onClick={() => toggleSource(source.name, !source.enabled)}
               className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
                 source.enabled
-                  ? "bg-green-500 text-white hover:bg-green-600"
-                  : "bg-gray-300 text-gray-700 hover:bg-gray-400"
+                  ? "bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
             >
               {source.enabled ? "已启用" : "已禁用"}
@@ -145,7 +145,7 @@ export default function SourceManager() {
       ))}
 
       {sources.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
+        <div className="text-center py-8 text-muted-foreground">
           暂无数据源配置
         </div>
       )}

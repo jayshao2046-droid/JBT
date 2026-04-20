@@ -323,7 +323,7 @@ class OverseasMinuteCollector(BaseCollector):
             )
 
             try:
-                req = urllib.request.Request(url, headers={"User-Agent": "BotQuant/4.0"})
+                req = urllib.request.Request(url, headers={"User-Agent": "JBT/4.0"})
                 with urllib.request.urlopen(req, timeout=15) as resp:
                     data = json.loads(resp.read().decode())
 

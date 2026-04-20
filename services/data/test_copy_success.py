@@ -83,7 +83,7 @@ async def test_sla_style():
                     "elements": [
                         {
                             "tag": "plain_text",
-                            "content": f"BotQuant 资讯 | JBT data-service | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                            "content": f"JBT 资讯 | JBT data-service | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                         }
                     ]
                 }

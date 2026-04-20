@@ -63,7 +63,7 @@ def test_report_card():
                     "elements": [
                         {
                             "tag": "plain_text",
-                            "content": f"BotQuant 资讯 | JBT 数据研究员 | {hour}:{minute} | 采集8源23篇 | Alienware"
+                            "content": f"JBT 资讯 | JBT 数据研究员 | {hour}:{minute} | 采集8源23篇 | Alienware"
                         }
                     ]
                 }
@@ -109,7 +109,7 @@ def test_alert_card():
                     "elements": [
                         {
                             "tag": "plain_text",
-                            "content": f"BotQuant 资讯 | JBT 数据研究员 | {timestamp} | Alienware"
+                            "content": f"JBT 资讯 | JBT 数据研究员 | {timestamp} | Alienware"
                         }
                     ]
                 }
@@ -155,7 +155,7 @@ def test_urgent_card():
                     "elements": [
                         {
                             "tag": "plain_text",
-                            "content": "BotQuant 资讯 | JBT 数据研究员 | 突发紧急 | Alienware"
+                            "content": "JBT 资讯 | JBT 数据研究员 | 突发紧急 | Alienware"
                         }
                     ]
                 }

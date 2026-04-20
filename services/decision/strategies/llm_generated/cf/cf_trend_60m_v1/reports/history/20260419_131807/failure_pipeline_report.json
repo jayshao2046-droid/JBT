@@ -1,0 +1,8 @@
+{
+  "stage": "pipeline",
+  "error": "回测失败: 未知错误",
+  "context": {},
+  "saved_at": "2026-04-19T13:25:52.754922",
+  "report_type": "failure_pipeline",
+  "run_id": "20260419_131807"
+}

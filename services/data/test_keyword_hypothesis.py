@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""验证关键词假设：BotQuant 资讯"""
+"""验证关键词假设：JBT 资讯"""
 
 import asyncio
 import httpx
@@ -9,7 +9,7 @@ NEWS_WEBHOOK = "https://open.feishu.cn/open-apis/bot/v2/hook/c51f4956-2a5c-4cad-
 
 
 async def test_with_keyword():
-    """包含 'BotQuant 资讯' 关键词"""
+    """包含 'JBT 资讯' 关键词"""
     card = {
         "msg_type": "interactive",
         "card": {
@@ -36,7 +36,7 @@ async def test_with_keyword():
                     "elements": [
                         {
                             "tag": "plain_text",
-                            "content": f"BotQuant 资讯 | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                            "content": f"JBT 资讯 | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                         }
                     ]
                 }
@@ -48,10 +48,10 @@ async def test_with_keyword():
         async with httpx.AsyncClient() as client:
             resp = await client.post(NEWS_WEBHOOK, json=card, timeout=10.0)
             result = resp.json()
-            print(f"✅ 包含 'BotQuant 资讯': code={result.get('code')}, msg={result.get('msg')}")
+            print(f"✅ 包含 'JBT 资讯': code={result.get('code')}, msg={result.get('msg')}")
             return result.get('code') == 0
     except Exception as e:
-        print(f"❌ 包含 'BotQuant 资讯': Error - {e}")
+        print(f"❌ 包含 'JBT 资讯': Error - {e}")
         return False
 
 
@@ -110,7 +110,7 @@ async def test_keyword_in_title():
             "header": {
                 "title": {
                     "tag": "plain_text",
-                    "content": "BotQuant 资讯 - 测试消息"
+                    "content": "JBT 资讯 - 测试消息"
                 },
                 "template": "blue"
             },
@@ -154,7 +154,7 @@ async def test_keyword_in_content():
                     "tag": "div",
                     "text": {
                         "tag": "lark_md",
-                        "content": "BotQuant 资讯 - 这是测试内容"
+                        "content": "JBT 资讯 - 这是测试内容"
                     }
                 }
             ]
@@ -174,7 +174,7 @@ async def test_keyword_in_content():
 
 async def main():
     print("="*60)
-    print("验证关键词假设：BotQuant 资讯")
+    print("验证关键词假设：JBT 资讯")
     print("="*60)
     print()
 

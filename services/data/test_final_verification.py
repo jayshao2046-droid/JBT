@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# 使用修复后的卡片结构（添加了 "BotQuant 资讯" 关键词）
+# 使用修复后的卡片结构（添加了 "JBT 资讯" 关键词）
 card = {
     "msg_type": "interactive",
     "card": {
@@ -57,7 +57,7 @@ card = {
                 "elements": [
                     {
                         "tag": "plain_text",
-                        "content": "BotQuant 资讯 | JBT 数据研究员 | 14:00 | 采集8源23篇 | Alienware"
+                        "content": "JBT 资讯 | JBT 数据研究员 | 14:00 | 采集8源23篇 | Alienware"
                     }
                 ]
             }
@@ -77,7 +77,7 @@ result = resp.json()
 if result.get("code") == 0:
     print("✅ 发送成功！")
     print("\n修复内容：")
-    print("  - 在 note 中添加 'BotQuant 资讯' 关键词")
+    print("  - 在 note 中添加 'JBT 资讯' 关键词")
     print("  - 位置：notifier.py 三处飞书卡片（报告/告警/紧急）")
 else:
     print(f"❌ 发送失败: code={result.get('code')}, msg={result.get('msg')}")

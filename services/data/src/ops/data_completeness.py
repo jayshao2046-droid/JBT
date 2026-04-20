@@ -264,7 +264,7 @@ def run_check(target_date: str) -> dict:
 def print_report(report: dict):
     """终端打印可读报告."""
     print(f"\n{'=' * 60}")
-    print("  BotQuant 数据完整性报告")
+    print("  JBT 数据完整性报告")
     print(f"  日期: {report['date']}  检查时间: {report['checked_at'][:19]}")
     print(f"{'=' * 60}")
 
@@ -292,7 +292,7 @@ def save_report(report: dict, target_date: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="BotQuant 数据完整性监控")
+    parser = argparse.ArgumentParser(description="JBT 数据完整性监控")
     parser.add_argument("--date", type=str, default=None,
                         help="检查目标日期 (YYYYMMDD), 默认今天")
     parser.add_argument("--days", type=int, default=1,

@@ -172,7 +172,7 @@ class ResearcherNotifier:
                         "elements": [
                             {
                                 "tag": "plain_text",
-                                "content": f"BotQuant 资讯 | JBT 数据研究员 | {hour}:{minute} | 采集{sources_count}源{articles_count}篇 | Alienware"
+                                "content": f"JBT 资讯 | JBT 数据研究员 | {hour}:{minute} | 采集{sources_count}源{articles_count}篇 | Alienware"
                             }
                         ]
                     }
@@ -334,7 +334,7 @@ class ResearcherNotifier:
                         "elements": [
                             {
                                 "tag": "plain_text",
-                                "content": f"BotQuant 资讯 | JBT 数据研究员 | {timestamp} | Alienware"
+                                "content": f"JBT 资讯 | JBT 数据研究员 | {timestamp} | Alienware"
                             }
                         ]
                     }
@@ -383,7 +383,7 @@ class ResearcherNotifier:
                         "elements": [
                             {
                                 "tag": "plain_text",
-                                "content": f"BotQuant 资讯 | JBT 数据研究员 | 突发紧急 | Alienware"
+                                "content": f"JBT 资讯 | JBT 数据研究员 | 突发紧急 | Alienware"
                             }
                         ]
                     }

@@ -1,6 +1,6 @@
 """Centralized YAML configuration loader for JBT data service.
 
-Migrated from legacy J_BotQuant/src/utils/config.py with adaptations:
+Migrated from legacy codebase. Adaptations:
 - Root detection uses SERVICE_ROOT (services/data/) instead of project root
 - .env lookup uses services/data/.env
 - Removed feishu/email config merging (notification handled separately in A6)

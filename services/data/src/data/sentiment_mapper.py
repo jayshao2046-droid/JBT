@@ -1,6 +1,6 @@
 """P1-010: 情绪数据映射器 — 将 P3 payload 转换为 P5 因子可消费的扁平 DataFrame.
 
-Migrated from legacy J_BotQuant/src/data/sentiment_mapper.py.
+Migrated from legacy codebase.
 """
 
 from __future__ import annotations

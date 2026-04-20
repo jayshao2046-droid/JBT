@@ -1,0 +1,399 @@
+{
+  "id": "c057e8d9-d97b-4ab3-8729-86a6b34b2632",
+  "task_id": "c057e8d9-d97b-4ab3-8729-86a6b34b2632",
+  "name": "FC-rb_trend_60m_v1",
+  "strategy": "FC-rb_trend_60m_v1",
+  "status": "completed",
+  "payload": {
+    "start": "2025-11-20",
+    "end": "2025-12-31",
+    "symbols": [
+      "SHFE.rb2505"
+    ],
+    "contract": "SHFE.rb2505",
+    "engine_type": "tqsdk",
+    "params": {},
+    "strategy": {
+      "id": "FC-rb_trend_60m_v1",
+      "description": "螺纹钢60分钟趋势跟踪策略，使用EMA交叉、ADX趋势强度及ATR波动过滤",
+      "category": "trend_following",
+      "template_id": "generic_formal_strategy_v1",
+      "version": "1.0",
+      "params": {
+        "position_fraction": 0.08633256045879875,
+        "position_adjustment": {
+          "atr_multiplier": 1.0,
+          "atr_period": 14,
+          "base_position": 0.0075,
+          "method": "atr_scaling"
+        },
+        "timeframe_minutes": 60,
+        "timeframe": 60
+      },
+      "symbols": [
+        "SHFE.rb2505"
+      ],
+      "factor_names": [
+        "EMA_Cross",
+        "ADX",
+        "ATR"
+      ],
+      "capital_params": {},
+      "signal": {
+        "confirm_bars": 1,
+        "long_condition": "ema_cross > 0 and adx > 25 and close > ema_fast and (close - ema_fast) < atr",
+        "short_condition": "ema_cross < 0 and adx > 25 and close < ema_fast and (ema_fast - close) < atr"
+      },
+      "risk": {
+        "force_close_day": "14:55",
+        "force_close_night": "22:55",
+        "no_overnight": true,
+        "per_symbol_fuse_yuan": 160,
+        "daily_loss_limit": 0.004,
+        "max_drawdown": 0.008
+      },
+      "strategy_yaml_filename": "FC-rb_trend_60m_v1.yaml",
+      "formal_parser_error": null,
+      "execution_profile": {
+        "mode": "formal",
+        "label": "正式回测",
+        "template_id": "generic_formal_strategy_v1",
+        "formal_supported": true,
+        "formal_parser_error": null,
+        "formal_engine": {
+          "ready": true,
+          "auth_configured": true,
+          "backtest_mode": "online",
+          "registered_templates": [
+            "FC-224_v3_intraday_trend_cf605_5m",
+            "generic_formal_strategy_v1"
+          ],
+          "reason": "正式引擎已具备基础运行条件"
+        },
+        "reason": "策略模板 generic_formal_strategy_v1 已注册到正式引擎，且正式引擎基础条件已就绪。",
+        "evidence": [
+          "当前结果由 services/backtest/src/backtest/runner.py 正式引擎生成。",
+          "formal_status=completed",
+          "formal_report_path=c057e8d9-d97b-4ab3-8729-86a6b34b2632/report.json",
+          "正式引擎已注册模板: FC-224_v3_intraday_trend_cf605_5m, generic_formal_strategy_v1",
+          "当前策略 template_id: generic_formal_strategy_v1",
+          "正式引擎已具备基础运行条件"
+        ],
+        "engine_type": "tqsdk",
+        "executed_mode": "tqsdk",
+        "executed_label": "TqSdk 在线回测",
+        "executed_formal": true,
+        "can_execute_formal": true,
+        "executed_reason": "当前结果由 services/backtest/src/backtest/runner.py 正式引擎生成。"
+      }
+    },
+    "signal": {
+      "confirm_bars": 1,
+      "long_condition": "ema_cross > 0 and adx > 25 and close > ema_fast and (close - ema_fast) < atr",
+      "short_condition": "ema_cross < 0 and adx > 25 and close < ema_fast and (ema_fast - close) < atr"
+    },
+    "risk": {
+      "force_close_day": "14:55",
+      "force_close_night": "22:55",
+      "no_overnight": true,
+      "per_symbol_fuse_yuan": 160,
+      "daily_loss_limit": 0.004,
+      "max_drawdown": 0.008
+    },
+    "timeframe": "60m",
+    "template_id": "generic_formal_strategy_v1"
+  },
+  "contracts": [
+    "SHFE.rb2505"
+  ],
+  "submitted_at": 1776575059,
+  "progress": 100,
+  "current_date": "2025-12-31",
+  "trades": [],
+  "equity_curve": [
+    {
+      "timestamp": "2026-04-19T13:04:19.370420+08:00",
+      "equity": 500000.0,
+      "drawdown": 0.0,
+      "position": 0,
+      "pnl": 0.0,
+      "cum_pnl": 0.0
+    }
+  ],
+  "error_message": null,
+  "source": "tqsdk_formal_engine",
+  "report_path": "c057e8d9-d97b-4ab3-8729-86a6b34b2632/report.json",
+  "execution_profile": {
+    "mode": "formal",
+    "label": "正式回测",
+    "template_id": "generic_formal_strategy_v1",
+    "formal_supported": true,
+    "formal_parser_error": null,
+    "formal_engine": {
+      "ready": true,
+      "auth_configured": true,
+      "backtest_mode": "online",
+      "registered_templates": [
+        "FC-224_v3_intraday_trend_cf605_5m",
+        "generic_formal_strategy_v1"
+      ],
+      "reason": "正式引擎已具备基础运行条件"
+    },
+    "reason": "策略模板 generic_formal_strategy_v1 已注册到正式引擎，且正式引擎基础条件已就绪。",
+    "evidence": [
+      "当前结果由 services/backtest/src/backtest/runner.py 正式引擎生成。",
+      "formal_status=completed",
+      "formal_report_path=c057e8d9-d97b-4ab3-8729-86a6b34b2632/report.json",
+      "正式引擎已注册模板: FC-224_v3_intraday_trend_cf605_5m, generic_formal_strategy_v1",
+      "当前策略 template_id: generic_formal_strategy_v1",
+      "正式引擎已具备基础运行条件"
+    ],
+    "engine_type": "tqsdk",
+    "executed_mode": "tqsdk",
+    "executed_label": "TqSdk 在线回测",
+    "executed_formal": true,
+    "can_execute_formal": true,
+    "executed_reason": "当前结果由 services/backtest/src/backtest/runner.py 正式引擎生成。"
+  },
+  "duration_seconds": 0,
+  "completion_logged": true,
+  "report_summary": "strategy=FC-rb_trend_60m_v1; symbol=SHFE.rb2505; timeframe=60m; window=2025-11-20~2025-12-31; initial_capital=500000.00; slippage_per_unit=1; commission_per_lot_round_turn=8; status=completed; final_equity=500000.00; total_trades=0; max_drawdown=0.000000",
+  "formal_report": {
+    "result_id": "8e48d0f8-a723-435c-8472-fecd735a89ec",
+    "job_id": "c057e8d9-d97b-4ab3-8729-86a6b34b2632",
+    "symbol": "SHFE.rb2505",
+    "strategy_template_id": "generic_formal_strategy_v1",
+    "strategy_yaml_filename": "FC-rb_trend_60m_v1.yaml",
+    "strategy_name": "FC-rb_trend_60m_v1",
+    "timeframe": "60m",
+    "start_date": "2025-11-20",
+    "end_date": "2025-12-31",
+    "initial_capital": 500000.0,
+    "transaction_costs": {
+      "slippage_per_unit": 1.0,
+      "commission_per_lot_round_turn": 8.0
+    },
+    "status": "completed",
+    "final_equity": 500000.0,
+    "max_drawdown": 0.0,
+    "total_trades": 0,
+    "equity_curve_path": "c057e8d9-d97b-4ab3-8729-86a6b34b2632/equity_curve.parquet",
+    "report_path": "c057e8d9-d97b-4ab3-8729-86a6b34b2632/report.json",
+    "completed_at": "2026-04-19T13:04:19.370522+08:00",
+    "performance_metrics": {
+      "total_return": 0.0,
+      "annualized_return": 0.0,
+      "sharpe_ratio": 0.0,
+      "max_drawdown": 0.0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "total_trades": 0,
+      "avg_trade_pnl": 0.0,
+      "max_consecutive_wins": 0,
+      "max_consecutive_losses": 0
+    },
+    "risk_summary": {
+      "source": "yaml",
+      "parameters": {
+        "force_close_day": "14:55",
+        "force_close_night": "22:55",
+        "no_overnight": true,
+        "per_symbol_fuse_yuan": 160,
+        "daily_loss_limit": 0.004,
+        "max_drawdown": 0.008
+      },
+      "violation_count": 0,
+      "breached_rules": [],
+      "max_observed_drawdown": 0.0,
+      "peak_position": 0,
+      "violations": []
+    },
+    "equity_curve": [
+      {
+        "timestamp": "2026-04-19T13:04:19.370420+08:00",
+        "equity": 500000.0,
+        "drawdown": 0.0,
+        "position": 0,
+        "pnl": 0.0,
+        "cum_pnl": 0.0
+      }
+    ],
+    "notes": [
+      "target_pos=manual_order(SHFE.rb2505)",
+      "volume_multiple=10.0",
+      "template=generic_formal_strategy_v1",
+      "execution_loop=wait_update_target_pos",
+      "timeframe_minutes=60",
+      "transaction_costs=slippage_per_unit=1.0,commission_per_lot_round_turn=8.0",
+      "execution_loop_entered=true",
+      "signal_transitions=0",
+      "target_updates=0",
+      "observed_trade_records=0",
+      "final_signal_state=flat",
+      "transaction_cost_slippage_applied=false",
+      "transaction_cost_commission_applied=8.0"
+    ],
+    "report_summary": "strategy=FC-rb_trend_60m_v1; symbol=SHFE.rb2505; timeframe=60m; window=2025-11-20~2025-12-31; initial_capital=500000.00; slippage_per_unit=1; commission_per_lot_round_turn=8; status=completed; final_equity=500000.00; total_trades=0; max_drawdown=0.000000",
+    "failure_reason": null,
+    "transaction_cost_summary": {
+      "total_trades": 0,
+      "slippage_per_unit": 1.0,
+      "commission_per_lot_round_turn": 8.0,
+      "total_slippage_estimated": 0.0,
+      "total_commission_estimated": 0.0,
+      "total_cost_estimated": 0.0,
+      "avg_cost_per_trade_estimated": null,
+      "note": "slippage 按每手双边（开仓+平仓）估算，commission 按每笔回合计"
+    },
+    "trades": [],
+    "tqsdk_snapshot": {
+      "account": {
+        "currency": "CNY",
+        "pre_balance": 500000.0,
+        "static_balance": 500000.0,
+        "balance": 500000.0,
+        "available": 500000.0,
+        "ctp_balance": null,
+        "ctp_available": null,
+        "float_profit": 0.0,
+        "position_profit": 0.0,
+        "close_profit": 0.0,
+        "frozen_margin": 0.0,
+        "margin": 0.0,
+        "frozen_commission": 0.0,
+        "commission": 0.0,
+        "frozen_premium": 0.0,
+        "premium": 0.0,
+        "deposit": 0.0,
+        "withdraw": 0.0,
+        "risk_ratio": 0.0,
+        "market_value": 0.0
+      },
+      "position": {
+        "exchange_id": "SHFE",
+        "instrument_id": "rb2505",
+        "pos_long_his": 0,
+        "pos_long_today": 0,
+        "pos_short_his": 0,
+        "pos_short_today": 0,
+        "volume_long_today": 0,
+        "volume_long_his": 0,
+        "volume_long": 0,
+        "volume_long_frozen_today": 0,
+        "volume_long_frozen_his": 0,
+        "volume_long_frozen": 0,
+        "volume_short_today": 0,
+        "volume_short_his": 0,
+        "volume_short": 0,
+        "volume_short_frozen_today": 0,
+        "volume_short_frozen_his": 0,
+        "volume_short_frozen": 0,
+        "open_price_long": null,
+        "open_price_short": null,
+        "open_cost_long": null,
+        "open_cost_short": null,
+        "position_price_long": null,
+        "position_price_short": null,
+        "position_cost_long": null,
+        "position_cost_short": null,
+        "float_profit_long": null,
+        "float_profit_short": null,
+        "float_profit": null,
+        "position_profit_long": null,
+        "position_profit_short": null,
+        "position_profit": null,
+        "margin_long": null,
+        "margin_short": null,
+        "margin": null,
+        "market_value_long": null,
+        "market_value_short": null,
+        "market_value": null,
+        "pos": 0,
+        "pos_long": 0,
+        "pos_short": 0
+      }
+    },
+    "yaml_snapshot_hash": "32e42af40f90c3c61a5e4885884235d5f715c05ce1aba11318c559c0424b8681"
+  },
+  "formal_notes": [
+    "target_pos=manual_order(SHFE.rb2505)",
+    "volume_multiple=10.0",
+    "template=generic_formal_strategy_v1",
+    "execution_loop=wait_update_target_pos",
+    "timeframe_minutes=60",
+    "transaction_costs=slippage_per_unit=1.0,commission_per_lot_round_turn=8.0",
+    "execution_loop_entered=true",
+    "signal_transitions=0",
+    "target_updates=0",
+    "observed_trade_records=0",
+    "final_signal_state=flat",
+    "transaction_cost_slippage_applied=false",
+    "transaction_cost_commission_applied=8.0"
+  ],
+  "risk_summary": {
+    "source": "yaml",
+    "parameters": {
+      "force_close_day": "14:55",
+      "force_close_night": "22:55",
+      "no_overnight": true,
+      "per_symbol_fuse_yuan": 160,
+      "daily_loss_limit": 0.004,
+      "max_drawdown": 0.008
+    },
+    "violation_count": 0,
+    "breached_rules": [],
+    "max_observed_drawdown": 0.0,
+    "peak_position": 0,
+    "violations": []
+  },
+  "transaction_costs": {
+    "slippage_per_unit": 1.0,
+    "commission_per_lot_round_turn": 8.0
+  },
+  "transaction_cost_summary": {
+    "total_trades": 0,
+    "slippage_per_unit": 1.0,
+    "commission_per_lot_round_turn": 8.0,
+    "total_slippage_estimated": 0.0,
+    "total_commission_estimated": 0.0,
+    "total_cost_estimated": 0.0,
+    "avg_cost_per_trade_estimated": null,
+    "note": "slippage 按每手双边（开仓+平仓）估算，commission 按每笔回合计"
+  },
+  "template_id": "generic_formal_strategy_v1",
+  "timeframe": "60m",
+  "totalReturn": 0.0,
+  "annualReturn": 0.0,
+  "maxDrawdown": 0.0,
+  "sharpeRatio": 0.0,
+  "winRate": 0.0,
+  "profitLossRatio": 0.0,
+  "totalTrades": 0,
+  "total_trades": 0,
+  "initialCapital": 500000.0,
+  "finalCapital": 500000.0,
+  "result": {
+    "totalReturn": 0.0,
+    "annualReturn": 0.0,
+    "maxDrawdown": 0.0,
+    "sharpeRatio": 0.0,
+    "winRate": 0.0,
+    "profitLossRatio": 0.0,
+    "totalTrades": 0
+  },
+  "tqsdk_stat": {
+    "symbol": "SHFE.rb2505",
+    "start_date": "2025-11-20",
+    "end_date": "2025-12-31",
+    "timeframe": 60,
+    "init_balance": 500000.0,
+    "balance": 500000.0,
+    "trading_days": 0,
+    "open_times": 0,
+    "close_times": 0,
+    "profit_volumes": 0,
+    "loss_volumes": 0
+  },
+  "saved_at": "2026-04-19T13:04:26.144272",
+  "report_type": "tqsdk_backtest"
+}

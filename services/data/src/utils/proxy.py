@@ -1,6 +1,6 @@
 """VPN proxy utilities for overseas data collection.
 
-Migrated from legacy J_BotQuant/src/utils/proxy.py with adaptations:
+Migrated from legacy codebase. Adaptations:
 - Config path uses services/data/configs/vpn.yaml
 - Only overseas collectors should call these helpers
 - Domestic collectors must NOT use proxy (direct connection)

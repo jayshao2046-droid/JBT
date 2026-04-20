@@ -102,17 +102,17 @@ export default function PriorityAdjuster() {
           placeholder="搜索品种..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 px-4 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
         />
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-muted-foreground">
           共 {symbols.length} 个品种，已启用{" "}
           {symbols.filter((s) => s.enabled).length} 个
         </div>
       </div>
 
       {/* 优先级说明 */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-        <div className="text-sm text-blue-800">
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+        <div className="text-sm text-blue-400">
           <strong>优先级说明：</strong>
           <ul className="list-disc list-inside mt-1 space-y-1">
             <li>高优先级（8-10）：重点关注，异常立即分析</li>
@@ -128,7 +128,7 @@ export default function PriorityAdjuster() {
           <div
             key={symbol.symbol}
             className={`border rounded-lg p-4 ${
-              symbol.enabled ? "bg-white" : "bg-gray-50"
+              symbol.enabled ? "bg-card" : "bg-muted/50"
             }`}
           >
             <div className="flex items-center justify-between mb-3">
@@ -137,8 +137,8 @@ export default function PriorityAdjuster() {
                 onClick={() => toggleSymbol(symbol.symbol, !symbol.enabled)}
                 className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
                   symbol.enabled
-                    ? "bg-green-500 text-white hover:bg-green-600"
-                    : "bg-gray-300 text-gray-700 hover:bg-gray-400"
+                    ? "bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
                 {symbol.enabled ? "启用" : "禁用"}
@@ -147,14 +147,14 @@ export default function PriorityAdjuster() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">优先级:</span>
+                <span className="text-sm text-muted-foreground">优先级:</span>
                 <span
                   className={`px-2 py-1 rounded text-xs font-medium ${
                     symbol.priority >= 8
-                      ? "bg-red-100 text-red-800"
+                      ? "bg-red-500/20 text-red-400 border border-red-500/30"
                       : symbol.priority >= 5
-                      ? "bg-yellow-100 text-yellow-800"
-                      : "bg-gray-100 text-gray-800"
+                      ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
+                      : "bg-muted text-muted-foreground"
                   }`}
                 >
                   {symbol.priority}
@@ -173,7 +173,7 @@ export default function PriorityAdjuster() {
                 disabled={!symbol.enabled}
               />
 
-              <div className="flex justify-between text-xs text-gray-500">
+              <div className="flex justify-between text-xs text-muted-foreground">
                 <span>低</span>
                 <span>中</span>
                 <span>高</span>
@@ -184,7 +184,7 @@ export default function PriorityAdjuster() {
       </div>
 
       {sortedSymbols.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
+        <div className="text-center py-8 text-muted-foreground">
           {searchTerm ? "未找到匹配的品种" : "暂无品种配置"}
         </div>
       )}

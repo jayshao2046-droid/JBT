@@ -30,7 +30,7 @@ class FeishuSender:
 
     @staticmethod
     def _build_news_card(event: "DataEvent") -> dict[str, Any]:
-        """为新闻类事件构建每条带分隔线的卡片（参照 J_BotQuant 样板）。"""
+        """为新闻类事件构建每条带分隔线的卡片。"""
         from notify.card_templates import _note, _hr, _md
 
         elements: list[dict[str, Any]] = [_hr()]
@@ -47,7 +47,7 @@ class FeishuSender:
             "msg_type": "interactive",
             "card": {
                 "header": {
-                    "title": {"tag": "plain_text", "content": f"JBQ {event.title}"},
+                    "title": {"tag": "plain_text", "content": f"JBT {event.title}"},
                     "template": "wathet",
                 },
                 "elements": elements,

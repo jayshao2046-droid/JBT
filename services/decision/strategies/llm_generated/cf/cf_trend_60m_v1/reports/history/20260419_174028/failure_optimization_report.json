@@ -1,0 +1,8 @@
+{
+  "stage": "optimization",
+  "error": "调优失败: 基础代码生成失败: 代码生成失败（未知原因）",
+  "context": {},
+  "saved_at": "2026-04-19T17:48:14.710451",
+  "report_type": "failure_optimization",
+  "run_id": "20260419_174028"
+}

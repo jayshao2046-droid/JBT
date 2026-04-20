@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""BotQuant 自动修复脚本 — 读取健康报告中的告警，执行非破坏性修复动作并更新报告。
+"""JBT 自动修复脚本 — 读取健康报告中的告警，执行非破坏性修复动作并更新报告。
 
 用法:
     .venv/bin/python3 scripts/health_remediate.py --report health_reports/mini.json
@@ -84,7 +84,7 @@ def restart_collectors(report: dict) -> dict:
 
         # 重启 TqSdk 采集器（如果在 Mini 上）
         # P1-7 修复：验证环境变量值，防止注入攻击
-        hostname = os.environ.get("BOTQUANT_DEVICE", "").lower() or __import__("socket").gethostname().lower()
+        hostname = (os.environ.get("JBT_DEVICE") or "").lower() or __import__("socket").gethostname().lower()
         # 白名单验证：仅允许 "mini" 或 "alienware"
         if hostname not in ["mini", "alienware", ""] and not any(x in hostname for x in ["mini", "alienware"]):
             hostname = __import__("socket").gethostname().lower()
@@ -142,7 +142,7 @@ ACTION_MAP = {
 
 # ===================== 主流程 =====================
 def main():
-    parser = argparse.ArgumentParser(description="BotQuant 自动修复")
+    parser = argparse.ArgumentParser(description="JBT 自动修复")
     parser.add_argument("--report", required=True, help="健康报告 JSON 文件路径")
     args = parser.parse_args()
 

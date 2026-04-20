@@ -4,12 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REPO_ROOT="$(cd "${SERVICE_ROOT}/../.." && pwd)"
-TEMPLATE="${SERVICE_ROOT}/configs/launchagents/com.botquant.data_scheduler.plist"
+TEMPLATE="${SERVICE_ROOT}/configs/launchagents/com.jbt.data_scheduler.plist"
 TARGET_DIR="${HOME}/Library/LaunchAgents"
-TARGET_PLIST="${TARGET_DIR}/com.botquant.data_scheduler.plist"
+TARGET_PLIST="${TARGET_DIR}/com.jbt.data_scheduler.plist"
 LOG_DIR="${HOME}/jbt-data/logs"
 LOG_PATH="${LOG_DIR}/data_scheduler_launchd.log"
-LABEL="com.botquant.data_scheduler"
+LABEL="com.jbt.data_scheduler"
 DOMAIN="gui/$(id -u)"
 
 detect_python_bin() {

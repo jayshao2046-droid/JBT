@@ -1,0 +1,146 @@
+{
+  "strategy_id": "p_single_roundtrip_v1",
+  "evaluation_time": "2026-04-19T05:56:06.324957",
+  "final_score": 0,
+  "grade": "D",
+  "breakdown": {
+    "basic": {
+      "score": 5,
+      "max": 30,
+      "report": {
+        "weight_sum": {
+          "status": "fail",
+          "value": 0,
+          "expected": 1.0
+        },
+        "thresholds": {
+          "status": "warn",
+          "long": 0.0,
+          "short": 0.0,
+          "note": "threshold range 0.3-0.9 / -0.9 to -0.3 recommended"
+        },
+        "risk_params": {
+          "status": "fail",
+          "missing": [
+            "daily_loss_limit_yuan",
+            "max_drawdown_pct"
+          ]
+        },
+        "no_overnight": {
+          "status": "pass"
+        },
+        "night_session": {
+          "status": "pass",
+          "close_at": "22:55"
+        },
+        "force_close_day": {
+          "status": "pass",
+          "close_at": "14:55"
+        }
+      }
+    },
+    "backtest": {
+      "score": 3,
+      "max": 30,
+      "report": {
+        "sharpe_ratio": -0.2997,
+        "max_drawdown": 0.021886,
+        "win_rate": 0.3629,
+        "total_return": -0.021486,
+        "annualized_return": -0.001823,
+        "trades_count": 124,
+        "final_capital": 489256.91,
+        "status": "success"
+      }
+    },
+    "pbo": {
+      "score": 3,
+      "max": 10,
+      "report": {
+        "status": "completed",
+        "method": "temporal_stability_4q",
+        "positive_quarters": 1,
+        "total_quarters": 4,
+        "stability_ratio": 0.25,
+        "quarterly_sharpes": [
+          0.8695,
+          0.0,
+          -1.0212,
+          -1.9431
+        ]
+      }
+    },
+    "factor": {
+      "score": 0,
+      "max": 10,
+      "report": {
+        "status": "completed",
+        "factor_name": "ATR",
+        "ic_mean": -0.285781,
+        "ic_std": 0.29271,
+        "ic_ir": -0.9763,
+        "t_stat": -169.0319,
+        "p_value": 0.01,
+        "ls_return": -4.3e-05,
+        "passed": false,
+        "samples": 29985
+      }
+    },
+    "risk": {
+      "score": 1,
+      "max": 20,
+      "report": {
+        "max_drawdown_pct": {
+          "value": 0.1,
+          "pass": false
+        },
+        "daily_loss_limit_yuan": {
+          "value": 10000,
+          "hard_cap": 2000,
+          "pass": false,
+          "status": "FAIL — 超出 2000 元上限"
+        },
+        "per_trade_stop_yuan": {
+          "value": 10000,
+          "hard_cap": 1000,
+          "pass": false,
+          "status": "FAIL — 单笔止损超出 1000 元上限"
+        },
+        "atr_multiplier": {
+          "value": 0.0,
+          "symbol": "p",
+          "recommended_range": [
+            1.2,
+            2.8
+          ],
+          "pass": true,
+          "status": "pass"
+        },
+        "risk_reward_ratio": {
+          "value": 1.0,
+          "minimum": 2.0,
+          "pass": false,
+          "status": "WARN — 盈亏比 1.0:1，建议 ≥ 2:1"
+        }
+      }
+    }
+  },
+  "risk_adjustment": {
+    "bonus": 0,
+    "penalty": 28
+  },
+  "conclusion": {
+    "can_deploy": false,
+    "priority": "low",
+    "suggestions": [
+      "降低仓位或收紧止损，控制回撤",
+      "优化入场时机，提高 Sharpe Ratio",
+      "提高入场阈值，提升胜率"
+    ],
+    "warnings": [
+      "回撤阈值过宽松，建议收紧至 1.5%"
+    ]
+  },
+  "saved_at": "2026-04-19T05:56:06.325170",
+  "report_type": "evaluator"
+}
