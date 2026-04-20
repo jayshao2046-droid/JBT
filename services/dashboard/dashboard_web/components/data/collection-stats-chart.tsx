@@ -5,7 +5,7 @@ import { TrendingUp } from "lucide-react"
 
 export default function CollectionStatsChart() {
   return (
-    <Card className="bg-neutral-900 border-neutral-800">
+    <Card>
       <CardHeader>
         <CardTitle className="text-sm font-medium text-neutral-300 flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-orange-500" />

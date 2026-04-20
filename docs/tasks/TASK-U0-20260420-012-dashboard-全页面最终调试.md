@@ -105,6 +105,54 @@ NEXT_PUBLIC_BACKTEST_URL=http://192.168.31.245:8103
 | Researcher | 修复 source-manager 硬编码颜色 | components/source-manager.tsx | 2026-04-20 |
 | Researcher | 修复 priority-adjuster 硬编码颜色 | components/priority-adjuster.tsx | 2026-04-20 |
 | Researcher | 修复 report-viewer 硬编码颜色 | components/report-viewer.tsx | 2026-04-20 |
+| Settings | 修复设置页 bg-gray-950 遮住蜂窝背景 | app/(dashboard)/settings/layout.tsx | 2026-04-20 |
+| Data | 数据端 overview/collectors/explorer/system-monitor/news-feed 清理暗色硬编码 | components/data/*.tsx | 2026-04-20 |
+| 用户系统 | **完整用户认证系统**（Session Token + 路由保护 + 用户管理 UI） | 见下方详情 | 2026-04-20 |
+
+### 用户认证系统修改详情（2026-04-20，commit 37c86bac2）
+
+**后端 (`services/dashboard/src/main.py`)**：
+- 新增 `sessions` SQLite 表（token、user_id、created_at、expires_at）
+- 登录接口 `/auth/login` 返回 session token（`secrets.token_urlsafe(32)`，有效期30天）
+- 新增 `/auth/me`（验证 token 返回当前用户）、`/auth/logout`（失效 session）
+- 新增 `get_current_user`、`require_admin` FastAPI 依赖注入
+- 用户管理端点（list/create/update/delete/password）全部加上管理员 session 认证
+- 密码最小6位校验，`delete_user` 禁止删除自己，`update_user` 保护最后一个管理员
+
+**前端**：
+- `middleware.ts`：Next.js 边缘路由保护，未登录跳转 `/login`（读 `jbt_token` cookie）
+- `lib/auth-context.tsx`：全局 `AuthProvider` + `useAuth` hook（user/token/isAdmin/logout）
+- `lib/api/auth.ts`：新增 `getAuthHeaders()` 自动携带 Bearer token；登录响应含 token
+- `app/layout.tsx`：注入 `AuthProvider` 包裹全局
+- `app/(auth)/login/page.tsx`：登录成功存 token 到 cookie（`SameSite=Lax`）+ localStorage；inline 错误提示
+- `app/(dashboard)/settings/page.tsx`：完整重写——Dialog 弹窗式用户管理 UI（添加/删除/改密码），useAuth 读取当前用户，管理员才显示用户列表，退出登录按钮
+
+## 最近修改记录（2026-04-20 本轮）
+
+### 登录修复与视觉升级（commit daffc4c04 / fe8ee3faf / 1766cbc02）
+
+| 修改类别 | 文件 | 内容 |
+|---------|------|------|
+| 登录大小写不敏感 | `src/main.py` | `WHERE LOWER(username)=LOWER(?)` |
+| 登录页左侧文字居中 | `login/page.tsx` | 加 `items-center justify-center w-full text-center` |
+| 退出按钮接 logout | `app-sidebar.tsx` | 加 `useAuth`、`onClick={() => logout()}`，用户名/头像动态显示 |
+| 登录页蜂窝背景 | `auth/layout.tsx` | 加 `AnimatedGridBg` + `.scan-line` 扫描亮条 |
+| 登录页面板透明 | `login/page.tsx` | 去掉两侧不透明渐变背景 |
+| 扫描亮条动画 | `globals.css` | 新增 `@keyframes scan-down` + `.scan-line` CSS |
+| KPI 透明玻璃（亮色模式）| `globals.css` | `glass-card` 背景从 0.8→0.15，真正透明 |
+| KPI 加 glass-card | `kpi-card.tsx`、`data-quality-kpi.tsx`、`data-source-health-kpi.tsx`、`decision/overview.tsx` | 所有 KPI Card 加 `glass-card` |
+| 橙色呼吸增强 | `animated-grid-bg.tsx` | `BASE_A 0.05→0.07`，`SHIMMER_A 0.18→0.28`，`PULSE_PROB 0.025→0.04`，光晕强度 +60% |
+
+### 验证结果（2026-04-20 最终）
+- ✅ `pnpm build` 通过（exit 0）
+- ✅ dev server 就绪（Ready in 3.5s，无 Error 日志）
+- ✅ `/login` → HTTP 200，HTML 含 `AnimatedGridBg` + `scan-line`
+- ✅ `/` → HTTP 307 重定向 `/login`（中间件认证正常）
+- ✅ 无白屏风险（auth/layout.tsx 无 flex 嵌套，login 有 Suspense 包裹）
+
+### Git 备份
+- tag: `backup-auth-sidebar-20260420-220843`
+- 最新 commit: `fe8ee3faf`
 
 ## 验收标准
 

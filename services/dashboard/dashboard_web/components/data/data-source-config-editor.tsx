@@ -5,7 +5,7 @@ import { Settings } from "lucide-react"
 
 export default function DataSourceConfigEditor() {
   return (
-    <Card className="bg-neutral-900 border-neutral-800">
+    <Card>
       <CardHeader>
         <CardTitle className="text-sm font-medium text-neutral-300 flex items-center gap-2">
           <Settings className="w-4 h-4 text-orange-500" />

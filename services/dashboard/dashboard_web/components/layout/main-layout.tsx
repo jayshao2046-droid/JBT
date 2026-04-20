@@ -80,7 +80,7 @@ export default function MainLayout({
           lastUpdate={lastUpdate}
           onMenuToggle={() => setMobileMenuOpen(true)}
         />
-        <main className="flex-1 overflow-auto bg-background relative">
+        <main className="flex-1 overflow-auto bg-transparent relative">
           <AnimatedGridBg />
           <div className="relative z-10">{children}</div>
         </main>

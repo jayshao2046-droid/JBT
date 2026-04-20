@@ -135,33 +135,39 @@
 }
 
 .dark .glass-card {
-  background: linear-gradient(135deg, hsl(0 0% 100% / 0.06) 0%, hsl(0 0% 100% / 0.02) 100%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: transparent;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid hsl(0 0% 100% / 0.08);
-  box-shadow: 0 4px 24px -1px hsl(0 0% 0% / 0.3), 0 0 1px 0 hsl(0 0% 100% / 0.1) inset;
+  box-shadow: 0 2px 12px -1px hsl(0 0% 0% / 0.2);
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .dark .glass-card:hover {
-  background: linear-gradient(135deg, hsl(0 0% 100% / 0.08) 0%, hsl(0 0% 100% / 0.03) 100%);
-  border-color: hsl(24 95% 53% / 0.3);
-  box-shadow: 0 8px 32px -2px hsl(0 0% 0% / 0.4), 0 0 1px 0 hsl(0 0% 100% / 0.15) inset,
-    0 0 20px -5px hsl(24 95% 53% / 0.15);
+  background: linear-gradient(135deg, hsl(0 0% 0% / 0.42) 0%, hsl(0 0% 0% / 0.30) 100%);
+  border-color: hsl(24 95% 53% / 0.50);
+  box-shadow: 0 10px 36px -2px hsl(0 0% 0% / 0.55),
+    0 0 0 1px hsl(24 95% 53% / 0.14) inset,
+    0 0 28px -4px hsl(24 95% 53% / 0.28);
+  transform: translateY(-2px);
 }
 
 .glass-card {
-  background: linear-gradient(135deg, hsl(210 14% 98.5% / 0.15) 0%, hsl(210 14% 96.8% / 0.10) 100%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid hsl(210 14% 70% / 0.20);
-  box-shadow: 0 4px 24px -1px hsl(0 0% 0% / 0.04), 0 0 1px 0 hsl(24 95% 53% / 0.05) inset;
+  background: transparent;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid hsl(210 14% 70% / 0.25);
+  box-shadow: 0 2px 8px -1px hsl(0 0% 0% / 0.05);
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .glass-card:hover {
-  background: linear-gradient(135deg, hsl(210 14% 98.5% / 0.22) 0%, hsl(210 14% 96.8% / 0.16) 100%);
-  border-color: hsl(24 95% 53% / 0.3);
-  box-shadow: 0 8px 32px -2px hsl(0 0% 0% / 0.06), 0 0 1px 0 hsl(24 95% 53% / 0.12) inset,
-    0 0 20px -5px hsl(24 95% 53% / 0.15);
+  background: linear-gradient(135deg, hsl(220 15% 15% / 0.10) 0%, hsl(220 15% 15% / 0.07) 100%);
+  border-color: hsl(24 95% 53% / 0.50);
+  box-shadow: 0 10px 28px -2px hsl(0 0% 0% / 0.14),
+    0 0 0 1px hsl(24 95% 53% / 0.12) inset,
+    0 0 24px -4px hsl(24 95% 53% / 0.22);
+  transform: translateY(-2px);
 }
 
 .text-float {
