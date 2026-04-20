@@ -463,13 +463,15 @@ interface RuleKpiCardProps {
   rule: NotificationRule
   feishuReady: boolean
   smtpReady: boolean
+  isSelected?: boolean
+  onToggleSelect?: (rule: NotificationRule) => void
   onUpdated: (rule: NotificationRule) => void
   onDelete:  (rule: NotificationRule) => void
   onEdit:    (rule: NotificationRule) => void
   onTest:    (rule: NotificationRule) => Promise<void>
 }
 
-function RuleKpiCard({ rule, feishuReady, smtpReady, onUpdated, onDelete, onEdit, onTest }: RuleKpiCardProps) {
+function RuleKpiCard({ rule, feishuReady, smtpReady, isSelected, onToggleSelect, onUpdated, onDelete, onEdit, onTest }: RuleKpiCardProps) {
   const [busy, setBusy] = useState<string | null>(null)
   const typeCfg = RULE_TYPE_CFG[rule.rule_type]
   const hex = COLOR_CFG[rule.color]?.hex ?? '#888'
@@ -507,8 +509,20 @@ function RuleKpiCard({ rule, feishuReady, smtpReady, onUpdated, onDelete, onEdit
       onClick={toggleEnabled}
       title={rule.enabled ? '点击关闭此通知' : '点击开启此通知'}
     >
-      {/* 颜色条 */}
-      <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl" style={{ backgroundColor: hex }} />
+      {/* 颜色条 + 复选框 */}
+      <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl flex items-start" style={{ backgroundColor: hex }}>
+        {onToggleSelect && (
+          <div
+            className="absolute -left-2 -top-2 w-5 h-5 rounded border-2 border-border bg-background flex items-center justify-center cursor-pointer hover:bg-muted transition-all"
+            onClick={(e) => { e.stopPropagation(); onToggleSelect(rule) }}
+            title="选择此规则用于批量操作"
+          >
+            {isSelected && (
+              <span className="text-xs font-bold text-foreground">✓</span>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* 操作按钮（hover 显示） */}
       <div
@@ -649,6 +663,9 @@ function ServicePanel({ config, rules, onConfigUpdated, onRuleAdded, onRuleUpdat
   const [configDialog,setConfigDialog]= useState(false)
   const [editingRule, setEditingRule] = useState<NotificationRule | null>(null)
   const [deleteTarget,setDeleteTarget]= useState<NotificationRule | null>(null)
+  const [selectedRuleIds, setSelectedRuleIds] = useState<Set<number>>(new Set())
+  const [testingBatch, setTestingBatch] = useState(false)
+  const [batchResults, setBatchResults] = useState<Record<number, { success: boolean; msg: string }> | null>(null)
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -656,6 +673,58 @@ function ServicePanel({ config, rules, onConfigUpdated, onRuleAdded, onRuleUpdat
     clearTimeout(toastTimer.current)
     setToast({ type, msg })
     toastTimer.current = setTimeout(() => setToast(null), 2500)
+  }
+
+  const toggleRuleSelect = (rule: NotificationRule) => {
+    setSelectedRuleIds(prev => {
+      const next = new Set(prev)
+      if (next.has(rule.id)) {
+        next.delete(rule.id)
+      } else {
+        next.add(rule.id)
+      }
+      return next
+    })
+  }
+
+  const handleBatchTest = async () => {
+    if (selectedRuleIds.size === 0) {
+      showToast('err', '请先选择要测试的规则')
+      return
+    }
+    setTestingBatch(true)
+    setBatchResults({})
+    const results: Record<number, { success: boolean; msg: string }> = {}
+    
+    try {
+      await Promise.all(
+        Array.from(selectedRuleIds).map(async (ruleId) => {
+          const rule = rules.find(r => r.id === ruleId)
+          if (!rule) return
+          try {
+            const res = await notificationApi.testRule(ruleId)
+            const parts: string[] = []
+            if (res.results.feishu) parts.push(`飞书${res.results.feishu.success ? '✓' : '✗'}`)
+            if (res.results.smtp) parts.push(`邮件${res.results.smtp.success ? '✓' : '✗'}`)
+            results[ruleId] = {
+              success: res.success,
+              msg: parts.join(' ') || (res.success ? '成功' : '失败'),
+            }
+          } catch (e) {
+            results[ruleId] = {
+              success: false,
+              msg: (e as Error).message || '测试失败',
+            }
+          }
+        })
+      )
+    } finally {
+      setTestingBatch(false)
+      setBatchResults(results)
+      const okCount = Object.values(results).filter(r => r.success).length
+      const total = Object.keys(results).length
+      showToast(okCount > 0 ? 'ok' : 'err', `批量测试完成: ${okCount}/${total} 成功`)
+    }
   }
 
   const handleRuleSave = async (form: RuleForm) => {
@@ -776,6 +845,8 @@ function ServicePanel({ config, rules, onConfigUpdated, onRuleAdded, onRuleUpdat
                 <RuleKpiCard key={rule.id} rule={rule}
                   feishuReady={feishuActive}
                   smtpReady={smtpActive}
+                  isSelected={selectedRuleIds.has(rule.id)}
+                  onToggleSelect={toggleRuleSelect}
                   onUpdated={onRuleUpdated}
                   onDelete={setDeleteTarget}
                   onEdit={r => { setEditingRule(r); setRuleDialog(true) }}
@@ -784,7 +855,43 @@ function ServicePanel({ config, rules, onConfigUpdated, onRuleAdded, onRuleUpdat
               ))}
             </div>
           )}
-          <div className="flex justify-end pt-1">
+          {batchResults && Object.keys(batchResults).length > 0 && (
+            <div className="rounded-md border border-border/50 bg-muted/5 p-2.5 space-y-1">
+              <p className="text-xs font-semibold text-foreground mb-1">批量测试结果</p>
+              {rules
+                .filter(r => selectedRuleIds.has(r.id))
+                .map(rule => {
+                  const result = batchResults[rule.id]
+                  return (
+                    <div key={rule.id} className="flex items-center justify-between text-[10px] px-2 py-1 rounded bg-background/50">
+                      <span className="text-muted-foreground truncate flex-1">{rule.name}</span>
+                      <span className={result?.success ? 'text-green-400 font-medium' : 'text-destructive font-medium'}>
+                        {result?.msg || '—'}
+                      </span>
+                    </div>
+                  )
+                })}
+            </div>
+          )}
+          <div className="flex justify-between gap-2 pt-1">
+            <div className="flex gap-1.5">
+              {selectedRuleIds.size > 0 && (
+                <>
+                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1"
+                    onClick={() => setSelectedRuleIds(new Set())}
+                    title="清除所有选择"
+                  >
+                    取消选择 ({selectedRuleIds.size})
+                  </Button>
+                  <Button size="sm" className="h-7 text-xs gap-1 bg-orange-600 hover:bg-orange-700"
+                    onClick={handleBatchTest}
+                    disabled={testingBatch}
+                  >
+                    {testingBatch ? '测试中…' : '🚀 批量测试'} ({selectedRuleIds.size})
+                  </Button>
+                </>
+              )}
+            </div>
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5"
               onClick={() => { setEditingRule(null); setRuleDialog(true) }}
             >
