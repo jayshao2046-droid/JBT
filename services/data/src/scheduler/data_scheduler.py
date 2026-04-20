@@ -59,7 +59,7 @@ if _env_file.exists():
 
 from utils.config import get_config
 from utils.logger import get_logger
-from utils.trading_calendar import GlobalTradingCalendar, MarketSnapshot
+from utils.trading_calendar import GlobalTradingCalendar, MarketSnapshot, MarketType
 
 # ─────────────────────────────────────────────
 # 全局状态
@@ -1064,6 +1064,11 @@ def job_tushare_futures(config: dict[str, Any]) -> None:
 
 def job_macro(config: dict[str, Any]) -> None:
     """宏观数据 — 每日 09:00。"""
+    _calendar.refresh()
+    ok, reason = _calendar.is_cn_trading_day(datetime.now())
+    if not ok:
+        logger.info("跳过宏观数据: %s", reason)
+        return
     from scheduler.pipeline import run_macro_pipeline
     _safe_run("宏观数据", run_macro_pipeline, config=config)
 
@@ -1092,7 +1097,13 @@ def job_rss(config: dict[str, Any]) -> None:
 
 
 def job_volatility(config: dict[str, Any]) -> None:
-    """波动率 — 每日 17:00。"""
+    """波动率 — 每日 17:00（含 VIX/QVIX，需 CN 或 US 任一为交易日）。"""
+    _calendar.refresh()
+    cn_ok, _ = _calendar.is_cn_trading_day(datetime.now())
+    us_ok, _ = _calendar.is_us_trading_day(datetime.now())
+    if not cn_ok and not us_ok:
+        logger.info("跳过波动率指数: CN/US 均为非交易日")
+        return
     from scheduler.pipeline import run_volatility_pipeline
     _safe_run("波动率指数", run_volatility_pipeline, config=config)
 
@@ -1140,13 +1151,20 @@ def job_symbol_features(config: dict[str, Any]) -> None:
 
 
 def job_sentiment(config: dict[str, Any]) -> None:
-    """情绪指数 — 每5分钟。"""
+    """情绪指数 — 每5分钟（仅CN交易时段）。"""
+    if not _calendar.is_market_open(MarketType.CN_STOCKS):
+        return
     from scheduler.pipeline import run_sentiment_pipeline
     _safe_run("情绪指数", run_sentiment_pipeline, config=config)
 
 
 def job_shipping(config: dict[str, Any]) -> None:
-    """海运物流 — 每日 09:00。"""
+    """海运物流 — 每日 09:00（BDI 为全球工作日数据，仅工作日采集）。"""
+    _calendar.refresh()
+    ok, reason = _calendar.is_lme_trading_day(datetime.now())
+    if not ok:
+        logger.info("跳过海运物流: %s", reason)
+        return
     from scheduler.pipeline import run_shipping_pipeline
     _safe_run("海运物流", run_shipping_pipeline, config=config)
 
@@ -1169,7 +1187,14 @@ def job_forex(config: dict[str, Any]) -> None:
 
 
 def job_cftc(config: dict[str, Any]) -> None:
-    """CFTC持仓报告 — 每周六 10:00 (CFTC 周五发布)。"""
+    """CFTC持仓报告 — 每周六 10:00 (CFTC 周五发布，周六 CST 采集)。"""
+    # 周六运行时，参考前一日（周五）是否为美国交易日
+    _calendar.refresh()
+    ref = datetime.now() - timedelta(days=1)
+    ok, reason = _calendar.is_us_trading_day(ref)
+    if not ok:
+        logger.info("跳过CFTC持仓报告: 前一日非US交易日 (%s)", reason)
+        return
     from scheduler.pipeline import run_cftc_pipeline
     _safe_run("CFTC持仓报告", run_cftc_pipeline, config=config)
 
