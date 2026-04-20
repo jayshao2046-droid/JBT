@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
 
 interface NavItem {
   id: string
@@ -102,6 +103,7 @@ interface AppSidebarProps {
 export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   const pathname = usePathname()
   const [expandedItems, setExpandedItems] = useState<string[]>(["sim-trading"])
+  const { user, logout } = useAuth()
 
   const toggleExpand = (id: string) => {
     setExpandedItems((prev) =>
@@ -254,16 +256,17 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           {/* User Info */}
           <div className="flex items-center gap-3 p-2">
             <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center text-sm text-foreground font-medium">
-              A
+              {user?.username?.[0]?.toUpperCase() ?? 'U'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-foreground truncate">admin</p>
+              <p className="text-sm text-foreground truncate">{user?.username ?? '-'}</p>
               <p className="text-xs text-muted-foreground">管理员</p>
             </div>
             <Button
               variant="ghost"
               size="icon"
               className="text-muted-foreground hover:text-foreground hover:bg-accent"
+              onClick={() => logout()}
             >
               <LogOut className="w-4 h-4" />
             </Button>
