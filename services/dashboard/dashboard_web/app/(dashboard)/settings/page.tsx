@@ -20,6 +20,8 @@ import { settingsApi, type SystemSettings } from '@/lib/api/settings';
 import { usersApi, type User } from '@/lib/api/auth';
 import { useAuth } from '@/lib/auth-context';
 import { PermissionsDialog } from '@/components/settings/permissions-dialog';
+import { TradingSessionsCard } from '@/components/settings/trading-sessions-card';
+import { TradingCalendarCard } from '@/components/settings/trading-calendar-card';
 import {
   Trash2,
   UserPlus,
@@ -610,30 +612,8 @@ export default function SettingsPage() {
 
         {/* 交易时段 Tab */}
         <TabsContent value="trading" className="space-y-4">
-          <Card className="bg-transparent backdrop-blur-sm border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground">交易时段控制</CardTitle>
-              <CardDescription className="text-muted-foreground">配置交易时段和自动开关</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {[
-                { key: 'auto_trading_enabled', label: '启用自动交易', desc: '在交易时段自动启动交易' },
-                { key: 'pre_market_enabled', label: '盘前准备', desc: '开盘前30分钟启动系统' },
-                { key: 'post_market_enabled', label: '盘后清算', desc: '收盘后自动执行清算' },
-              ].map(({ key, label, desc }) => (
-                <div key={key} className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-foreground">{label}</Label>
-                    <p className="text-sm text-muted-foreground">{desc}</p>
-                  </div>
-                  <Switch
-                    checked={(settings.trading as unknown as Record<string, boolean>)[key]}
-                    onCheckedChange={(checked) => handleTradingToggle(key, checked)}
-                  />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          <TradingSessionsCard />
+          <TradingCalendarCard />
         </TabsContent>
 
         {/* 通知配置 Tab */}

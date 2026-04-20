@@ -42,7 +42,7 @@ async def _verify_api_key(request: Request, api_key: Optional[str] = Depends(_ap
     """服务间 API Key 认证（用户认证路径豁免）"""
     path = request.url.path
     # 认证/用户管理路径走 session 认证，不走 API Key
-    if path in _PUBLIC_PATHS or path.startswith("/api/v1/users") or path.startswith("/api/v1/auth"):
+    if path in _PUBLIC_PATHS or path.startswith("/api/v1/users") or path.startswith("/api/v1/auth") or path.startswith("/api/v1/trading"):
         return
 
     env = os.environ.get("JBT_ENV", "development").lower()
@@ -99,6 +99,67 @@ def init_db():
         cursor.execute("ALTER TABLE users ADD COLUMN permissions TEXT NOT NULL DEFAULT '[]'")
     except sqlite3.OperationalError:
         pass  # column already exists
+
+    # 交易时段配置表（每天3个期货时段）
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS trading_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            label TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL
+        )
+    """)
+
+    # 交易全局配置
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS trading_config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+
+    # 交易日历（节假日 / 补班日 / 临时休市）
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS trading_calendar (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL UNIQUE,
+            type TEXT NOT NULL DEFAULT 'holiday',
+            label TEXT NOT NULL DEFAULT '',
+            note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    # 初始化默认期货三时段
+    cursor.execute("SELECT COUNT(*) FROM trading_sessions")
+    if cursor.fetchone()[0] == 0:
+        now_str = datetime.now().isoformat()
+        default_sessions = [
+            ("night",   "夜盘",   1, "21:00", "23:00", 0, now_str),
+            ("morning", "上午盘", 1, "09:00", "11:30", 1, now_str),
+            ("afternoon","下午盘",1, "13:30", "15:00", 2, now_str),
+        ]
+        cursor.executemany(
+            "INSERT INTO trading_sessions (name,label,enabled,start_time,end_time,sort_order,updated_at) VALUES (?,?,?,?,?,?,?)",
+            default_sessions
+        )
+
+    # 初始化默认全局配置
+    defaults = {
+        "auto_trading_enabled": "true",
+        "pre_market_minutes": "30",
+        "post_market_enabled": "true",
+        "pre_market_enabled": "true",
+        "timezone": "Asia/Shanghai",
+    }
+    for k, v in defaults.items():
+        cursor.execute("INSERT OR IGNORE INTO trading_config (key,value,updated_at) VALUES (?,?,?)",
+                       (k, v, datetime.now().isoformat()))
 
     # 创建默认管理员账户 admin/admin123
     cursor.execute("SELECT COUNT(*) FROM users WHERE username = 'admin'")
@@ -467,6 +528,136 @@ async def update_user_permissions(
     conn.commit()
     conn.close()
     return {"success": True, "permissions": req.permissions}
+
+
+@app.get("/api/v1/trading/sessions")
+async def get_trading_sessions(current_user: dict = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id,name,label,enabled,start_time,end_time,sort_order FROM trading_sessions ORDER BY sort_order")
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id":r[0],"name":r[1],"label":r[2],"enabled":bool(r[3]),"start_time":r[4],"end_time":r[5],"sort_order":r[6]} for r in rows]
+
+
+@app.put("/api/v1/trading/sessions/{session_id}")
+async def update_trading_session(session_id: int, req: dict, admin: dict = Depends(require_admin)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM trading_sessions WHERE id=?", (session_id,))
+    if cursor.fetchone()[0] == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="时段不存在")
+    updates, params = [], []
+    for field in ("label","enabled","start_time","end_time"):
+        if field in req:
+            updates.append(f"{field}=?")
+            params.append(int(req[field]) if field == "enabled" else req[field])
+    if not updates:
+        conn.close()
+        raise HTTPException(status_code=400, detail="无可更新字段")
+    updates.append("updated_at=?")
+    params.append(datetime.now().isoformat())
+    params.append(session_id)
+    cursor.execute(f"UPDATE trading_sessions SET {','.join(updates)} WHERE id=?", params)
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+@app.get("/api/v1/trading/config")
+async def get_trading_config(current_user: dict = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT key,value FROM trading_config")
+    rows = cursor.fetchall()
+    conn.close()
+    return {r[0]: r[1] for r in rows}
+
+
+@app.put("/api/v1/trading/config")
+async def update_trading_config(req: dict, admin: dict = Depends(require_admin)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+    for k, v in req.items():
+        cursor.execute("INSERT OR REPLACE INTO trading_config (key,value,updated_at) VALUES (?,?,?)", (k, str(v), now))
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+@app.get("/api/v1/trading/calendar")
+async def get_trading_calendar(year: Optional[int] = None, current_user: dict = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    if year:
+        cursor.execute("SELECT id,date,type,label,note,created_at FROM trading_calendar WHERE date LIKE ? ORDER BY date", (f"{year}-%",))
+    else:
+        cursor.execute("SELECT id,date,type,label,note,created_at FROM trading_calendar ORDER BY date DESC LIMIT 200")
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id":r[0],"date":r[1],"type":r[2],"label":r[3],"note":r[4],"created_at":r[5]} for r in rows]
+
+
+class CalendarEntryRequest(BaseModel):
+    date: str
+    type: str = "holiday"   # holiday | workday | early_close
+    label: str = ""
+    note: str = ""
+
+
+@app.post("/api/v1/trading/calendar")
+async def add_calendar_entry(req: CalendarEntryRequest, admin: dict = Depends(require_admin)):
+    import re
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", req.date):
+        raise HTTPException(status_code=400, detail="日期格式必须为 YYYY-MM-DD")
+    if req.type not in ("holiday", "workday", "early_close"):
+        raise HTTPException(status_code=400, detail="type 必须为 holiday/workday/early_close")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO trading_calendar (date,type,label,note,created_at) VALUES (?,?,?,?,?)",
+            (req.date, req.type, req.label, req.note, datetime.now().isoformat())
+        )
+        entry_id = cursor.lastrowid
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(status_code=400, detail="该日期已存在日历条目")
+    conn.close()
+    return {"id": entry_id, "date": req.date, "type": req.type, "label": req.label, "note": req.note}
+
+
+@app.put("/api/v1/trading/calendar/{entry_id}")
+async def update_calendar_entry(entry_id: int, req: CalendarEntryRequest, admin: dict = Depends(require_admin)):
+    import re
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", req.date):
+        raise HTTPException(status_code=400, detail="日期格式必须为 YYYY-MM-DD")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM trading_calendar WHERE id=?", (entry_id,))
+    if cursor.fetchone()[0] == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="条目不存在")
+    cursor.execute(
+        "UPDATE trading_calendar SET date=?,type=?,label=?,note=? WHERE id=?",
+        (req.date, req.type, req.label, req.note, entry_id)
+    )
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+@app.delete("/api/v1/trading/calendar/{entry_id}")
+async def delete_calendar_entry(entry_id: int, admin: dict = Depends(require_admin)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM trading_calendar WHERE id=?", (entry_id,))
+    conn.commit()
+    conn.close()
+    return {"success": True}
 
 
 @app.get("/health")

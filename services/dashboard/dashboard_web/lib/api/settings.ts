@@ -2,6 +2,7 @@ import { apiFetch } from "./fetcher"
 
 const SIM_TRADING_BASE = "/api/sim-trading/api/v1"
 const DATA_BASE = "/api/data/api/v1"
+const DASHBOARD_BASE = "/api/dashboard/api/v1"
 
 // 系统设置类型定义
 export interface SystemSettings {
@@ -20,6 +21,29 @@ export interface TradingSettings {
   auto_trading_enabled: boolean
   pre_market_enabled: boolean
   post_market_enabled: boolean
+  pre_market_minutes: number
+  timezone: string
+}
+
+export interface TradingSession {
+  id: number
+  name: string
+  label: string
+  enabled: boolean
+  start_time: string
+  end_time: string
+  sort_order: number
+}
+
+export type CalendarEntryType = "holiday" | "workday" | "early_close"
+
+export interface CalendarEntry {
+  id: number
+  date: string
+  type: CalendarEntryType
+  label: string
+  note: string
+  created_at: string
 }
 
 export interface NotificationSettings {
@@ -66,6 +90,8 @@ export const settingsApi = {
         auto_trading_enabled: simTradingState?.trading_enabled ?? false,
         pre_market_enabled: true,
         post_market_enabled: true,
+        pre_market_minutes: 30,
+        timezone: "Asia/Shanghai",
       },
       notifications: {
         feishu_webhook: dataNotifications?.feishu_webhook ?? "",
@@ -139,4 +165,64 @@ export const settingsApi = {
     console.log("Restart service:", serviceName)
     return { success: true }
   },
+}
+
+// ── 交易时段 & 日历 API ──────────────────────────────────────
+function getDashboardHeaders(): HeadersInit {
+  const token = typeof window !== "undefined" ? localStorage.getItem("jbt_token") : null
+  const h: Record<string, string> = { "Content-Type": "application/json" }
+  if (token) h["Authorization"] = `Bearer ${token}`
+  return h
+}
+
+async function dashFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${DASHBOARD_BASE}${path}`, {
+    ...init,
+    headers: { ...getDashboardHeaders(), ...(init?.headers ?? {}) },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error((err as { detail?: string }).detail ?? "Request failed")
+  }
+  return res.json() as Promise<T>
+}
+
+export const tradingSessionsApi = {
+  list: () => dashFetch<TradingSession[]>("/trading/sessions"),
+
+  update: (id: number, data: Partial<Pick<TradingSession, "label" | "enabled" | "start_time" | "end_time">>) =>
+    dashFetch<{ success: boolean }>(`/trading/sessions/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+}
+
+export const tradingConfigApi = {
+  get: () => dashFetch<Record<string, string>>("/trading/config"),
+
+  update: (data: Record<string, string | boolean | number>) =>
+    dashFetch<{ success: boolean }>("/trading/config", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+}
+
+export const calendarApi = {
+  list: (year?: number) =>
+    dashFetch<CalendarEntry[]>(`/trading/calendar${year ? `?year=${year}` : ""}`),
+
+  add: (entry: Omit<CalendarEntry, "id" | "created_at">) =>
+    dashFetch<CalendarEntry>("/trading/calendar", {
+      method: "POST",
+      body: JSON.stringify(entry),
+    }),
+
+  update: (id: number, entry: Omit<CalendarEntry, "id" | "created_at">) =>
+    dashFetch<{ success: boolean }>(`/trading/calendar/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(entry),
+    }),
+
+  remove: (id: number) =>
+    dashFetch<{ success: boolean }>(`/trading/calendar/${id}`, { method: "DELETE" }),
 }
