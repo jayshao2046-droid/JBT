@@ -51,8 +51,6 @@ export function AppHeader({
 
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-neutral-500">JBT</span>
-          <span className="text-neutral-600">/</span>
           <span className="text-orange-500 font-medium">{title}</span>
           {subtitle && (
             <>

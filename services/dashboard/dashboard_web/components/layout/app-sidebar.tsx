@@ -129,8 +129,8 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
       )}
     >
       {/* Logo */}
-      <div className={cn("p-4 border-b border-border", collapsed && "px-2")}>
-        <div className="flex items-center justify-between">
+      <div className={cn("h-14 flex items-center px-4 border-b border-border", collapsed && "px-2")}>
+        <div className="flex items-center justify-between w-full">
           {!collapsed && (
             <Link href="/" className="flex items-center gap-2">
               <h1 className="text-lg font-extrabold text-orange-500 tracking-wide">
