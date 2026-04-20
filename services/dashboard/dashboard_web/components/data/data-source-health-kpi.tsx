@@ -5,15 +5,15 @@ import { Activity } from "lucide-react"
 
 export default function DataSourceHealthKPI() {
   return (
-    <Card className="bg-neutral-900 border-neutral-800">
+    <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-medium text-neutral-300 flex items-center gap-2">
+        <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
           <Activity className="w-4 h-4 text-orange-500" />
           数据源健康度 KPI
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-neutral-500">数据源健康度 KPI 功能开发中...</p>
+        <p className="text-xs text-muted-foreground">数据源健康度 KPI 功能开发中...</p>
       </CardContent>
     </Card>
   )

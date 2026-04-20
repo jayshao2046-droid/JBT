@@ -107,7 +107,7 @@ export default function DataExplorer() {
               ) : (
                 <span className="w-4 flex-shrink-0" />
               )}
-              {isExpanded ? <FolderOpen className="w-4 h-4 text-orange-400 flex-shrink-0" /> : <Folder className="w-4 h-4 text-neutral-400 flex-shrink-0" />}
+              {isExpanded ? <FolderOpen className="w-4 h-4 text-orange-400 flex-shrink-0" /> : <Folder className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
             </>
           ) : (
             <>
@@ -140,7 +140,7 @@ export default function DataExplorer() {
       <div className="flex flex-col items-center justify-center h-full py-24 text-muted-foreground">
         <AlertCircle className="w-10 h-10 mb-3 text-red-500/60" />
         <p className="text-sm mb-4">数据加载失败，请稍后重试</p>
-        <Button variant="outline" size="sm" onClick={fetchData} className="border-neutral-700 text-neutral-400">
+        <Button variant="outline" size="sm" onClick={fetchData}>
           重新加载
         </Button>
       </div>
@@ -215,7 +215,7 @@ export default function DataExplorer() {
             <>
               <div className="p-4 border-b border-border bg-card/30">
                 <div className="flex items-start gap-3">
-                  {selectedNode.type === "folder" ? <FolderOpen className="w-6 h-6 text-orange-400 flex-shrink-0 mt-0.5" /> : <FileText className="w-6 h-6 text-neutral-400 flex-shrink-0 mt-0.5" />}
+                  {selectedNode.type === "folder" ? <FolderOpen className="w-6 h-6 text-orange-400 flex-shrink-0 mt-0.5" /> : <FileText className="w-6 h-6 text-muted-foreground flex-shrink-0 mt-0.5" />}
                   <div className="flex-1 min-w-0">
                     <h2 className="text-lg font-semibold text-foreground truncate">{selectedNode.name}</h2>
                     <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate">{selectedNode.path}</p>
