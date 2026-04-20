@@ -64,8 +64,8 @@ function AddUserDialog({
       await usersApi.create({ username: form.username.trim(), password: form.password, role: form.role });
       onSuccess();
       handleClose();
-    } catch (err: any) {
-      setError(err.message || '创建失败');
+    } catch (err: unknown) {
+      setError((err as { message?: string }).message || '创建失败');
     } finally {
       setLoading(false);
     }
@@ -194,8 +194,8 @@ function ChangePasswordDialog({
       });
       handleClose();
       alert('密码修改成功');
-    } catch (err: any) {
-      setError(err.message || '修改失败');
+    } catch (err: unknown) {
+      setError((err as { message?: string }).message || '修改失败');
     } finally {
       setLoading(false);
     }
@@ -389,7 +389,7 @@ export default function SettingsPage() {
     try {
       await settingsApi.restartService(serviceName);
       alert(`${serviceName} 重启请求已发送`);
-    } catch (err) {
+    } catch {
       alert('重启失败');
     }
   };
@@ -611,7 +611,7 @@ export default function SettingsPage() {
                     <p className="text-sm text-muted-foreground">{desc}</p>
                   </div>
                   <Switch
-                    checked={(settings.trading as any)[key]}
+                    checked={(settings.trading as unknown as Record<string, boolean>)[key]}
                     onCheckedChange={(checked) => handleTradingToggle(key, checked)}
                   />
                 </div>
