@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, Suspense } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Eye, EyeOff, Lock, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,6 @@ import type { AuthUser } from "@/lib/auth-context"
 
 function LoginForm() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { login } = useAuth()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
@@ -37,8 +36,7 @@ function LoginForm() {
 
       if (response.success && response.user && response.token) {
         login(response.user as AuthUser, response.token)
-        const from = searchParams.get('from') || '/'
-        router.push(from)
+        router.push('/')
       } else {
         setErrorMsg(response.message || "登录失败，请检查账号和密码")
       }
@@ -148,9 +146,5 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-neutral-950" />}>
-      <LoginForm />
-    </Suspense>
-  )
+  return <LoginForm />
 }

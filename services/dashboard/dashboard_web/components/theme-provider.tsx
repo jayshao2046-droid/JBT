@@ -21,7 +21,6 @@ export function useTheme() {
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // 初始值从 localStorage 读取，避免水合不一致
   const [theme, setTheme] = useState<Theme>("dark")
-  const [mounted, setMounted] = useState(false)
 
   // 客户端挂载后读取实际主题
   useEffect(() => {
@@ -29,7 +28,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (stored) {
       setTheme(stored)
     }
-    setMounted(true)
   }, [])
 
   const applyTheme = (t: Theme) => {
@@ -50,11 +48,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem("jbt_theme", next)
       return next
     })
-  }
-
-  // 避免水合不匹配：在挂载前不渲染子组件
-  if (!mounted) {
-    return null
   }
 
   return (
