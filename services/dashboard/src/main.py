@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import logging
 import os
 import secrets
@@ -93,6 +94,12 @@ def init_db():
         )
     """)
 
+    # Migration: add permissions column if it doesn't exist yet
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN permissions TEXT NOT NULL DEFAULT '[]'")
+    except sqlite3.OperationalError:
+        pass  # column already exists
+
     # 创建默认管理员账户 admin/admin123
     cursor.execute("SELECT COUNT(*) FROM users WHERE username = 'admin'")
     if cursor.fetchone()[0] == 0:
@@ -135,7 +142,7 @@ def get_session_user(token: str) -> Optional[dict]:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
-        """SELECT u.id, u.username, u.role, u.created_at
+        """SELECT u.id, u.username, u.role, u.created_at, u.permissions
            FROM sessions s JOIN users u ON s.user_id = u.id
            WHERE s.token = ? AND s.expires_at > ?""",
         (token, datetime.now().isoformat()),
@@ -144,7 +151,10 @@ def get_session_user(token: str) -> Optional[dict]:
     conn.close()
     if not row:
         return None
-    return {"id": row[0], "username": row[1], "role": row[2], "created_at": row[3]}
+    return {
+        "id": row[0], "username": row[1], "role": row[2],
+        "created_at": row[3], "permissions": json.loads(row[4] or '[]'),
+    }
 
 
 def delete_session(token: str) -> None:
@@ -192,12 +202,18 @@ class User(BaseModel):
     username: str
     role: str
     created_at: str
+    permissions: list[str] = []
 
 
 class CreateUserRequest(BaseModel):
     username: str
     password: str
     role: str = "user"
+    permissions: list[str] = []
+
+
+class UpdatePermissionsRequest(BaseModel):
+    permissions: list[str]
 
 
 class UpdatePasswordRequest(BaseModel):
@@ -263,11 +279,13 @@ async def logout(authorization: Optional[str] = Depends(_session_header)):
 async def list_users(admin: dict = Depends(require_admin)):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, role, created_at FROM users ORDER BY created_at DESC")
+    cursor.execute("SELECT id, username, role, created_at, permissions FROM users ORDER BY created_at DESC")
     rows = cursor.fetchall()
     conn.close()
-
-    return [User(id=r[0], username=r[1], role=r[2], created_at=r[3]) for r in rows]
+    return [
+        User(id=r[0], username=r[1], role=r[2], created_at=r[3], permissions=json.loads(r[4] or '[]'))
+        for r in rows
+    ]
 
 
 @app.post("/api/v1/users", response_model=User)
@@ -286,17 +304,18 @@ async def create_user(req: CreateUserRequest, admin: dict = Depends(require_admi
         raise HTTPException(status_code=400, detail="密码长度不能少于6位")
 
     password_hash = hashlib.sha256(req.password.encode()).hexdigest()
+    permissions_json = json.dumps(req.permissions)
     now = datetime.now().isoformat()
 
     cursor.execute(
-        "INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        (req.username, password_hash, req.role, now, now)
+        "INSERT INTO users (username, password_hash, role, permissions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (req.username, password_hash, req.role, permissions_json, now, now)
     )
     user_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
-    return User(id=user_id, username=req.username, role=req.role, created_at=now)
+    return User(id=user_id, username=req.username, role=req.role, created_at=now, permissions=req.permissions)
 
 
 @app.put("/api/v1/users/{user_id}")
@@ -417,6 +436,37 @@ async def change_password(user_id: int, req: UpdatePasswordRequest, current_user
     conn.close()
 
     return {"success": True}
+
+
+@app.get("/api/v1/users/{user_id}/permissions")
+async def get_user_permissions(user_id: int, admin: dict = Depends(require_admin)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT permissions FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return {"permissions": json.loads(row[0] or '[]')}
+
+
+@app.put("/api/v1/users/{user_id}/permissions")
+async def update_user_permissions(
+    user_id: int, req: UpdatePermissionsRequest, admin: dict = Depends(require_admin)
+):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM users WHERE id = ?", (user_id,))
+    if cursor.fetchone()[0] == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="用户不存在")
+    cursor.execute(
+        "UPDATE users SET permissions = ?, updated_at = ? WHERE id = ?",
+        (json.dumps(req.permissions), datetime.now().isoformat(), user_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"success": True, "permissions": req.permissions}
 
 
 @app.get("/health")

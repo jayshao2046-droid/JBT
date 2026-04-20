@@ -4,6 +4,7 @@ const SIM_TRADING_URL = process.env.SIM_TRADING_URL ?? 'http://localhost:8101';
 const BACKTEST_URL    = process.env.BACKTEST_URL    ?? 'http://localhost:8103';
 const DATA_URL        = process.env.DATA_URL        ?? 'http://localhost:8105';
 const DECISION_URL    = process.env.DECISION_URL    ?? 'http://localhost:8104';
+const DASHBOARD_URL   = process.env.DASHBOARD_URL   ?? 'http://localhost:3006';
 
 const nextConfig: NextConfig = {
   async rewrites() {
@@ -23,6 +24,10 @@ const nextConfig: NextConfig = {
       {
         source: '/api/decision/:path*',
         destination: `${DECISION_URL}/:path*`,
+      },
+      {
+        source: '/api/dashboard/:path*',
+        destination: `${DASHBOARD_URL}/:path*`,
       },
     ];
   },

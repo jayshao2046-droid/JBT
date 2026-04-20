@@ -19,6 +19,7 @@ import {
 import { settingsApi, type SystemSettings } from '@/lib/api/settings';
 import { usersApi, type User } from '@/lib/api/auth';
 import { useAuth } from '@/lib/auth-context';
+import { PermissionsDialog } from '@/components/settings/permissions-dialog';
 import {
   Trash2,
   UserPlus,
@@ -30,6 +31,7 @@ import {
   Eye,
   EyeOff,
   Users,
+  Shield,
 } from 'lucide-react';
 
 // ── 子组件：添加用户弹窗 ───────────────────────────────────
@@ -40,7 +42,7 @@ function AddUserDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (user: User) => void;
 }) {
   const [form, setForm] = useState({ username: '', password: '', confirmPassword: '', role: 'user' });
   const [showPwd, setShowPwd] = useState(false);
@@ -61,8 +63,8 @@ function AddUserDialog({
     if (form.password !== form.confirmPassword) { setError('两次密码不一致'); return; }
     setLoading(true);
     try {
-      await usersApi.create({ username: form.username.trim(), password: form.password, role: form.role });
-      onSuccess();
+      const newUser = await usersApi.create({ username: form.username.trim(), password: form.password, role: form.role });
+      onSuccess(newUser);
       handleClose();
     } catch (err: unknown) {
       setError((err as { message?: string }).message || '创建失败');
@@ -332,10 +334,10 @@ export default function SettingsPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
 
-  // 弹窗状态
   const [showAddUser, setShowAddUser] = useState(false);
   const [changePwdTarget, setChangePwdTarget] = useState<User | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  const [permissionsTarget, setPermissionsTarget] = useState<User | null>(null);
 
   const loadUsers = useCallback(async () => {
     if (!isAdmin) return;
@@ -398,6 +400,11 @@ export default function SettingsPage() {
     if (!deleteTarget) return;
     await usersApi.delete(deleteTarget.id);
     await loadUsers();
+  };
+
+  const handlePermissionsSave = async (userId: number, permissions: string[]) => {
+    await usersApi.updatePermissions(userId, permissions);
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, permissions } : u));
   };
 
   if (loading) {
@@ -479,7 +486,7 @@ export default function SettingsPage() {
                   variant="outline"
                   size="sm"
                   className="gap-2"
-                  onClick={() => currentUser && setChangePwdTarget({ ...currentUser, role: currentUser.role })}
+                  onClick={() => currentUser && setChangePwdTarget({ ...currentUser, role: currentUser.role, permissions: [] })}
                 >
                   <Key className="w-4 h-4" />
                   修改密码
@@ -557,6 +564,15 @@ export default function SettingsPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1 text-muted-foreground hover:text-foreground"
+                            onClick={() => setPermissionsTarget(user)}
+                          >
+                            <Shield className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">权限</span>
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -732,7 +748,10 @@ export default function SettingsPage() {
       <AddUserDialog
         open={showAddUser}
         onOpenChange={setShowAddUser}
-        onSuccess={loadUsers}
+        onSuccess={(newUser) => {
+          loadUsers();
+          setPermissionsTarget(newUser);
+        }}
       />
 
       <ChangePasswordDialog
@@ -748,6 +767,12 @@ export default function SettingsPage() {
         onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
         targetUser={deleteTarget}
         onConfirm={handleDeleteUser}
+      />
+      <PermissionsDialog
+        open={!!permissionsTarget}
+        onOpenChange={(open) => !open && setPermissionsTarget(null)}
+        user={permissionsTarget}
+        onSave={handlePermissionsSave}
       />
     </div>
   );

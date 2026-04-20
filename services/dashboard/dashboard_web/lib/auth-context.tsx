@@ -8,6 +8,7 @@ export interface AuthUser {
   username: string
   role: 'admin' | 'user'
   created_at: string
+  permissions?: string[]
 }
 
 interface AuthContextType {

@@ -1,4 +1,6 @@
-const API_BASE = process.env.NEXT_PUBLIC_DASHBOARD_API_URL || 'http://localhost:3006'
+// 通过 Next.js 代理转发到 dashboard 后端（避免 CORS）
+// next.config.ts: /api/dashboard/:path* → http://localhost:3006/:path*
+const API_BASE = '/api/dashboard'
 
 export interface LoginRequest {
   username: string
@@ -22,12 +24,14 @@ export interface User {
   username: string
   role: string
   created_at: string
+  permissions: string[]
 }
 
 export interface CreateUserRequest {
   username: string
   password: string
   role?: string
+  permissions?: string[]
 }
 
 export interface UpdatePasswordRequest {
@@ -134,6 +138,19 @@ export const usersApi = {
     if (!res.ok) {
       const error = await res.json()
       throw new Error(error.detail || 'Failed to change password')
+    }
+    return res.json()
+  },
+
+  async updatePermissions(userId: number, permissions: string[]): Promise<{ success: boolean; permissions: string[] }> {
+    const res = await fetch(`${API_BASE}/api/v1/users/${userId}/permissions`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ permissions }),
+    })
+    if (!res.ok) {
+      const error = await res.json()
+      throw new Error(error.detail || 'Failed to update permissions')
     }
     return res.json()
   },
