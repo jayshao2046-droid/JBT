@@ -1,60 +1,374 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { settingsApi, type SystemSettings } from '@/lib/api/settings';
+import { usersApi, type User } from '@/lib/api/auth';
+import { useAuth } from '@/lib/auth-context';
+import {
+  Trash2,
+  UserPlus,
+  Key,
+  ShieldCheck,
+  User as UserIcon,
+  LogOut,
+  RefreshCw,
+  Eye,
+  EyeOff,
+  Users,
+} from 'lucide-react';
 
-export default function SettingsPage() {
-  const [settings, setSettings] = useState<SystemSettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+// ── 子组件：添加用户弹窗 ───────────────────────────────────
+function AddUserDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSuccess: () => void;
+}) {
+  const [form, setForm] = useState({ username: '', password: '', confirmPassword: '', role: 'user' });
+  const [showPwd, setShowPwd] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  const handleClose = () => {
+    setForm({ username: '', password: '', confirmPassword: '', role: 'user' });
+    setError('');
+    onOpenChange(false);
+  };
 
-  const loadSettings = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!form.username.trim()) { setError('请输入用户名'); return; }
+    if (form.password.length < 6) { setError('密码不能少于6位'); return; }
+    if (form.password !== form.confirmPassword) { setError('两次密码不一致'); return; }
+    setLoading(true);
     try {
-      const data = await settingsApi.getSettings();
-      setSettings(data);
-    } catch (error) {
-      console.error('Failed to load settings:', error);
+      await usersApi.create({ username: form.username.trim(), password: form.password, role: form.role });
+      onSuccess();
+      handleClose();
+    } catch (err: any) {
+      setError(err.message || '创建失败');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAccountSave = async () => {
-    if (!settings) return;
-    setSaving(true);
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="w-5 h-5 text-orange-500" />
+            添加用户
+          </DialogTitle>
+          <DialogDescription>
+            添加后，用户即可使用该账号登录看板系统
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label htmlFor="add-username">用户名</Label>
+            <Input
+              id="add-username"
+              placeholder="输入用户名（字母、数字、下划线）"
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="add-password">密码</Label>
+            <div className="relative">
+              <Input
+                id="add-password"
+                type={showPwd ? 'text' : 'password'}
+                placeholder="至少6位"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                autoComplete="new-password"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd(!showPwd)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="add-confirm-password">确认密码</Label>
+            <Input
+              id="add-confirm-password"
+              type="password"
+              placeholder="再次输入密码"
+              value={form.confirmPassword}
+              onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+              autoComplete="new-password"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="add-role">角色</Label>
+            <select
+              id="add-role"
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value })}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+            >
+              <option value="user">普通用户（只读查看）</option>
+              <option value="admin">管理员（完整权限）</option>
+            </select>
+          </div>
+          {error && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2">
+              <p className="text-destructive text-sm">{error}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={handleClose}>取消</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? '创建中...' : '创建用户'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── 子组件：修改密码弹窗 ───────────────────────────────────
+function ChangePasswordDialog({
+  open,
+  onOpenChange,
+  targetUser,
+  isSelf,
+  isAdmin,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  targetUser: User | null;
+  isSelf: boolean;
+  isAdmin: boolean;
+}) {
+  const [form, setForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+  const [showPwd, setShowPwd] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleClose = () => {
+    setForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+    setError('');
+    onOpenChange(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (form.newPassword.length < 6) { setError('新密码不能少于6位'); return; }
+    if (form.newPassword !== form.confirmPassword) { setError('两次密码不一致'); return; }
+    if (!targetUser) return;
+    setLoading(true);
     try {
-      await settingsApi.updateAccount(settings.account);
-      alert('账户设置已保存');
-    } catch (error) {
-      console.error('Failed to save account:', error);
-      alert('保存失败');
+      await usersApi.changePassword(targetUser.id, {
+        old_password: (isSelf && !isAdmin) ? form.oldPassword : undefined,
+        new_password: form.newPassword,
+      });
+      handleClose();
+      alert('密码修改成功');
+    } catch (err: any) {
+      setError(err.message || '修改失败');
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   };
 
-  const handleTradingToggle = async (field: keyof NonNullable<typeof settings>['trading'], value: boolean) => {
-    if (!settings) return;
+  const needOldPwd = isSelf && !isAdmin;
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Key className="w-5 h-5 text-orange-500" />
+            修改密码
+          </DialogTitle>
+          <DialogDescription>
+            {targetUser ? `为用户「${targetUser.username}」修改密码` : '修改密码'}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          {needOldPwd && (
+            <div className="space-y-2">
+              <Label htmlFor="old-pwd">当前密码</Label>
+              <Input
+                id="old-pwd"
+                type="password"
+                placeholder="输入当前密码"
+                value={form.oldPassword}
+                onChange={(e) => setForm({ ...form, oldPassword: e.target.value })}
+                autoComplete="current-password"
+              />
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="new-pwd">新密码</Label>
+            <div className="relative">
+              <Input
+                id="new-pwd"
+                type={showPwd ? 'text' : 'password'}
+                placeholder="至少6位"
+                value={form.newPassword}
+                onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
+                autoComplete="new-password"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd(!showPwd)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-pwd">确认新密码</Label>
+            <Input
+              id="confirm-pwd"
+              type="password"
+              placeholder="再次输入新密码"
+              value={form.confirmPassword}
+              onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+              autoComplete="new-password"
+            />
+          </div>
+          {error && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2">
+              <p className="text-destructive text-sm">{error}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={handleClose}>取消</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? '修改中...' : '确认修改'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── 子组件：删除确认弹窗 ───────────────────────────────────
+function DeleteUserDialog({
+  open,
+  onOpenChange,
+  targetUser,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  targetUser: User | null;
+  onConfirm: () => Promise<void>;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  const handleConfirm = async () => {
+    setLoading(true);
     try {
-      await settingsApi.updateTrading({ [field]: value });
-      setSettings({
-        ...settings,
-        trading: { ...settings.trading, [field]: value },
-      });
-    } catch (error) {
-      console.error('Failed to update trading settings:', error);
-      alert('更新失败');
+      await onConfirm();
+      onOpenChange(false);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-destructive">删除用户</DialogTitle>
+          <DialogDescription>
+            确定要删除用户「<strong>{targetUser?.username}</strong>」吗？
+            此操作不可撤销，该用户的所有会话将立即失效。
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button variant="destructive" onClick={handleConfirm} disabled={loading}>
+            {loading ? '删除中...' : '确认删除'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── 主页面 ───────────────────────────────────────────────
+export default function SettingsPage() {
+  const { user: currentUser, isAdmin, logout } = useAuth();
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+
+  // 弹窗状态
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [changePwdTarget, setChangePwdTarget] = useState<User | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+
+  const loadUsers = useCallback(async () => {
+    if (!isAdmin) return;
+    setUsersLoading(true);
+    try {
+      const data = await usersApi.list();
+      setUsers(data);
+    } catch (err) {
+      console.error('Failed to load users:', err);
+    } finally {
+      setUsersLoading(false);
+    }
+  }, [isAdmin]);
+
+  const loadSettings = useCallback(async () => {
+    try {
+      const data = await settingsApi.getSettings();
+      setSettings(data);
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+    loadUsers();
+  }, [loadSettings, loadUsers]);
+
+  const handleTradingToggle = async (key: string, value: boolean) => {
+    if (!settings) return;
+    setSettings({ ...settings, trading: { ...settings.trading, [key]: value } });
   };
 
   const handleNotificationSave = async () => {
@@ -63,8 +377,8 @@ export default function SettingsPage() {
     try {
       await settingsApi.updateNotifications(settings.notifications);
       alert('通知配置已保存');
-    } catch (error) {
-      console.error('Failed to save notifications:', error);
+    } catch (err) {
+      console.error('Failed to save notifications:', err);
       alert('保存失败');
     } finally {
       setSaving(false);
@@ -75,15 +389,20 @@ export default function SettingsPage() {
     try {
       await settingsApi.restartService(serviceName);
       alert(`${serviceName} 重启请求已发送`);
-    } catch (error) {
-      console.error('Failed to restart service:', error);
+    } catch (err) {
       alert('重启失败');
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!deleteTarget) return;
+    await usersApi.delete(deleteTarget.id);
+    await loadUsers();
+  };
+
   if (loading) {
     return (
-      <div className="p-6 flex items-center justify-center">
+      <div className="p-6 flex items-center justify-center min-h-[200px]">
         <p className="text-muted-foreground">加载中...</p>
       </div>
     );
@@ -92,112 +411,218 @@ export default function SettingsPage() {
   if (!settings) {
     return (
       <div className="p-6 flex items-center justify-center">
-        <p className="text-destructive">加载设置失败</p>
+        <p className="text-destructive">加载设置失败，请刷新重试</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">系统设置</h1>
-        <p className="text-muted-foreground mt-2">配置交易平台参数</p>
+    <div className="p-6 space-y-6 bg-transparent">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">系统设置</h1>
+          <p className="text-muted-foreground mt-1">配置交易平台参数</p>
+        </div>
+        {currentUser && (
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-medium text-foreground">{currentUser.username}</p>
+              <p className="text-xs text-muted-foreground">{isAdmin ? '管理员' : '普通用户'}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={logout} className="gap-2">
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">退出登录</span>
+            </Button>
+          </div>
+        )}
       </div>
 
       <Tabs defaultValue="account" className="w-full">
-        <TabsList className="bg-muted">
+        <TabsList className="bg-transparent backdrop-blur-sm">
           <TabsTrigger value="account">账户设置</TabsTrigger>
           <TabsTrigger value="trading">交易时段</TabsTrigger>
           <TabsTrigger value="notifications">通知配置</TabsTrigger>
           <TabsTrigger value="services">服务管理</TabsTrigger>
         </TabsList>
 
+        {/* 账户设置 Tab */}
         <TabsContent value="account" className="space-y-4">
-          <Card className="bg-card border-border">
+          <Card className="bg-transparent backdrop-blur-sm border-border">
             <CardHeader>
-              <CardTitle className="text-foreground">账户信息</CardTitle>
-              <CardDescription className="text-muted-foreground">管理您的账户信息</CardDescription>
+              <CardTitle className="text-foreground flex items-center gap-2">
+                <UserIcon className="w-5 h-5 text-orange-500" />
+                个人信息
+              </CardTitle>
+              <CardDescription className="text-muted-foreground">您的账户基本信息</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="username" className="text-foreground">用户名</Label>
-                <Input
-                  id="username"
-                  value={settings.account.username}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      account: { ...settings.account, username: e.target.value },
-                    })
-                  }
-                  className="bg-background border-input text-foreground"
-                />
+              <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/30 border border-border">
+                <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center">
+                  <UserIcon className="w-6 h-6 text-orange-500" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-foreground">{currentUser?.username}</p>
+                    <Badge variant={isAdmin ? 'default' : 'secondary'} className="text-xs">
+                      {isAdmin ? (
+                        <span className="flex items-center gap-1">
+                          <ShieldCheck className="w-3 h-3" /> 管理员
+                        </span>
+                      ) : '普通用户'}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    账户 ID: #{currentUser?.id} · 创建于 {currentUser?.created_at ? new Date(currentUser.created_at).toLocaleDateString('zh-CN') : '-'}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => currentUser && setChangePwdTarget({ ...currentUser, role: currentUser.role })}
+                >
+                  <Key className="w-4 h-4" />
+                  修改密码
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-foreground">邮箱</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={settings.account.email}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      account: { ...settings.account, email: e.target.value },
-                    })
-                  }
-                  className="bg-background border-input text-foreground"
-                />
-              </div>
-              <Button onClick={handleAccountSave} disabled={saving}>
-                {saving ? '保存中...' : '保存更改'}
-              </Button>
             </CardContent>
           </Card>
+
+          {isAdmin && (
+            <Card className="bg-transparent backdrop-blur-sm border-border">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-foreground flex items-center gap-2">
+                      <Users className="w-5 h-5 text-orange-500" />
+                      用户管理
+                    </CardTitle>
+                    <CardDescription className="text-muted-foreground">
+                      管理系统用户账户，只有管理员添加的账号才能登录看板
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={loadUsers}
+                      disabled={usersLoading}
+                      title="刷新列表"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${usersLoading ? 'animate-spin' : ''}`} />
+                    </Button>
+                    <Button onClick={() => setShowAddUser(true)} size="sm" className="gap-2">
+                      <UserPlus className="w-4 h-4" />
+                      添加用户
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {usersLoading ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">加载中...</div>
+                ) : users.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">暂无用户数据</div>
+                ) : (
+                  <div className="space-y-2">
+                    {users.map((user) => (
+                      <div
+                        key={user.id}
+                        className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/20 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
+                            {user.role === 'admin' ? (
+                              <ShieldCheck className="w-4 h-4 text-orange-500" />
+                            ) : (
+                              <UserIcon className="w-4 h-4 text-muted-foreground" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-foreground font-medium text-sm">{user.username}</p>
+                              {user.id === currentUser?.id && (
+                                <Badge variant="outline" className="text-xs">我</Badge>
+                              )}
+                              <Badge
+                                variant={user.role === 'admin' ? 'default' : 'secondary'}
+                                className="text-xs"
+                              >
+                                {user.role === 'admin' ? '管理员' : '普通用户'}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              创建于 {new Date(user.created_at).toLocaleDateString('zh-CN')}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1 text-muted-foreground hover:text-foreground"
+                            onClick={() => setChangePwdTarget(user)}
+                          >
+                            <Key className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">改密码</span>
+                          </Button>
+                          {user.id !== currentUser?.id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => setDeleteTarget(user)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-orange-500" />
+                    系统中共 {users.length} 个用户，{users.filter(u => u.role === 'admin').length} 个管理员
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
+        {/* 交易时段 Tab */}
         <TabsContent value="trading" className="space-y-4">
-          <Card className="bg-card border-border">
+          <Card className="bg-transparent backdrop-blur-sm border-border">
             <CardHeader>
               <CardTitle className="text-foreground">交易时段控制</CardTitle>
               <CardDescription className="text-muted-foreground">配置交易时段和自动开关</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-foreground">启用自动交易</Label>
-                  <p className="text-sm text-muted-foreground">在交易时段自动启动交易</p>
+              {[
+                { key: 'auto_trading_enabled', label: '启用自动交易', desc: '在交易时段自动启动交易' },
+                { key: 'pre_market_enabled', label: '盘前准备', desc: '开盘前30分钟启动系统' },
+                { key: 'post_market_enabled', label: '盘后清算', desc: '收盘后自动执行清算' },
+              ].map(({ key, label, desc }) => (
+                <div key={key} className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-foreground">{label}</Label>
+                    <p className="text-sm text-muted-foreground">{desc}</p>
+                  </div>
+                  <Switch
+                    checked={(settings.trading as any)[key]}
+                    onCheckedChange={(checked) => handleTradingToggle(key, checked)}
+                  />
                 </div>
-                <Switch
-                  checked={settings.trading.auto_trading_enabled}
-                  onCheckedChange={(checked) => handleTradingToggle('auto_trading_enabled', checked)}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-foreground">盘前准备</Label>
-                  <p className="text-sm text-muted-foreground">开盘前30分钟启动系统</p>
-                </div>
-                <Switch
-                  checked={settings.trading.pre_market_enabled}
-                  onCheckedChange={(checked) => handleTradingToggle('pre_market_enabled', checked)}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-foreground">盘后清算</Label>
-                  <p className="text-sm text-muted-foreground">收盘后自动执行清算</p>
-                </div>
-                <Switch
-                  checked={settings.trading.post_market_enabled}
-                  onCheckedChange={(checked) => handleTradingToggle('post_market_enabled', checked)}
-                />
-              </div>
+              ))}
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* 通知配置 Tab */}
         <TabsContent value="notifications" className="space-y-4">
-          <Card className="bg-card border-border">
+          <Card className="bg-transparent backdrop-blur-sm border-border">
             <CardHeader>
               <CardTitle className="text-foreground">通知配置</CardTitle>
               <CardDescription className="text-muted-foreground">配置飞书和邮件通知</CardDescription>
@@ -252,30 +677,48 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
+        {/* 服务管理 Tab */}
         <TabsContent value="services" className="space-y-4">
-          <Card className="bg-card border-border">
+          <Card className="bg-transparent backdrop-blur-sm border-border">
             <CardHeader>
               <CardTitle className="text-foreground">服务管理</CardTitle>
               <CardDescription className="text-muted-foreground">管理各个服务的运行状态</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3">
               {settings.services.map((service) => (
-                <div key={service.name} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div>
-                    <p className="text-foreground font-medium">{service.name}</p>
-                    <p
-                      className={`text-sm ${
+                <div key={service.name} className="flex items-center justify-between p-3 rounded-lg border border-border">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-2 h-2 rounded-full ${
                         service.status === 'running'
-                          ? 'text-green-400'
+                          ? 'bg-green-500'
                           : service.status === 'stopped'
-                          ? 'text-yellow-400'
-                          : 'text-red-400'
+                          ? 'bg-yellow-500'
+                          : 'bg-red-500'
                       }`}
-                    >
-                      {service.status === 'running' ? '运行中' : service.status === 'stopped' ? '已停止' : '错误'}
-                    </p>
+                    />
+                    <div>
+                      <p className="text-foreground font-medium text-sm">{service.name}</p>
+                      <p
+                        className={`text-xs ${
+                          service.status === 'running'
+                            ? 'text-green-500'
+                            : service.status === 'stopped'
+                            ? 'text-yellow-500'
+                            : 'text-red-500'
+                        }`}
+                      >
+                        {service.status === 'running' ? '运行中' : service.status === 'stopped' ? '已停止' : '错误'}
+                      </p>
+                    </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => handleServiceRestart(service.name)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleServiceRestart(service.name)}
+                    className="gap-2"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
                     重启
                   </Button>
                 </div>
@@ -284,6 +727,28 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* 弹窗 */}
+      <AddUserDialog
+        open={showAddUser}
+        onOpenChange={setShowAddUser}
+        onSuccess={loadUsers}
+      />
+
+      <ChangePasswordDialog
+        open={!!changePwdTarget}
+        onOpenChange={(v) => { if (!v) setChangePwdTarget(null); }}
+        targetUser={changePwdTarget}
+        isSelf={changePwdTarget?.id === currentUser?.id}
+        isAdmin={isAdmin}
+      />
+
+      <DeleteUserDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
+        targetUser={deleteTarget}
+        onConfirm={handleDeleteUser}
+      />
     </div>
   );
 }
