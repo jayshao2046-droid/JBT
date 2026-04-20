@@ -5,7 +5,7 @@ import { Activity } from "lucide-react"
 
 export default function DataSourceHealthKPI() {
   return (
-    <Card>
+    <Card className="glass-card">
       <CardHeader>
         <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
           <Activity className="w-4 h-4 text-orange-500" />

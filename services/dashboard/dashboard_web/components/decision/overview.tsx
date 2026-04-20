@@ -25,7 +25,7 @@ export function Overview() {
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="glass-card">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">策略总数</CardTitle>
           </CardHeader>
@@ -37,7 +37,7 @@ export function Overview() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="glass-card">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">已发布</CardTitle>
           </CardHeader>
@@ -49,7 +49,7 @@ export function Overview() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="glass-card">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">因子对齐</CardTitle>
           </CardHeader>
@@ -61,7 +61,7 @@ export function Overview() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="glass-card">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">待审批</CardTitle>
           </CardHeader>
@@ -75,7 +75,7 @@ export function Overview() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
+        <Card className="glass-card">
           <CardHeader>
             <CardTitle>运行时状态</CardTitle>
           </CardHeader>
@@ -101,7 +101,7 @@ export function Overview() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="glass-card">
           <CardHeader>
             <CardTitle>执行门控</CardTitle>
           </CardHeader>
@@ -129,7 +129,7 @@ export function Overview() {
         </Card>
       </div>
 
-      <Card>
+      <Card className="glass-card">
         <CardHeader>
           <CardTitle>研究窗口</CardTitle>
         </CardHeader>

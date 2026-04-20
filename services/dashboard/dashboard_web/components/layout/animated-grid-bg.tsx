@@ -16,12 +16,12 @@ export function AnimatedGridBg() {
     const HEX_R     = 16        // hex radius
     const WAVE_AMP  = 2.8       // wave distortion strength
     const WAVE_SPD  = 0.00055   // animation speed scalar
-    const BASE_A    = 0.05      // base line alpha
-    const SHIMMER_A = 0.18      // peak shimmer alpha
+    const BASE_A    = 0.07      // base line alpha
+    const SHIMMER_A = 0.28      // peak shimmer alpha
 
     // Electric pulse config
-    const MAX_PULSES      = 10
-    const PULSE_PROB      = 0.025  // per-frame spawn probability
+    const MAX_PULSES      = 12
+    const PULSE_PROB      = 0.040  // per-frame spawn probability
     const PULSE_TRAIL     = 12     // trail length in segments
 
     // Radial glow sources (anchor positions as fractions of viewport)
@@ -241,9 +241,9 @@ export function AnimatedGridBg() {
         const breathe = 0.5 + 0.5 * Math.sin(t * 0.6 + g.fx * 8)
 
         const rg = ctx.createRadialGradient(gx, gy, 0, gx, gy, r)
-        rg.addColorStop(0,    ORANGE_CORE(0.055 * breathe))
-        rg.addColorStop(0.35, AMBER_MID  (0.030 * breathe))
-        rg.addColorStop(0.65, GOLD_EDGE  (0.012 * breathe))
+        rg.addColorStop(0,    ORANGE_CORE(0.09 * breathe))
+        rg.addColorStop(0.35, AMBER_MID  (0.05 * breathe))
+        rg.addColorStop(0.65, GOLD_EDGE  (0.022 * breathe))
         rg.addColorStop(1,    `hsla(40,90%,50%,0)`)
 
         ctx.beginPath()

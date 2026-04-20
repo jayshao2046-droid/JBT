@@ -52,7 +52,7 @@ function LoginForm() {
 
   return (
     <div className="min-h-screen flex dark">
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-neutral-900 via-neutral-950 to-neutral-900 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden border-r border-white/[0.07]">
         <div className="relative z-10 flex flex-col items-center justify-center w-full px-16 text-center">
           <h1 className="text-2xl font-bold tracking-wide mb-8"><span className="text-orange-500">JBT</span> <span className="text-white">量化研究室</span></h1>
 
@@ -64,7 +64,7 @@ function LoginForm() {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-8 bg-gradient-to-b from-neutral-900 via-neutral-950 to-neutral-900">
+      <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-3 justify-center mb-8">
             <h1 className="text-xl font-bold text-white">JBT 量化研究室</h1>

@@ -5,7 +5,7 @@ import { CheckCircle } from "lucide-react"
 
 export default function DataQualityKPI() {
   return (
-    <Card className="bg-neutral-900 border-neutral-800">
+    <Card className="glass-card border-border/50">
       <CardHeader>
         <CardTitle className="text-sm font-medium text-neutral-300 flex items-center gap-2">
           <CheckCircle className="w-4 h-4 text-orange-500" />

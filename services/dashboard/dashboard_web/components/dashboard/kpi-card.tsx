@@ -53,7 +53,7 @@ export function KpiCard({
   const statusStyle = getStatusColor(status)
 
   return (
-    <Card className={cn("transition-all duration-300 overflow-hidden", statusStyle.border)}>
+    <Card className={cn("transition-all duration-300 overflow-hidden glass-card", statusStyle.border)}>
       <CardContent className="p-4 relative">
         <div className="space-y-3">
           <div className="flex items-start justify-between">

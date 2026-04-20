@@ -150,17 +150,17 @@
 }
 
 .glass-card {
-  background: linear-gradient(135deg, hsl(210 14% 98.5% / 0.8) 0%, hsl(210 14% 96.8% / 0.6) 100%);
+  background: linear-gradient(135deg, hsl(210 14% 98.5% / 0.15) 0%, hsl(210 14% 96.8% / 0.10) 100%);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid hsl(210 14% 88% / 0.4);
-  box-shadow: 0 4px 24px -1px hsl(0 0% 0% / 0.06), 0 0 1px 0 hsl(210 14% 85% / 0.08) inset;
+  border: 1px solid hsl(210 14% 70% / 0.20);
+  box-shadow: 0 4px 24px -1px hsl(0 0% 0% / 0.04), 0 0 1px 0 hsl(24 95% 53% / 0.05) inset;
 }
 
 .glass-card:hover {
-  background: linear-gradient(135deg, hsl(210 14% 98.8%) 0%, hsl(210 14% 97.2%) 100%);
+  background: linear-gradient(135deg, hsl(210 14% 98.5% / 0.22) 0%, hsl(210 14% 96.8% / 0.16) 100%);
   border-color: hsl(24 95% 53% / 0.3);
-  box-shadow: 0 8px 32px -2px hsl(0 0% 0% / 0.1), 0 0 1px 0 hsl(210 14% 85% / 0.12) inset,
+  box-shadow: 0 8px 32px -2px hsl(0 0% 0% / 0.06), 0 0 1px 0 hsl(24 95% 53% / 0.12) inset,
     0 0 20px -5px hsl(24 95% 53% / 0.15);
 }
 
@@ -225,6 +225,33 @@
 
 .animate-glow {
   animation: glow 2s ease-in-out infinite;
+}
+
+@keyframes scan-down {
+  0%   { transform: translateY(-4px); opacity: 0; }
+  5%   { opacity: 1; }
+  95%  { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+.scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    hsla(28, 100%, 62%, 0.08) 15%,
+    hsla(28, 100%, 62%, 0.55) 50%,
+    hsla(28, 100%, 62%, 0.08) 85%,
+    transparent 100%
+  );
+  box-shadow: 0 0 10px 4px hsla(28, 100%, 62%, 0.2), 0 0 2px 1px hsla(48, 100%, 70%, 0.35);
+  animation: scan-down 7s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 2;
 }
 
 ::-webkit-scrollbar {
