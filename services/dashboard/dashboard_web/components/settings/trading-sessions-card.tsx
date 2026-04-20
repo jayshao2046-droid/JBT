@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Clock, Save, RefreshCw, Moon, Sun, Sunset } from 'lucide-react'
 import { tradingSessionsApi, tradingConfigApi, type TradingSession } from '@/lib/api/settings'
-// Badge 已移除，时段状态通过 Switch 颜色体现
 
 const SESSION_ICONS: Record<string, React.ReactNode> = {
   night: <Moon className="w-4 h-4 text-blue-400" />,
@@ -78,27 +77,26 @@ export function TradingSessionsCard() {
 
   const saveSession = async (s: TradingSession) => {
     const edited = getEdit(s)
-    setSaving(prev => ({ ...prev, [s.id]: true }))
-    try {
-      await tradingSessionsApi.update(s.id, {
-        label: edited.label,
-        enabled: edited.enabled,
-        start_time: edited.start_time,
-        end_time: edited.end_time,
-      })
-      setSessions(prev => prev.map(x => x.id === s.id ? { ...x, ...editMap[x.id] } : x))
-      setEditMap(prev => { const n = { ...prev }; delete n[s.id]; return n })
-      showMsg('success', `「${edited.label}」已保存`)
-    } catch (e) {
-      showMsg('error', '保存失败: ' + (e as Error).message)
-    } finally {
-      setSaving(prev => ({ ...prev, [s.id]: false }))
-    }
+    await tradingSessionsApi.update(s.id, {
+      label: edited.label,
+      enabled: edited.enabled,
+      start_time: edited.start_time,
+      end_time: edited.end_time,
+    })
+    setSessions(prev => prev.map(x => x.id === s.id ? { ...x, ...editMap[x.id] } : x))
+    setEditMap(prev => { const n = { ...prev }; delete n[s.id]; return n })
   }
 
-  const saveConfig = async () => {
+  const saveAll = async () => {
     setSaving(prev => ({ ...prev, config: true }))
     try {
+      // 保存所有有改动的时段
+      const dirtyIds = Object.keys(editMap).map(Number)
+      await Promise.all(dirtyIds.map(id => {
+        const s = sessions.find(x => x.id === id)
+        return s ? saveSession(s) : Promise.resolve()
+      }))
+      // 保存全局配置
       await tradingConfigApi.update({
         auto_trading_enabled: config.auto_trading_enabled,
         pre_market_enabled: config.pre_market_enabled,
@@ -106,7 +104,7 @@ export function TradingSessionsCard() {
         pre_market_minutes: config.pre_market_minutes,
         timezone: config.timezone,
       })
-      showMsg('success', '全局配置已保存')
+      showMsg('success', '配置已保存')
     } catch (e) {
       showMsg('error', '保存失败: ' + (e as Error).message)
     } finally {
@@ -135,7 +133,7 @@ export function TradingSessionsCard() {
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-1.5">
             <Clock className="w-4 h-4 text-orange-500" />
-            交易时段 &amp; 控制
+            交易控制
           </CardTitle>
           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={load} title="刷新">
             <RefreshCw className="w-3 h-3" />
@@ -186,17 +184,10 @@ export function TradingSessionsCard() {
                   className="shrink-0 scale-75 origin-right ml-auto"
                 />
 
-                {/* 保存 */}
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-6 w-6 shrink-0"
-                  disabled={!dirty || !!saving[s.id]}
-                  onClick={() => saveSession(s)}
-                  title="保存"
-                >
-                  <Save className={`w-3 h-3 ${dirty ? 'text-orange-400' : ''}`} />
-                </Button>
+                {/* 有改动时显示橙点提示 */}
+                {dirty && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0" title="有未保存改动" />
+                )}
               </div>
             )
           })}
@@ -258,7 +249,7 @@ export function TradingSessionsCard() {
             <Button
               size="sm"
               className="ml-auto h-7 text-xs gap-1"
-              onClick={saveConfig}
+              onClick={saveAll}
               disabled={!!saving['config']}
             >
               <Save className="w-3 h-3" />

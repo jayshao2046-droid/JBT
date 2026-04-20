@@ -449,7 +449,7 @@ export default function SettingsPage() {
       <Tabs defaultValue="account" className="w-full">
         <TabsList className="bg-transparent backdrop-blur-sm">
           <TabsTrigger value="account">账户设置</TabsTrigger>
-          <TabsTrigger value="trading">交易时段</TabsTrigger>
+          <TabsTrigger value="trading">交易控制</TabsTrigger>
           <TabsTrigger value="notifications">通知配置</TabsTrigger>
           <TabsTrigger value="services">服务管理</TabsTrigger>
         </TabsList>
@@ -610,13 +610,13 @@ export default function SettingsPage() {
           )}
         </TabsContent>
 
-        {/* 交易时段 Tab：左 4 开关区 / 右 6 日历区 */}
+        {/* 交易控制 Tab：左 5 开关区 / 右 5 日历区，等高 */}
         <TabsContent value="trading">
-          <div className="grid grid-cols-10 gap-4 items-start">
-            <div className="col-span-4">
+          <div className="grid grid-cols-10 gap-4 items-stretch">
+            <div className="col-span-5">
               <TradingSessionsCard />
             </div>
-            <div className="col-span-6">
+            <div className="col-span-5">
               <TradingCalendarCard />
             </div>
           </div>

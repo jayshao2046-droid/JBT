@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import {
   CalendarDays,
   Plus,
@@ -65,9 +72,10 @@ interface EntryFormState {
   type: CalendarEntryType
   label: string
   note: string
+  trading_enabled: boolean
 }
 
-const EMPTY_FORM: EntryFormState = { date: '', type: 'holiday', label: '', note: '' }
+const EMPTY_FORM: EntryFormState = { date: '', type: 'holiday', label: '', note: '', trading_enabled: false }
 
 interface EntryDialogProps {
   open: boolean
@@ -81,6 +89,11 @@ function EntryDialog({ open, onOpenChange, initial, editing, onSave }: EntryDial
   const [form, setForm] = useState<EntryFormState>(initial)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  // 当类型变化时自动设置 trading_enabled 默认值
+  useEffect(() => {
+    setForm(f => ({ ...f, trading_enabled: f.type !== 'holiday' }))
+  }, [form.type])
 
   useEffect(() => { setForm(initial); setError('') }, [initial, open])
 
@@ -142,11 +155,24 @@ function EntryDialog({ open, onOpenChange, initial, editing, onSave }: EntryDial
           </div>
           <div className="space-y-1.5">
             <Label>备注（可选）</Label>
-            <Input
-              placeholder="额外说明"
+            <textarea
+              placeholder="额外说明，鼠标悬停日期时自动显示"
               value={form.note}
               onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
-              className="bg-background"
+              rows={2}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+          <div className="flex items-center justify-between rounded-md border border-input bg-muted/20 px-3 py-2">
+            <div>
+              <Label className="text-sm font-medium">当日交易</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {form.trading_enabled ? '当日正常开市交易' : '当日停止交易（休市）'}
+              </p>
+            </div>
+            <Switch
+              checked={form.trading_enabled}
+              onCheckedChange={v => setForm(f => ({ ...f, trading_enabled: v }))}
             />
           </div>
           {error && (
@@ -206,7 +232,7 @@ export function TradingCalendarCard() {
 
   const openEdit = (entry: CalendarEntry) => {
     setEditingEntry(entry)
-    setDialogInitial({ date: entry.date, type: entry.type, label: entry.label, note: entry.note })
+    setDialogInitial({ date: entry.date, type: entry.type, label: entry.label, note: entry.note, trading_enabled: entry.trading_enabled ?? (entry.type !== 'holiday') })
     setDialogOpen(true)
   }
 
@@ -234,163 +260,178 @@ export function TradingCalendarCard() {
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
   return (
-    <>
-      <Card className="bg-transparent backdrop-blur-sm border-border">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-foreground flex items-center gap-2">
-                <CalendarDays className="w-5 h-5 text-orange-500" />
-                交易日历
-              </CardTitle>
-              <CardDescription>管理节假日、补班日和提前收盘日</CardDescription>
+    <TooltipProvider delayDuration={200}>
+      <>
+        <Card className="bg-transparent backdrop-blur-sm border-border">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-foreground flex items-center gap-2 text-base">
+                  <CalendarDays className="w-4 h-4 text-orange-500" />
+                  交易日历
+                </CardTitle>
+                <CardDescription className="text-xs">管理节假日、补班日和提前收盘日</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={load} disabled={loading} title="刷新">
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
+                <Button size="sm" className="gap-1 h-7 text-xs" onClick={() => openAdd()}>
+                  <Plus className="w-3.5 h-3.5" />
+                  添加
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={load} disabled={loading} title="刷新">
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </Button>
-              <Button size="sm" className="gap-1" onClick={() => openAdd()}>
-                <Plus className="w-4 h-4" />
-                添加
-              </Button>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* 月份导航 */}
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={prevMonth}><ChevronLeft className="w-3.5 h-3.5" /></Button>
+              <span className="font-semibold text-foreground text-sm">{year} 年 {month} 月</span>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={nextMonth}><ChevronRight className="w-3.5 h-3.5" /></Button>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* 月份导航 */}
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" size="icon" onClick={prevMonth}><ChevronLeft className="w-4 h-4" /></Button>
-            <span className="font-semibold text-foreground">{year} 年 {month} 月</span>
-            <Button variant="ghost" size="icon" onClick={nextMonth}><ChevronRight className="w-4 h-4" /></Button>
-          </div>
 
-          {/* 图例 */}
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            {Object.entries(TYPE_CFG).map(([k, v]) => (
-              <span key={k} className="flex items-center gap-1">
-                <span className={`w-2 h-2 rounded-full ${v.color}`} />{v.label}
-              </span>
-            ))}
-          </div>
-
-          {/* 日历网格 */}
-          <div className="rounded-xl border border-border overflow-hidden">
-            {/* 周标题 */}
-            <div className="grid grid-cols-7 bg-muted/30">
-              {weekdays.map(d => (
-                <div key={d} className={`text-center text-xs py-2 font-medium ${d === '六' || d === '日' ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
-                  {d}
-                </div>
+            {/* 图例 */}
+            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+              {Object.entries(TYPE_CFG).map(([k, v]) => (
+                <span key={k} className="flex items-center gap-1">
+                  <span className={`w-1.5 h-1.5 rounded-full ${v.color}`} />{v.label}
+                </span>
               ))}
             </div>
-            {/* 日格 */}
-            <div className="grid grid-cols-7 divide-x divide-y divide-border/30">
-              {grid.map((cell, i) => {
-                if (!cell.day) {
-                  return <div key={`empty-${i}`} className="aspect-square bg-muted/10" />
-                }
-                const isToday = cell.date === todayStr
-                const entry = cell.entry
-                const dotColor = entry ? TYPE_CFG[entry.type as CalendarEntryType]?.color : null
 
-                return (
-                  <div
-                    key={cell.date}
-                    className={`aspect-square flex flex-col items-center justify-center relative cursor-pointer hover:bg-muted/30 transition-colors group
-                      ${cell.isWeekend ? 'bg-muted/10' : ''}
-                      ${entry?.type === 'holiday' ? 'bg-red-500/5' : ''}
-                      ${entry?.type === 'workday' ? 'bg-green-500/5' : ''}
-                      ${entry?.type === 'early_close' ? 'bg-yellow-500/5' : ''}
-                    `}
-                    onClick={() => entry ? openEdit(entry) : openAdd(cell.date!)}
-                    title={entry ? `${entry.label}（${TYPE_CFG[entry.type as CalendarEntryType]?.label}）` : '点击添加'}
-                  >
-                    <span className={`text-xs font-medium
-                      ${isToday ? 'text-orange-400 font-bold' : cell.isWeekend ? 'text-muted-foreground/60' : 'text-foreground'}
-                    `}>
-                      {cell.day}
-                    </span>
-                    {isToday && (
-                      <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-orange-400" />
-                    )}
-                    {dotColor && (
-                      <span className={`absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full ${dotColor}`} />
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* 本月条目列表 */}
-          {monthEntries.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground font-medium">{year} 年 {month} 月条目 ({monthEntries.length} 条)</p>
-              <div className="rounded-lg border border-border divide-y divide-border/50">
-                {monthEntries.map(entry => (
-                  <div key={entry.id} className="flex items-center justify-between px-3 py-2 group hover:bg-muted/20">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-mono text-muted-foreground w-10 shrink-0">
-                        {entry.date.slice(8)}日
-                      </span>
-                      <Badge variant="outline" className={`text-xs shrink-0 ${TYPE_CFG[entry.type as CalendarEntryType]?.badge}`}>
-                        {TYPE_CFG[entry.type as CalendarEntryType]?.label}
-                      </Badge>
-                      <span className="text-sm text-foreground">{entry.label}</span>
-                      {entry.note && (
-                        <span className="text-xs text-muted-foreground truncate max-w-[120px]">{entry.note}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(entry)}>
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteConfirm(entry)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
+            {/* 日历网格 */}
+            <div className="rounded-xl border border-border overflow-hidden">
+              {/* 周标题 */}
+              <div className="grid grid-cols-7 bg-muted/30">
+                {weekdays.map(d => (
+                  <div key={d} className={`text-center text-[10px] py-1.5 font-medium ${d === '六' || d === '日' ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
+                    {d}
                   </div>
                 ))}
               </div>
+              {/* 日格 */}
+              <div className="grid grid-cols-7 divide-x divide-y divide-border/30">
+                {grid.map((cell, i) => {
+                  if (!cell.day) {
+                    return <div key={`empty-${i}`} className="h-8 bg-muted/10" />
+                  }
+                  const isToday = cell.date === todayStr
+                  const entry = cell.entry
+                  const dotColor = entry ? TYPE_CFG[entry.type as CalendarEntryType]?.color : null
+                  const hasNote = entry && (entry.label || entry.note)
+
+                  const cellEl = (
+                    <div
+                      className={`h-8 flex flex-col items-center justify-center relative cursor-pointer hover:bg-muted/30 transition-colors
+                        ${cell.isWeekend ? 'bg-muted/10' : ''}
+                        ${entry?.type === 'holiday' ? 'bg-red-500/5' : ''}
+                        ${entry?.type === 'workday' ? 'bg-green-500/5' : ''}
+                        ${entry?.type === 'early_close' ? 'bg-yellow-500/5' : ''}
+                      `}
+                      onClick={() => entry ? openEdit(entry) : openAdd(cell.date!)}
+                    >
+                      <span className={`text-[11px] font-medium leading-none
+                        ${isToday ? 'text-orange-400 font-bold' : cell.isWeekend ? 'text-muted-foreground/60' : 'text-foreground'}
+                      `}>
+                        {cell.day}
+                      </span>
+                      {isToday && (
+                        <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-orange-400" />
+                      )}
+                      {dotColor && (
+                        <span className={`absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                      )}
+                    </div>
+                  )
+
+                  if (!hasNote) return <div key={cell.date}>{cellEl}</div>
+
+                  return (
+                    <Tooltip key={cell.date}>
+                      <TooltipTrigger asChild>{cellEl}</TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[180px] space-y-0.5">
+                        <p className="font-medium text-xs">{entry!.label}</p>
+                        <p className="text-xs text-muted-foreground">{TYPE_CFG[entry!.type as CalendarEntryType]?.label}</p>
+                        {entry!.note && <p className="text-xs text-muted-foreground">{entry!.note}</p>}
+                        <p className="text-xs">{entry!.trading_enabled ? '✅ 正常交易' : '🚫 停止交易'}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )
+                })}
+              </div>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              本月无特殊日历条目，点击日期格可快速添加
-            </p>
-          )}
-        </CardContent>
-      </Card>
 
-      <EntryDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        initial={dialogInitial}
-        editing={editingEntry}
-        onSave={handleSave}
-      />
+            {/* 本月条目列表 */}
+            {monthEntries.length > 0 ? (
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-muted-foreground font-medium">{year} 年 {month} 月 · {monthEntries.length} 条</p>
+                <div className="rounded-lg border border-border divide-y divide-border/50">
+                  {monthEntries.map(entry => (
+                    <div key={entry.id} className="flex items-center justify-between px-3 py-1.5 group hover:bg-muted/20">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-mono text-muted-foreground shrink-0">
+                          {entry.date.slice(8)}日
+                        </span>
+                        <Badge variant="outline" className={`text-[10px] py-0 shrink-0 ${TYPE_CFG[entry.type as CalendarEntryType]?.badge}`}>
+                          {TYPE_CFG[entry.type as CalendarEntryType]?.label}
+                        </Badge>
+                        <span className="text-xs text-foreground truncate">{entry.label}</span>
+                        {entry.note && (
+                          <span className="text-[10px] text-muted-foreground truncate max-w-[80px] hidden sm:block">{entry.note}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(entry)}>
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteConfirm(entry)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                本月无特殊条目，点击日期格快速添加
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
-      {/* 删除确认 */}
-      <Dialog open={!!deleteConfirm} onOpenChange={v => !v && setDeleteConfirm(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-destructive">删除日历条目</DialogTitle>
-            <DialogDescription>
-              确定删除「{deleteConfirm?.label}」（{deleteConfirm?.date}）？
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>取消</Button>
-            <Button variant="destructive" onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>
-              确认删除
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+        <EntryDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          initial={dialogInitial}
+          editing={editingEntry}
+          onSave={handleSave}
+        />
+
+        {/* 删除确认 */}
+        <Dialog open={!!deleteConfirm} onOpenChange={v => !v && setDeleteConfirm(null)}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-destructive">删除日历条目</DialogTitle>
+              <DialogDescription>
+                确定删除「{deleteConfirm?.label}」（{deleteConfirm?.date}）？
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteConfirm(null)}>取消</Button>
+              <Button variant="destructive" onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>
+                确认删除
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    </TooltipProvider>
   )
 }
