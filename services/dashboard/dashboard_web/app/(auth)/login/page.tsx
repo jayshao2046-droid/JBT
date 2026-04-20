@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Eye, EyeOff, Lock, User, Activity } from "lucide-react"
+import { Eye, EyeOff, Lock, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -54,56 +54,20 @@ function LoginForm() {
     <div className="min-h-screen bg-background flex dark">
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-neutral-900 via-neutral-950 to-neutral-900 relative overflow-hidden">
         <div className="relative z-10 flex flex-col justify-center px-16">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center">
-              <Activity className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white tracking-wide">JBT 量化研究室</h1>
-            </div>
-          </div>
+          <h1 className="text-2xl font-bold text-white tracking-wide mb-8">JBT 量化研究室</h1>
 
           <h2 className="text-4xl font-bold text-white mb-4 leading-tight">
             专业量化交易
             <br />
             <span className="text-orange-500">统一管理平台</span>
           </h2>
-
-          <p className="text-neutral-400 text-lg mb-12 max-w-md leading-relaxed">
-            集成模拟交易、策略回测、智能决策、数据采集四大核心模块
-          </p>
-
-          <div className="space-y-4">
-            {[
-              { icon: "📊", title: "模拟交易", desc: "实时 CTP 交易执行与风控" },
-              { icon: "🔬", title: "策略回测", desc: "历史数据驱动的策略验证" },
-              { icon: "🧠", title: "智能决策", desc: "AI 辅助信号生成与审批" },
-              { icon: "📡", title: "数据采集", desc: "多源数据实时采集与供数" },
-            ].map((item) => (
-              <div key={item.title} className="flex items-center gap-3">
-                <span className="text-2xl">{item.icon}</span>
-                <div>
-                  <p className="text-white text-sm font-medium">{item.title}</p>
-                  <p className="text-neutral-500 text-xs">{item.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
       <div className="flex-1 flex items-center justify-center p-8 bg-gradient-to-b from-neutral-900 via-neutral-950 to-neutral-900">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-3 justify-center mb-8">
-            <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center">
-              <Activity className="w-6 h-6 text-white" />
-            </div>
             <h1 className="text-xl font-bold text-white">JBT 量化研究室</h1>
-          </div>
-
-          <div className="text-center mb-10">
-            <h2 className="text-2xl font-bold text-white mb-2">欢迎登录</h2>
-            <p className="text-neutral-400">请输入管理员提供的账号和密码</p>
           </div>
 
           <div className="glass-card p-8 rounded-xl border border-neutral-700/30 backdrop-blur-xl">
