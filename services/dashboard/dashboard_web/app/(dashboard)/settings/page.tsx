@@ -610,10 +610,16 @@ export default function SettingsPage() {
           )}
         </TabsContent>
 
-        {/* 交易时段 Tab */}
-        <TabsContent value="trading" className="space-y-4">
-          <TradingSessionsCard />
-          <TradingCalendarCard />
+        {/* 交易时段 Tab：左 4 开关区 / 右 6 日历区 */}
+        <TabsContent value="trading">
+          <div className="grid grid-cols-10 gap-4 items-start">
+            <div className="col-span-4">
+              <TradingSessionsCard />
+            </div>
+            <div className="col-span-6">
+              <TradingCalendarCard />
+            </div>
+          </div>
         </TabsContent>
 
         {/* 通知配置 Tab */}

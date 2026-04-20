@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Clock, Save, RefreshCw, Moon, Sun, Sunset } from 'lucide-react'
 import { tradingSessionsApi, tradingConfigApi, type TradingSession } from '@/lib/api/settings'
+// Badge 已移除，时段状态通过 Switch 颜色体现
 
 const SESSION_ICONS: Record<string, React.ReactNode> = {
   night: <Moon className="w-4 h-4 text-blue-400" />,
@@ -123,196 +123,150 @@ export function TradingSessionsCard() {
 
   if (loading) {
     return (
-      <Card className="bg-transparent backdrop-blur-sm border-border">
+      <Card className="bg-transparent backdrop-blur-sm border-border h-full">
         <CardContent className="py-8 text-center text-muted-foreground text-sm">加载中...</CardContent>
       </Card>
     )
   }
 
   return (
-    <>
-      {/* 三时段配置 */}
-      <Card className="bg-transparent backdrop-blur-sm border-border">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-foreground flex items-center gap-2">
-                <Clock className="w-5 h-5 text-orange-500" />
-                期货交易时段
-              </CardTitle>
-              <CardDescription className="text-muted-foreground">
-                配置夜盘 / 上午盘 / 下午盘的开收盘时间与启用状态
-              </CardDescription>
-            </div>
-            <Button variant="ghost" size="icon" onClick={load} title="刷新">
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+    <Card className="bg-transparent backdrop-blur-sm border-border h-full">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+            <Clock className="w-4 h-4 text-orange-500" />
+            交易时段 &amp; 控制
+          </CardTitle>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={load} title="刷新">
+            <RefreshCw className="w-3 h-3" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+
+        {/* 三时段紧凑行 */}
+        <div className="space-y-1.5">
           {sessions.map(s => {
             const ed = getEdit(s)
             const dirty = isDirty(s)
             return (
               <div
                 key={s.id}
-                className={`rounded-xl border p-4 space-y-4 transition-colors ${SESSION_COLORS[s.name] ?? 'border-border bg-muted/10'}`}
+                className={`rounded-lg border px-3 py-2 flex items-center gap-2 transition-colors ${SESSION_COLORS[s.name] ?? 'border-border bg-muted/10'}`}
               >
-                {/* 头部：图标 + 名称 + 状态 + 开关 */}
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-background border border-border flex items-center justify-center shrink-0">
-                    {SESSION_ICONS[s.name] ?? <Clock className="w-4 h-4" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={ed.label}
-                        onChange={e => patch(s.id, 'label', e.target.value)}
-                        className="h-7 w-28 text-sm font-medium bg-background"
-                      />
-                      <Badge
-                        variant="outline"
-                        className={ed.enabled
-                          ? 'text-green-400 border-green-500/30'
-                          : 'text-neutral-500 border-neutral-500/30'}
-                      >
-                        {ed.enabled ? '启用' : '停用'}
-                      </Badge>
-                      {dirty && (
-                        <Badge variant="outline" className="text-orange-400 border-orange-500/30 text-[10px]">
-                          未保存
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {ed.start_time} — {ed.end_time}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={ed.enabled}
-                    onCheckedChange={v => patch(s.id, 'enabled', v)}
-                  />
-                </div>
+                {/* 图标 */}
+                <div className="shrink-0">{SESSION_ICONS[s.name] ?? <Clock className="w-3.5 h-3.5" />}</div>
 
-                {/* 时间编辑 */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">开盘时间</Label>
-                    <Input
-                      type="time"
-                      value={ed.start_time}
-                      onChange={e => patch(s.id, 'start_time', e.target.value)}
-                      className="h-8 bg-background text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">收盘时间</Label>
-                    <Input
-                      type="time"
-                      value={ed.end_time}
-                      onChange={e => patch(s.id, 'end_time', e.target.value)}
-                      className="h-8 bg-background text-sm"
-                    />
-                  </div>
-                </div>
+                {/* 名称 */}
+                <Input
+                  value={ed.label}
+                  onChange={e => patch(s.id, 'label', e.target.value)}
+                  className="h-6 w-16 text-xs font-medium bg-background px-1.5 shrink-0"
+                />
 
-                {/* 保存按钮（仅有改动才激活） */}
-                <div className="flex justify-end">
-                  <Button
-                    size="sm"
-                    className="h-7 text-xs gap-1"
-                    disabled={!dirty || saving[s.id]}
-                    onClick={() => saveSession(s)}
-                  >
-                    <Save className="w-3 h-3" />
-                    {saving[s.id] ? '保存中...' : '保存此时段'}
-                  </Button>
-                </div>
+                {/* 时间 */}
+                <Input
+                  type="time"
+                  value={ed.start_time}
+                  onChange={e => patch(s.id, 'start_time', e.target.value)}
+                  className="h-6 w-20 text-xs bg-background px-1 shrink-0"
+                />
+                <span className="text-muted-foreground text-xs shrink-0">—</span>
+                <Input
+                  type="time"
+                  value={ed.end_time}
+                  onChange={e => patch(s.id, 'end_time', e.target.value)}
+                  className="h-6 w-20 text-xs bg-background px-1 shrink-0"
+                />
+
+                {/* 开关 */}
+                <Switch
+                  checked={ed.enabled}
+                  onCheckedChange={v => patch(s.id, 'enabled', v)}
+                  className="shrink-0 scale-75 origin-right ml-auto"
+                />
+
+                {/* 保存 */}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 shrink-0"
+                  disabled={!dirty || !!saving[s.id]}
+                  onClick={() => saveSession(s)}
+                  title="保存"
+                >
+                  <Save className={`w-3 h-3 ${dirty ? 'text-orange-400' : ''}`} />
+                </Button>
               </div>
             )
           })}
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* 全局交易控制 */}
-      <Card className="bg-transparent backdrop-blur-sm border-border">
-        <CardHeader>
-          <CardTitle className="text-foreground text-base">全局交易控制</CardTitle>
-          <CardDescription>自动交易、盘前盘后时间与时区</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <div className="border-t border-border/50 pt-2 space-y-2">
+          {/* 开关行 */}
           {[
-            {
-              key: 'auto_trading_enabled' as const,
-              label: '启用自动交易',
-              desc: '在启用的时段内自动触发开仓/平仓',
-            },
-            {
-              key: 'pre_market_enabled' as const,
-              label: '盘前准备',
-              desc: '开盘前提前启动系统连接 CTP',
-            },
-            {
-              key: 'post_market_enabled' as const,
-              label: '盘后清算',
-              desc: '收盘后自动执行清算和报告',
-            },
+            { key: 'auto_trading_enabled' as const, label: '自动交易', desc: '时段内自动触发开仓/平仓' },
+            { key: 'pre_market_enabled' as const,   label: '盘前准备', desc: '开盘前提前连接 CTP' },
+            { key: 'post_market_enabled' as const,  label: '盘后清算', desc: '收盘后自动执行清算' },
           ].map(({ key, label, desc }) => (
-            <div key={key} className="flex items-center justify-between">
-              <div>
-                <Label className="text-foreground">{label}</Label>
-                <p className="text-sm text-muted-foreground">{desc}</p>
+            <div key={key} className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-foreground leading-tight">{label}</p>
+                <p className="text-[11px] text-muted-foreground leading-tight">{desc}</p>
               </div>
               <Switch
                 checked={config[key]}
                 onCheckedChange={v => setConfig(c => ({ ...c, [key]: v }))}
+                className="scale-75 origin-right shrink-0"
               />
             </div>
           ))}
 
-          <div className="grid grid-cols-2 gap-4 pt-2">
-            <div className="space-y-1.5">
-              <Label className="text-sm text-foreground">盘前准备时间（分钟）</Label>
+          {/* 盘前分钟 + 时区 */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="space-y-1">
+              <Label className="text-[11px] text-muted-foreground">盘前分钟</Label>
               <Input
                 type="number"
                 min={5}
                 max={120}
                 value={config.pre_market_minutes}
                 onChange={e => setConfig(c => ({ ...c, pre_market_minutes: parseInt(e.target.value, 10) || 30 }))}
-                className="h-8 bg-background"
+                className="h-7 bg-background text-xs"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm text-foreground">时区</Label>
+            <div className="space-y-1">
+              <Label className="text-[11px] text-muted-foreground">时区</Label>
               <select
                 value={config.timezone}
                 onChange={e => setConfig(c => ({ ...c, timezone: e.target.value }))}
-                className="w-full h-8 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                className="w-full h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground"
               >
-                <option value="Asia/Shanghai">Asia/Shanghai（北京时间）</option>
+                <option value="Asia/Shanghai">北京时间</option>
                 <option value="UTC">UTC</option>
-                <option value="America/New_York">America/New_York</option>
+                <option value="America/New_York">纽约时间</option>
               </select>
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-2">
+          <div className="flex items-center justify-between pt-1">
             {message && (
-              <p className={`text-sm ${message.type === 'success' ? 'text-green-400' : 'text-destructive'}`}>
+              <p className={`text-xs ${message.type === 'success' ? 'text-green-400' : 'text-destructive'}`}>
                 {message.text}
               </p>
             )}
             <Button
-              className="ml-auto gap-1.5"
+              size="sm"
+              className="ml-auto h-7 text-xs gap-1"
               onClick={saveConfig}
-              disabled={saving['config']}
+              disabled={!!saving['config']}
             >
-              <Save className="w-4 h-4" />
-              {saving['config'] ? '保存中...' : '保存全局配置'}
+              <Save className="w-3 h-3" />
+              {saving['config'] ? '保存中...' : '保存配置'}
             </Button>
           </div>
-        </CardContent>
-      </Card>
-    </>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
