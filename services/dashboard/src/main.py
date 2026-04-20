@@ -7,7 +7,9 @@ import logging
 import os
 import secrets
 import sqlite3
+import smtplib
 from datetime import datetime, timedelta
+from email.message import EmailMessage
 from pathlib import Path
 from typing import Optional
 
@@ -249,15 +251,27 @@ def init_db():
             enabled INTEGER NOT NULL DEFAULT 1,
             feishu_enabled INTEGER NOT NULL DEFAULT 1,
             smtp_enabled INTEGER NOT NULL DEFAULT 1,
+            trigger_type TEXT NOT NULL DEFAULT 'realtime',
+            daily_limit INTEGER NOT NULL DEFAULT 0,
+            time_window TEXT NOT NULL DEFAULT '',
+            schedule_times TEXT NOT NULL DEFAULT '',
             sort_order INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
     """)
     # 迁移：为已存在的数据库加上新列（幂等）
-    for col, default in [("feishu_enabled", 1), ("smtp_enabled", 1)]:
+    _migration_cols = [
+        ("feishu_enabled", "INTEGER NOT NULL DEFAULT 1"),
+        ("smtp_enabled",   "INTEGER NOT NULL DEFAULT 1"),
+        ("trigger_type",   "TEXT NOT NULL DEFAULT 'realtime'"),
+        ("daily_limit",    "INTEGER NOT NULL DEFAULT 0"),
+        ("time_window",    "TEXT NOT NULL DEFAULT ''"),
+        ("schedule_times", "TEXT NOT NULL DEFAULT ''"),
+    ]
+    for col, col_def in _migration_cols:
         try:
-            cursor.execute(f"ALTER TABLE notification_rules ADD COLUMN {col} INTEGER NOT NULL DEFAULT {default}")
+            cursor.execute(f"ALTER TABLE notification_rules ADD COLUMN {col} {col_def}")
         except sqlite3.OperationalError:
             pass  # 列已存在
 
@@ -265,43 +279,48 @@ def init_db():
     cursor.execute("SELECT COUNT(*) FROM notification_configs")
     if cursor.fetchone()[0] == 0:
         now_str = datetime.now().isoformat()
-        default_services = ["sim-trading", "data", "decision", "backtest"]
-        cursor.executemany(
-            "INSERT OR IGNORE INTO notification_configs (service, updated_at) VALUES (?, ?)",
-            [(s, now_str) for s in default_services]
-        )
+        for svc in ["sim-trading", "data", "decision", "backtest"]:
+            cursor.execute(
+                "INSERT INTO notification_configs (service,feishu_webhook,feishu_enabled,smtp_enabled,updated_at) VALUES (?,?,1,0,?)",
+                (svc, "", now_str)
+            )
 
-    # 种子：默认通知规则（首次初始化）
+    # 种子：通知规则默认数据
     cursor.execute("SELECT COUNT(*) FROM notification_rules")
     if cursor.fetchone()[0] == 0:
         now_str = datetime.now().isoformat()
+        # (service, name, rule_type, color, content_template, enabled, feishu_en, smtp_en,
+        #  trigger_type, daily_limit, time_window, schedule_times, sort_order)
         default_rules = [
             # sim-trading
-            ("sim-trading", "CTP 断线告警",   "alarm_p1", "orange",    "CTP 连接中断: {reason}",        1, 1, 1, 0),
-            ("sim-trading", "强制平仓告警",   "alarm_p0", "red",       "触发强制平仓: {reason}\n持仓: {positions}", 1, 1, 1, 1),
-            ("sim-trading", "风控告警",       "alarm_p2", "yellow",    "风控预警: {rule} 当前值 {value}", 1, 1, 1, 2),
-            ("sim-trading", "成交回报",       "trade",    "grey",      "订单成交: {symbol} {direction} {volume}手 @ {price}", 1, 1, 0, 3),
-            ("sim-trading", "系统启停通知",   "notify",   "turquoise", "服务 {action}: {service_name} at {time}", 1, 1, 0, 4),
-            ("sim-trading", "日报汇总",       "info",     "blue",      "今日交易汇总\n盈亏: {pnl}\n成交: {trades}笔\n胜率: {win_rate}", 1, 1, 1, 5),
+            ("sim-trading", "CTP 断线告警",   "alarm_p1", "orange",    "CTP 连接中断: {reason}",        1, 1, 1, "realtime", 0, "09:00-15:15", "", 0),
+            ("sim-trading", "强制平仓告警",   "alarm_p0", "red",       "触发强制平仓: {reason}\n持仓: {positions}", 1, 1, 1, "realtime", 0, "", "", 1),
+            ("sim-trading", "风控告警",       "alarm_p2", "yellow",    "风控预警: {rule} 当前值 {value}", 1, 1, 1, "realtime", 10, "09:00-15:15", "", 2),
+            ("sim-trading", "成交回报",       "trade",    "grey",      "订单成交: {symbol} {direction} {volume}手 @ {price}", 1, 1, 0, "realtime", 0, "09:00-15:15", "", 3),
+            ("sim-trading", "系统启停通知",   "notify",   "turquoise", "服务 {action}: {service_name} at {time}", 1, 1, 0, "realtime", 0, "", "", 4),
+            ("sim-trading", "日报汇总",       "info",     "blue",      "今日交易汇总\n盈亏: {pnl}\n成交: {trades}笔\n胜率: {win_rate}", 1, 1, 1, "scheduled", 1, "", "15:30", 5),
             # data
-            ("data", "采集失败告警",  "alarm_p1", "orange",    "数据采集器异常: {collector}\n错误: {error}",   1, 1, 1, 0),
-            ("data", "存储空间预警",  "alarm_p2", "yellow",    "存储空间不足: {path} 剩余 {free_gb}GB",       1, 1, 0, 1),
-            ("data", "新闻推送",      "news",     "wathet",    "[{source}] {title}\n{summary}",               1, 1, 0, 2),
-            ("data", "采集器状态",   "notify",   "turquoise", "采集器 {name} 状态: {status}\n延迟: {delay}s",1, 1, 0, 3),
-            ("data", "日报汇总",      "info",     "blue",      "数据采集日报\n成功: {ok}条 失败: {fail}条",   1, 1, 1, 4),
+            ("data", "采集失败告警",  "alarm_p1", "orange",    "数据采集器异常: {collector}\n错误: {error}",   1, 1, 1, "realtime", 0, "", "", 0),
+            ("data", "存储空间预警",  "alarm_p2", "yellow",    "存储空间不足: {path} 剩余 {free_gb}GB",       1, 1, 0, "realtime", 3, "", "", 1),
+            ("data", "新闻推送",      "news",     "wathet",    "[{source}] {title}\n{summary}",               1, 1, 0, "scheduled", 4, "08:00-22:00", "09:30,12:00,15:30,20:00", 2),
+            ("data", "采集器状态",   "notify",   "turquoise", "采集器 {name} 状态: {status}\n延迟: {delay}s",1, 1, 0, "scheduled", 3, "", "09:00,12:00,15:00", 3),
+            ("data", "日报汇总",      "info",     "blue",      "数据采集日报\n成功: {ok}条 失败: {fail}条",   1, 1, 1, "scheduled", 1, "", "18:00", 4),
             # decision
-            ("decision", "策略信号生成", "info",     "blue",      "信号生成: {strategy} {symbol} {direction}\n置信度: {confidence}", 1, 1, 0, 0),
-            ("decision", "LLM 分析完成", "info",     "blue",      "研究员分析报告: {title}\n评分: {score}",     1, 1, 0, 1),
-            ("decision", "风控告警",     "alarm_p1", "orange",    "决策风控预警: {reason}\n触发规则: {rule}",   1, 1, 1, 2),
-            ("decision", "信号待审批",   "notify",   "turquoise", "待审批信号: {strategy} {symbol}\n强度: {strength}", 1, 1, 0, 3),
+            ("decision", "策略信号生成", "info",     "blue",      "信号生成: {strategy} {symbol} {direction}\n置信度: {confidence}", 1, 1, 0, "realtime", 0, "09:00-15:15", "", 0),
+            ("decision", "LLM 分析完成", "info",     "blue",      "研究员分析报告: {title}\n评分: {score}",     1, 1, 0, "realtime", 0, "", "", 1),
+            ("decision", "风控告警",     "alarm_p1", "orange",    "决策风控预警: {reason}\n触发规则: {rule}",   1, 1, 1, "realtime", 0, "", "", 2),
+            ("decision", "信号待审批",   "notify",   "turquoise", "待审批信号: {strategy} {symbol}\n强度: {strength}", 1, 1, 0, "realtime", 0, "", "", 3),
             # backtest
-            ("backtest", "回测完成",     "notify", "turquoise", "回测完成: {task_name}\n收益率: {return_pct}% 最大回撤: {max_dd}%", 1, 1, 0, 0),
-            ("backtest", "回测失败",     "alarm_p1", "orange",  "回测异常: {task_name}\n错误: {error}",         1, 1, 0, 1),
-            ("backtest", "参数优化完成", "info",   "blue",      "参数优化完成: {task_name}\n最优参数: {params}", 1, 1, 0, 2),
+            ("backtest", "回测完成",     "notify", "turquoise", "回测完成: {task_name}\n收益率: {return_pct}% 最大回撤: {max_dd}%", 1, 1, 0, "realtime", 0, "", "", 0),
+            ("backtest", "回测失败",     "alarm_p1", "orange",  "回测异常: {task_name}\n错误: {error}",         1, 1, 0, "realtime", 0, "", "", 1),
+            ("backtest", "参数优化完成", "info",   "blue",      "参数优化完成: {task_name}\n最优参数: {params}", 1, 1, 0, "realtime", 0, "", "", 2),
         ]
         cursor.executemany(
-            "INSERT INTO notification_rules (service,name,rule_type,color,content_template,enabled,feishu_enabled,smtp_enabled,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            [(s, n, rt, c, ct, e, fe, se, so, now_str, now_str) for s, n, rt, c, ct, e, fe, se, so in default_rules]
+            "INSERT INTO notification_rules (service,name,rule_type,color,content_template,enabled,"
+            "feishu_enabled,smtp_enabled,trigger_type,daily_limit,time_window,schedule_times,sort_order,created_at,updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [(s, n, rt, c, ct, e, fe, se, tt, dl, tw, st, so, now_str, now_str)
+             for s, n, rt, c, ct, e, fe, se, tt, dl, tw, st, so in default_rules]
         )
 
 
@@ -838,6 +857,25 @@ class NotificationRuleRequest(BaseModel):
     enabled: bool = True
     feishu_enabled: bool = True
     smtp_enabled: bool = True
+    trigger_type: str = "realtime"   # realtime / scheduled / daily_summary
+    daily_limit: int = 0             # 0=不限
+    time_window: str = ""            # 如 "09:00-15:00"
+    schedule_times: str = ""         # 如 "09:30,11:30,15:00"
+
+
+class NotificationRulePatchRequest(BaseModel):
+    """规则部分更新请求 — 所有字段都是可选的"""
+    name: Optional[str] = None
+    rule_type: Optional[str] = None
+    color: Optional[str] = None
+    content_template: Optional[str] = None
+    enabled: Optional[bool] = None
+    feishu_enabled: Optional[bool] = None
+    smtp_enabled: Optional[bool] = None
+    trigger_type: Optional[str] = None
+    daily_limit: Optional[int] = None
+    time_window: Optional[str] = None
+    schedule_times: Optional[str] = None
 
 
 def _row_to_config(row: tuple) -> dict:
@@ -858,6 +896,178 @@ def _row_to_config(row: tuple) -> dict:
     }
 
 
+_RULE_SAMPLE_CONTEXT = {
+    "reason": "测试原因",
+    "positions": "rb2410 多单 2 手",
+    "rule": "最大回撤阈值",
+    "value": "12.6%",
+    "symbol": "rb2410",
+    "direction": "BUY",
+    "volume": "2",
+    "price": "3521",
+    "action": "started",
+    "service_name": "JBT Dashboard",
+    "time": datetime.now().strftime("%H:%M:%S"),
+    "pnl": "+1280.50",
+    "trades": "12",
+    "win_rate": "66.7%",
+    "collector": "news_collector",
+    "error": "测试错误",
+    "path": "/data/runtime",
+    "free_gb": "12.4",
+    "source": "Reuters",
+    "title": "测试标题",
+    "summary": "这是通知规则联调测试内容。",
+    "name": "collector-A",
+    "status": "running",
+    "delay": "3",
+    "ok": "128",
+    "fail": "4",
+    "strategy": "trend_follow",
+    "confidence": "0.82",
+    "score": "8.6",
+    "strength": "high",
+    "task_name": "rb-breakout-backtest",
+    "task_id": "bt-20260421-001",
+    "return_pct": "18.2",
+    "max_dd": "4.9",
+    "params": "lookback=20, risk=0.02",
+}
+
+
+def _render_rule_template(rule: dict) -> str:
+    template = (rule.get("content_template") or "").strip()
+    if not template:
+        trigger_label = {
+            "realtime": "实时触发",
+            "scheduled": "定时触发",
+            "daily_summary": "日报推送",
+        }.get(rule.get("trigger_type"), "通知测试")
+        return f"规则「{rule['name']}」测试成功\n类型：{trigger_label}\n服务：{_SERVICE_LABELS.get(rule['service'], rule['service'])}"
+
+    rendered = template
+    for key, value in _RULE_SAMPLE_CONTEXT.items():
+        rendered = rendered.replace(f"{{{key}}}", str(value))
+    return rendered
+
+
+def _build_feishu_test_payload(service: str, rule: dict, rendered: str) -> dict:
+    rule_type = str(rule.get("rule_type") or "notify").upper()
+    return {
+        "msg_type": "interactive",
+        "card": {
+            "header": {
+                "title": {
+                    "tag": "plain_text",
+                    "content": f"📣 [DEV-{rule_type}] {rule['name']} 测试"
+                },
+                "template": rule.get("color") or "turquoise",
+            },
+            "elements": [
+                {
+                    "tag": "div",
+                    "text": {
+                        "tag": "lark_md",
+                        "content": (
+                            f"**服务**：{_SERVICE_LABELS.get(service, service)}\n"
+                            f"**规则**：{rule['name']}\n"
+                            f"**推送方式**：{rule.get('trigger_type', 'realtime')}\n\n"
+                            f"{rendered}"
+                        ),
+                    },
+                },
+                {"tag": "hr"},
+                {
+                    "tag": "div",
+                    "text": {
+                        "tag": "lark_md",
+                        "content": (
+                            f"时段：{rule.get('time_window') or '不限'}\n"
+                            f"频次：{rule.get('daily_limit') or 0} 次/天\n"
+                            f"定时：{rule.get('schedule_times') or '无'}"
+                        ),
+                    },
+                },
+                {"tag": "note", "elements": [
+                    {"tag": "plain_text", "content": f"JBT {service} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"}
+                ]},
+            ],
+        },
+    }
+
+
+def _build_test_email_html(service: str, rule: dict, rendered: str) -> str:
+    color = {
+        "red": "#c0392b",
+        "orange": "#e67e22",
+        "yellow": "#f39c12",
+        "grey": "#7f8c8d",
+        "blue": "#2980b9",
+        "wathet": "#5dade2",
+        "turquoise": "#1abc9c",
+    }.get(rule.get("color"), "#1abc9c")
+    body = rendered.replace("\n", "<br>")
+    return f"""
+<div style=\"max-width:720px;margin:0 auto;border:1px solid #2a2a2a;border-radius:16px;overflow:hidden;background:#111;color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\">
+  <div style=\"background:{color};padding:16px 20px;font-weight:700\">📣 [DEV-TEST] {rule['name']}</div>
+  <div style=\"padding:20px\">
+    <p style=\"margin:0 0 12px;font-size:13px;color:#bbb\">JBT {_SERVICE_LABELS.get(service, service)} 通知测试</p>
+    <table style=\"width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px\">
+      <tr><td style=\"padding:6px 0;color:#999\">规则</td><td style=\"padding:6px 0\">{rule['name']}</td></tr>
+      <tr><td style=\"padding:6px 0;color:#999\">方式</td><td style=\"padding:6px 0\">{rule.get('trigger_type', 'realtime')}</td></tr>
+      <tr><td style=\"padding:6px 0;color:#999\">时段</td><td style=\"padding:6px 0\">{rule.get('time_window') or '不限'}</td></tr>
+      <tr><td style=\"padding:6px 0;color:#999\">定时</td><td style=\"padding:6px 0\">{rule.get('schedule_times') or '无'}</td></tr>
+    </table>
+    <div style=\"padding:12px 14px;background:#171717;border:1px solid #2a2a2a;border-radius:12px;line-height:1.7\">{body}</div>
+  </div>
+  <div style=\"padding:12px 20px;border-top:1px solid #2a2a2a;color:#888;font-size:12px\">JBT {service} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+</div>
+"""
+
+
+def _send_feishu_webhook(webhook: str, payload: dict) -> dict:
+    import urllib.request as urlreq
+
+    req = urlreq.Request(webhook, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+    with urlreq.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read())
+
+
+def _send_smtp_message(config_row: tuple, subject: str, html: str) -> None:
+    smtp_host = str(config_row[3] or "").strip()
+    smtp_port = int(config_row[4] or 465)
+    smtp_username = str(config_row[5] or "").strip()
+    smtp_password = str(config_row[6] or "")
+    smtp_to_addrs = [addr.strip() for addr in str(config_row[7] or "").split(",") if addr.strip()]
+
+    if not smtp_host or not smtp_to_addrs:
+        raise ValueError("SMTP Host 或收件人未配置")
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = smtp_username or "jbt-dashboard@localhost"
+    message["To"] = ", ".join(smtp_to_addrs)
+    message.set_content("请使用 HTML 邮件客户端查看测试通知。")
+    message.add_alternative(html, subtype="html")
+
+    if smtp_port == 465:
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as server:
+            if smtp_username:
+                server.login(smtp_username, smtp_password)
+            server.send_message(message)
+    else:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+            server.ehlo()
+            try:
+                server.starttls()
+                server.ehlo()
+            except smtplib.SMTPException:
+                pass
+            if smtp_username:
+                server.login(smtp_username, smtp_password)
+            server.send_message(message)
+
+
 @app.get("/api/v1/notifications/configs")
 async def list_notification_configs(current_user: dict = Depends(get_current_user)):
     conn = sqlite3.connect(DB_PATH)
@@ -870,6 +1080,28 @@ async def list_notification_configs(current_user: dict = Depends(get_current_use
     rows = cursor.fetchall()
     conn.close()
     return [_row_to_config(r) for r in rows]
+
+
+@app.get("/api/v1/notifications/configs/{service}")
+async def get_notification_config(
+    service: str,
+    current_user: dict = Depends(get_current_user),
+):
+    if service not in _SERVICE_LABELS:
+        raise HTTPException(status_code=400, detail=f"未知服务: {service}")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT service,feishu_webhook,feishu_enabled,smtp_host,smtp_port,"
+        "smtp_username,smtp_password,smtp_to_addrs,smtp_enabled,updated_at "
+        "FROM notification_configs WHERE service=?",
+        (service,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"服务配置不存在: {service}")
+    return _row_to_config(row)
 
 
 @app.put("/api/v1/notifications/configs/{service}")
@@ -939,33 +1171,144 @@ async def test_feishu(service: str, admin: dict = Depends(require_admin)):
         },
     }
     data = json.dumps(payload).encode()
-    req_obj = urlreq.Request(webhook, data=data, headers={"Content-Type": "application/json"})
+    req2 = urlreq.Request(webhook, data=data, headers={"Content-Type": "application/json"})
     try:
-        with urlreq.urlopen(req_obj, timeout=10) as resp:
-            result = json.loads(resp.read())
-            ok = result.get("StatusCode", result.get("code", -1)) == 0
-            return {"success": ok, "result": result}
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Feishu 请求失败: {e}")
+        with urlreq.urlopen(req2, timeout=10) as resp:
+            body = json.loads(resp.read())
+        return {"success": True, "response": body}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"发送失败: {exc}")
 
 
+@app.post("/api/v1/notifications/configs/{service}/test-smtp")
+async def test_smtp(service: str, admin: dict = Depends(require_admin)):
+    if service not in _SERVICE_LABELS:
+        raise HTTPException(status_code=400, detail=f"未知服务: {service}")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT service,feishu_webhook,feishu_enabled,smtp_host,smtp_port,"
+        "smtp_username,smtp_password,smtp_to_addrs,smtp_enabled,updated_at "
+        "FROM notification_configs WHERE service=?",
+        (service,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="通知配置不存在")
+    if not row[8]:
+        raise HTTPException(status_code=400, detail="SMTP 已关闭")
+    try:
+        html = _build_test_email_html(service, {
+            "name": "服务级邮件测试",
+            "color": "turquoise",
+            "trigger_type": "manual",
+            "time_window": "",
+            "schedule_times": "",
+        }, f"来自 {_SERVICE_LABELS[service]} 的 SMTP 渠道测试邮件。")
+        _send_smtp_message(row, f"[DEV-NOTIFY] {_SERVICE_LABELS[service]} SMTP 测试", html)
+        return {"success": True}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"发送失败: {exc}")
+
+
+@app.post("/api/v1/notifications/rules/{rule_id}/test")
+async def test_notification_rule(rule_id: int, admin: dict = Depends(require_admin)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id,service,name,rule_type,color,content_template,enabled,"
+        "feishu_enabled,smtp_enabled,trigger_type,daily_limit,time_window,schedule_times "
+        "FROM notification_rules WHERE id=?",
+        (rule_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="规则不存在")
+
+    rule = {
+        "id": row[0],
+        "service": row[1],
+        "name": row[2],
+        "rule_type": row[3],
+        "color": row[4],
+        "content_template": row[5],
+        "enabled": bool(row[6]),
+        "feishu_enabled": bool(row[7]),
+        "smtp_enabled": bool(row[8]),
+        "trigger_type": row[9],
+        "daily_limit": row[10],
+        "time_window": row[11],
+        "schedule_times": row[12],
+    }
+
+    cursor.execute(
+        "SELECT service,feishu_webhook,feishu_enabled,smtp_host,smtp_port,"
+        "smtp_username,smtp_password,smtp_to_addrs,smtp_enabled,updated_at "
+        "FROM notification_configs WHERE service=?",
+        (rule["service"],),
+    )
+    config_row = cursor.fetchone()
+    conn.close()
+    if not config_row:
+        raise HTTPException(status_code=404, detail="服务通知配置不存在")
+
+    rendered = _render_rule_template(rule)
+    results: dict[str, dict] = {}
+
+    if rule["feishu_enabled"]:
+        webhook = str(config_row[1] or "").strip()
+        if bool(config_row[2]) and webhook.startswith("http"):
+            try:
+                resp = _send_feishu_webhook(webhook, _build_feishu_test_payload(rule["service"], rule, rendered))
+                results["feishu"] = {"success": True, "response": resp}
+            except Exception as exc:
+                results["feishu"] = {"success": False, "detail": str(exc)}
+        else:
+            results["feishu"] = {"success": False, "detail": "服务级 Feishu Webhook 未配置或未启用"}
+    else:
+        results["feishu"] = {"success": False, "detail": "该规则未启用飞书渠道"}
+
+    if rule["smtp_enabled"]:
+        if bool(config_row[8]) and str(config_row[3] or "").strip() and str(config_row[7] or "").strip():
+            try:
+                html = _build_test_email_html(rule["service"], rule, rendered)
+                _send_smtp_message(config_row, f"[DEV-TEST] {rule['name']}", html)
+                results["smtp"] = {"success": True}
+            except Exception as exc:
+                results["smtp"] = {"success": False, "detail": str(exc)}
+        else:
+            results["smtp"] = {"success": False, "detail": "服务级 SMTP 未配置或未启用"}
+    else:
+        results["smtp"] = {"success": False, "detail": "该规则未启用邮件渠道"}
+
+    return {
+        "success": any(v.get("success") for v in results.values()),
+        "rule_id": rule_id,
+        "rule_name": rule["name"],
+        "results": results,
+    }
+
+
+# ── 通知规则 CRUD ─────────────────────────────────────────────
 @app.get("/api/v1/notifications/rules")
 async def list_notification_rules(
     service: Optional[str] = None,
-    current_user: dict = Depends(get_current_user),
+    admin: dict = Depends(require_admin),
 ):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    _cols = ("id,service,name,rule_type,color,content_template,enabled,"
+             "feishu_enabled,smtp_enabled,trigger_type,daily_limit,time_window,schedule_times,sort_order,created_at")
     if service:
         cursor.execute(
-            "SELECT id,service,name,rule_type,color,content_template,enabled,feishu_enabled,smtp_enabled,sort_order,created_at "
-            "FROM notification_rules WHERE service=? ORDER BY sort_order,id",
+            f"SELECT {_cols} FROM notification_rules WHERE service=? ORDER BY sort_order,id",
             (service,)
         )
     else:
         cursor.execute(
-            "SELECT id,service,name,rule_type,color,content_template,enabled,feishu_enabled,smtp_enabled,sort_order,created_at "
-            "FROM notification_rules ORDER BY service,sort_order,id"
+            f"SELECT {_cols} FROM notification_rules ORDER BY service,sort_order,id"
         )
     rows = cursor.fetchall()
     conn.close()
@@ -973,7 +1316,9 @@ async def list_notification_rules(
         {"id": r[0], "service": r[1], "name": r[2], "rule_type": r[3],
          "color": r[4], "content_template": r[5], "enabled": bool(r[6]),
          "feishu_enabled": bool(r[7]), "smtp_enabled": bool(r[8]),
-         "sort_order": r[9], "created_at": r[10]}
+         "trigger_type": r[9], "daily_limit": r[10],
+         "time_window": r[11], "schedule_times": r[12],
+         "sort_order": r[13], "created_at": r[14]}
         for r in rows
     ]
 
@@ -993,10 +1338,12 @@ async def create_notification_rule(
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO notification_rules (service,name,rule_type,color,content_template,enabled,feishu_enabled,smtp_enabled,sort_order,created_at,updated_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO notification_rules (service,name,rule_type,color,content_template,enabled,"
+        "feishu_enabled,smtp_enabled,trigger_type,daily_limit,time_window,schedule_times,sort_order,created_at,updated_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (req.service, req.name, req.rule_type, req.color, req.content_template,
          1 if req.enabled else 0, 1 if req.feishu_enabled else 0, 1 if req.smtp_enabled else 0,
+         req.trigger_type, req.daily_limit, req.time_window, req.schedule_times,
          99, now, now)
     )
     rule_id = cursor.lastrowid
@@ -1008,24 +1355,86 @@ async def create_notification_rule(
 @app.put("/api/v1/notifications/rules/{rule_id}")
 async def update_notification_rule(
     rule_id: int,
-    req: NotificationRuleRequest,
+    req: NotificationRulePatchRequest,
     admin: dict = Depends(require_admin),
 ):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM notification_rules WHERE id=?", (rule_id,))
-    if cursor.fetchone()[0] == 0:
+    
+    # 获取现有规则
+    cursor.execute(
+        "SELECT id,service,name,rule_type,color,content_template,enabled,"
+        "feishu_enabled,smtp_enabled,trigger_type,daily_limit,time_window,schedule_times,sort_order,created_at "
+        "FROM notification_rules WHERE id=?", (rule_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="规则不存在")
+    
+    # 构建更新数据，只更新传入的字段
+    updates = {}
+    if req.name is not None:
+        updates['name'] = req.name
+    if req.rule_type is not None:
+        updates['rule_type'] = req.rule_type
+    if req.color is not None:
+        updates['color'] = req.color
+    if req.content_template is not None:
+        updates['content_template'] = req.content_template
+    if req.enabled is not None:
+        updates['enabled'] = 1 if req.enabled else 0
+    if req.feishu_enabled is not None:
+        updates['feishu_enabled'] = 1 if req.feishu_enabled else 0
+    if req.smtp_enabled is not None:
+        updates['smtp_enabled'] = 1 if req.smtp_enabled else 0
+    if req.trigger_type is not None:
+        updates['trigger_type'] = req.trigger_type
+    if req.daily_limit is not None:
+        updates['daily_limit'] = req.daily_limit
+    if req.time_window is not None:
+        updates['time_window'] = req.time_window
+    if req.schedule_times is not None:
+        updates['schedule_times'] = req.schedule_times
+    
+    # 如果没有字段要更新，直接返回现有规则
+    if not updates:
+        conn.close()
+        return {
+            "id": row[0], "service": row[1], "name": row[2], "rule_type": row[3],
+            "color": row[4], "content_template": row[5], "enabled": bool(row[6]),
+            "feishu_enabled": bool(row[7]), "smtp_enabled": bool(row[8]),
+            "trigger_type": row[9], "daily_limit": row[10],
+            "time_window": row[11], "schedule_times": row[12]
+        }
+    
+    # 执行更新
+    set_clause = ", ".join([f"{k}=?" for k in updates.keys()])
+    values = list(updates.values()) + [datetime.now().isoformat(), rule_id]
     cursor.execute(
-        "UPDATE notification_rules SET name=?,rule_type=?,color=?,content_template=?,enabled=?,feishu_enabled=?,smtp_enabled=?,updated_at=? WHERE id=?",
-        (req.name, req.rule_type, req.color, req.content_template,
-         1 if req.enabled else 0, 1 if req.feishu_enabled else 0, 1 if req.smtp_enabled else 0,
-         datetime.now().isoformat(), rule_id)
+        f"UPDATE notification_rules SET {set_clause}, updated_at=? WHERE id=?",
+        values
     )
     conn.commit()
+    
+    # 获取更新后的规则
+    cursor.execute(
+        "SELECT id,service,name,rule_type,color,content_template,enabled,"
+        "feishu_enabled,smtp_enabled,trigger_type,daily_limit,time_window,schedule_times "
+        "FROM notification_rules WHERE id=?", (rule_id,)
+    )
+    updated_row = cursor.fetchone()
     conn.close()
-    return {"success": True}
+    
+    return {
+        "id": updated_row[0], "service": updated_row[1], "name": updated_row[2],
+        "rule_type": updated_row[3], "color": updated_row[4],
+        "content_template": updated_row[5], "enabled": bool(updated_row[6]),
+        "feishu_enabled": bool(updated_row[7]), "smtp_enabled": bool(updated_row[8]),
+        "trigger_type": updated_row[9], "daily_limit": updated_row[10],
+        "time_window": updated_row[11], "schedule_times": updated_row[12]
+    }
+
 
 
 @app.delete("/api/v1/notifications/rules/{rule_id}")

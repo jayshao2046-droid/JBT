@@ -31,6 +31,11 @@ import {
   ChevronRight,
   Mail,
   MessageSquare,
+  Clock,
+  Zap,
+  Calendar,
+  TestTube2,
+  Settings2,
 } from 'lucide-react'
 import {
   notificationApi,
@@ -62,6 +67,12 @@ const RULE_TYPE_CFG: Record<string, { icon: string; label: string; colorKey: str
   notify:   { icon: '📣', label: '通知',    colorKey: 'turquoise' },
 }
 
+const TRIGGER_TYPE_CFG: Record<string, { icon: React.ReactNode; label: string; desc: string }> = {
+  realtime:      { icon: <Zap className="w-3 h-3" />,      label: '实时',   desc: '事件触发即时推送' },
+  scheduled:     { icon: <Clock className="w-3 h-3" />,    label: '定时',   desc: '按指定时间点推送' },
+  daily_summary: { icon: <Calendar className="w-3 h-3" />, label: '日报',   desc: '每日定时汇总推送' },
+}
+
 const SERVICE_ORDER = ['sim-trading', 'data', 'decision', 'backtest']
 const SERVICE_LABELS: Record<string, string> = {
   'sim-trading': '模拟交易',
@@ -71,6 +82,8 @@ const SERVICE_LABELS: Record<string, string> = {
 }
 
 // ── RuleDialog（新建 / 编辑）────────────────────────────
+type TriggerType = 'realtime' | 'scheduled' | 'daily_summary'
+
 interface RuleForm {
   name: string
   rule_type: RuleType
@@ -79,6 +92,10 @@ interface RuleForm {
   enabled: boolean
   feishu_enabled: boolean
   smtp_enabled: boolean
+  trigger_type: TriggerType
+  daily_limit: number
+  time_window: string
+  schedule_times: string
 }
 
 const EMPTY_RULE: RuleForm = {
@@ -89,6 +106,140 @@ const EMPTY_RULE: RuleForm = {
   enabled: true,
   feishu_enabled: true,
   smtp_enabled: true,
+  trigger_type: 'realtime',
+  daily_limit: 0,
+  time_window: '',
+  schedule_times: '',
+}
+
+interface ConfigForm {
+  feishu_webhook: string
+  feishu_enabled: boolean
+  smtp_host: string
+  smtp_port: number
+  smtp_username: string
+  smtp_password: string
+  smtp_to_addrs: string
+  smtp_enabled: boolean
+}
+
+function toConfigForm(config: ServiceNotifConfig): ConfigForm {
+  return {
+    feishu_webhook: config.feishu_webhook,
+    feishu_enabled: config.feishu_enabled,
+    smtp_host: config.smtp_host,
+    smtp_port: config.smtp_port,
+    smtp_username: config.smtp_username,
+    smtp_password: '',
+    smtp_to_addrs: config.smtp_to_addrs,
+    smtp_enabled: config.smtp_enabled,
+  }
+}
+
+interface ConfigDialogProps {
+  open: boolean
+  config: ServiceNotifConfig
+  onOpenChange: (v: boolean) => void
+  onSave: (form: ConfigForm) => Promise<void>
+  onTestFeishu: () => Promise<void>
+  onTestSmtp: () => Promise<void>
+}
+
+function ConfigDialog({ open, config, onOpenChange, onSave, onTestFeishu, onTestSmtp }: ConfigDialogProps) {
+  const [form, setForm] = useState<ConfigForm>(() => toConfigForm(config))
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState<'feishu' | 'smtp' | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    setForm(toConfigForm(config))
+    setError('')
+  }, [config, open])
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError('')
+    try {
+      await onSave(form)
+      onOpenChange(false)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const runTest = async (kind: 'feishu' | 'smtp') => {
+    setTesting(kind)
+    setError('')
+    try {
+      if (kind === 'feishu') await onTestFeishu()
+      else await onTestSmtp()
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setTesting(null)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Settings2 className="w-4 h-4 text-orange-500" />
+            渠道配置 · {config.display_name}
+          </DialogTitle>
+          <DialogDescription>配置该服务的飞书 Webhook 与 SMTP，并可直接做服务级链路测试。</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          <div className="rounded-md border border-input bg-muted/10 p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-2"><MessageSquare className="w-4 h-4 text-[#1abc9c]" />飞书 Webhook</Label>
+              <Switch checked={form.feishu_enabled} onCheckedChange={v => setForm(f => ({ ...f, feishu_enabled: v }))} />
+            </div>
+            <Input
+              placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."
+              value={form.feishu_webhook}
+              onChange={e => setForm(f => ({ ...f, feishu_webhook: e.target.value }))}
+            />
+            <div className="flex justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={() => runTest('feishu')} disabled={testing !== null}>
+                {testing === 'feishu' ? '测试中...' : '测试飞书'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-input bg-muted/10 p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-2"><Mail className="w-4 h-4 text-blue-400" />SMTP 邮件</Label>
+              <Switch checked={form.smtp_enabled} onCheckedChange={v => setForm(f => ({ ...f, smtp_enabled: v }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="smtp.example.com" value={form.smtp_host} onChange={e => setForm(f => ({ ...f, smtp_host: e.target.value }))} />
+              <Input type="number" min={1} value={form.smtp_port} onChange={e => setForm(f => ({ ...f, smtp_port: parseInt(e.target.value) || 465 }))} />
+            </div>
+            <Input placeholder="SMTP 用户名 / 发件邮箱" value={form.smtp_username} onChange={e => setForm(f => ({ ...f, smtp_username: e.target.value }))} />
+            <Input type="password" placeholder={config.smtp_password_set ? '留空表示保留现有密码' : 'SMTP 密码'} value={form.smtp_password} onChange={e => setForm(f => ({ ...f, smtp_password: e.target.value }))} />
+            <Input placeholder="收件人，逗号分隔" value={form.smtp_to_addrs} onChange={e => setForm(f => ({ ...f, smtp_to_addrs: e.target.value }))} />
+            <div className="flex justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={() => runTest('smtp')} disabled={testing !== null}>
+                {testing === 'smtp' ? '测试中...' : '测试邮件'}
+              </Button>
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-destructive rounded-md bg-destructive/10 px-3 py-2">{error}</p>}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存配置'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 interface RuleDialogProps {
@@ -110,6 +261,10 @@ function RuleDialog({ open, service, editing, onOpenChange, onSave }: RuleDialog
         name: editing.name, rule_type: editing.rule_type, color: editing.color,
         content_template: editing.content_template, enabled: editing.enabled,
         feishu_enabled: editing.feishu_enabled, smtp_enabled: editing.smtp_enabled,
+        trigger_type: editing.trigger_type ?? 'realtime',
+        daily_limit: editing.daily_limit ?? 0,
+        time_window: editing.time_window ?? '',
+        schedule_times: editing.schedule_times ?? '',
       })
     } else {
       setForm(EMPTY_RULE)
@@ -214,6 +369,49 @@ function RuleDialog({ open, service, editing, onOpenChange, onSave }: RuleDialog
             />
           </div>
 
+          {/* 推送频率 / 调度 */}
+          <div className="space-y-2">
+            <Label>推送方式</Label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {Object.entries(TRIGGER_TYPE_CFG).map(([k, v]) => (
+                <button key={k} type="button"
+                  onClick={() => setForm(f => ({ ...f, trigger_type: k as TriggerType }))}
+                  className={`flex items-center gap-1.5 px-2.5 py-2 rounded-md border text-xs transition-all
+                    ${form.trigger_type === k
+                      ? 'border-primary bg-primary/10 text-primary font-medium'
+                      : 'border-border bg-background text-muted-foreground hover:bg-muted/20'}`}
+                >
+                  {v.icon}{v.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">{TRIGGER_TYPE_CFG[form.trigger_type]?.desc}</p>
+
+            {/* 条件字段 */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">每日上限 <span className="text-muted-foreground">(0=不限)</span></Label>
+                <Input type="number" min={0} value={form.daily_limit}
+                  onChange={e => setForm(f => ({ ...f, daily_limit: parseInt(e.target.value) || 0 }))}
+                  className="bg-background h-8 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">推送时段</Label>
+                <Input placeholder="09:00-15:15" value={form.time_window}
+                  onChange={e => setForm(f => ({ ...f, time_window: e.target.value }))}
+                  className="bg-background h-8 text-xs" />
+              </div>
+            </div>
+            {(form.trigger_type === 'scheduled' || form.trigger_type === 'daily_summary') && (
+              <div className="space-y-1">
+                <Label className="text-xs">定时时间点 <span className="text-muted-foreground">(逗号分隔)</span></Label>
+                <Input placeholder="09:30,12:00,15:30" value={form.schedule_times}
+                  onChange={e => setForm(f => ({ ...f, schedule_times: e.target.value }))}
+                  className="bg-background h-8 text-xs" />
+              </div>
+            )}
+          </div>
+
           {/* 渠道与开关 */}
           <div className="rounded-md border border-input bg-muted/10 divide-y divide-border/50">
             <div className="flex items-center justify-between px-3 py-2">
@@ -254,6 +452,7 @@ function RuleDialog({ open, service, editing, onOpenChange, onSave }: RuleDialog
 interface ServicePanelProps {
   config: ServiceNotifConfig
   rules: NotificationRule[]
+  onConfigUpdated: (config: ServiceNotifConfig) => void
   onRuleAdded: (rule: NotificationRule) => void
   onRuleUpdated: (rule: NotificationRule) => void
   onRuleDeleted: (id: number) => void
@@ -262,15 +461,20 @@ interface ServicePanelProps {
 // ── RuleKpiCard（每条规则的 KPI 卡片）────────────────────
 interface RuleKpiCardProps {
   rule: NotificationRule
+  feishuReady: boolean
+  smtpReady: boolean
   onUpdated: (rule: NotificationRule) => void
   onDelete:  (rule: NotificationRule) => void
   onEdit:    (rule: NotificationRule) => void
+  onTest:    (rule: NotificationRule) => Promise<void>
 }
 
-function RuleKpiCard({ rule, onUpdated, onDelete, onEdit }: RuleKpiCardProps) {
+function RuleKpiCard({ rule, feishuReady, smtpReady, onUpdated, onDelete, onEdit, onTest }: RuleKpiCardProps) {
   const [busy, setBusy] = useState<string | null>(null)
   const typeCfg = RULE_TYPE_CFG[rule.rule_type]
   const hex = COLOR_CFG[rule.color]?.hex ?? '#888'
+  const feishuLive = rule.enabled && rule.feishu_enabled && feishuReady
+  const smtpLive = rule.enabled && rule.smtp_enabled && smtpReady
 
   const patch = async (field: string, value: boolean, busyKey: string) => {
     if (busy) return
@@ -282,6 +486,8 @@ function RuleKpiCard({ rule, onUpdated, onDelete, onEdit }: RuleKpiCardProps) {
         service: rule.service, name: rule.name, rule_type: rule.rule_type,
         color: rule.color, content_template: rule.content_template,
         enabled: updated.enabled, feishu_enabled: updated.feishu_enabled, smtp_enabled: updated.smtp_enabled,
+        trigger_type: rule.trigger_type, daily_limit: rule.daily_limit,
+        time_window: rule.time_window, schedule_times: rule.schedule_times,
       })
     } catch {
       onUpdated(rule)   // 失败回滚
@@ -311,6 +517,10 @@ function RuleKpiCard({ rule, onUpdated, onDelete, onEdit }: RuleKpiCardProps) {
       >
         <Button variant="ghost" size="icon"
           className="h-5 w-5 rounded bg-background/80 hover:bg-muted"
+          onClick={() => void onTest(rule)}
+        ><TestTube2 className="w-2.5 h-2.5" /></Button>
+        <Button variant="ghost" size="icon"
+          className="h-5 w-5 rounded bg-background/80 hover:bg-muted"
           onClick={() => onEdit(rule)}
         ><Pencil className="w-2.5 h-2.5" /></Button>
         <Button variant="ghost" size="icon"
@@ -338,6 +548,33 @@ function RuleKpiCard({ rule, onUpdated, onDelete, onEdit }: RuleKpiCardProps) {
           </p>
         )}
 
+        {/* 调度信息 */}
+        <div className="flex flex-wrap items-center gap-1">
+          {(() => {
+            const tt = TRIGGER_TYPE_CFG[rule.trigger_type] ?? TRIGGER_TYPE_CFG.realtime
+            return (
+              <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border border-border bg-muted/20 text-muted-foreground">
+                {tt.icon}{tt.label}
+              </span>
+            )
+          })()}
+          {rule.daily_limit > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-border bg-muted/20 text-muted-foreground">
+              {rule.daily_limit}次/天
+            </span>
+          )}
+          {rule.time_window && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-border bg-muted/20 text-muted-foreground">
+              🕐 {rule.time_window}
+            </span>
+          )}
+          {rule.schedule_times && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-border bg-muted/20 text-muted-foreground">
+              ⏰ {rule.schedule_times}
+            </span>
+          )}
+        </div>
+
         {/* 渠道开关行 */}
         <div className="flex items-center gap-1.5 pt-0.5" onClick={e => e.stopPropagation()}>
           <TooltipProvider delayDuration={150}>
@@ -346,7 +583,7 @@ function RuleKpiCard({ rule, onUpdated, onDelete, onEdit }: RuleKpiCardProps) {
                 <button type="button" onClick={toggleFeishu}
                   disabled={!rule.enabled || busy === 'feishu'}
                   className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border transition-all
-                    ${rule.enabled && rule.feishu_enabled
+                    ${feishuLive
                       ? 'border-[#1abc9c]/40 bg-[#1abc9c]/10 text-[#1abc9c] hover:bg-[#1abc9c]/20'
                       : 'border-border bg-muted/20 text-muted-foreground hover:bg-muted/40'}
                     disabled:cursor-not-allowed disabled:opacity-50`}
@@ -355,7 +592,11 @@ function RuleKpiCard({ rule, onUpdated, onDelete, onEdit }: RuleKpiCardProps) {
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">
-                {rule.feishu_enabled ? '飞书已开启（点击关闭）' : '飞书已关闭（点击开启）'}
+                {!rule.feishu_enabled
+                  ? '飞书规则已关闭（点击开启）'
+                  : !feishuReady
+                    ? '飞书规则已开启，但服务端 Webhook 未配置'
+                    : '飞书已开启（点击关闭）'}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -366,7 +607,7 @@ function RuleKpiCard({ rule, onUpdated, onDelete, onEdit }: RuleKpiCardProps) {
                 <button type="button" onClick={toggleSmtp}
                   disabled={!rule.enabled || busy === 'smtp'}
                   className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border transition-all
-                    ${rule.enabled && rule.smtp_enabled
+                    ${smtpLive
                       ? 'border-blue-400/40 bg-blue-400/10 text-blue-400 hover:bg-blue-400/20'
                       : 'border-border bg-muted/20 text-muted-foreground hover:bg-muted/40'}
                     disabled:cursor-not-allowed disabled:opacity-50`}
@@ -375,7 +616,11 @@ function RuleKpiCard({ rule, onUpdated, onDelete, onEdit }: RuleKpiCardProps) {
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">
-                {rule.smtp_enabled ? '邮件已开启（点击关闭）' : '邮件已关闭（点击开启）'}
+                {!rule.smtp_enabled
+                  ? '邮件规则已关闭（点击开启）'
+                  : !smtpReady
+                    ? '邮件规则已开启，但服务端 SMTP 未配置'
+                    : '邮件已开启（点击关闭）'}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -398,9 +643,10 @@ interface ServicePanelProps {
   onRuleDeleted: (id: number) => void
 }
 
-function ServicePanel({ config, rules, onRuleAdded, onRuleUpdated, onRuleDeleted }: ServicePanelProps) {
+function ServicePanel({ config, rules, onConfigUpdated, onRuleAdded, onRuleUpdated, onRuleDeleted }: ServicePanelProps) {
   const [expanded,    setExpanded]    = useState(true)
   const [ruleDialog,  setRuleDialog]  = useState(false)
+  const [configDialog,setConfigDialog]= useState(false)
   const [editingRule, setEditingRule] = useState<NotificationRule | null>(null)
   const [deleteTarget,setDeleteTarget]= useState<NotificationRule | null>(null)
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
@@ -429,6 +675,35 @@ function ServicePanel({ config, rules, onRuleAdded, onRuleUpdated, onRuleDeleted
     onRuleDeleted(rule.id)
     setDeleteTarget(null)
     showToast('ok', `已删除「${rule.name}」`)
+  }
+
+  const handleConfigSave = async (form: ConfigForm) => {
+    await notificationApi.updateConfig(config.service, form)
+    onConfigUpdated({
+      ...config,
+      ...form,
+      smtp_password_set: config.smtp_password_set || !!form.smtp_password,
+      updated_at: new Date().toISOString(),
+    })
+    showToast('ok', `${config.display_name} 渠道配置已保存`)
+  }
+
+  const handleServiceFeishuTest = async () => {
+    await notificationApi.testFeishu(config.service)
+    showToast('ok', `${config.display_name} 飞书测试已发送`)
+  }
+
+  const handleServiceSmtpTest = async () => {
+    await notificationApi.testSmtp(config.service)
+    showToast('ok', `${config.display_name} 邮件测试已发送`)
+  }
+
+  const handleRuleTest = async (rule: NotificationRule) => {
+    const res = await notificationApi.testRule(rule.id)
+    const parts: string[] = []
+    if (res.results.feishu) parts.push(`飞书${res.results.feishu.success ? '成功' : '失败'}`)
+    if (res.results.smtp) parts.push(`邮件${res.results.smtp.success ? '成功' : '失败'}`)
+    showToast(res.success ? 'ok' : 'err', `「${rule.name}」测试：${parts.join(' / ')}`)
   }
 
   const feishuActive = config.feishu_enabled && !!config.feishu_webhook
@@ -467,6 +742,21 @@ function ServicePanel({ config, rules, onRuleAdded, onRuleUpdated, onRuleDeleted
             <Badge variant="outline" className="text-[10px] h-5 px-1.5">{enabledCount}/{rules.length}</Badge>
           </div>
         </div>
+        <span
+          role="button"
+          tabIndex={0}
+          className="inline-flex items-center h-7 px-2 text-xs mr-1 rounded-md hover:bg-muted/40"
+          onClick={(e) => { e.stopPropagation(); setConfigDialog(true) }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              e.stopPropagation()
+              setConfigDialog(true)
+            }
+          }}
+        >
+          <Settings2 className="w-3.5 h-3.5 mr-1" />渠道配置
+        </span>
         {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
       </button>
 
@@ -484,9 +774,12 @@ function ServicePanel({ config, rules, onRuleAdded, onRuleUpdated, onRuleDeleted
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
               {rules.map(rule => (
                 <RuleKpiCard key={rule.id} rule={rule}
+                  feishuReady={feishuActive}
+                  smtpReady={smtpActive}
                   onUpdated={onRuleUpdated}
                   onDelete={setDeleteTarget}
                   onEdit={r => { setEditingRule(r); setRuleDialog(true) }}
+                  onTest={handleRuleTest}
                 />
               ))}
             </div>
@@ -503,6 +796,15 @@ function ServicePanel({ config, rules, onRuleAdded, onRuleUpdated, onRuleDeleted
 
       <RuleDialog open={ruleDialog} service={config.service} editing={editingRule}
         onOpenChange={setRuleDialog} onSave={handleRuleSave} />
+
+      <ConfigDialog
+        open={configDialog}
+        config={config}
+        onOpenChange={setConfigDialog}
+        onSave={handleConfigSave}
+        onTestFeishu={handleServiceFeishuTest}
+        onTestSmtp={handleServiceSmtpTest}
+      />
 
       <Dialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-xs">
@@ -575,7 +877,7 @@ export function NotificationsCard() {
             <p className="text-xs text-muted-foreground mt-0.5">
               点击卡片开启/关闭通知；点击
               <MessageSquare className="inline w-3 h-3 mx-0.5" />飞书 /
-              <Mail className="inline w-3 h-3 mx-0.5" />邮件 标签独立控制渠道
+              <Mail className="inline w-3 h-3 mx-0.5" />邮件 标签独立控制渠道；右上角可配置渠道并逐条测试
             </p>
           </div>
           <Button variant="ghost" size="icon" className="h-7 w-7"
@@ -600,6 +902,7 @@ export function NotificationsCard() {
         </div>
         {configs.map(cfg => (
           <ServicePanel key={cfg.service} config={cfg} rules={rulesFor(cfg.service)}
+            onConfigUpdated={config => setConfigs(prev => prev.map(c => c.service === config.service ? config : c))}
             onRuleAdded={rule  => setRules(prev => [...prev, rule])}
             onRuleUpdated={rule => setRules(prev => prev.map(r => r.id === rule.id ? rule : r))}
             onRuleDeleted={id  => setRules(prev => prev.filter(r => r.id !== id))}

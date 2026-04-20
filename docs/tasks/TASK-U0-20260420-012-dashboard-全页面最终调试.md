@@ -143,11 +143,22 @@ NEXT_PUBLIC_BACKTEST_URL=http://192.168.31.245:8103
 | KPI 加 glass-card | `kpi-card.tsx`、`data-quality-kpi.tsx`、`data-source-health-kpi.tsx`、`decision/overview.tsx` | 所有 KPI Card 加 `glass-card` |
 | 橙色呼吸增强 | `animated-grid-bg.tsx` | `BASE_A 0.05→0.07`，`SHIMMER_A 0.18→0.28`，`PULSE_PROB 0.025→0.04`，光晕强度 +60% |
 
-### 验证结果（2026-04-20 最终）
-- ✅ `pnpm build` 通过（exit 0）
-- ✅ dev server 就绪（Ready in 3.5s，无 Error 日志）
-- ✅ `/login` → HTTP 200，HTML 含 `AnimatedGridBg` + `scan-line`
-- ✅ `/` → HTTP 307 重定向 `/login`（中间件认证正常）
+### 编译错误修复（2026-04-21，commit da2e4f05）
+
+| 修改类别 | 文件 | 问题 | 修复方案 |
+|---------|------|------|---------|
+| 移除未使用导入 | `app/(dashboard)/settings/page.tsx` | ESLint：`Switch` imported but never used | 删除 `import { Switch }`  |
+| 移除未使用变量 | `app/(dashboard)/settings/page.tsx` | ESLint：`saving` assigned but never used | 删除 `const [saving, setSaving]` |
+| 移除未使用函数 | `app/(dashboard)/settings/page.tsx` | ESLint：`handleTradingToggle` / `handleNotificationSave` never used | 删除两个函数定义（setSaving 已删） |
+| 修复导入 | `components/settings/trading-sessions-card.tsx` | ESLint：`CardDescription` imported but never used | 删除 `CardDescription` from import |
+| 修复类型错误 | `components/settings/notifications-card.tsx` | TS：`trigger_type: string` 不匹配 API 期望的 `TriggerType` | 定义 `type TriggerType = 'realtime' \| 'scheduled' \| 'daily_summary'`；在 setForm 时强制转换 `k as TriggerType` |
+| 编译成功 | `dashboard_web/` | pnpm build 全部通过 | ✅ Build 成功，生成 .next 产物 |
+
+### 验证结果（2026-04-21 最终）
+- ✅ `pnpm build` 通过（exit 0，28 个页面 Route 无报错）
+- ✅ 本地 `pnpm dev` 启动成功（Ready in 1926ms，port 3005）
+- ✅ 前端重定向登录正常（curl http://localhost:3005 → /login?from=%2F）
+- ✅ **白屏已修复**：编译错误排除，前端服务正常运行
 - ✅ 无白屏风险（auth/layout.tsx 无 flex 嵌套，login 有 Suspense 包裹）
 
 ### Git 备份
@@ -177,6 +188,28 @@ NEXT_PUBLIC_BACKTEST_URL=http://192.168.31.245:8103
 ### 本轮回滚点
 - 修复前备份 commit: `b06c8dc18`
 - 修复前 tag: `backup-dashboard-header-align-20260420-*`
+
+### 通知配置系统 + 交易控制对接真实 sim-trading（2026-04-21，commit e5cdcba59）
+
+| 修改类别 | 文件 | 内容 |
+|---------|------|------|
+| 通知配置组件 | `components/settings/notifications-card.tsx` | 新增 646 行；4服务分栏（折叠式），飞书 Webhook + 邮件 SMTP 独立配置，通知规则 CRUD，7色 color picker |
+| 后端通知 API | `src/main.py` | 新增 `notification_configs`（4条种子） + `notification_rules`（15条种子）表；7个 REST 端点（CRUD + testFeishu） |
+| Settings API 类型 | `lib/api/settings.ts` | 新增 `simControlApi`、`notificationApi`、`ServiceNotifConfig`、`NotificationRule` |
+| 交易控制连接真实服务 | `components/settings/trading-sessions-card.tsx` | 从真实 Alienware sim-trading 读取 `trading_enabled`，在线/离线状态指示灯；`saveAll()` 调用真实 pause/resume |
+| sim-trading 代理路由 | `app/api/sim-control/route.ts` | Next.js 服务端代理，注入 `X-API-Key`（不暴露到浏览器） |
+| 设置页通知 Tab | `app/(dashboard)/settings/page.tsx` | 通知 Tab 替换为 `<NotificationsCard />` |
+
+### 本轮验证（2026-04-21）
+- ✅ `pnpm tsc --noEmit` 零错误
+- ✅ 后端 `notification_configs` API 返回 4 个服务配置（backtest/data/decision/sim-trading）
+- ✅ 后端 `notification_rules` API 返回 15 条种子规则
+- ✅ sim-trading 真实接口代理路由已就绪（等待 Alienware 上线验证 pause/resume）
+- ✅ `.env.local` DATA_URL 已修正为 `192.168.31.74`（Mini 实际 IP）
+
+### 本轮回滚点
+- commit: `e5cdcba59`
+- branch: `backup-settings-p0p1-20260420-193000`
 
 ## 验收标准
 

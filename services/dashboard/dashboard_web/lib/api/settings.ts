@@ -176,11 +176,25 @@ function getDashboardHeaders(): HeadersInit {
   return h
 }
 
+function clearDashboardSession() {
+  if (typeof window === "undefined") return
+  localStorage.removeItem("jbt_token")
+  localStorage.removeItem("jbt_user")
+  document.cookie = "jbt_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax"
+}
+
 async function dashFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${DASHBOARD_BASE}${path}`, {
     ...init,
     headers: { ...getDashboardHeaders(), ...(init?.headers ?? {}) },
   })
+  if (res.status === 401) {
+    clearDashboardSession()
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.href = "/login"
+    }
+    throw new Error("会话已过期，请重新登录")
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error((err as { detail?: string }).detail ?? "Request failed")
@@ -278,8 +292,22 @@ export interface NotificationRule {
   enabled: boolean
   feishu_enabled: boolean
   smtp_enabled: boolean
+  trigger_type: "realtime" | "scheduled" | "daily_summary"
+  daily_limit: number
+  time_window: string
+  schedule_times: string
   sort_order: number
   created_at: string
+}
+
+export interface NotificationRuleTestResult {
+  success: boolean
+  rule_id: number
+  rule_name: string
+  results: {
+    feishu?: { success: boolean; detail?: string; response?: unknown }
+    smtp?: { success: boolean; detail?: string }
+  }
 }
 
 export const notificationApi = {
@@ -306,8 +334,18 @@ export const notificationApi = {
       method: "POST",
     }),
 
+  testSmtp: (service: string) =>
+    dashFetch<{ success: boolean }>(`/notifications/configs/${service}/test-smtp`, {
+      method: "POST",
+    }),
+
   listRules: (service?: string) =>
     dashFetch<NotificationRule[]>(`/notifications/rules${service ? `?service=${service}` : ""}`),
+
+  testRule: (id: number) =>
+    dashFetch<NotificationRuleTestResult>(`/notifications/rules/${id}/test`, {
+      method: "POST",
+    }),
 
   createRule: (data: Omit<NotificationRule, "id" | "sort_order" | "created_at">) =>
     dashFetch<{ id: number; success: boolean }>("/notifications/rules", {

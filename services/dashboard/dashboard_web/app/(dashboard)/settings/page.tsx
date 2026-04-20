@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -333,7 +332,6 @@ export default function SettingsPage() {
   const { user: currentUser, isAdmin, logout } = useAuth();
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
 
@@ -370,25 +368,6 @@ export default function SettingsPage() {
     loadSettings();
     loadUsers();
   }, [loadSettings, loadUsers]);
-
-  const handleTradingToggle = async (key: string, value: boolean) => {
-    if (!settings) return;
-    setSettings({ ...settings, trading: { ...settings.trading, [key]: value } });
-  };
-
-  const handleNotificationSave = async () => {
-    if (!settings) return;
-    setSaving(true);
-    try {
-      await settingsApi.updateNotifications(settings.notifications);
-      alert('通知配置已保存');
-    } catch (err) {
-      console.error('Failed to save notifications:', err);
-      alert('保存失败');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleServiceRestart = async (serviceName: string) => {
     try {

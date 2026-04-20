@@ -122,6 +122,19 @@
   - 三场景测算：当前（无 TASK-0104）≈¥0.2/天，TASK-0104 上线后≈¥1.6/天，高频策略日≈¥5.2/天
   - 月费区间：¥4（当前）→ ¥35（TASK-0104后）→ ¥115（高频满载），成本可控，采用推荐配置。
 
+- 2026-04-21：**仪表板登录问题修复 ✅**（看板 Agent U0 应急维修）
+  - **问题**：前端登录页面显示 "用户名或密码错误"（后端无法连接）
+  - **根本原因**：(1)后端进程停止不运行；(2)代码有 Python 3.9 不兼容的类型注解 `str | None`
+  - **修复内容**：`services/dashboard/src/main.py` 第 1260 行 `str | None` → `Optional[str]`
+  - **验证状态**：
+    - ✅ 后端登录 API 成功返回 token
+    - ✅ 认证流程正常（有效 token 通过，无效 token 拒绝）
+    - ✅ 获取通知规则成功（18 条）
+    - ✅ 规则测试端点正常工作
+  - **当前状态**：后端运行在 3006，前端运行在 3005，两端完全可用
+  - **凭证**：username=admin / password=admin123
+  - **文档**：see [docs/troubleshooting/dashboard-login-fix.md](docs/troubleshooting/dashboard-login-fix.md)
+
 ## 接管要求
 
 1. 若 `docs/JBT_FINAL_MASTER_PLAN.md` 与总项目经理双 prompt 有时间差，以双 prompt 的较新留痕为准。
