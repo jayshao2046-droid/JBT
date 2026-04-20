@@ -51,10 +51,10 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex dark">
+    <div className="min-h-screen flex dark w-full">
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-neutral-900 via-neutral-950 to-neutral-900 relative overflow-hidden">
         <div className="relative z-10 flex flex-col justify-center px-16">
-          <h1 className="text-2xl font-bold text-white tracking-wide mb-8">JBT 量化研究室</h1>
+          <h1 className="text-2xl font-bold tracking-wide mb-8"><span className="text-orange-500">JBT</span> <span className="text-white">量化研究室</span></h1>
 
           <h2 className="text-4xl font-bold text-white mb-4 leading-tight">
             专业量化交易
