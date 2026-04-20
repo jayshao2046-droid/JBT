@@ -63,7 +63,7 @@ async def test_sla_style():
             "header": {
                 "title": {
                     "tag": "plain_text",
-                    "content": "JBQ SLA 日报 — 🟢 全部正常"
+                    "content": "JBT SLA 日报 — 🟢 全部正常"
                 },
                 "template": "blue"
             },
