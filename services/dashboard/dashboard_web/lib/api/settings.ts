@@ -276,6 +276,8 @@ export interface NotificationRule {
   color: "red" | "orange" | "yellow" | "grey" | "blue" | "wathet" | "turquoise"
   content_template: string
   enabled: boolean
+  feishu_enabled: boolean
+  smtp_enabled: boolean
   sort_order: number
   created_at: string
 }

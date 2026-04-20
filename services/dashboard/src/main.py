@@ -247,11 +247,19 @@ def init_db():
             color TEXT NOT NULL DEFAULT 'turquoise',
             content_template TEXT NOT NULL DEFAULT '',
             enabled INTEGER NOT NULL DEFAULT 1,
+            feishu_enabled INTEGER NOT NULL DEFAULT 1,
+            smtp_enabled INTEGER NOT NULL DEFAULT 1,
             sort_order INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
     """)
+    # 迁移：为已存在的数据库加上新列（幂等）
+    for col, default in [("feishu_enabled", 1), ("smtp_enabled", 1)]:
+        try:
+            cursor.execute(f"ALTER TABLE notification_rules ADD COLUMN {col} INTEGER NOT NULL DEFAULT {default}")
+        except sqlite3.OperationalError:
+            pass  # 列已存在
 
     # 种子：各服务默认通知配置
     cursor.execute("SELECT COUNT(*) FROM notification_configs")
@@ -269,29 +277,31 @@ def init_db():
         now_str = datetime.now().isoformat()
         default_rules = [
             # sim-trading
-            ("sim-trading", "CTP 断线告警",   "alarm_p1", "orange",    "CTP 连接中断: {reason}",        1, 0),
-            ("sim-trading", "强制平仓告警",   "alarm_p0", "red",       "触发强制平仓: {reason}",        1, 1),
-            ("sim-trading", "成交回报",       "trade",    "grey",      "订单成交: {symbol} {volume}手", 1, 2),
-            ("sim-trading", "系统启停",       "notify",   "turquoise", "服务启动/停止通知",             1, 3),
-            ("sim-trading", "日报汇总",       "info",     "blue",      "每日交易汇总报告",              1, 4),
+            ("sim-trading", "CTP 断线告警",   "alarm_p1", "orange",    "CTP 连接中断: {reason}",        1, 1, 1, 0),
+            ("sim-trading", "强制平仓告警",   "alarm_p0", "red",       "触发强制平仓: {reason}\n持仓: {positions}", 1, 1, 1, 1),
+            ("sim-trading", "风控告警",       "alarm_p2", "yellow",    "风控预警: {rule} 当前值 {value}", 1, 1, 1, 2),
+            ("sim-trading", "成交回报",       "trade",    "grey",      "订单成交: {symbol} {direction} {volume}手 @ {price}", 1, 1, 0, 3),
+            ("sim-trading", "系统启停通知",   "notify",   "turquoise", "服务 {action}: {service_name} at {time}", 1, 1, 0, 4),
+            ("sim-trading", "日报汇总",       "info",     "blue",      "今日交易汇总\n盈亏: {pnl}\n成交: {trades}笔\n胜率: {win_rate}", 1, 1, 1, 5),
             # data
-            ("data", "采集失败告警",  "alarm_p1", "orange",    "数据采集器异常: {collector}",   1, 0),
-            ("data", "新闻推送",      "news",     "wathet",    "财经新闻推送: {title}",         1, 1),
-            ("data", "采集器状态",    "notify",   "turquoise", "采集器运行状态更新",             1, 2),
-            ("data", "日报汇总",      "info",     "blue",      "数据采集日报",                  1, 3),
+            ("data", "采集失败告警",  "alarm_p1", "orange",    "数据采集器异常: {collector}\n错误: {error}",   1, 1, 1, 0),
+            ("data", "存储空间预警",  "alarm_p2", "yellow",    "存储空间不足: {path} 剩余 {free_gb}GB",       1, 1, 0, 1),
+            ("data", "新闻推送",      "news",     "wathet",    "[{source}] {title}\n{summary}",               1, 1, 0, 2),
+            ("data", "采集器状态",   "notify",   "turquoise", "采集器 {name} 状态: {status}\n延迟: {delay}s",1, 1, 0, 3),
+            ("data", "日报汇总",      "info",     "blue",      "数据采集日报\n成功: {ok}条 失败: {fail}条",   1, 1, 1, 4),
             # decision
-            ("decision", "策略信号生成", "info",     "blue",      "信号生成: {strategy} {symbol}", 1, 0),
-            ("decision", "LLM 分析完成", "info",     "blue",      "研究员分析报告完成",            1, 1),
-            ("decision", "风控告警",     "alarm_p1", "orange",    "决策风控预警: {reason}",       1, 2),
-            ("decision", "信号审批",     "notify",   "turquoise", "待审批信号通知",               1, 3),
+            ("decision", "策略信号生成", "info",     "blue",      "信号生成: {strategy} {symbol} {direction}\n置信度: {confidence}", 1, 1, 0, 0),
+            ("decision", "LLM 分析完成", "info",     "blue",      "研究员分析报告: {title}\n评分: {score}",     1, 1, 0, 1),
+            ("decision", "风控告警",     "alarm_p1", "orange",    "决策风控预警: {reason}\n触发规则: {rule}",   1, 1, 1, 2),
+            ("decision", "信号待审批",   "notify",   "turquoise", "待审批信号: {strategy} {symbol}\n强度: {strength}", 1, 1, 0, 3),
             # backtest
-            ("backtest", "回测完成",     "notify", "turquoise", "回测任务完成: {task_id}", 1, 0),
-            ("backtest", "回测失败",     "alarm_p1", "orange",  "回测任务异常: {reason}", 1, 1),
-            ("backtest", "参数优化完成", "info",   "blue",      "参数优化结果: {task_id}", 1, 2),
+            ("backtest", "回测完成",     "notify", "turquoise", "回测完成: {task_name}\n收益率: {return_pct}% 最大回撤: {max_dd}%", 1, 1, 0, 0),
+            ("backtest", "回测失败",     "alarm_p1", "orange",  "回测异常: {task_name}\n错误: {error}",         1, 1, 0, 1),
+            ("backtest", "参数优化完成", "info",   "blue",      "参数优化完成: {task_name}\n最优参数: {params}", 1, 1, 0, 2),
         ]
         cursor.executemany(
-            "INSERT INTO notification_rules (service,name,rule_type,color,content_template,enabled,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
-            [(s, n, rt, c, ct, e, so, now_str, now_str) for s, n, rt, c, ct, e, so in default_rules]
+            "INSERT INTO notification_rules (service,name,rule_type,color,content_template,enabled,feishu_enabled,smtp_enabled,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            [(s, n, rt, c, ct, e, fe, se, so, now_str, now_str) for s, n, rt, c, ct, e, fe, se, so in default_rules]
         )
 
 
@@ -826,6 +836,8 @@ class NotificationRuleRequest(BaseModel):
     color: str = "turquoise"
     content_template: str = ""
     enabled: bool = True
+    feishu_enabled: bool = True
+    smtp_enabled: bool = True
 
 
 def _row_to_config(row: tuple) -> dict:
@@ -946,13 +958,13 @@ async def list_notification_rules(
     cursor = conn.cursor()
     if service:
         cursor.execute(
-            "SELECT id,service,name,rule_type,color,content_template,enabled,sort_order,created_at "
+            "SELECT id,service,name,rule_type,color,content_template,enabled,feishu_enabled,smtp_enabled,sort_order,created_at "
             "FROM notification_rules WHERE service=? ORDER BY sort_order,id",
             (service,)
         )
     else:
         cursor.execute(
-            "SELECT id,service,name,rule_type,color,content_template,enabled,sort_order,created_at "
+            "SELECT id,service,name,rule_type,color,content_template,enabled,feishu_enabled,smtp_enabled,sort_order,created_at "
             "FROM notification_rules ORDER BY service,sort_order,id"
         )
     rows = cursor.fetchall()
@@ -960,7 +972,8 @@ async def list_notification_rules(
     return [
         {"id": r[0], "service": r[1], "name": r[2], "rule_type": r[3],
          "color": r[4], "content_template": r[5], "enabled": bool(r[6]),
-         "sort_order": r[7], "created_at": r[8]}
+         "feishu_enabled": bool(r[7]), "smtp_enabled": bool(r[8]),
+         "sort_order": r[9], "created_at": r[10]}
         for r in rows
     ]
 
@@ -980,10 +993,11 @@ async def create_notification_rule(
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO notification_rules (service,name,rule_type,color,content_template,enabled,sort_order,created_at,updated_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO notification_rules (service,name,rule_type,color,content_template,enabled,feishu_enabled,smtp_enabled,sort_order,created_at,updated_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (req.service, req.name, req.rule_type, req.color, req.content_template,
-         1 if req.enabled else 0, 99, now, now)
+         1 if req.enabled else 0, 1 if req.feishu_enabled else 0, 1 if req.smtp_enabled else 0,
+         99, now, now)
     )
     rule_id = cursor.lastrowid
     conn.commit()
@@ -1004,9 +1018,10 @@ async def update_notification_rule(
         conn.close()
         raise HTTPException(status_code=404, detail="规则不存在")
     cursor.execute(
-        "UPDATE notification_rules SET name=?,rule_type=?,color=?,content_template=?,enabled=?,updated_at=? WHERE id=?",
+        "UPDATE notification_rules SET name=?,rule_type=?,color=?,content_template=?,enabled=?,feishu_enabled=?,smtp_enabled=?,updated_at=? WHERE id=?",
         (req.name, req.rule_type, req.color, req.content_template,
-         1 if req.enabled else 0, datetime.now().isoformat(), rule_id)
+         1 if req.enabled else 0, 1 if req.feishu_enabled else 0, 1 if req.smtp_enabled else 0,
+         datetime.now().isoformat(), rule_id)
     )
     conn.commit()
     conn.close()
