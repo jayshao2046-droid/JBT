@@ -86,7 +86,7 @@ export default function NewsFeed() {
       case "negative":
         return <TrendingDown className="w-4 h-4 text-red-500" />
       case "neutral":
-        return <Minus className="w-4 h-4 text-neutral-500" />
+        return <Minus className="w-4 h-4 text-muted-foreground" />
     }
   }
 
@@ -97,7 +97,7 @@ export default function NewsFeed() {
       case "negative":
         return "border-red-500/30 bg-red-500/10"
       case "neutral":
-        return "border-neutral-500/30 bg-neutral-500/10"
+        return "border-border bg-muted/30"
     }
   }
 
@@ -106,14 +106,14 @@ export default function NewsFeed() {
   if (isLoading) {
     return (
       <div className="p-6 space-y-6">
-        <Skeleton className="h-12 w-64 bg-neutral-800" />
+        <Skeleton className="h-12 w-64" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
             {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-32 bg-neutral-800" />
+              <Skeleton key={i} className="h-32" />
             ))}
           </div>
-          <Skeleton className="h-[600px] bg-neutral-800" />
+          <Skeleton className="h-[600px]" />
         </div>
       </div>
     )
@@ -121,33 +121,33 @@ export default function NewsFeed() {
 
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col">
-      <div className="p-4 border-b border-neutral-800 bg-neutral-900/50">
+      <div className="p-4 border-b border-border bg-card/50">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">新闻资讯</h1>
-            <p className="text-sm text-neutral-400 mt-1">实时财经资讯聚合与情绪观测</p>
+            <h1 className="text-2xl font-bold text-foreground">新闻资讯</h1>
+            <p className="text-sm text-muted-foreground mt-1">实时财经资讯聚合与情绪观测</p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1 bg-neutral-800 rounded-lg p-1">
-              <button onClick={() => setTimeRange("1h")} className={`px-3 py-1 text-xs rounded ${timeRange === "1h" ? "bg-orange-500 text-white" : "text-neutral-400 hover:text-white"}`}>
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+              <button onClick={() => setTimeRange("1h")} className={`px-3 py-1 text-xs rounded ${timeRange === "1h" ? "bg-orange-500 text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 1小时
               </button>
-              <button onClick={() => setTimeRange("6h")} className={`px-3 py-1 text-xs rounded ${timeRange === "6h" ? "bg-orange-500 text-white" : "text-neutral-400 hover:text-white"}`}>
+              <button onClick={() => setTimeRange("6h")} className={`px-3 py-1 text-xs rounded ${timeRange === "6h" ? "bg-orange-500 text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 6小时
               </button>
-              <button onClick={() => setTimeRange("24h")} className={`px-3 py-1 text-xs rounded ${timeRange === "24h" ? "bg-orange-500 text-white" : "text-neutral-400 hover:text-white"}`}>
+              <button onClick={() => setTimeRange("24h")} className={`px-3 py-1 text-xs rounded ${timeRange === "24h" ? "bg-orange-500 text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 24小时
               </button>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-neutral-400">仅看重大</span>
+              <span className="text-muted-foreground">仅看重大</span>
               <Switch checked={showImportantOnly} onCheckedChange={setShowImportantOnly} className="data-[state=checked]:bg-orange-500" />
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-neutral-400">自动滚动</span>
+              <span className="text-muted-foreground">自动滚动</span>
               <Switch checked={autoScroll} onCheckedChange={setAutoScroll} className="data-[state=checked]:bg-orange-500" />
             </div>
-            <Button variant="outline" size="sm" onClick={fetchData} className="border-neutral-700 text-neutral-300">
+            <Button variant="outline" size="sm" onClick={fetchData}>
               <RefreshCw className="w-4 h-4 mr-2" />
               刷新
             </Button>
@@ -168,7 +168,7 @@ export default function NewsFeed() {
               key={source}
               onClick={() => setSelectedSource(source)}
               className={`px-3 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors ${
-                selectedSource === source ? "bg-orange-500 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700"
+                selectedSource === source ? "bg-orange-500 text-white" : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
               }`}
             >
               {source}
@@ -176,8 +176,8 @@ export default function NewsFeed() {
           ))}
           <div className="ml-auto">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-              <Input placeholder="搜索关键词..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 w-64 h-9 bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input placeholder="搜索关键词..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 w-64 h-9" />
             </div>
           </div>
         </div>
@@ -187,40 +187,40 @@ export default function NewsFeed() {
         <div className="flex-1 flex flex-col min-w-0">
           <ScrollArea className="flex-1 p-4">
             {fetchError ? (
-              <div className="flex flex-col items-center justify-center py-20 text-neutral-500">
+              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                 <AlertCircle className="w-10 h-10 mb-3 text-red-500/60" />
                 <p className="text-sm">数据加载失败，请稍后重试</p>
-                <Button variant="outline" size="sm" onClick={fetchData} className="mt-4 border-neutral-700 text-neutral-400">
+                <Button variant="outline" size="sm" onClick={fetchData} className="mt-4">
                   重新加载
                 </Button>
               </div>
             ) : filteredNews.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-neutral-500">
-                <MessageSquare className="w-10 h-10 mb-3 text-neutral-600" />
+              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                <MessageSquare className="w-10 h-10 mb-3 text-muted-foreground/50" />
                 <p className="text-sm">暂无新闻数据</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {filteredNews.map((news) => (
-                  <Card key={news.id} className="bg-neutral-900 border-neutral-800 hover:border-neutral-700 transition-all cursor-pointer">
+                  <Card key={news.id} className="hover:border-orange-500/30 transition-all cursor-pointer">
                     <CardContent className="p-4">
                       <div className="flex items-start gap-3">
                         <div className={`flex-shrink-0 p-2 rounded-lg border ${getSentimentColor(news.sentiment)}`}>{getSentimentIcon(news.sentiment)}</div>
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-2">
-                            <h3 className="text-sm font-medium text-white leading-tight">{news.title}</h3>
+                            <h3 className="text-sm font-medium text-foreground leading-tight">{news.title}</h3>
                             {news.is_important && <Star className="w-4 h-4 text-yellow-500 flex-shrink-0" />}
                           </div>
 
-                          <p className="text-xs text-neutral-400 line-clamp-2 mb-2">{news.summary}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{news.summary}</p>
 
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-xs border-neutral-700 text-neutral-400">
+                              <Badge variant="outline" className="text-xs">
                                 {news.source}
                               </Badge>
-                              <span className="text-xs text-neutral-500 flex items-center gap-1">
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
                                 {news.publish_time}
                               </span>
@@ -230,7 +230,7 @@ export default function NewsFeed() {
                                 <Badge
                                   key={keyword}
                                   variant="outline"
-                                  className="text-xs border-neutral-700 text-neutral-500 bg-neutral-800/50 cursor-pointer hover:bg-neutral-700 hover:text-orange-400 transition-colors"
+                                  className="text-xs cursor-pointer hover:text-orange-400 transition-colors"
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     setSelectedKeyword(keyword)
@@ -252,31 +252,31 @@ export default function NewsFeed() {
           </ScrollArea>
         </div>
 
-        <div className="w-80 border-l border-neutral-800 bg-neutral-900/50 flex flex-col">
+        <div className="w-80 border-l border-border bg-card/50 flex flex-col">
           <ScrollArea className="flex-1">
-            <div className="p-4 border-b border-neutral-800">
-              <h3 className="text-sm font-medium text-neutral-300 uppercase tracking-wider mb-4 flex items-center gap-2">
+            <div className="p-4 border-b border-border">
+              <h3 className="text-sm font-medium text-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                 <Activity className="w-4 h-4 text-orange-500" />
                 情绪分布
               </h3>
               {sentimentDist.length === 0 ? (
-                <p className="text-xs text-neutral-500">暂无数据</p>
+                <p className="text-xs text-muted-foreground">暂无数据</p>
               ) : (
                 <div className="space-y-3">
                   {sentimentDist.map((bucket) => {
                     const pct = sentimentTotal > 0 ? Math.round((bucket.count / sentimentTotal) * 100) : 0
                     const label = bucket.sentiment === "positive" ? "正面" : bucket.sentiment === "negative" ? "负面" : "中性"
-                    const color = bucket.sentiment === "positive" ? "text-green-400" : bucket.sentiment === "negative" ? "text-red-400" : "text-neutral-400"
+                    const color = bucket.sentiment === "positive" ? "text-green-500" : bucket.sentiment === "negative" ? "text-red-500" : "text-muted-foreground"
                     return (
                       <div key={bucket.sentiment}>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-neutral-400">{label}</span>
+                          <span className="text-xs text-muted-foreground">{label}</span>
                           <div className="flex items-center gap-2">
                             <span className={`text-sm font-bold ${color}`}>{bucket.count}</span>
-                            <span className="text-xs text-neutral-500">{pct}%</span>
+                            <span className="text-xs text-muted-foreground">{pct}%</span>
                           </div>
                         </div>
-                        <Progress value={pct} className="h-2 bg-neutral-800" />
+                        <Progress value={pct} className="h-2" />
                       </div>
                     )
                   })}
@@ -284,28 +284,28 @@ export default function NewsFeed() {
               )}
             </div>
 
-            <div className="p-4 border-b border-neutral-800">
+            <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-neutral-300 uppercase tracking-wider flex items-center gap-2">
+                <h3 className="text-sm font-medium text-foreground uppercase tracking-wider flex items-center gap-2">
                   <Zap className="w-4 h-4 text-orange-500" />
                   关键词热度榜
                 </h3>
               </div>
               {hotKeywords.length === 0 ? (
-                <p className="text-xs text-neutral-500">暂无热词数据</p>
+                <p className="text-xs text-muted-foreground">暂无热词数据</p>
               ) : (
                 <div className="space-y-2">
                   {hotKeywords.map((item, index) => (
                     <div
                       key={item.word}
-                      className="flex items-center justify-between p-2 bg-neutral-800/50 rounded-lg hover:bg-neutral-800 transition-colors cursor-pointer"
+                      className="flex items-center justify-between p-2 bg-muted/50 rounded-lg hover:bg-muted transition-colors cursor-pointer"
                       onClick={() => setSelectedKeyword(item.word)}
                     >
                       <div className="flex items-center gap-3">
-                        <span className={`w-5 h-5 rounded text-xs font-bold flex items-center justify-center ${index < 3 ? "bg-orange-500 text-white" : "bg-neutral-700 text-neutral-400"}`}>{index + 1}</span>
-                        <span className="text-sm text-white">{item.word}</span>
+                        <span className={`w-5 h-5 rounded text-xs font-bold flex items-center justify-center ${index < 3 ? "bg-orange-500 text-white" : "bg-muted-foreground/20 text-muted-foreground"}`}>{index + 1}</span>
+                        <span className="text-sm text-foreground">{item.word}</span>
                       </div>
-                      <span className="text-xs text-neutral-400 font-mono">{item.count}</span>
+                      <span className="text-xs text-muted-foreground font-mono">{item.count}</span>
                     </div>
                   ))}
                 </div>
@@ -313,22 +313,22 @@ export default function NewsFeed() {
             </div>
 
             <div className="p-4">
-              <h3 className="text-sm font-medium text-neutral-300 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <h3 className="text-sm font-medium text-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                 <Send className="w-4 h-4 text-orange-500" />
                 推送记录
               </h3>
               {pushRecords.length === 0 ? (
-                <p className="text-xs text-neutral-500">暂无推送记录</p>
+                <p className="text-xs text-muted-foreground">暂无推送记录</p>
               ) : (
                 <div className="space-y-3">
                   {pushRecords.map((record, index) => (
-                    <div key={index} className="p-3 bg-neutral-800/50 rounded-lg border border-neutral-800">
-                      <p className="text-sm text-white line-clamp-1 mb-2">{record.title}</p>
+                    <div key={index} className="p-3 bg-muted/50 rounded-lg border border-border">
+                      <p className="text-sm text-foreground line-clamp-1 mb-2">{record.title}</p>
                       <div className="flex items-center justify-between text-xs">
                         <Badge variant="outline" className="border-green-500/30 text-green-400">
                           {record.source}
                         </Badge>
-                        <span className="text-neutral-500">{record.time}</span>
+                        <span className="text-muted-foreground">{record.time}</span>
                       </div>
                     </div>
                   ))}
