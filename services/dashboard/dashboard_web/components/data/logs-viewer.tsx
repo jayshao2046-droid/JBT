@@ -183,7 +183,7 @@ export function LogsViewer() {
                 </Badge>
 
                 {/* 日志消息 */}
-                <span className="text-foreground/80 break-words flex-1 line-clamp-2">
+                <span className="text-foreground/80 truncate flex-1">
                   {formatLogMessage(
                     log.message.replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[,.]\d+\s+-\s+\S+\s+-\s+\w+\s+-\s+/, "")
                   )}
