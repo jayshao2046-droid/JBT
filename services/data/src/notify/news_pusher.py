@@ -168,7 +168,17 @@ class NewsPusher:
 
     @staticmethod
     def _normalize_record(record: dict[str, Any]) -> dict[str, Any] | None:
-        payload = record.get("payload") if isinstance(record.get("payload"), dict) else None
+        # 处理 payload：可能是字典或 JSON 字符串
+        payload_raw = record.get("payload")
+        payload = None
+        if isinstance(payload_raw, dict):
+            payload = payload_raw
+        elif isinstance(payload_raw, str):
+            try:
+                payload = json.loads(payload_raw)
+            except (json.JSONDecodeError, TypeError):
+                payload = None
+        
         source_name = str(record.get("source") or record.get("symbol_or_indicator") or "")
         if payload is not None:
             source_name = str(payload.get("source") or payload.get("provider") or payload.get("feed") or source_name)
