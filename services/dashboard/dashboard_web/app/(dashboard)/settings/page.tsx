@@ -22,6 +22,7 @@ import { PermissionsDialog } from '@/components/settings/permissions-dialog';
 import { TradingSessionsCard } from '@/components/settings/trading-sessions-card';
 import { TradingCalendarCard } from '@/components/settings/trading-calendar-card';
 import { NotificationsCard } from '@/components/settings/notifications-card';
+import { ServicesKpiCard } from '@/components/settings/services-kpi-card';
 import {
   Trash2,
   UserPlus,
@@ -369,6 +370,7 @@ export default function SettingsPage() {
     loadUsers();
   }, [loadSettings, loadUsers]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleServiceRestart = async (serviceName: string) => {
     try {
       await settingsApi.restartService(serviceName);
@@ -609,52 +611,7 @@ export default function SettingsPage() {
 
         {/* 服务管理 Tab */}
         <TabsContent value="services" className="space-y-4">
-          <Card className="bg-transparent backdrop-blur-sm border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground">服务管理</CardTitle>
-              <CardDescription className="text-muted-foreground">管理各个服务的运行状态</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {settings.services.map((service) => (
-                <div key={service.name} className="flex items-center justify-between p-3 rounded-lg border border-border">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-2 h-2 rounded-full ${
-                        service.status === 'running'
-                          ? 'bg-green-500'
-                          : service.status === 'stopped'
-                          ? 'bg-yellow-500'
-                          : 'bg-red-500'
-                      }`}
-                    />
-                    <div>
-                      <p className="text-foreground font-medium text-sm">{service.name}</p>
-                      <p
-                        className={`text-xs ${
-                          service.status === 'running'
-                            ? 'text-green-500'
-                            : service.status === 'stopped'
-                            ? 'text-yellow-500'
-                            : 'text-red-500'
-                        }`}
-                      >
-                        {service.status === 'running' ? '运行中' : service.status === 'stopped' ? '已停止' : '错误'}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleServiceRestart(service.name)}
-                    className="gap-2"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    重启
-                  </Button>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          <ServicesKpiCard />
         </TabsContent>
       </Tabs>
 

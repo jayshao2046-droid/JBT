@@ -1,119 +1,189 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Progress } from "@/components/ui/progress"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Search,
   RefreshCw,
   TrendingUp,
-  TrendingDown,
-  Minus,
-  Clock,
-  Send,
-  Star,
   AlertCircle,
-  Zap,
   MessageSquare,
-  Activity,
+  ExternalLink,
+  Globe,
+  Rss,
+  Clock,
+  BarChart2,
 } from "lucide-react"
-import { dataApi, NewsItem, HotKeyword, PushRecord, SentimentBucket } from "@/lib/api/data"
+import { dataApi, NewsApiRecord, RssRecord, SentimentRecord } from "@/lib/api/data"
 
-type SentimentDirection = "positive" | "negative" | "neutral"
+// ── 统一条目结构 ─────────────────────────────────────────────
+interface FeedItem {
+  uid: string
+  source: string
+  feed: string
+  title: string
+  summary: string
+  url: string | null
+  timestamp: string
+  type: "news_api" | "rss"
+  mode: string
+}
+
+function toFeedItem(r: NewsApiRecord): FeedItem {
+  return {
+    uid: r.uid,
+    source: r.source,
+    feed: r.source,
+    title: r.title || "(无标题)",
+    summary: r.content?.slice(0, 200) || "",
+    url: r.url || null,
+    timestamp: r.timestamp,
+    type: "news_api",
+    mode: r.mode,
+  }
+}
+
+function rssToFeedItem(r: RssRecord): FeedItem {
+  return {
+    uid: r.uid,
+    source: r.indicator,
+    feed: r.feed || r.indicator,
+    title: r.title || "(无标题)",
+    summary: r.summary?.slice(0, 200) || r.full_text?.slice(0, 200) || "",
+    url: r.link || null,
+    timestamp: r.timestamp,
+    type: "rss",
+    mode: r.mode,
+  }
+}
+
+function fmtTime(ts: string): string {
+  try {
+    const d = new Date(ts)
+    if (isNaN(d.getTime())) return ts.slice(0, 16)
+    const now = new Date()
+    const diffMs = now.getTime() - d.getTime()
+    const diffH = diffMs / (1000 * 60 * 60)
+    if (diffH < 1) return `${Math.round(diffMs / 60000)}分钟前`
+    if (diffH < 24) return `${Math.round(diffH)}小时前`
+    return d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
+  } catch {
+    return ts.slice(0, 16)
+  }
+}
+
+function SentimentPanel({ records }: { records: SentimentRecord[] }) {
+  const latest = useMemo(() => {
+    const map = new Map<string, SentimentRecord>()
+    for (const r of records) {
+      const existing = map.get(r.indicator + "_" + r.item)
+      if (!existing || r.timestamp > existing.timestamp) map.set(r.indicator + "_" + r.item, r)
+    }
+    return Array.from(map.values()).slice(0, 10)
+  }, [records])
+
+  return (
+    <div className="space-y-1.5">
+      {latest.length === 0 ? (
+        <p className="text-xs text-muted-foreground py-2">暂无情绪数据</p>
+      ) : (
+        latest.map((r) => (
+          <div key={r.indicator + r.item + r.timestamp} className="flex items-center justify-between px-2.5 py-1.5 rounded-md bg-muted/30">
+            <span className="text-xs text-muted-foreground truncate max-w-[110px]">
+              {r.item || r.indicator}
+            </span>
+            <span className={`text-xs font-mono font-semibold ${
+              r.item === "上涨" || r.item === "涨停" ? "text-green-400" :
+              r.item === "下跌" || r.item === "跌停" ? "text-red-400" : "text-foreground"
+            }`}>
+              {r.value != null ? r.value.toLocaleString() : "—"}
+            </span>
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
+type TabType = "all" | "news_api" | "rss"
 
 export default function NewsFeed() {
-  const [selectedSource, setSelectedSource] = useState("全部")
+  const [tab, setTab] = useState<TabType>("all")
   const [searchTerm, setSearchTerm] = useState("")
-  const [showImportantOnly, setShowImportantOnly] = useState(false)
-  const [autoScroll, setAutoScroll] = useState(true)
+  const [selectedSource, setSelectedSource] = useState("全部")
   const [isLoading, setIsLoading] = useState(true)
-  const [timeRange, setTimeRange] = useState<"1h" | "6h" | "24h">("24h")
-  const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null)
-
-  const [newsItems, setNewsItems] = useState<NewsItem[]>([])
-  const [hotKeywords, setHotKeywords] = useState<HotKeyword[]>([])
-  const [pushRecords, setPushRecords] = useState<PushRecord[]>([])
-  const [sentimentDist, setSentimentDist] = useState<SentimentBucket[]>([])
-  const [sources, setSources] = useState<string[]>(["全部"])
   const [fetchError, setFetchError] = useState(false)
 
-  const fetchData = async () => {
+  const [newsApiItems, setNewsApiItems] = useState<FeedItem[]>([])
+  const [rssItems, setRssItems] = useState<FeedItem[]>([])
+  const [sentimentRecords, setSentimentRecords] = useState<SentimentRecord[]>([])
+  const [lastUpdate, setLastUpdate] = useState("")
+
+  const fetchData = useCallback(async () => {
     setIsLoading(true)
     setFetchError(false)
     try {
-      const data = await dataApi.getNews()
-      setNewsItems(data.items)
-      setHotKeywords(data.hot_keywords ?? [])
-      setPushRecords(data.push_records ?? [])
-      setSentimentDist(data.sentiment_distribution ?? [])
-      setSources(["全部", ...(data.source_breakdown ?? []).map((s) => s.source)])
+      const [naRes, rssRes, sentRes] = await Promise.all([
+        dataApi.getNewsApiContext().catch(() => ({ records: [] as NewsApiRecord[], count: 0, data_type: "" })),
+        dataApi.getRssContext().catch(() => ({ records: [] as RssRecord[], count: 0, data_type: "" })),
+        dataApi.getSentimentContext().catch(() => ({ records: [] as SentimentRecord[], count: 0, data_type: "" })),
+      ])
+      setNewsApiItems(naRes.records.map(toFeedItem))
+      setRssItems(rssRes.records.map(rssToFeedItem))
+      setSentimentRecords(sentRes.records)
+      setLastUpdate(new Date().toLocaleTimeString("zh-CN"))
     } catch {
       setFetchError(true)
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     fetchData()
-  }, [])
+    const t = setInterval(fetchData, 60000)
+    return () => clearInterval(t)
+  }, [fetchData])
 
-  const filteredNews = newsItems.filter((news) => {
-    const matchSource = selectedSource === "全部" || news.source === selectedSource
-    const matchSearch = news.title.toLowerCase().includes(searchTerm.toLowerCase()) || news.keywords.some((k) => k.toLowerCase().includes(searchTerm.toLowerCase()))
-    const matchImportant = !showImportantOnly || news.is_important
-    const matchKeyword = !selectedKeyword || news.keywords.includes(selectedKeyword)
+  const allItems = useMemo(() => {
+    const base = tab === "news_api" ? newsApiItems : tab === "rss" ? rssItems : [...newsApiItems, ...rssItems]
+    return [...base].sort((a, b) => {
+      try { return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime() }
+      catch { return 0 }
+    })
+  }, [tab, newsApiItems, rssItems])
 
-    // 时间范围过滤
-    const now = new Date()
-    const publishTime = new Date(news.publish_time)
-    const hoursDiff = (now.getTime() - publishTime.getTime()) / (1000 * 60 * 60)
-    const matchTime = timeRange === "24h" ? hoursDiff <= 24 : timeRange === "6h" ? hoursDiff <= 6 : hoursDiff <= 1
+  const sources = useMemo(() => {
+    const s = new Set(allItems.map(i => i.feed))
+    return ["全部", ...Array.from(s).sort()]
+  }, [allItems])
 
-    return matchSource && matchSearch && matchImportant && matchKeyword && matchTime
-  })
-
-  const getSentimentIcon = (sentiment: SentimentDirection) => {
-    switch (sentiment) {
-      case "positive":
-        return <TrendingUp className="w-4 h-4 text-green-500" />
-      case "negative":
-        return <TrendingDown className="w-4 h-4 text-red-500" />
-      case "neutral":
-        return <Minus className="w-4 h-4 text-muted-foreground" />
-    }
-  }
-
-  const getSentimentColor = (sentiment: SentimentDirection) => {
-    switch (sentiment) {
-      case "positive":
-        return "border-green-500/30 bg-green-500/10"
-      case "negative":
-        return "border-red-500/30 bg-red-500/10"
-      case "neutral":
-        return "border-border bg-muted/30"
-    }
-  }
-
-  const sentimentTotal = sentimentDist.reduce((sum, b) => sum + b.count, 0)
+  const filtered = useMemo(() => {
+    return allItems.filter(item => {
+      if (selectedSource !== "全部" && item.feed !== selectedSource) return false
+      if (searchTerm) {
+        const q = searchTerm.toLowerCase()
+        if (!item.title.toLowerCase().includes(q) && !item.summary.toLowerCase().includes(q) && !item.feed.toLowerCase().includes(q)) return false
+      }
+      return true
+    })
+  }, [allItems, selectedSource, searchTerm])
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6">
-        <Skeleton className="h-12 w-64" />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-32" />
-            ))}
+      <div className="p-6 space-y-4">
+        <Skeleton className="h-10 w-64" />
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <div className="lg:col-span-3 space-y-3">
+            {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-24" />)}
           </div>
-          <Skeleton className="h-[600px]" />
+          <Skeleton className="h-96" />
         </div>
       </div>
     )
@@ -121,219 +191,191 @@ export default function NewsFeed() {
 
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col">
-      <div className="p-4 border-b border-border bg-card/50">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+      {/* ── 顶栏 ─────────────────────────────────────────────── */}
+      <div className="px-5 py-3 border-b border-border bg-card/50 space-y-3">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">新闻资讯</h1>
-            <p className="text-sm text-muted-foreground mt-1">实时财经资讯聚合与情绪观测</p>
+            <h1 className="text-xl font-bold text-foreground">新闻资讯</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              news_api {newsApiItems.length} 条 · RSS {rssItems.length} 条
+              {lastUpdate && ` · 更新于 ${lastUpdate}`}
+            </p>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-              <button onClick={() => setTimeRange("1h")} className={`px-3 py-1 text-xs rounded ${timeRange === "1h" ? "bg-orange-500 text-white" : "text-muted-foreground hover:text-foreground"}`}>
-                1小时
-              </button>
-              <button onClick={() => setTimeRange("6h")} className={`px-3 py-1 text-xs rounded ${timeRange === "6h" ? "bg-orange-500 text-white" : "text-muted-foreground hover:text-foreground"}`}>
-                6小时
-              </button>
-              <button onClick={() => setTimeRange("24h")} className={`px-3 py-1 text-xs rounded ${timeRange === "24h" ? "bg-orange-500 text-white" : "text-muted-foreground hover:text-foreground"}`}>
-                24小时
-              </button>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">仅看重大</span>
-              <Switch checked={showImportantOnly} onCheckedChange={setShowImportantOnly} className="data-[state=checked]:bg-orange-500" />
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">自动滚动</span>
-              <Switch checked={autoScroll} onCheckedChange={setAutoScroll} className="data-[state=checked]:bg-orange-500" />
-            </div>
-            <Button variant="outline" size="sm" onClick={fetchData}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              刷新
-            </Button>
-          </div>
+          <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5">
+            <RefreshCw className="w-3.5 h-3.5" />
+            刷新
+          </Button>
         </div>
 
-        <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2">
-          {selectedKeyword && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Tabs value={tab} onValueChange={v => { setTab(v as TabType); setSelectedSource("全部") }}>
+            <TabsList className="h-8 bg-muted/50">
+              <TabsTrigger value="all" className="h-6 text-xs">全部 ({newsApiItems.length + rssItems.length})</TabsTrigger>
+              <TabsTrigger value="news_api" className="h-6 text-xs gap-1">
+                <Globe className="w-3 h-3" />新闻 API ({newsApiItems.length})
+              </TabsTrigger>
+              <TabsTrigger value="rss" className="h-6 text-xs gap-1">
+                <Rss className="w-3 h-3" />RSS ({rssItems.length})
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              placeholder="搜索标题/来源..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="pl-8 h-8 text-xs"
+            />
+          </div>
+          <span className="text-xs text-muted-foreground">{filtered.length} 条</span>
+        </div>
+
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+          {sources.slice(0, 20).map(src => (
             <button
-              onClick={() => setSelectedKeyword(null)}
-              className="px-3 py-1.5 text-sm rounded-lg whitespace-nowrap bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30 transition-colors"
-            >
-              ✕ {selectedKeyword}
-            </button>
-          )}
-          {sources.map((source) => (
-            <button
-              key={source}
-              onClick={() => setSelectedSource(source)}
-              className={`px-3 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors ${
-                selectedSource === source ? "bg-orange-500 text-white" : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
+              key={src}
+              onClick={() => setSelectedSource(src)}
+              className={`px-2.5 py-1 text-xs rounded-md whitespace-nowrap transition-colors flex-shrink-0 ${
+                selectedSource === src
+                  ? "bg-orange-500 text-white"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
               }`}
             >
-              {source}
+              {src}
             </button>
           ))}
-          <div className="ml-auto">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="搜索关键词..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 w-64 h-9" />
-            </div>
-          </div>
+          {sources.length > 20 && (
+            <span className="text-xs text-muted-foreground flex-shrink-0">+{sources.length - 20}</span>
+          )}
         </div>
       </div>
 
+      {/* ── 主体 ─────────────────────────────────────────────── */}
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 flex flex-col min-w-0">
-          <ScrollArea className="flex-1 p-4">
+        <ScrollArea className="flex-1">
+          <div className="p-4 space-y-2.5">
             {fetchError ? (
               <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                 <AlertCircle className="w-10 h-10 mb-3 text-red-500/60" />
-                <p className="text-sm">数据加载失败，请稍后重试</p>
-                <Button variant="outline" size="sm" onClick={fetchData} className="mt-4">
-                  重新加载
-                </Button>
+                <p className="text-sm">数据加载失败</p>
+                <Button variant="outline" size="sm" onClick={fetchData} className="mt-3">重试</Button>
               </div>
-            ) : filteredNews.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-                <MessageSquare className="w-10 h-10 mb-3 text-muted-foreground/50" />
-                <p className="text-sm">暂无新闻数据</p>
+                <MessageSquare className="w-10 h-10 mb-3 opacity-40" />
+                <p className="text-sm">暂无数据</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {filteredNews.map((news) => (
-                  <Card key={news.id} className="hover:border-orange-500/30 transition-all cursor-pointer">
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className={`flex-shrink-0 p-2 rounded-lg border ${getSentimentColor(news.sentiment)}`}>{getSentimentIcon(news.sentiment)}</div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <h3 className="text-sm font-medium text-foreground leading-tight">{news.title}</h3>
-                            {news.is_important && <Star className="w-4 h-4 text-yellow-500 flex-shrink-0" />}
-                          </div>
-
-                          <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{news.summary}</p>
-
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-xs">
-                                {news.source}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {news.publish_time}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {news.keywords.slice(0, 3).map((keyword) => (
-                                <Badge
-                                  key={keyword}
-                                  variant="outline"
-                                  className="text-xs cursor-pointer hover:text-orange-400 transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setSelectedKeyword(keyword)
-                                  }}
-                                >
-                                  {keyword}
-                                </Badge>
-                              ))}
-                              {news.is_pushed && <Send className="w-3 h-3 text-green-500" />}
-                            </div>
-                          </div>
+              filtered.map(item => (
+                <Card key={item.uid} className="hover:border-orange-500/30 transition-colors">
+                  <CardContent className="p-3.5">
+                    <div className="flex items-start gap-3">
+                      <div className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center mt-0.5 ${
+                        item.type === "news_api" ? "bg-blue-500/15" : "bg-orange-500/15"
+                      }`}>
+                        {item.type === "news_api"
+                          ? <Globe className="w-3.5 h-3.5 text-blue-400" />
+                          : <Rss className="w-3.5 h-3.5 text-orange-400" />
+                        }
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start gap-2 mb-1">
+                          <h3 className="text-sm font-medium text-foreground leading-snug flex-1 min-w-0">
+                            {item.url ? (
+                              <a
+                                href={item.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-orange-400 transition-colors"
+                              >
+                                {item.title}
+                                <ExternalLink className="w-3 h-3 inline-block ml-1 opacity-50" />
+                              </a>
+                            ) : item.title}
+                          </h3>
+                        </div>
+                        {item.summary && (
+                          <p className="text-xs text-muted-foreground line-clamp-2 mb-2 leading-relaxed">
+                            {item.summary}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                            {item.feed}
+                          </Badge>
+                          {item.mode === "mock" && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-yellow-500/40 text-yellow-500">
+                              模拟
+                            </Badge>
+                          )}
+                          <span className="text-[10px] text-muted-foreground flex items-center gap-1 ml-auto">
+                            <Clock className="w-2.5 h-2.5" />
+                            {fmtTime(item.timestamp)}
+                          </span>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
             )}
-          </ScrollArea>
-        </div>
+          </div>
+        </ScrollArea>
 
-        <div className="w-80 border-l border-border bg-card/50 flex flex-col">
-          <ScrollArea className="flex-1">
-            <div className="p-4 border-b border-border">
-              <h3 className="text-sm font-medium text-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Activity className="w-4 h-4 text-orange-500" />
-                情绪分布
-              </h3>
-              {sentimentDist.length === 0 ? (
-                <p className="text-xs text-muted-foreground">暂无数据</p>
-              ) : (
-                <div className="space-y-3">
-                  {sentimentDist.map((bucket) => {
-                    const pct = sentimentTotal > 0 ? Math.round((bucket.count / sentimentTotal) * 100) : 0
-                    const label = bucket.sentiment === "positive" ? "正面" : bucket.sentiment === "negative" ? "负面" : "中性"
-                    const color = bucket.sentiment === "positive" ? "text-green-500" : bucket.sentiment === "negative" ? "text-red-500" : "text-muted-foreground"
-                    return (
-                      <div key={bucket.sentiment}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-muted-foreground">{label}</span>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-sm font-bold ${color}`}>{bucket.count}</span>
-                            <span className="text-xs text-muted-foreground">{pct}%</span>
-                          </div>
-                        </div>
-                        <Progress value={pct} className="h-2" />
-                      </div>
-                    )
-                  })}
+        {/* ── 右侧情绪面板 ──────────────────────────────────── */}
+        <div className="w-56 flex-shrink-0 border-l border-border bg-card/50">
+          <ScrollArea className="h-full">
+            <div className="p-4 space-y-5">
+              <div>
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5 flex items-center gap-1">
+                  <BarChart2 className="w-3 h-3" />数据来源
+                </p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between px-2.5 py-1.5 rounded-md bg-blue-500/10 border border-blue-500/20">
+                    <span className="text-xs text-blue-400 flex items-center gap-1">
+                      <Globe className="w-3 h-3" />新闻 API
+                    </span>
+                    <span className="text-xs font-mono font-bold text-blue-400">{newsApiItems.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-2.5 py-1.5 rounded-md bg-orange-500/10 border border-orange-500/20">
+                    <span className="text-xs text-orange-400 flex items-center gap-1">
+                      <Rss className="w-3 h-3" />RSS
+                    </span>
+                    <span className="text-xs font-mono font-bold text-orange-400">{rssItems.length}</span>
+                  </div>
                 </div>
-              )}
-            </div>
-
-            <div className="p-4 border-b border-border">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-foreground uppercase tracking-wider flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-orange-500" />
-                  关键词热度榜
-                </h3>
               </div>
-              {hotKeywords.length === 0 ? (
-                <p className="text-xs text-muted-foreground">暂无热词数据</p>
-              ) : (
-                <div className="space-y-2">
-                  {hotKeywords.map((item, index) => (
-                    <div
-                      key={item.word}
-                      className="flex items-center justify-between p-2 bg-muted/50 rounded-lg hover:bg-muted transition-colors cursor-pointer"
-                      onClick={() => setSelectedKeyword(item.word)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className={`w-5 h-5 rounded text-xs font-bold flex items-center justify-center ${index < 3 ? "bg-orange-500 text-white" : "bg-muted-foreground/20 text-muted-foreground"}`}>{index + 1}</span>
-                        <span className="text-sm text-foreground">{item.word}</span>
-                      </div>
-                      <span className="text-xs text-muted-foreground font-mono">{item.count}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
-            <div className="p-4">
-              <h3 className="text-sm font-medium text-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Send className="w-4 h-4 text-orange-500" />
-                推送记录
-              </h3>
-              {pushRecords.length === 0 ? (
-                <p className="text-xs text-muted-foreground">暂无推送记录</p>
-              ) : (
-                <div className="space-y-3">
-                  {pushRecords.map((record, index) => (
-                    <div key={index} className="p-3 bg-muted/50 rounded-lg border border-border">
-                      <p className="text-sm text-foreground line-clamp-1 mb-2">{record.title}</p>
-                      <div className="flex items-center justify-between text-xs">
-                        <Badge variant="outline" className="border-green-500/30 text-green-400">
-                          {record.source}
-                        </Badge>
-                        <span className="text-muted-foreground">{record.time}</span>
+              <div>
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5 flex items-center gap-1">
+                  <TrendingUp className="w-3 h-3" />市场情绪
+                </p>
+                <SentimentPanel records={sentimentRecords} />
+              </div>
+
+              <div>
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">
+                  热门来源
+                </p>
+                {(() => {
+                  const cnt = new Map<string, number>()
+                  allItems.forEach(i => cnt.set(i.feed, (cnt.get(i.feed) ?? 0) + 1))
+                  return Array.from(cnt.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 8)
+                    .map(([feed, count]) => (
+                      <div
+                        key={feed}
+                        className="flex items-center justify-between px-2 py-1 rounded hover:bg-muted/40 cursor-pointer transition-colors"
+                        onClick={() => setSelectedSource(feed)}
+                      >
+                        <span className="text-[11px] text-muted-foreground truncate max-w-[110px]">{feed}</span>
+                        <span className="text-[11px] font-mono text-foreground ml-1">{count}</span>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))
+                })()}
+              </div>
             </div>
           </ScrollArea>
         </div>

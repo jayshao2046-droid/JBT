@@ -232,4 +232,136 @@ export const dataApi = {
     if (!res.ok) throw new Error("Failed to fetch health")
     return res.json()
   },
+
+  // ── Context APIs ─────────────────────────────────────────
+  async getContext<T = unknown>(type: string): Promise<{ data_type: string; records: T[]; count: number }> {
+    const res = await fetch(`${BASE_URL}/context/${type}`)
+    if (!res.ok) throw new Error(`Failed to fetch context/${type}`)
+    return res.json()
+  },
+
+  async getNewsApiContext(): Promise<{ data_type: string; records: NewsApiRecord[]; count: number }> {
+    const res = await fetch(`${BASE_URL}/context/news_api`)
+    if (!res.ok) throw new Error("Failed to fetch context/news_api")
+    return res.json()
+  },
+
+  async getRssContext(): Promise<{ data_type: string; records: RssRecord[]; count: number }> {
+    const res = await fetch(`${BASE_URL}/context/rss`)
+    if (!res.ok) throw new Error("Failed to fetch context/rss")
+    return res.json()
+  },
+
+  async getSentimentContext(): Promise<{ data_type: string; records: SentimentRecord[]; count: number }> {
+    const res = await fetch(`${BASE_URL}/context/sentiment`)
+    if (!res.ok) throw new Error("Failed to fetch context/sentiment")
+    return res.json()
+  },
+
+  async getMacroContext(): Promise<{ data_type: string; records: MacroRecord[]; count: number }> {
+    const res = await fetch(`${BASE_URL}/context/macro`)
+    if (!res.ok) throw new Error("Failed to fetch context/macro")
+    return res.json()
+  },
+
+  async getVolatilityContext(): Promise<{ data_type: string; records: VolatilityRecord[]; count: number }> {
+    const res = await fetch(`${BASE_URL}/context/volatility`)
+    if (!res.ok) throw new Error("Failed to fetch context/volatility")
+    return res.json()
+  },
+
+  async getForexContext(): Promise<{ data_type: string; records: ForexRecord[]; count: number }> {
+    const res = await fetch(`${BASE_URL}/context/forex`)
+    if (!res.ok) throw new Error("Failed to fetch context/forex")
+    return res.json()
+  },
+
+  async getShippingContext(): Promise<{ data_type: string; records: ShippingRecord[]; count: number }> {
+    const res = await fetch(`${BASE_URL}/context/shipping`)
+    if (!res.ok) throw new Error("Failed to fetch context/shipping")
+    return res.json()
+  },
+
+  async getCftcContext(): Promise<{ data_type: string; records: CftcRecord[]; count: number }> {
+    const res = await fetch(`${BASE_URL}/context/cftc`)
+    if (!res.ok) throw new Error("Failed to fetch context/cftc")
+    return res.json()
+  },
+}
+
+// ── Context Record Types ─────────────────────────────────────
+export interface NewsApiRecord {
+  indicator: string
+  timestamp: string
+  title: string
+  url: string
+  content: string
+  source: string
+  uid: string
+  mode: string
+}
+
+export interface RssRecord {
+  indicator: string
+  timestamp: string
+  title: string
+  link: string
+  summary: string
+  full_text: string
+  feed: string
+  uid: string
+  mode: string
+}
+
+export interface SentimentRecord {
+  indicator: string
+  timestamp: string
+  item: string
+  value: number
+  mode: string
+}
+
+export interface MacroRecord {
+  indicator: string
+  timestamp: string
+  country: string
+  value: number
+  forecast: number | null
+  previous: number | null
+  mode: string
+}
+
+export interface VolatilityRecord {
+  indicator: string
+  timestamp: string
+  close: number
+  high: number
+  low: number
+  open: number
+  volume: number | null
+  mode: string
+}
+
+export interface ForexRecord {
+  indicator: string
+  timestamp: string
+  bid_close: number
+  pair: string
+  mode: string
+}
+
+export interface ShippingRecord {
+  indicator: string
+  timestamp: string
+  value: number
+  change_pct: number
+  mode: string
+}
+
+export interface CftcRecord {
+  indicator: string
+  timestamp: string
+  net: number
+  report_type: string
+  mode: string
 }
