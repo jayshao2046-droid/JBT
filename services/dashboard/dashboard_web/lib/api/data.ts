@@ -195,6 +195,31 @@ export interface NewsResponse {
   sentiment_distribution: SentimentBucket[]
 }
 
+export interface LogsResponse {
+  total: number
+  logs: LogEntry[]
+  source: string
+  generated_at: string
+}
+
+export interface CollectorResult {
+  name: string
+  count: number
+  duration?: number
+  status: "success" | "failed"
+  message: string
+}
+
+export interface CollectorResultsResponse {
+  generated_at: string
+  summary: {
+    total: number
+    success: number
+    failed: number
+  }
+  collectors: Record<string, CollectorResult>
+}
+
 export const dataApi = {
   async getCollectors(): Promise<CollectorsResponse> {
     const res = await fetch(`${BASE_URL}/dashboard/collectors`)
@@ -219,6 +244,18 @@ export const dataApi = {
   async getNews(): Promise<NewsResponse> {
     const res = await fetch(`${BASE_URL}/dashboard/news`)
     if (!res.ok) throw new Error("Failed to fetch news")
+    return res.json()
+  },
+
+  async getLogs(limit: number = 200): Promise<LogsResponse> {
+    const res = await fetch(`${BASE_URL}/dashboard/logs?limit=${limit}`)
+    if (!res.ok) throw new Error("Failed to fetch logs")
+    return res.json()
+  },
+
+  async getCollectorResults(): Promise<CollectorResultsResponse> {
+    const res = await fetch(`${BASE_URL}/dashboard/collector-results`)
+    if (!res.ok) throw new Error("Failed to fetch collector results")
     return res.json()
   },
 

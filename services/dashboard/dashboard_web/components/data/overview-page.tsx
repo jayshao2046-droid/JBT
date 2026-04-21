@@ -22,7 +22,8 @@ import {
   ArrowDownCircle,
 } from "lucide-react"
 import { collectorDisplayName } from "@/lib/collector-labels"
-import { dataApi, CollectorSummary, CollectorItem, ResourceCpu, ResourceMem, ResourceDisk, ResourceNetwork, LogEntry } from "@/lib/api/data"
+import { dataApi, CollectorSummary, CollectorItem, ResourceCpu, ResourceMem, ResourceDisk, ResourceNetwork, LogEntry, CollectorResultsResponse } from "@/lib/api/data"
+import { LogsViewer } from "./logs-viewer"
 
 const STATUS_DOT: Record<string, string> = {
   success: "bg-green-500",
@@ -47,10 +48,15 @@ export default function OverviewPage() {
   const [disk, setDisk] = useState<ResourceDisk | null>(null)
   const [net, setNet] = useState<ResourceNetwork | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [collectorResults, setCollectorResults] = useState<CollectorResultsResponse | null>(null)
 
   const fetchData = useCallback(async () => {
     try {
-      const [cR, sR] = await Promise.all([dataApi.getCollectors(), dataApi.getSystem()])
+      const [cR, sR, crR] = await Promise.all([
+        dataApi.getCollectors(), 
+        dataApi.getSystem(),
+        dataApi.getCollectorResults(),
+      ])
       setSummary(cR.summary)
       setItems(cR.collectors ?? [])
       setCpu(sR.resources?.cpu ?? null)
@@ -58,6 +64,7 @@ export default function OverviewPage() {
       setDisk(sR.resources?.disk ?? null)
       setNet(sR.resources?.network ?? null)
       setLogs((sR.logs ?? []).slice(-12))
+      setCollectorResults(crR)
       setFetchError(false)
     } catch {
       setFetchError(true)
@@ -144,6 +151,40 @@ export default function OverviewPage() {
         ))}
       </div>
 
+      {/* 第3排：最新采集结果（实时数据，不是 mock）*/}
+      <div className="grid grid-cols-4 gap-3">
+        {collectorResults && Object.values(collectorResults.collectors).slice(0, 4).map((collector, idx) => (
+          <Card key={collector.name}>
+            <CardContent className="p-3 flex flex-col items-center text-center">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${collector.status === "success" ? "bg-green-500/10" : "bg-red-500/10"}`}>
+                {collector.status === "success" ? (
+                  <CheckCircle className={`w-4 h-4 ${collector.status === "success" ? "text-green-500" : "text-red-500"}`} />
+                ) : (
+                  <XCircle className="w-4 h-4 text-red-500" />
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground truncate">{collector.name}</p>
+              <p className={`text-lg font-bold font-mono ${collector.status === "success" ? "text-green-400" : "text-red-400"}`}>
+                {collector.count > 0 ? `${collector.count}` : "—"}
+              </p>
+              {collector.duration && (
+                <p className="text-[9px] text-muted-foreground mt-0.5">{collector.duration.toFixed(2)}s</p>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+        {/* 如果采集结果少于4个，补充空白卡片 */}
+        {collectorResults && Object.values(collectorResults.collectors).length < 4 && 
+          Array(4 - Object.values(collectorResults.collectors).length).fill(null).map((_, idx) => (
+            <Card key={`empty-${idx}`}>
+              <CardContent className="p-3 flex flex-col items-center text-center justify-center h-24">
+                <p className="text-xs text-muted-foreground">暂无数据</p>
+              </CardContent>
+            </Card>
+          ))
+        }
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
@@ -178,43 +219,6 @@ export default function OverviewPage() {
             )}
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
-                <FileText className="w-4 h-4 text-orange-500" />
-                近期日志
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {logs.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">暂无日志</p>
-            ) : (
-              <div className="space-y-2">
-                {logs
-                  .slice()
-                  .reverse()
-                  .map((l, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap mt-0.5">{l.timestamp ? l.timestamp.slice(11, 19) : ""}</span>
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] px-1 py-0 flex-shrink-0 ${
-                          l.level === "ERROR" ? "border-red-500/50 text-red-400" : l.level === "WARNING" ? "border-yellow-500/50 text-yellow-400" : "border-blue-500/50 text-blue-400"
-                        }`}
-                      >
-                        {l.level}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground break-all">
-                        {l.message.replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[,.]\d+\s+-\s+\S+\s+-\s+\w+\s+-\s+/, "")}
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -234,6 +238,10 @@ export default function OverviewPage() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      <div className="mt-8">
+        <LogsViewer />
       </div>
     </div>
   )

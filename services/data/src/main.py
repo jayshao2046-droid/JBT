@@ -1056,6 +1056,61 @@ def _sanitize_log_message(line: str) -> str:
     return _truncate_text(sanitized, limit=400)
 
 
+def _get_latest_collector_results() -> dict[str, Any]:
+    """从日志中提取最后的采集结果（实时数据，不是 mock）"""
+    path = _dashboard_scheduler_log_path()
+    if not path.exists():
+        return {"collectors": {}, "total_today": 0, "success_today": 0}
+    
+    try:
+        lines = [line.strip() for line in path.read_text(encoding="utf-8", errors="ignore").splitlines() if line.strip()]
+    except Exception:
+        return {"collectors": {}, "total_today": 0, "success_today": 0}
+    
+    # 从最新的日志向后查找，提取每个采集器的最后一次执行结果
+    collectors: dict[str, dict[str, Any]] = {}
+    success_count = 0
+    failed_count = 0
+    
+    # 反向遍历，找到最新的采集完成记录
+    for line in reversed(lines[-500:]):  # 只查看最后500行
+        # 匹配采集完成的行：✅ 新闻API 完成: 111 条记录, 耗时 0.85s
+        if "✅" in line and "完成:" in line:
+            # 提取采集器名称和结果数
+            match = re.search(r"✅\s+(.+?)\s+完成:\s+(\d+)\s+条记录.*耗时\s+([\d.]+)s", line)
+            if match:
+                name, count, duration = match.groups()
+                if name not in collectors:  # 只保存最新的（最后遇到的）
+                    collectors[name] = {
+                        "name": name,
+                        "count": int(count),
+                        "duration": float(duration),
+                        "status": "success",
+                        "message": line,
+                    }
+                    success_count += 1
+        # 匹配采集失败的行：❌ 采集器名称 失败
+        elif "❌" in line and "失败" in line:
+            match = re.search(r"❌\s+(.+?)\s+失败", line)
+            if match:
+                name = match.group(1)
+                if name not in collectors:
+                    collectors[name] = {
+                        "name": name,
+                        "count": 0,
+                        "status": "failed",
+                        "message": line,
+                    }
+                    failed_count += 1
+    
+    return {
+        "collectors": collectors,
+        "total": len(collectors),
+        "success": success_count,
+        "failed": failed_count,
+    }
+
+
 def _process_entries(resources: dict[str, Any], snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     scheduler_log = _dashboard_scheduler_log_path()
     scheduler_heartbeat = _timestamp_to_iso(scheduler_log.stat().st_mtime) if scheduler_log.exists() else None
@@ -1530,6 +1585,33 @@ def dashboard_storage(
         },
         "directories": entries,
         "tree": tree,
+    }
+
+
+@app.get("/api/v1/dashboard/logs")
+def dashboard_logs(limit: int = Query(200, ge=1, le=500)) -> dict[str, Any]:
+    """获取采集日志（从 scheduler.log 读取，按时间倒序）"""
+    entries = _recent_log_entries(limit=limit)
+    return {
+        "total": len(entries),
+        "logs": entries,
+        "source": "scheduler",
+        "generated_at": _now_iso(),
+    }
+
+
+@app.get("/api/v1/dashboard/collector-results")
+def dashboard_collector_results() -> dict[str, Any]:
+    """获取最新的采集结果（从日志实时解析，不是 mock）"""
+    results = _get_latest_collector_results()
+    return {
+        "generated_at": _now_iso(),
+        "summary": {
+            "total": results.get("total", 0),
+            "success": results.get("success", 0),
+            "failed": results.get("failed", 0),
+        },
+        "collectors": results.get("collectors", {}),
     }
 
 
