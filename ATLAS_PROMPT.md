@@ -711,3 +711,16 @@ Mini 采集 → context API (/api/v1/context/macro,volatility,shipping,sentiment
 | Studio decision:8104 | FEISHU_WEBHOOK_URL ✅ | EMAIL_SMTP_* ✅ | ✅ |
 | Studio dashboard:8106 | DB(4 svcs) ✅ | DB(4 svcs) ✅ | ✅ |
 | Studio backtest:8103 | via dashboard API | via dashboard API | ✅ |
+
+## 最近动作（补录 2026-04-21 — P3 守护巡检启动）
+
+- 2026-04-21：**P3 系统守护巡检已启动开发 ✅**
+  - 已完成收口：Studio `JBT-DECISION-8104` 容器重启并验证 `/health -> ok`
+  - 已完成收口：Alienware `sim-trading:8101` 新 PID `275376` 监听，服务健康 `{"status":"ok"}`
+  - 已完成同步：`services/decision/.env`、`services/data/.env` 已再次 rsync 到 Studio
+  - GitHub `origin` 当前网络不可达：`Failed to connect to github.com port 443`，本轮未继续强推，避免在脏工作区上做不安全推送
+  - 分支备份已完成：`git push mini backup-settings-p0p1-20260420-193000` 成功，Mini 远端已保存同名分支
+  - 新增治理文件：`governance/scripts/jbt_service_guardian.py`、`governance/scripts/install_jbt_service_guardian.sh`、`governance/launchagents/com.jbt.service_guardian.plist`
+  - P3 第一版范围：MacBook launchd 每 60 秒巡检 `data/sim-trading/researcher/decision/dashboard/backtest` 六个核心 API 端点
+  - 通知策略：连续失败 2 次后发飞书 + 邮件 P1 告警；恢复后发 NOTIFY 恢复通知；配置直接读取本地现有 `.env`
+  - 验证结果：dry-run 巡检 6/6 全绿；LaunchAgent `com.jbt.service_guardian` 已安装并成功运行 1 次；状态文件 `~/jbt-governance/state/jbt_service_guardian.json` 已写出
