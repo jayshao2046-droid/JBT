@@ -98,6 +98,7 @@
   - TASK-0079 decision_web 功能页扩容（tok-0ca581e2 / decision / 6文件 / 480min）
   - TASK-0079-N Navbar导航补充（tok-60c4ba0a / decision / 1文件 / 480min）
   - TASK-0080 G0工作区切割（tok-b7a463ce / 治理 / 1文件 / 480min）
+- 2026-04-21：**数据Agent诊断完成**。用户报告"2026-04-21期货分钟K线没采集，只在17:00有数据"。根本原因：`_sync_minute_to_bars_dir()`中datetime验证失败导致早盘数据被无声过滤。修复已实施：添加datetime有效性检查、errors="coerce"强制转换、dropna()清理、增强日志。交付物：诊断报告225行、部署清单、验证测试（3测试场景全通过）、Git提交cdc17b78a/3a1a6eff5、5步部署前置验证全过。代码已就绪部署，待Mini重启容器后明日早盘验证。
 
 - 2026-04-21 16:15：**研究员 Agent U0 快速诊断 — 架构纠正与故障定位 ✅**
   - 【纠正 1】架构已验证正确：Alienware 8199 **直连 Decision 8104**，Mini 研报 API 是可选备用非关键路径
@@ -685,3 +686,28 @@ Mini 采集 → context API (/api/v1/context/macro,volatility,shipping,sentiment
   - 审计材料已补齐：task + review + lock + handoff + prompt
   - 总计 17 文件（data 3 + decision 14）全部 🔒 locked
   - 待执行：独立 commit + push + 两地同步
+
+## 最近动作（补录 2026-04-21 — P2 通知基础设施完成）
+
+### 任务目标
+为所有非 Air 端点补齐飞书 + 邮件通知配置基础，确保通知从本端发出，禁止混用。
+
+### 已完成
+
+- ✅ **researcher (AW:8199)** — 补齐独立通知变量：`RESEARCHER_FEISHU_WEBHOOK_URL` + `RESEARCHER_EMAIL_*` 写入 `services/data/.env`；SCP 同步到 AW `C:/Users/17621/jbt/services/data/.env`
+- ✅ **sim-trading (AW:8101)** — 开启 `NOTIFY_FEISHU_ENABLED=true`、`NOTIFY_EMAIL_ENABLED=true`；`ALERT_EMAIL_TO` 补加 `ewangli@icloud.com`；SCP 同步到 AW
+- ✅ **decision (Studio:8104)** — SMTP 替换 placeholder 为真实值（smtp.qq.com:465）；`EMAIL_ENABLED=true`、`NOTIFY_EMAIL_ENABLED=true`；rsync 同步到 Studio
+- ✅ **dashboard notification_configs (Studio:8106)** — 通过 API 填充 SQLite DB 中 sim-trading/data/decision/backtest 四条记录：feishu_webhook + SMTP 全部写入，`feishu_enabled=true`、`smtp_enabled=true`
+- ✅ **data .env** — rsync 同步到 Studio（含 researcher 新键）；SCP 同步到 AW
+- ✅ **backtest (Studio:8103)** — 无独立通知代码，委托 dashboard 发送，无需 .env 修改
+
+### 通知配置总表（完成后）
+
+| 端点 | 飞书 Webhook | 邮件 SMTP | 状态 |
+|-----|------------|---------|-----|
+| Mini data:8105 | FEISHU_ALERT/TRADE/NEWS ✅ | smtp.qq.com ✅ | ✅ |
+| AW researcher:8199 | RESEARCHER_FEISHU_WEBHOOK_URL ✅ | RESEARCHER_EMAIL_* ✅ | ✅ |
+| AW sim-trading:8101 | FEISHU_WEBHOOK_URL ✅ | ALERT_EMAIL_* ✅ | ✅ |
+| Studio decision:8104 | FEISHU_WEBHOOK_URL ✅ | EMAIL_SMTP_* ✅ | ✅ |
+| Studio dashboard:8106 | DB(4 svcs) ✅ | DB(4 svcs) ✅ | ✅ |
+| Studio backtest:8103 | via dashboard API | via dashboard API | ✅ |
