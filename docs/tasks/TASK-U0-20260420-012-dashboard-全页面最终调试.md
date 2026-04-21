@@ -307,10 +307,23 @@ f3abae7aa docs(reports): Dashboard 通知系统实测证据 - 19 条规则全部
 
 **格式**：`【日期】【工作内容】【文件改动】【commits】【tag】`
 
-### 待进行的页面调整
-1. [ ] 页面 A 调整
-2. [ ] 页面 B 调整
-3. [ ] ...
+### 已完成项（2026-04-21）
+
+| # | 内容 | 文件 | Commit | Tag |
+|---|------|------|--------|-----|
+| 1 | Mini IP 修正 .74→.76 修复白屏 | `.env.local` | bcac3413c | backup-dashboard-envfix-* |
+| 2 | 服务管理新增4服务KPI卡片 | `components/settings/services-kpi-card.tsx` | 14d8d86b6 | backup-dashboard-services-kpi-* |
+| 3 | 服务KPI修正：decision路径/data采集器状态/backtest改Studio/移除折叠 | `components/settings/services-kpi-card.tsx` | 14d8d86b6 | backup-dashboard-services-kpi-* |
+
+### 待进行的页面调整（TASK-DATA-01）
+
+**目标**：数据看板5个页面全面真实对接，完整展示所有采集数据和资讯
+
+- [x] `data/news/page.tsx` — 资讯看板：已接入 `/context/news_api`(60条) + `/context/rss`(100条) + `/context/sentiment`，合并展示，来源筛选、全文搜索、情绪面板 · `a9e0e0bc1` · `backup-dashboard-data-newsfeed-explorer-20260421-143200`
+- [x] `data/explorer/page.tsx` — 数据浏览器：storage树保留 + 新增宏观/波动率/外汇/航运/CFTC 五个 tab 展示真实 context 数据 · `a9e0e0bc1` · 同上
+- [x] `data/page.tsx` — 概览页：接入采集器汇总 + 系统资源 + 近期日志（collectors/system 已就位，待增强） · API 已核验真实对接 ✅
+- [ ] `data/collectors/page.tsx` — 采集器详情：21个采集器完整状态/一键重启/自动修复（已有基础实现）
+- [ ] `data/system/page.tsx` — 系统监控：CPU/MEM/磁盘/进程/通知渠道全展示（已有基础实现）
 
 **每项完成时流程**：
 1. 修改代码 → 构建验证
@@ -318,3 +331,70 @@ f3abae7aa docs(reports): Dashboard 通知系统实测证据 - 19 条规则全部
 3. `git add . && git commit -m "..."`
 4. `git tag backup-dashboard-<内容简述>-$(date +%Y%m%d-%H%M%S)`
 5. 表格中记录 tag 和 commit hash
+
+---
+
+## 数据端概览页 API 核查记录（2026-04-21）
+
+### 核查结论
+
+**所有 API 均为真实连接，无 mock 数据。**
+
+| API 端点 | 数据来源 | 实测结果 | 状态 |
+|---------|---------|---------|-----|
+| `/api/data/api/v1/dashboard/collectors` | Mini 192.168.31.76:8105 | 21 个采集器，返回 id/name/category/status/age_str | ✅ 真实 |
+| `/api/data/api/v1/dashboard/system` | Mini 192.168.31.76:8105 | CPU 0.2% / 内存 17.1% / 磁盘 2% / 40 条日志 | ✅ 真实 |
+
+### 采集源状态矩阵（21 个，实测）
+
+| ID | 中文名 | 分类 | 状态 | 数据时效 |
+|----|------|------|-----|--------|
+| futures_minute | 国内期货分钟 | 行情类 | idle | 非交易时段 |
+| futures_eod | 国内期货EOD | 行情类 | success | 1.6h |
+| overseas_minute | 外盘期货分钟 | 行情类 | idle | 已暂停采集 |
+| overseas_daily | 外盘期货日线 | 行情类 | success | 7.1h |
+| stock_minute | A股分钟 | 行情类 | idle | 已暂停采集 |
+| stock_realtime | A股实时 | 行情类 | idle | 已暂停采集 |
+| watchlist | 自选股 | 监控类 | success | 0min |
+| macro_global | 宏观数据 | 宏观类 | success | 4.1h |
+| news_rss | 新闻RSS | 新闻资讯类 | success | 2min |
+| position_daily | 持仓日报 | 持仓类 | delayed | 21.6h |
+| position_weekly | 持仓周报 | 持仓类 | success | 21.6h |
+| volatility_cboe | CBOE波动率 | 宏观类 | delayed | 19.8h |
+| volatility_qvix | QVIX波动率 | 宏观类 | delayed | 19.8h |
+| shipping | 海运运费 | 宏观类 | success | 3.9h |
+| tushare | Tushare日线 | 行情类 | delayed | 17.1h |
+| weather | 天气 | 宏观类 | success | 6.6h |
+| sentiment | 情绪指数 | 情绪类 | success | 4min |
+| forex | 外汇日线 | 宏观类 | delayed | 19.7h |
+| cftc | CFTC持仓 | 宏观类 | success | 2.0d |
+| options | 期权行情 | 行情类 | delayed | 21.6h |
+| health_log | 健康日志 | 监控类 | success | 0min |
+
+**汇总**：success=11，delayed=6，idle=4，failed=0（与截图 KPI 完全吻合）
+
+### KPI 卡片核查
+
+| 卡片 | 显示值 | API 来源字段 | 验证 |
+|-----|------|------------|-----|
+| 采集源 | 11/21 | `summary.success`/`summary.total` | ✅ |
+| 正常 | 11 | `summary.success` | ✅ |
+| 失败 | 0 | `summary.failed` | ✅ |
+| 延迟 | 6 | `summary.delayed` | ✅ |
+| CPU | 0.2% | `resources.cpu.usage_percent` | ✅ |
+| 内存 | 17.1% | `resources.memory.used_percent` | ✅ |
+| 磁盘 | 2% | `resources.disk.used_percent` | ✅ |
+
+### 修复记录
+
+| 问题 | 根因 | 修复 | Commit | Tag |
+|-----|-----|-----|--------|-----|
+| 采集器状态矩阵显示中文名而非代码 | `collectorDisplayName(c.name)` 传入中文导致 fallback | 改为 `collectorDisplayName(c.id)`，中文名直接用 `c.name` | ffc09aee8 | backup-dashboard-collector-labels-20260421-144748 |
+| collector-labels.ts 缺少 11 个 ID | 原始文件只映射了 16 个旧 ID，实际 API 有 21 个新 ID | 补全全部 21 个 ID 映射，并向下兼容旧 ID | ffc09aee8 | 同上 |
+
+### .next 缓存崩溃修复（2026-04-21 白屏事件）
+
+- **现象**：页面白屏，`e[o] is not a function` webpack 运行时错误
+- **根因**：`.next/server/webpack-runtime.js` 模块注册表损坏
+- **修复**：`rm -rf .next && pnpm dev` 重新构建
+- **无代码改动**，纯缓存问题
