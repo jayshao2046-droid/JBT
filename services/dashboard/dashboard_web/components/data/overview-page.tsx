@@ -17,6 +17,7 @@ import {
   Activity,
   FileText,
   AlertCircle,
+  Clock,
 } from "lucide-react"
 import { collectorDisplayName } from "@/lib/collector-labels"
 import { dataApi, CollectorSummary, CollectorItem, ResourceCpu, ResourceMem, ResourceDisk, LogEntry } from "@/lib/api/data"
@@ -73,8 +74,8 @@ export default function OverviewPage() {
     return (
       <div className="p-6 space-y-6">
         <Skeleton className="h-12 w-64" />
-        <div className="grid grid-cols-3 lg:grid-cols-7 gap-3">
-          {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+        <div className="grid grid-cols-4 gap-3">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <Skeleton key={i} className="h-24" />
           ))}
         </div>
@@ -99,15 +100,33 @@ export default function OverviewPage() {
         <p className="text-sm text-muted-foreground mt-1">JBT 数据服务实时总览</p>
       </div>
 
-      <div className="grid grid-cols-3 lg:grid-cols-7 gap-3">
+      {/* 第1排：采集器状态 */}
+      <div className="grid grid-cols-4 gap-3">
         {[
-          { icon: Database, label: "采集源", value: `${summary.success}/${summary.total}`, color: "text-foreground", bg: "bg-blue-500/10", ic: "text-blue-500" },
-          { icon: CheckCircle, label: "正常", value: summary.success, color: "text-green-400", bg: "bg-green-500/10", ic: "text-green-500" },
-          { icon: XCircle, label: "失败", value: summary.failed, color: "text-red-400", bg: "bg-red-500/10", ic: "text-red-500" },
-          { icon: AlertTriangle, label: "延迟", value: summary.delayed, color: "text-yellow-400", bg: "bg-yellow-500/10", ic: "text-yellow-500" },
-          { icon: Cpu, label: "CPU", value: cpu ? `${cpu.usage_percent}%` : "—", color: "text-blue-500", bg: "bg-blue-500/10", ic: "text-blue-500" },
-          { icon: MemoryStick, label: "内存", value: mem ? `${mem.used_percent}%` : "—", color: "text-purple-500", bg: "bg-purple-500/10", ic: "text-purple-500" },
-          { icon: HardDrive, label: "磁盘", value: disk ? `${disk.used_percent}%` : "—", color: "text-orange-500", bg: "bg-orange-500/10", ic: "text-orange-500" },
+          { icon: Database, label: "采集源",   value: `${summary.success}/${summary.total}`, color: "text-blue-400",    bg: "bg-blue-500/10",    ic: "text-blue-500" },
+          { icon: CheckCircle, label: "正常",  value: String(summary.success),               color: "text-green-400",  bg: "bg-green-500/10",  ic: "text-green-500" },
+          { icon: AlertTriangle, label: "延迟",value: String(summary.delayed),               color: "text-yellow-400", bg: "bg-yellow-500/10", ic: "text-yellow-500" },
+          { icon: XCircle, label: "失败",      value: String(summary.failed),                color: "text-red-400",    bg: "bg-red-500/10",    ic: "text-red-500" },
+        ].map((kpi) => (
+          <Card key={kpi.label}>
+            <CardContent className="p-3 flex flex-col items-center text-center">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${kpi.bg}`}>
+                <kpi.icon className={`w-4 h-4 ${kpi.ic}`} />
+              </div>
+              <p className="text-[10px] text-muted-foreground">{kpi.label}</p>
+              <p className={`text-lg font-bold font-mono ${kpi.color}`}>{kpi.value}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* 第2排：系统规格（静态参数，不与底部使用率重复） */}
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { icon: Clock,      label: "空闲采集", value: String(summary.idle),                                          color: "text-neutral-400", bg: "bg-neutral-500/10", ic: "text-neutral-400" },
+          { icon: Cpu,        label: "CPU 核数", value: cpu  ? `${cpu.logical_cores} 核`                  : "—",       color: "text-blue-400",    bg: "bg-blue-500/10",   ic: "text-blue-500" },
+          { icon: MemoryStick,label: "内存总量", value: mem  ? `${(mem.total_mb/1024).toFixed(1)} GB`      : "—",       color: "text-purple-400",  bg: "bg-purple-500/10", ic: "text-purple-500" },
+          { icon: HardDrive,  label: "磁盘可用", value: disk ? `${(disk.free_bytes/1073741824).toFixed(0)} GB` : "—",   color: "text-orange-400",  bg: "bg-orange-500/10", ic: "text-orange-500" },
         ].map((kpi) => (
           <Card key={kpi.label}>
             <CardContent className="p-3 flex flex-col items-center text-center">
@@ -196,9 +215,9 @@ export default function OverviewPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { label: "CPU", pct: cpu?.usage_percent, sub: cpu ? `${cpu.logical_cores} 核` : "" },
-          { label: "内存", pct: mem?.used_percent, sub: mem ? `${(mem.used_mb / 1024).toFixed(1)}G / ${(mem.total_mb / 1024).toFixed(1)}G` : "" },
-          { label: "磁盘", pct: disk?.used_percent, sub: disk ? `剩余 ${(disk.free_bytes / 1073741824).toFixed(1)} GB` : "" },
+          { label: "CPU 使用率",  pct: cpu?.usage_percent,  sub: cpu  ? `${cpu.usage_percent}% · ${cpu.logical_cores} 核`                                                    : "" },
+          { label: "内存使用率",  pct: mem?.used_percent,   sub: mem  ? `${(mem.used_mb/1024).toFixed(1)} GB / ${(mem.total_mb/1024).toFixed(1)} GB 已用`                   : "" },
+          { label: "磁盘使用率",  pct: disk?.used_percent,  sub: disk ? `${(disk.used_bytes/1073741824).toFixed(0)} GB / ${(disk.total_bytes/1073741824).toFixed(0)} GB 已用` : "" },
         ].map((r) => (
           <Card key={r.label}>
             <CardContent className="p-4 cursor-pointer hover:bg-muted/40 transition-colors">
