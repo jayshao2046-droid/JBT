@@ -138,7 +138,6 @@ SNAPSHOT=$(echo "$SELECTED" | python3 -c "import sys,json; d=json.load(sys.stdin
 HOST=$(echo "$SELECTED" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['host'])" 2>/dev/null || echo "$SELECTED" | grep -o '"host":"[^"]*"' | cut -d'"' -f4)
 TS=$(echo "$SELECTED" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['ts'])" 2>/dev/null || echo "$SELECTED" | grep -o '"ts":"[^"]*"' | cut -d'"' -f4)
 
-local config
 config=$(get_service_config "$SERVICE")
 IFS='|' read -r host ip port health_path container remote_path <<< "$config"
 

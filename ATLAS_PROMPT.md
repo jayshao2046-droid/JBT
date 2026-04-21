@@ -741,3 +741,8 @@ Mini 采集 → context API (/api/v1/context/macro,volatility,shipping,sentiment
   - 新增 `--target override` 逻辑生效（mini|studio|air 可强制覆盖默认设备）
   - dry-run 验证：脚本解析/路径/清单写入全部正常；SSH 超时为 Mini 网络不可达，符合预期
   - GitHub `origin/backup-settings-p0p1-20260420-193000` 已同步到 `60f16e29b`
+
+- 2026-04-21：**P4 后续修复 — 离线 dry-run 与 rollback 语法修正 ✅**
+  - `jbt_rsync_deploy.sh` 的 `--dry-run` 改为纯离线预演，不再触发 SSH / rsync 远端连接；弱网或离线环境下也能直接验证参数、路径和目标映射
+  - 修复 `jbt_rsync_rollback.sh` 顶层误用 `local config` 的 bash 语法错误
+  - 本地验证通过：`bash -n` 语法检查通过，`--service data --dry-run` 可在离线场景正常完成并写入 manifest

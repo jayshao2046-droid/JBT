@@ -169,6 +169,14 @@ deploy_service() {
         return 1
     fi
 
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log "[DRY-RUN] 仅做离线预演，不连接远端"
+        log "[DRY-RUN] 将执行: rsync -avz --delete ... ${local_src} ${host}:${remote_dest}"
+        ok "dry-run 预演完成，跳过快照、rsync、重启与健康检查"
+        write_manifest "$svc" "dry_run" "$snapshot_dir" "$host"
+        return 0
+    fi
+
     # 构造 rsync 命令
     local rsync_cmd=(
         rsync -avz
@@ -176,14 +184,9 @@ deploy_service() {
         "${RSYNC_EXCLUDES[@]}"
     )
 
-    if [[ "$DRY_RUN" == "true" ]]; then
-        rsync_cmd+=(--dry-run)
-        log "[DRY-RUN] 模拟同步，不实际修改文件"
-    else
-        # 在远端创建完整快照（ssh 展开 ~，rsync --backup-dir 不展开，所以快照通过 ssh rsync 独立完成）
-        log "在远端创建快照..."
-        ssh "${host}" "mkdir -p ${snapshot_dir} && rsync -a --ignore-missing-args ${remote_dest} ${snapshot_dir}/ 2>/dev/null || true"
-    fi
+    # 在远端创建完整快照（ssh 展开 ~，rsync --backup-dir 不展开，所以快照通过 ssh rsync 独立完成）
+    log "在远端创建快照..."
+    ssh "${host}" "mkdir -p ${snapshot_dir} && rsync -a --ignore-missing-args ${remote_dest} ${snapshot_dir}/ 2>/dev/null || true"
 
     rsync_cmd+=("${local_src}" "${host}:${remote_dest}")
 
@@ -195,8 +198,6 @@ deploy_service() {
         write_manifest "$svc" "rsync_failed" "$snapshot_dir" "$host"
         return 1
     fi
-
-    [[ "$DRY_RUN" == "true" ]] && { ok "dry-run 完成，跳过重启与健康检查"; write_manifest "$svc" "dry_run" "$snapshot_dir" "$host"; return 0; }
 
     # 重启容器
     if [[ "$SKIP_RESTART" != "true" ]]; then
