@@ -193,20 +193,20 @@ export default function OverviewPage() {
             {items.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">无采集源</p>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {items.map((c, i) => (
                   <div
                     key={`${c.id}-${i}`}
-                    className={`p-3 rounded-lg border cursor-pointer hover:opacity-90 transition-opacity ${STATUS_BG[c.status] ?? STATUS_BG.idle}`}
+                    className={`p-5 rounded-lg border cursor-pointer hover:opacity-90 transition-opacity min-h-[120px] flex flex-col justify-center ${STATUS_BG[c.status] ?? STATUS_BG.idle}`}
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`w-2 h-2 rounded-full ${STATUS_DOT[c.status] ?? STATUS_DOT.idle}`} />
-                      <p className="text-xs font-bold text-orange-400 font-mono tracking-wider truncate">{collectorDisplayName(c.id)}</p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`w-3 h-3 rounded-full ${STATUS_DOT[c.status] ?? STATUS_DOT.idle}`} />
+                      <p className="text-sm font-bold text-orange-400 font-mono tracking-wider truncate">{collectorDisplayName(c.id)}</p>
                     </div>
-                    <p className="text-[10px] text-muted-foreground truncate">
+                    <p className="text-xs text-muted-foreground truncate">
                       {c.name} · {c.category}
                     </p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{c.age_str || "—"}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{c.age_str || "—"}</p>
                   </div>
                 ))}
               </div>
