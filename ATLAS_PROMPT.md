@@ -735,3 +735,9 @@ Mini 采集 → context API (/api/v1/context/macro,volatility,shipping,sentiment
   - 清理临时工件：`.tmp-governance-push` worktree 已移除
   - commit: `5a73b0aa3`（filter-repo 后新 SHA）
   - 当前守护状态：LaunchAgent `com.jbt.service_guardian` `runs=20+`，6/6 全绿
+
+- 2026-04-21：**P4 后续修复 — bash 3.2 兼容 ✅**（commit `60f16e29b`）
+  - 修复两个 rsync 脚本的 `declare -A` 用法，改为 `case` 函数，兼容 macOS 自带 bash 3.2
+  - 新增 `--target override` 逻辑生效（mini|studio|air 可强制覆盖默认设备）
+  - dry-run 验证：脚本解析/路径/清单写入全部正常；SSH 超时为 Mini 网络不可达，符合预期
+  - GitHub `origin/backup-settings-p0p1-20260420-193000` 已同步到 `60f16e29b`
