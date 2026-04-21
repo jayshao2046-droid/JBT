@@ -35,3 +35,9 @@ out/
 参考文件/
 **/参考文档/
 **/参考文件/
+
+# 备份 tar.gz（体积过大，不入仓）
+docs/backups/*.tar.gz
+docs/backups/*.tar
+docs/backups/*.zip
+*.tar.gz
