@@ -18,7 +18,7 @@ export function LogsViewer() {
     try {
       setLoading(true)
       setError("")
-      const res = await dataApi.getLogs(30)
+      const res = await dataApi.getLogs(200)
       // 按时间倒序排列（最新的在最上面）
       const sorted = [...res.logs].reverse()
       setLogs(sorted)
@@ -115,7 +115,7 @@ export function LogsViewer() {
           <div>
             <CardTitle className="text-sm">采集日志</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              最后 200 条 • {lastUpdate}
+              显示最新 20 条 / 总计 {logs.length} 条 • {lastUpdate}
             </p>
           </div>
         </div>
@@ -158,7 +158,7 @@ export function LogsViewer() {
           <div
             ref={scrollContainerRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto bg-muted/20 rounded border border-border/50 p-2 space-y-1 font-mono text-[11px]"
+            className="flex-1 overflow-y-auto bg-muted/20 rounded border border-border/50 p-2 space-y-1 font-mono text-[11px] max-h-[600px]"
           >
             {logs.map((log, idx) => (
               <div
