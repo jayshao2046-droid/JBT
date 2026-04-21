@@ -18,7 +18,7 @@ import {
   FileText,
   AlertCircle,
 } from "lucide-react"
-import { collectorDisplayName, collectorZhName } from "@/lib/collector-labels"
+import { collectorDisplayName } from "@/lib/collector-labels"
 import { dataApi, CollectorSummary, CollectorItem, ResourceCpu, ResourceMem, ResourceDisk, LogEntry } from "@/lib/api/data"
 
 const STATUS_DOT: Record<string, string> = {
@@ -143,10 +143,10 @@ export default function OverviewPage() {
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`w-2 h-2 rounded-full ${STATUS_DOT[c.status] ?? STATUS_DOT.idle}`} />
-                      <p className="text-xs font-bold text-orange-400 font-mono tracking-wider truncate">{collectorDisplayName(c.name)}</p>
+                      <p className="text-xs font-bold text-orange-400 font-mono tracking-wider truncate">{collectorDisplayName(c.id)}</p>
                     </div>
                     <p className="text-[10px] text-muted-foreground truncate">
-                      {collectorZhName(c.name)} · {c.category}
+                      {c.name} · {c.category}
                     </p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">{c.age_str || "—"}</p>
                   </div>
