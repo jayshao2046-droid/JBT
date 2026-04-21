@@ -52,7 +52,7 @@ export default function OverviewPage() {
       setCpu(sR.resources?.cpu ?? null)
       setMem(sR.resources?.memory ?? null)
       setDisk(sR.resources?.disk ?? null)
-      setLogs((sR.logs ?? []).slice(-8))
+      setLogs((sR.logs ?? []).slice(-12))
       setFetchError(false)
     } catch {
       setFetchError(true)
@@ -183,7 +183,9 @@ export default function OverviewPage() {
                       >
                         {l.level}
                       </Badge>
-                      <span className="text-xs text-muted-foreground break-all">{l.message}</span>
+                      <span className="text-xs text-muted-foreground break-all">
+                        {l.message.replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[,.]\d+\s+-\s+\S+\s+-\s+\w+\s+-\s+/, "")}
+                      </span>
                     </div>
                   ))}
               </div>
