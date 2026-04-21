@@ -18,9 +18,11 @@ import {
   FileText,
   AlertCircle,
   Clock,
+  ArrowUpCircle,
+  ArrowDownCircle,
 } from "lucide-react"
 import { collectorDisplayName } from "@/lib/collector-labels"
-import { dataApi, CollectorSummary, CollectorItem, ResourceCpu, ResourceMem, ResourceDisk, LogEntry } from "@/lib/api/data"
+import { dataApi, CollectorSummary, CollectorItem, ResourceCpu, ResourceMem, ResourceDisk, ResourceNetwork, LogEntry } from "@/lib/api/data"
 
 const STATUS_DOT: Record<string, string> = {
   success: "bg-green-500",
@@ -43,6 +45,7 @@ export default function OverviewPage() {
   const [cpu, setCpu] = useState<ResourceCpu | null>(null)
   const [mem, setMem] = useState<ResourceMem | null>(null)
   const [disk, setDisk] = useState<ResourceDisk | null>(null)
+  const [net, setNet] = useState<ResourceNetwork | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
 
   const fetchData = useCallback(async () => {
@@ -53,6 +56,7 @@ export default function OverviewPage() {
       setCpu(sR.resources?.cpu ?? null)
       setMem(sR.resources?.memory ?? null)
       setDisk(sR.resources?.disk ?? null)
+      setNet(sR.resources?.network ?? null)
       setLogs((sR.logs ?? []).slice(-12))
       setFetchError(false)
     } catch {
@@ -120,13 +124,13 @@ export default function OverviewPage() {
         ))}
       </div>
 
-      {/* 第2排：系统规格（静态参数，不与底部使用率重复） */}
+      {/* 第2排：系统规格（静态参数 + 网络速率）*/}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { icon: Clock,      label: "空闲采集", value: String(summary.idle),                                          color: "text-neutral-400", bg: "bg-neutral-500/10", ic: "text-neutral-400" },
-          { icon: Cpu,        label: "CPU 核数", value: cpu  ? `${cpu.logical_cores} 核`                  : "—",       color: "text-blue-400",    bg: "bg-blue-500/10",   ic: "text-blue-500" },
-          { icon: MemoryStick,label: "内存总量", value: mem  ? `${(mem.total_mb/1024).toFixed(1)} GB`      : "—",       color: "text-purple-400",  bg: "bg-purple-500/10", ic: "text-purple-500" },
-          { icon: HardDrive,  label: "磁盘可用", value: disk ? `${(disk.free_bytes/1073741824).toFixed(0)} GB` : "—",   color: "text-orange-400",  bg: "bg-orange-500/10", ic: "text-orange-500" },
+          { icon: Clock,          label: "空闲采集",  value: String(summary.idle),                                              color: "text-neutral-400",  bg: "bg-neutral-500/10",  ic: "text-neutral-400" },
+          { icon: Cpu,            label: "CPU 核数",  value: cpu  ? `${cpu.logical_cores} 核`                      : "—",       color: "text-blue-400",     bg: "bg-blue-500/10",     ic: "text-blue-500" },
+          { icon: ArrowUpCircle,  label: "网络上行",  value: net  ? `${net.send_kbps.toFixed(1)} KB/s`            : "—",       color: "text-cyan-400",     bg: "bg-cyan-500/10",     ic: "text-cyan-500" },
+          { icon: ArrowDownCircle,label: "网络下行",  value: net  ? `${net.recv_kbps.toFixed(1)} KB/s`            : "—",       color: "text-teal-400",     bg: "bg-teal-500/10",     ic: "text-teal-500" },
         ].map((kpi) => (
           <Card key={kpi.label}>
             <CardContent className="p-3 flex flex-col items-center text-center">

@@ -46,6 +46,13 @@ export interface ResourceDisk {
   free_bytes: number
 }
 
+export interface ResourceNetwork {
+  send_kbps: number
+  recv_kbps: number
+  total_sent_mb: number
+  total_recv_mb: number
+}
+
 export interface ProcessEntry {
   id: string
   name: string
@@ -96,6 +103,7 @@ export interface SystemResponse {
     cpu: ResourceCpu
     memory: ResourceMem
     disk: ResourceDisk
+    network?: ResourceNetwork
   }
   processes: ProcessEntry[]
   notifications: NotifChannel[]
