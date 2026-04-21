@@ -23,7 +23,6 @@ from .reporter import Reporter
 from .notifier import ResearcherNotifier
 from .report_reviewer import ReportReviewer
 from .notify import DailyDigest, ResearcherEmailSender, build_morning_report_html, build_evening_report_html
-from .health_monitor import HealthMonitor
 from .crawler.engine import CodeCrawler, BrowserCrawler
 from .crawler.source_registry import SourceRegistry
 from .crawler.parsers import get_parser
@@ -74,12 +73,6 @@ class ResearcherScheduler:
         self._pending_macro_report: Optional[Dict] = None
         # 服务启动时记录到当日统计
         self.reporter.stats_tracker.record_startup()
-
-        # 健康监控（飞书报警）
-        self.health_monitor = HealthMonitor(
-            alert_webhook=self.notifier.feishu_alert_webhook,
-            info_webhook=self.notifier.feishu_webhook,
-        )
 
         # 尝试注册 2h 健康度飞书报告（旧模块，兼容）
         try:
@@ -1019,23 +1012,7 @@ class ResearcherScheduler:
                 logger.info(f"[EMAIL] {label} 已发送: {digest_date}")
             except Exception as e:
                 logger.warning(f"[EMAIL] {label} 发送失败: {e}")
-
-        # ── 阶段5: 健康监控回调 ──
         elapsed = time.time() - start_time
-        try:
-            llm_slow = elapsed > 120 and len(analyzed) == 0  # 粗估 LLM 超时
-            if errors:
-                for err in errors:
-                    module = "crawler" if "爬" in err else ("kline" if "K线" in err else "push" if "推送" in err else "llm")
-                    await self.health_monitor.on_cycle_error(module, err)
-            else:
-                await self.health_monitor.on_cycle_success(
-                    articles=len(analyzed),
-                    cycle_secs=elapsed,
-                    llm_timeout=llm_slow,
-                )
-        except Exception as hm_err:
-            logger.debug(f"[HEALTH] 监控回调异常(不影响主流程): {hm_err}")
         mode = "both" if kline_reports else ("news" if analyzed else "idle")
 
         logger.info(
