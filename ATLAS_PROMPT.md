@@ -724,3 +724,14 @@ Mini 采集 → context API (/api/v1/context/macro,volatility,shipping,sentiment
   - P3 第一版范围：MacBook launchd 每 60 秒巡检 `data/sim-trading/researcher/decision/dashboard/backtest` 六个核心 API 端点
   - 通知策略：连续失败 2 次后发飞书 + 邮件 P1 告警；恢复后发 NOTIFY 恢复通知；配置直接读取本地现有 `.env`
   - 验证结果：dry-run 巡检 6/6 全绿；LaunchAgent `com.jbt.service_guardian` 已安装并成功运行 1 次；状态文件 `~/jbt-governance/state/jbt_service_guardian.json` 已写出
+
+- 2026-04-21：**P4 rsync 无 git 交付链完成 ✅**（Atlas 继续工作）
+  - 新增 `governance/scripts/jbt_rsync_deploy.sh`：支持 `--service [data|decision|dashboard|backtest|all]`，自动做远端快照、rsync、容器重启、健康检查、写清单
+  - 新增 `governance/scripts/jbt_rsync_rollback.sh`：从 `~/jbt-governance/deploy-manifest.jsonl` 读取历史记录，`--list` 列出快照，`--pick N` 选择快照回滚
+  - GitHub 大文件阻塞（289MB tar.gz）已彻底修复：
+    - 用 `git filter-repo --path docs/backups/dashboard-backup-20260421-031934.tar.gz --invert-paths --force` 清理全量历史
+    - `.gitignore` 新增 `docs/backups/*.tar.gz` / `*.tar.gz` 规则，防止再次进仓
+    - 已成功推送到 GitHub origin：`backup-settings-p0p1-20260420-193000` 分支 `[new branch]`
+  - 清理临时工件：`.tmp-governance-push` worktree 已移除
+  - commit: `5a73b0aa3`（filter-repo 后新 SHA）
+  - 当前守护状态：LaunchAgent `com.jbt.service_guardian` `runs=20+`，6/6 全绿
