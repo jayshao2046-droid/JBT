@@ -18,7 +18,7 @@ export function LogsViewer() {
     try {
       setLoading(true)
       setError("")
-      const res = await dataApi.getLogs(200)
+      const res = await dataApi.getLogs(30)
       // 按时间倒序排列（最新的在最上面）
       const sorted = [...res.logs].reverse()
       setLogs(sorted)
