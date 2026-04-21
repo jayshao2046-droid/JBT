@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -12,17 +11,14 @@ import {
   XCircle,
   AlertTriangle,
   Cpu,
-  MemoryStick,
-  HardDrive,
   Activity,
-  FileText,
   AlertCircle,
   Clock,
   ArrowUpCircle,
   ArrowDownCircle,
 } from "lucide-react"
 import { collectorDisplayName } from "@/lib/collector-labels"
-import { dataApi, CollectorSummary, CollectorItem, ResourceCpu, ResourceMem, ResourceDisk, ResourceNetwork, LogEntry, CollectorResultsResponse } from "@/lib/api/data"
+import { dataApi, CollectorSummary, CollectorItem, ResourceCpu, ResourceMem, ResourceDisk, ResourceNetwork, CollectorResultsResponse } from "@/lib/api/data"
 import { LogsViewer } from "./logs-viewer"
 
 const STATUS_DOT: Record<string, string> = {
@@ -47,7 +43,6 @@ export default function OverviewPage() {
   const [mem, setMem] = useState<ResourceMem | null>(null)
   const [disk, setDisk] = useState<ResourceDisk | null>(null)
   const [net, setNet] = useState<ResourceNetwork | null>(null)
-  const [logs, setLogs] = useState<LogEntry[]>([])
   const [collectorResults, setCollectorResults] = useState<CollectorResultsResponse | null>(null)
 
   const fetchData = useCallback(async () => {
@@ -63,7 +58,6 @@ export default function OverviewPage() {
       setMem(sR.resources?.memory ?? null)
       setDisk(sR.resources?.disk ?? null)
       setNet(sR.resources?.network ?? null)
-      setLogs((sR.logs ?? []).slice(-12))
       setCollectorResults(crR)
       setFetchError(false)
     } catch {
@@ -153,7 +147,7 @@ export default function OverviewPage() {
 
       {/* 第3排：最新采集结果（实时数据，不是 mock）*/}
       <div className="grid grid-cols-4 gap-3">
-        {collectorResults && Object.values(collectorResults.collectors).slice(0, 4).map((collector, idx) => (
+        {collectorResults && Object.values(collectorResults.collectors).slice(0, 4).map((collector) => (
           <Card key={collector.name}>
             <CardContent className="p-3 flex flex-col items-center text-center">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${collector.status === "success" ? "bg-green-500/10" : "bg-red-500/10"}`}>
@@ -185,8 +179,8 @@ export default function OverviewPage() {
         }
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[500px]">
+        <Card className="lg:col-span-2 flex flex-col">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -195,7 +189,7 @@ export default function OverviewPage() {
               </CardTitle>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 overflow-auto">
             {items.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">无采集源</p>
             ) : (
@@ -219,6 +213,11 @@ export default function OverviewPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* 采集日志窗口 - 右侧空缺位置，填满整个高度 */}
+        <div className="flex flex-col">
+          <LogsViewer />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -238,10 +237,6 @@ export default function OverviewPage() {
             </CardContent>
           </Card>
         ))}
-      </div>
-
-      <div className="mt-8">
-        <LogsViewer />
       </div>
     </div>
   )

@@ -61,22 +61,68 @@ export function LogsViewer() {
     }
   }
 
+  const formatLogMessage = (message: string): string => {
+    // 转换 cron 表达式为可读格式
+    // 示例: [factor_signal_afternoon] → cron[day_of_week='mon-fri', hour='15', minute='5']
+    // 转换为: [factor_signal_afternoon] → 周一至周五，下午3:05
+    
+    const cronMatch = message.match(/\[([^\]]+)\]\s*→\s*cron\[([^\]]+)\]/)
+    if (cronMatch) {
+      const strategyName = cronMatch[1]
+      const cronParams = cronMatch[2]
+      
+      let readableTime = ""
+      
+      // 解析 day_of_week
+      const dayMatch = cronParams.match(/day_of_week='([^']+)'/)
+      if (dayMatch) {
+        const days = dayMatch[1]
+        if (days === "mon-fri") readableTime = "周一至周五"
+        else if (days === "0-4") readableTime = "周一至周五"
+        else if (days === "*") readableTime = "每天"
+      }
+      
+      // 解析 hour 和 minute
+      const hourMatch = cronParams.match(/hour='(\d+)'/)
+      const minuteMatch = cronParams.match(/minute='(\d+)'/)
+      
+      const hour = hourMatch ? parseInt(hourMatch[1]) : null
+      const minute = minuteMatch ? parseInt(minuteMatch[1]) : null
+      
+      if (hour !== null || minute !== null) {
+        if (readableTime) readableTime += "，"
+        
+        if (hour !== null && minute !== null) {
+          readableTime += `${hour}:${minute.toString().padStart(2, "0")}`
+        } else if (hour !== null) {
+          readableTime += `${hour}时`
+        } else if (minute !== null) {
+          readableTime += `第${minute}分钟`
+        }
+      }
+      
+      return `[${strategyName}] → ${readableTime || "未指定"}`
+    }
+    
+    return message
+  }
+
   return (
-    <Card className="col-span-1 md:col-span-3">
-      <CardHeader className="pb-3 flex flex-row items-center justify-between">
+    <Card className="col-span-1 flex flex-col h-full">
+      <CardHeader className="pb-3 flex-shrink-0 flex flex-row items-center justify-between">
         <div className="flex items-center gap-2">
           <Clock className="h-5 w-5 text-muted-foreground" />
           <div>
-            <CardTitle className="text-base">采集日志</CardTitle>
+            <CardTitle className="text-sm">采集日志</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              显示最后 200 条采集日志 • 更新于 {lastUpdate}
+              最后 200 条 • {lastUpdate}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {autoScroll && (
             <span className="text-xs px-2 py-1 bg-green-500/10 text-green-400 rounded border border-green-500/20">
-              自动滚动
+              自动
             </span>
           )}
           <button
@@ -85,69 +131,71 @@ export function LogsViewer() {
               setAutoScroll(true)
             }}
             className="p-2 hover:bg-muted rounded transition-colors"
-            title="刷新日志"
+            title="刷新"
           >
             <RotateCw className="h-4 w-4" />
           </button>
         </div>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="flex-1 overflow-hidden flex flex-col">
         {error && (
-          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-sm mb-3">
+          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-sm mb-3 flex-shrink-0">
             <AlertCircle className="h-4 w-4 flex-shrink-0" />
             {error}
           </div>
         )}
 
         {loading ? (
-          <div className="h-96 flex items-center justify-center text-muted-foreground text-sm">
-            加载日志中...
+          <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+            加载中...
           </div>
         ) : logs.length === 0 ? (
-          <div className="h-96 flex items-center justify-center text-muted-foreground text-sm">
-            无日志数据
+          <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+            无日志
           </div>
         ) : (
           <div
             ref={scrollContainerRef}
             onScroll={handleScroll}
-            className="h-96 overflow-y-auto bg-muted/20 rounded border border-border/50 p-2 space-y-1 font-mono text-xs"
+            className="flex-1 overflow-y-auto bg-muted/20 rounded border border-border/50 p-2 space-y-1 font-mono text-[11px]"
           >
             {logs.map((log, idx) => (
               <div
                 key={idx}
-                className={`flex items-start gap-2 p-2 rounded hover:bg-muted/40 transition-colors ${getLogLevelColor(
+                className={`flex items-start gap-2 p-1.5 rounded hover:bg-muted/40 transition-colors ${getLogLevelColor(
                   log.level
                 )}`}
               >
                 {/* 时间戳 */}
                 {log.timestamp && (
-                  <span className="text-muted-foreground flex-shrink-0 whitespace-nowrap">
-                    [{log.timestamp.slice(11, 19)}]
+                  <span className="text-muted-foreground flex-shrink-0 whitespace-nowrap text-[10px]">
+                    {log.timestamp.slice(11, 19)}
                   </span>
                 )}
 
                 {/* 日志级别 */}
                 <Badge
                   variant="outline"
-                  className={`text-[10px] px-1 py-0 flex-shrink-0 ${getLogLevelColor(log.level)}`}
+                  className={`text-[9px] px-1 py-0 flex-shrink-0 h-5 ${getLogLevelColor(log.level)}`}
                 >
                   {log.level}
                 </Badge>
 
                 {/* 日志消息 */}
-                <span className="text-foreground/80 break-words flex-1">
-                  {log.message.replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[,.]\d+\s+-\s+\S+\s+-\s+\w+\s+-\s+/, "")}
+                <span className="text-foreground/80 break-words flex-1 line-clamp-2">
+                  {formatLogMessage(
+                    log.message.replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[,.]\d+\s+-\s+\S+\s+-\s+\w+\s+-\s+/, "")
+                  )}
                 </span>
               </div>
             ))}
           </div>
         )}
 
-        <div className="mt-3 flex items-center justify-between">
+        <div className="mt-2 flex items-center justify-between flex-shrink-0">
           <div className="text-xs text-muted-foreground">
-            显示 {logs.length} 条日志 • 数据来源：采集调度器
+            {logs.length} 条
           </div>
           <button
             onClick={() => {
