@@ -210,6 +210,13 @@ NEXT_PUBLIC_BACKTEST_URL=http://192.168.31.245:8103
 - ✅ sim-trading 真实接口代理路由已就绪（等待 Alienware 上线验证 pause/resume）
 - ✅ `.env.local` DATA_URL 已修正为 `192.168.31.74`（Mini 实际 IP）
 
+### 2026-04-21 Mini IP 二次修正
+- **问题**：`.env.local` 中 `DATA_URL=http://192.168.31.74:8105` 指向错误 IP，导致 EHOSTDOWN 白屏
+- **根因**：Mini 正确 IP 为 `192.168.31.76`（jaybot），`.74` 不可达
+- **修复**：`DATA_URL=http://192.168.31.76:8105` ✅
+- **日志验证**：重启后无 EHOSTDOWN/EHOSTUNREACH 报错
+- **受影响文件**：`services/dashboard/dashboard_web/.env.local`
+
 ### 本轮回滚点
 - commit: `e5cdcba59`
 - branch: `backup-settings-p0p1-20260420-193000`
