@@ -98,6 +98,39 @@
   - TASK-0079 decision_web 功能页扩容（tok-0ca581e2 / decision / 6文件 / 480min）
   - TASK-0079-N Navbar导航补充（tok-60c4ba0a / decision / 1文件 / 480min）
   - TASK-0080 G0工作区切割（tok-b7a463ce / 治理 / 1文件 / 480min）
+
+- 2026-04-21 16:15：**研究员 Agent U0 快速诊断 — 架构纠正与故障定位 ✅**
+  - 【纠正 1】架构已验证正确：Alienware 8199 **直连 Decision 8104**，Mini 研报 API 是可选备用非关键路径
+    - ResearcherLoader 配置：`http://192.168.31.223:8199/reports/latest`
+    - curl 验证端点存在 ✅，返回 404 + 正确的文件缺失提示
+    - 之前的 P0"实现 Mini API"需求**已作废**
+  - 【故障 1】**Alienware 报告生成进程已停止 5 天**
+    - 最新报告：2026-04-16 16:00（距今 5+ 天）
+    - 调度器最后执行：2026-04-17 20:54
+    - 日志显示：推送到 Decision 返回 **404 Not Found**，进程异常退出后未重启
+  - 【故障 2】虽然 Alienware HTTP API 8199 还在运行（/health 返回 ok），但报告生成 scheduler 已停止
+  - 【验证清单】
+    - ✅ Alienware 8199 HTTP 服务：正常（时间戳 13:46:28）
+    - ✅ Alienware `/reports/latest` 端点：存在且正确响应
+    - ✅ Mini 采集管道：正常（news_api 123,582 条，最新 2026-04-21 12:56）
+    - ✅ Mini scheduler：39 个任务已注册并运行
+    - ✅ Decision ResearcherLoader：代码配置正确，等待数据
+    - ❌ **Alienware 报告生成进程**：已停止 5 天
+    - ❌ **Decision 消费**：无新报告可用
+  - 【紧急行动】Priority 1：重启 Alienware 研究员进程（尚未执行，待 Jay.S 确认）
+    ```bash
+    ssh 17621@192.168.31.223 'C:\Users\17621\jbt\services\data\start_researcher.bat'
+    ```
+  - 【诊断文档】
+    - `docs/reports/RESEARCHER_SYSTEM_DIAGNOSIS_U0_COMPLETED_20260421.md`（完整总结）
+    - `docs/reports/RESEARCHER_DATA_PIPELINE_DIAGNOSIS_CORRECTED_20260421.md`（架构纠正版）
+    - `docs/prompts/agents/研究员提示词.md`（已同步更新）
+  - 【U0 模式约束遵循】
+    - ✅ 最小只读确认：仅查询代码、日志、文件列表，未修改任何代码
+    - ✅ 故障定位：已隔离到 Alienware 调度进程（单服务故障）
+    - ✅ 最小诊断文档：已生成，包含故障根本原因、验证清单、优先级行动
+    - ⏳ 用户确认前置：已准备好诊断报告，待 Jay.S 确认是否执行 Priority 1 重启
+    - 未执行任何代码修改（符合 U0 规则）
   - Phase 1 派发单：docs/handoffs/TASK-0077-0078-0079-Claude-派发单.md
   - Phase 2 派发单：docs/handoffs/TASK-0079N-0080-Claude-派发单-Phase2.md
   - Studio重建计划：完成Phase1 Claude任务后，Atlas执行SSH重建命令（Jay.S确认）

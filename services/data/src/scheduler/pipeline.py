@@ -75,8 +75,12 @@ def _sync_minute_to_bars_dir(
                 payload = rec.get("payload", {})
                 if isinstance(payload, str):
                     payload = json.loads(payload)
+                dt_str = rec.get("timestamp") or payload.get("datetime", "")
+                if not dt_str or dt_str.strip() == "":
+                    _logger.warning("bars-sync: empty datetime for %s, skipping record: %s", sym, rec[:100])
+                    continue
                 rows.append({
-                    "datetime": rec.get("timestamp") or payload.get("datetime", ""),
+                    "datetime": dt_str,
                     "open": float(payload.get("open", 0)),
                     "high": float(payload.get("high", 0)),
                     "low": float(payload.get("low", 0)),
@@ -86,10 +90,17 @@ def _sync_minute_to_bars_dir(
                 })
 
             if not rows:
+                _logger.warning("bars-sync minute: %s has no valid rows after filtering", sym)
                 continue
 
             df = pd.DataFrame(rows)
-            df["datetime"] = pd.to_datetime(df["datetime"])
+            df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+            df = df.dropna(subset=["datetime"])  # Remove rows with invalid datetime
+            
+            if len(df) == 0:
+                _logger.warning("bars-sync minute: %s all datetime values are invalid", sym)
+                continue
+            
             df = df.sort_values("datetime").drop_duplicates(
                 subset=["datetime"], keep="last"
             )
@@ -98,6 +109,7 @@ def _sync_minute_to_bars_dir(
             sym_dir = bars_root / dirname
             sym_dir.mkdir(parents=True, exist_ok=True)
 
+            total_written = 0
             for period, group in df.groupby(df["datetime"].dt.to_period("M")):
                 month_str = period.strftime("%Y%m")
                 fpath = sym_dir / f"{month_str}.parquet"
@@ -111,8 +123,12 @@ def _sync_minute_to_bars_dir(
                 else:
                     combined = group
                 combined.to_parquet(fpath, index=False, engine="pyarrow")
+                total_written += len(combined)
 
-            _logger.info("bars-sync minute: %s → %d bars", dirname, len(df))
+            _logger.info("bars-sync minute: %s → %d bars (from %d records), first=%s, last=%s", 
+                        dirname, total_written, len(df),
+                        df["datetime"].min() if len(df) > 0 else "N/A",
+                        df["datetime"].max() if len(df) > 0 else "N/A")
         except Exception as exc:
             _logger.warning("bars-sync minute failed for %s: %s", sym, exc)
 
