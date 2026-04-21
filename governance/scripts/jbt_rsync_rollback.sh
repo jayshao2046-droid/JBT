@@ -28,11 +28,20 @@ STUDIO_IP="192.168.31.142"
 AIR_HOST="jayshao@192.168.31.245"
 AIR_IP="192.168.31.245"
 
-declare -A SERVICE_CONFIG
-SERVICE_CONFIG["data"]="${MINI_HOST}|${MINI_IP}|8105|/health|JBT-DATA-8105|~/JBT/services/data"
-SERVICE_CONFIG["decision"]="${STUDIO_HOST}|${STUDIO_IP}|8104|/health|JBT-DECISION-8104|~/JBT/services/decision"
-SERVICE_CONFIG["dashboard"]="${STUDIO_HOST}|${STUDIO_IP}|8106|/health|JBT-DASHBOARD-8106|~/JBT/services/dashboard"
-SERVICE_CONFIG["backtest"]="${AIR_HOST}|${AIR_IP}|8103|/api/health|JBT-BACKTEST-8103|~/JBT/services/backtest"
+# ============================================================
+# 服务配置查询函数（兼容 bash 3.2，不使用 declare -A）
+# 格式: HOST|IP|PORT|HEALTH_PATH|CONTAINER|REMOTE_PATH
+# ============================================================
+get_service_config() {
+    local svc="$1"
+    case "$svc" in
+        data)      echo "${MINI_HOST}|${MINI_IP}|8105|/health|JBT-DATA-8105|~/JBT/services/data" ;;
+        decision)  echo "${STUDIO_HOST}|${STUDIO_IP}|8104|/health|JBT-DECISION-8104|~/JBT/services/decision" ;;
+        dashboard) echo "${STUDIO_HOST}|${STUDIO_IP}|8106|/health|JBT-DASHBOARD-8106|~/JBT/services/dashboard" ;;
+        backtest)  echo "${AIR_HOST}|${AIR_IP}|8103|/api/health|JBT-BACKTEST-8103|~/JBT/services/backtest" ;;
+        *) return 1 ;;
+    esac
+}
 
 # ============================================================
 # 解析参数
@@ -59,6 +68,9 @@ if [[ -z "$SERVICE" ]]; then
     echo "用法: $0 --service <data|decision|dashboard|backtest>"
     exit 1
 fi
+
+# 验证服务名合法性
+get_service_config "$SERVICE" > /dev/null 2>&1 || { echo "[ERROR] 未知服务: ${SERVICE}（合法值：data|decision|dashboard|backtest）"; exit 1; }
 
 log()  { echo "[$(date '+%H:%M:%S')] $*"; }
 ok()   { echo "[$(date '+%H:%M:%S')] ✓ $*"; }
@@ -126,7 +138,9 @@ SNAPSHOT=$(echo "$SELECTED" | python3 -c "import sys,json; d=json.load(sys.stdin
 HOST=$(echo "$SELECTED" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['host'])" 2>/dev/null || echo "$SELECTED" | grep -o '"host":"[^"]*"' | cut -d'"' -f4)
 TS=$(echo "$SELECTED" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['ts'])" 2>/dev/null || echo "$SELECTED" | grep -o '"ts":"[^"]*"' | cut -d'"' -f4)
 
-IFS='|' read -r host ip port health_path container remote_path <<< "${SERVICE_CONFIG[$SERVICE]}"
+local config
+config=$(get_service_config "$SERVICE")
+IFS='|' read -r host ip port health_path container remote_path <<< "$config"
 
 echo ""
 warn "即将回滚服务 [${SERVICE}]"

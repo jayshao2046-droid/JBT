@@ -34,14 +34,19 @@ AIR_PATH="~/JBT/services"
 AIR_IP="192.168.31.245"
 
 # ============================================================
-# 服务配置：service -> (设备, 容器名, 健康检查URL)
-# ============================================================
+# 服务配置查询函数（兼容 bash 3.2，不使用 declare -A）
 # 格式: HOST|PATH|IP|PORT|HEALTH_PATH|CONTAINER
-declare -A SERVICE_CONFIG
-SERVICE_CONFIG["data"]="${MINI_HOST}|${MINI_PATH}|${MINI_IP}|8105|/health|JBT-DATA-8105"
-SERVICE_CONFIG["decision"]="${STUDIO_HOST}|${STUDIO_PATH}|${STUDIO_IP}|8104|/health|JBT-DECISION-8104"
-SERVICE_CONFIG["dashboard"]="${STUDIO_HOST}|${STUDIO_PATH}|${STUDIO_IP}|8106|/health|JBT-DASHBOARD-8106"
-SERVICE_CONFIG["backtest"]="${AIR_HOST}|${AIR_PATH}|${AIR_IP}|8103|/api/health|JBT-BACKTEST-8103"
+# ============================================================
+get_service_config() {
+    local svc="$1"
+    case "$svc" in
+        data)      echo "${MINI_HOST}|${MINI_PATH}|${MINI_IP}|8105|/health|JBT-DATA-8105" ;;
+        decision)  echo "${STUDIO_HOST}|${STUDIO_PATH}|${STUDIO_IP}|8104|/health|JBT-DECISION-8104" ;;
+        dashboard) echo "${STUDIO_HOST}|${STUDIO_PATH}|${STUDIO_IP}|8106|/health|JBT-DASHBOARD-8106" ;;
+        backtest)  echo "${AIR_HOST}|${AIR_PATH}|${AIR_IP}|8103|/api/health|JBT-BACKTEST-8103" ;;
+        *) return 1 ;;
+    esac
+}
 
 # 清单文件路径
 MANIFEST_FILE="${HOME}/jbt-governance/deploy-manifest.jsonl"
@@ -114,16 +119,37 @@ write_manifest() {
         "$ts" "$svc" "$status" "$host" "$snapshot_dir" "$DRY_RUN" >> "$MANIFEST_FILE"
 }
 
+# 解析 --target 覆盖设备配置
+resolve_target_override() {
+    # 返回 HOST|PATH|IP，为空表示不覆盖
+    case "${TARGET}" in
+        mini)   echo "${MINI_HOST}|${MINI_PATH}|${MINI_IP}" ;;
+        studio) echo "${STUDIO_HOST}|${STUDIO_PATH}|${STUDIO_IP}" ;;
+        air)    echo "${AIR_HOST}|${AIR_PATH}|${AIR_IP}" ;;
+        "")     echo "" ;;
+        *)      err "未知 --target: ${TARGET}（合法值：mini|studio|air）"; exit 1 ;;
+    esac
+}
+
 # 发布单个服务
 deploy_service() {
     local svc="$1"
 
-    if [[ -z "${SERVICE_CONFIG[$svc]+_}" ]]; then
-        err "未知服务: $svc"
-        return 1
-    fi
+    local config
+    config=$(get_service_config "$svc") || { err "未知服务: $svc"; return 1; }
+    IFS='|' read -r host remote_base ip port health_path container <<< "$config"
 
-    IFS='|' read -r host remote_base ip port health_path container <<< "${SERVICE_CONFIG[$svc]}"
+    # 如果指定了 --target，覆盖设备三元组（host/path/ip）
+    local target_override
+    target_override=$(resolve_target_override)
+    if [[ -n "$target_override" ]]; then
+        local t_host t_path t_ip
+        IFS='|' read -r t_host t_path t_ip <<< "$target_override"
+        warn "--target ${TARGET} 覆盖默认设备: ${host} → ${t_host}"
+        host="$t_host"
+        remote_base="$t_path"
+        ip="$t_ip"
+    fi
     local local_src="${PWD}/services/${svc}/"
     local remote_dest="${remote_base}/${svc}/"
     local ts
@@ -154,10 +180,9 @@ deploy_service() {
         rsync_cmd+=(--dry-run)
         log "[DRY-RUN] 模拟同步，不实际修改文件"
     else
-        # 在远端创建快照目录并备份
+        # 在远端创建完整快照（ssh 展开 ~，rsync --backup-dir 不展开，所以快照通过 ssh rsync 独立完成）
         log "在远端创建快照..."
         ssh "${host}" "mkdir -p ${snapshot_dir} && rsync -a --ignore-missing-args ${remote_dest} ${snapshot_dir}/ 2>/dev/null || true"
-        rsync_cmd+=("--backup-dir=${snapshot_dir}")
     fi
 
     rsync_cmd+=("${local_src}" "${host}:${remote_dest}")
