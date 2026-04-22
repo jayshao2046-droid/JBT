@@ -49,12 +49,12 @@ class OptionsCollector(BaseCollector):
     ) -> list[dict[str, Any]]:
         exchange_list = exchanges or DEFAULT_EXCHANGES
         if self.use_mock:
-            return self._mock_records(exchange_list=exchange_list, trade_date=trade_date)
+            raise RuntimeError("mock data is forbidden for options collector")
         try:
             return self._fetch_live(exchange_list=exchange_list, trade_date=trade_date)
         except Exception as exc:
-            self.logger.warning("options live fetch failed: %s, falling back to mock", exc)
-            return self._mock_records(exchange_list=exchange_list, trade_date=trade_date)
+            self.logger.error("options live fetch failed: %s", exc)
+            raise
 
     def _fetch_live(
         self,

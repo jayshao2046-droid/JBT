@@ -80,6 +80,27 @@ class FeatureCacheManager:
             logger.error(f"检查缓存有效性失败: {e}")
             return False
 
+    @staticmethod
+    def _parse_cache_date(value: Any) -> datetime:
+        """解析缓存中的日期字段，兼容纯日期和 ISO 日期时间字符串。"""
+        if isinstance(value, datetime):
+            return value
+
+        text = str(value or "").strip()
+        if not text:
+            raise ValueError("empty cache date")
+
+        for fmt in ("%Y-%m-%d", "%Y%m%d"):
+            try:
+                return datetime.strptime(text, fmt)
+            except ValueError:
+                continue
+
+        try:
+            return datetime.fromisoformat(text)
+        except ValueError as exc:
+            raise ValueError(f"unsupported cache date: {text}") from exc
+
     def get_incremental_date_range(self, cache: dict[str, Any]) -> tuple[str, str]:
         """获取增量更新的日期范围
 
@@ -97,7 +118,7 @@ class FeatureCacheManager:
 
         # 从上次更新的下一天开始
         last_end = cache["data_range"]["end"]
-        start_date = datetime.strptime(last_end, "%Y-%m-%d") + timedelta(days=1)
+        start_date = self._parse_cache_date(last_end) + timedelta(days=1)
         end_date = datetime.now()
 
         return start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")

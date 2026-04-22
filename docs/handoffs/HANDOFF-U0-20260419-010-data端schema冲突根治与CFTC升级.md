@@ -37,7 +37,7 @@ Mini JBT-DATA-8105 健康报告 17/21 红，情绪/RSS/新闻API/天气采集失
 1. **容器重启后 cftc_collector.py 会被旧镜像覆盖**：
    ```bash
    rsync -avz /Users/jayshao/JBT/services/data/src/collectors/cftc_collector.py \
-     jaybot@192.168.31.76:~/jbt/services/data/src/collectors/cftc_collector.py
+     jaybot@192.168.31.76:~/JBT/services/data/src/collectors/cftc_collector.py
    ```
    然后重建镜像，或在 Dockerfile 中更新依赖。
 

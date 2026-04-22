@@ -22,12 +22,12 @@ class MacroCollector(BaseCollector):
     def collect(self, *, countries: list[str] | None = None, as_of: str | None = None, full_history: bool = False) -> list[dict[str, Any]]:
         country_list = countries or self.DEFAULT_COUNTRIES
         if self.use_mock:
-            return self._mock_records(country_list=country_list, as_of=as_of)
+            raise RuntimeError("mock data is forbidden for macro collector")
         try:
             return self._fetch_live(country_list=country_list, as_of=as_of, full_history=full_history)
         except Exception as exc:
-            self.logger.warning("macro live fetch failed: %s, falling back to mock", exc)
-            return self._mock_records(country_list=country_list, as_of=as_of)
+            self.logger.error("macro live fetch failed: %s", exc)
+            raise
 
     def _fetch_live(self, *, country_list: list[str], as_of: str | None, full_history: bool = False) -> list[dict[str, Any]]:
         import akshare as ak

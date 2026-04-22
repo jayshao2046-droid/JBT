@@ -8,6 +8,7 @@ TASK-0121-D1: 集成研究员报告到决策流程。
 import logging
 import os
 import time
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 import httpx
@@ -24,6 +25,46 @@ logger = logging.getLogger(__name__)
 
 # 研报消费审计日志
 _RESEARCH_AUDIT_LOG: list[dict] = []
+
+
+def _resolve_timeframe_minutes(timeframe: str) -> int:
+    mapping = {
+        "1m": 1,
+        "1min": 1,
+        "5m": 5,
+        "5min": 5,
+        "15m": 15,
+        "15min": 15,
+        "30m": 30,
+        "30min": 30,
+        "60m": 60,
+        "60min": 60,
+        "1h": 60,
+        "1d": 1440,
+        "1day": 1440,
+    }
+    return mapping.get(timeframe.strip().lower(), 1)
+
+
+def _default_window_for_timeframe(timeframe: str) -> tuple[str, str]:
+    window_days = {
+        "1m": 3,
+        "1min": 3,
+        "5m": 7,
+        "5min": 7,
+        "15m": 14,
+        "15min": 14,
+        "30m": 21,
+        "30min": 21,
+        "60m": 30,
+        "60min": 30,
+        "1h": 30,
+        "1d": 120,
+        "1day": 120,
+    }
+    end = datetime.utcnow().replace(microsecond=0)
+    start = end - timedelta(days=window_days.get(timeframe.strip().lower(), 3))
+    return start.isoformat(), end.isoformat()
 
 
 class LLMPipeline:
@@ -527,16 +568,21 @@ class LLMPipeline:
         # 2. fallback: Mini API
         try:
             url = f"{data_service_url.rstrip('/')}/api/v1/bars"
-            params: Dict[str, Any] = {"symbol": symbol, "timeframe": timeframe}
-            if start_date:
-                params["start"] = start_date
-            if end_date:
-                params["end"] = end_date
+            timeframe_minutes = _resolve_timeframe_minutes(timeframe)
+            default_start, default_end = _default_window_for_timeframe(timeframe)
+            params: Dict[str, Any] = {
+                "symbol": symbol,
+                "timeframe_minutes": timeframe_minutes,
+                "start": start_date or default_start,
+                "end": end_date or default_end,
+            }
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url, params=params)
                 response.raise_for_status()
                 data = response.json()
-                return data.get("bars", [])
+                if isinstance(data, list):
+                    return data
+                return data.get("bars", data.get("data", []))
         except Exception as e:
             logger.warning(f"[KLINE] Mini API fallback 失败: {e}")
             return []
@@ -550,8 +596,22 @@ class LLMPipeline:
             logger.debug("[KLINE] TQSDK 账号未配置，跳过")
             return []
 
-        duration_map = {"1min": 60, "5min": 300, "15min": 900, "1d": 86400}
-        duration_seconds = duration_map.get(timeframe, 60)
+        duration_map = {
+            "1m": 60,
+            "1min": 60,
+            "5m": 300,
+            "5min": 300,
+            "15m": 900,
+            "15min": 900,
+            "30m": 1800,
+            "30min": 1800,
+            "60m": 3600,
+            "60min": 3600,
+            "1h": 3600,
+            "1d": 86400,
+            "1day": 86400,
+        }
+        duration_seconds = duration_map.get(timeframe.strip().lower(), 60)
 
         import asyncio
         loop = asyncio.get_event_loop()

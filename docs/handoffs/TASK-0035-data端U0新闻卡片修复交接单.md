@@ -33,9 +33,9 @@
 
 ## 三、接口与部署说明
 
-- Mini data 服务路径：`jaybot@172.16.0.49:~/jbt/`
+- Mini data 服务路径：`jaybot@172.16.0.49:~/JBT/`
 - API 端口：8105
-- 重启调度器：`ssh jaybot@172.16.0.49 'cd ~/jbt && pkill -f data_scheduler && nohup .venv/bin/python -m services.data.src.scheduler.data_scheduler > /tmp/scheduler.log 2>&1 &'`
+- 重启调度器：`ssh jaybot@172.16.0.49 'cd ~/JBT && pkill -f data_scheduler && nohup .venv/bin/python -m services.data.src.scheduler.data_scheduler > /tmp/scheduler.log 2>&1 &'`
 
 ---
 

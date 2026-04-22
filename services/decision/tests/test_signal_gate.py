@@ -287,8 +287,10 @@ async def test_l1_context_window():
 
         # 验证请求参数
         call_args = mock_client.get.call_args
-        assert call_args[1]["params"]["duration"] == "1d"
-        assert call_args[1]["params"]["count"] == 5
+        assert call_args[1]["params"]["symbol"] == "RB2505"
+        assert call_args[1]["params"]["timeframe_minutes"] == 1440
+        assert "start" in call_args[1]["params"]
+        assert "end" in call_args[1]["params"]
 
         # 验证上下文内容
         assert "L1 上下文 - 5日日线K线" in context
@@ -342,6 +344,19 @@ async def test_l2_context_window():
         mock_client_class.return_value = mock_client
 
         context, missing = await get_l2_context("RB2505")
+
+        daily_call = mock_client.get.call_args_list[0]
+        minute_call = mock_client.get.call_args_list[1]
+
+        assert daily_call[1]["params"]["symbol"] == "RB2505"
+        assert daily_call[1]["params"]["timeframe_minutes"] == 1440
+        assert "start" in daily_call[1]["params"]
+        assert "end" in daily_call[1]["params"]
+
+        assert minute_call[1]["params"]["symbol"] == "RB2505"
+        assert minute_call[1]["params"]["timeframe_minutes"] == 1
+        assert "start" in minute_call[1]["params"]
+        assert "end" in minute_call[1]["params"]
 
         # 验证上下文内容
         assert "L2 上下文" in context

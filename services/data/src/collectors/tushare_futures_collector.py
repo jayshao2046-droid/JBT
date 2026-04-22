@@ -56,32 +56,42 @@ class TushareFuturesCollector(BaseCollector):
             return []
 
     def fut_basic(self, ts_code: str, trade_date: str) -> list[dict[str, Any]]:
-        if self.use_mock or not self.token:
-            return self._mock_endpoint("fut_basic", ts_code, trade_date)
+        if self.use_mock:
+            raise RuntimeError("mock data is forbidden for futures supplement collector")
+        if not self.token:
+            raise RuntimeError("tushare token not configured for futures supplement collector")
         pro = self._get_pro()
         return self._safe_call(pro.fut_basic, exchange="", fut_type="1")
 
     def fut_daily(self, ts_code: str, trade_date: str) -> list[dict[str, Any]]:
-        if self.use_mock or not self.token:
-            return self._mock_endpoint("fut_daily", ts_code, trade_date)
+        if self.use_mock:
+            raise RuntimeError("mock data is forbidden for futures supplement collector")
+        if not self.token:
+            raise RuntimeError("tushare token not configured for futures supplement collector")
         pro = self._get_pro()
         return self._safe_call(pro.fut_daily, ts_code=ts_code, trade_date=trade_date)
 
     def fut_holding(self, ts_code: str, trade_date: str) -> list[dict[str, Any]]:
-        if self.use_mock or not self.token:
-            return self._mock_endpoint("fut_holding", ts_code, trade_date)
+        if self.use_mock:
+            raise RuntimeError("mock data is forbidden for futures supplement collector")
+        if not self.token:
+            raise RuntimeError("tushare token not configured for futures supplement collector")
         pro = self._get_pro()
         return self._safe_call(pro.fut_holding, symbol=ts_code.split(".")[0].lower(), trade_date=trade_date)
 
     def fut_wsr(self, ts_code: str, trade_date: str) -> list[dict[str, Any]]:
-        if self.use_mock or not self.token:
-            return self._mock_endpoint("fut_wsr", ts_code, trade_date)
+        if self.use_mock:
+            raise RuntimeError("mock data is forbidden for futures supplement collector")
+        if not self.token:
+            raise RuntimeError("tushare token not configured for futures supplement collector")
         pro = self._get_pro()
         return self._safe_call(pro.fut_wsr, trade_date=trade_date)
 
     def fut_settle(self, ts_code: str, trade_date: str) -> list[dict[str, Any]]:
-        if self.use_mock or not self.token:
-            return self._mock_endpoint("fut_settle", ts_code, trade_date)
+        if self.use_mock:
+            raise RuntimeError("mock data is forbidden for futures supplement collector")
+        if not self.token:
+            raise RuntimeError("tushare token not configured for futures supplement collector")
         pro = self._get_pro()
         return self._safe_call(pro.fut_settle, ts_code=ts_code, trade_date=trade_date)
 
@@ -91,16 +101,20 @@ class TushareFuturesCollector(BaseCollector):
         return self.collect_all(ts_code=ts_code, trade_date=trade_date)
 
     def collect_all(self, ts_code: str, trade_date: str) -> dict[str, list[dict[str, Any]]]:
-        self.logger.info("tushare futures collecting: ts_code=%s trade_date=%s", ts_code, trade_date)
+        self.logger.info("tushare futures supplement collecting: ts_code=%s trade_date=%s", ts_code, trade_date)
         result = {
-            "daily": self.fut_daily(ts_code, trade_date),
             "holding": self.fut_holding(ts_code, trade_date),
             "wsr": self.fut_wsr(ts_code, trade_date),
             "settle": self.fut_settle(ts_code, trade_date),
         }
         total = sum(len(v) for v in result.values())
-        self.logger.info("tushare futures total records: %d (daily=%d, holding=%d, wsr=%d, settle=%d)",
-                         total, len(result["daily"]), len(result["holding"]), len(result["wsr"]), len(result["settle"]))
+        self.logger.info(
+            "tushare futures supplement total records: %d (holding=%d, wsr=%d, settle=%d)",
+            total,
+            len(result["holding"]),
+            len(result["wsr"]),
+            len(result["settle"]),
+        )
         return result
 
     def _mock_endpoint(self, endpoint: str, ts_code: str, trade_date: str) -> list[dict[str, Any]]:

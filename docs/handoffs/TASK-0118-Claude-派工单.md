@@ -474,10 +474,10 @@ scp services/data/src/researcher/researcher_health.py alienware@192.168.31.223:/
 ssh alienware@192.168.31.223 "taskkill /F /IM python.exe /FI \"WINDOWTITLE eq researcher\" 2>nul; cd /Users/17621/jbt && start /B python services/data/run_researcher.py"
 
 # Batch B: SCP 到 Mini（data API）
-scp services/data/src/main.py mini@192.168.31.76:~/jbt/services/data/src/main.py
-scp services/data/src/researcher_store.py mini@192.168.31.76:~/jbt/services/data/src/researcher_store.py
+scp services/data/src/main.py mini@192.168.31.76:~/JBT/services/data/src/main.py
+scp services/data/src/researcher_store.py mini@192.168.31.76:~/JBT/services/data/src/researcher_store.py
 # 重启 Mini data API
-ssh mini@192.168.31.76 "cd ~/jbt && pkill -f 'uvicorn.*data' 2>/dev/null; nohup python -m uvicorn services.data.src.main:app --host 0.0.0.0 --port 8105 &"
+ssh mini@192.168.31.76 "cd ~/JBT && pkill -f 'uvicorn.*data' 2>/dev/null; nohup python -m uvicorn services.data.src.main:app --host 0.0.0.0 --port 8105 &"
 ```
 
 ---

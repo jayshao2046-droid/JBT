@@ -12,7 +12,7 @@ echo "=========================================="
 MINI_IP="192.168.31.76"
 MINI_USER="jaybot"
 CONTAINER_NAME="JBT-DATA-8105"
-REPO_PATH="~/jbt"
+REPO_PATH="~/JBT"
 
 # Step 1: Connect to Mini and pull code
 echo ""

@@ -197,7 +197,7 @@ pytest services/decision/tests/ -v --tb=short 2>&1 | tail -50
 
 ### 3. Atlas 统一验收后操作
 - Atlas 确认通过 → 重启 Studio decision 容器（生产上线）
-- 重启命令（由 Atlas/Jay.S 执行）：`ssh jayshao@192.168.31.142 "cd ~/jbt && docker compose restart decision"`
+- 重启命令（由 Atlas/Jay.S 执行）：`ssh jayshao@192.168.31.142 "cd ~/JBT && docker compose restart decision"`
 
 ### 4. 禁止事项
 - **不得**在 Atlas 确认前执行 git commit

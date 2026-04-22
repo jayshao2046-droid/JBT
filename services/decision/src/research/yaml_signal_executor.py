@@ -634,7 +634,7 @@ class YAMLSignalExecutor:
             "symbol": symbol,
             "start": start,
             "end": end,
-            "interval": timeframe_minutes,
+            "timeframe_minutes": timeframe_minutes,
         }
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:

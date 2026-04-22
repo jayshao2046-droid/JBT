@@ -25,7 +25,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 
 CN_TZ = timezone(timedelta(hours=8))
-SERVICE_NAME = "JBT data-service"
+SERVICE_NAME = "JBT-数据"
 
 # ── 统一颜色映射 ──────────────────────────────────────────
 _TEMPLATE_MAP: dict[str, tuple[str, str]] = {
@@ -72,7 +72,7 @@ def collector_start_card(*, collector_name: str, scheduled: bool = True) -> dict
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header(f"📣 [DATA-NOTIFY] {collector_name} 启动", "turquoise"),
+            "header": _header(f"JBT 数据 📣 [通知-采集] {collector_name} 启动", "turquoise"),
             "elements": [
                 _md(f"**采集器:** {collector_name}\n**模式:** {'定时调度' if scheduled else '手动触发'}"),
                 _hr(),
@@ -102,7 +102,7 @@ def collector_done_card(
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header(f"📊 [DATA-TRADE] {collector_name} 完成", "grey"),
+            "header": _header(f"JBT 数据 📊 [通知-采集] {collector_name} 完成", "grey"),
             "elements": [_md(body), _hr(), _note()],
         },
     }
@@ -134,7 +134,7 @@ def collector_batch_card(
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header(f"{icon} [DATA-TRADE] 批量采集完成 {ok_count}/{len(results)}", template),
+            "header": _header(f"JBT 数据 {icon} [通知-批采] 采集完成 {ok_count}/{len(results)}", template),
             "elements": [_md(body), _hr(), _md(summary), _hr(), _note()],
         },
     }
@@ -159,7 +159,7 @@ def collector_fail_card(
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header(f"{icon} [DATA-{level}] {collector_name} 采集失败", template),
+            "header": _header(f"JBT 数据 {icon} [{level}-采集] {collector_name} 采集失败", template),
             "elements": [_md(body), _hr(), _note()],
         },
     }
@@ -184,7 +184,7 @@ def collector_recovery_card(
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header(f"✅ [DATA-NOTIFY] 采集恢复 — {len(recovered)} 个源已恢复", color),
+            "header": _header(f"JBT 数据 ✅ [通知-恢复] 采集恢复 — {len(recovered)} 个源已恢复", color),
             "elements": elements,
         },
     }
@@ -211,7 +211,7 @@ def alert_card(
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header(f"JBT {title}", template),
+            "header": _header(f"JBT 数据 {icon} [{level}-报警] {title}", template),
             "elements": elements,
         },
     }
@@ -262,7 +262,7 @@ def alert_p0_with_buttons(
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header(f"🚨 [DATA-P0] {title}", "red"),
+            "header": _header(f"JBT 数据 🚨 [P0-报警] {title}", "red"),
             "elements": elements,
         },
     }
@@ -302,7 +302,7 @@ def news_batch_card(
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header(f"📰 [DATA-NEWS] {category}  {now_str}", "wathet"),
+            "header": _header(f"JBT 数据 📰 [新闻-{category}] {now_str}", "wathet"),
             "elements": elements,
         },
     }
@@ -334,7 +334,7 @@ def news_breaking_card(
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header("🚨 [DATA-P0] 突发重大新闻", "red"),
+            "header": _header("JBT 数据 🚨 [P0-黑天鹅] 突发重大新闻", "red"),
             "elements": [_md("\n".join(body_parts)), _hr(), _note()],
         },
     }
@@ -400,13 +400,13 @@ def device_health_card(
         elements.append(_md(f"**采集源 {src_ok}/{len(src_list)} {src_icon}**\n" + "\n".join(src_lines)))
         elements.append(_hr())
 
-    next_hour = (datetime.now(CN_TZ).hour + 2) % 24
+    next_hour = (datetime.now(CN_TZ).hour + 4) % 24
     elements.append(_note(f"下次推送: {next_hour:02d}:{time_str[3:]}"))
 
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header(f"{title_icon} Mini 设备健康报告 | {time_str}", color),
+            "header": _header(f"JBT 数据 {title_icon} [通知-健康] Mini 设备 | {time_str}", color),
             "elements": elements,
         },
     }
@@ -455,7 +455,7 @@ def daily_summary_card(
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header(f"📊 [DATA-INFO] JBT 数据端日报", color),
+            "header": _header(f"JBT 数据 📊 [信息-日报] 数据日报", color),
             "elements": [_md(body), _hr(), _note()],
         },
     }
@@ -480,7 +480,7 @@ def service_lifecycle_card(
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header(f"📣 [DATA-NOTIFY] 数据服务{action}", "turquoise"),
+            "header": _header(f"JBT 数据 📣 [通知-服务] 数据服务{action}", "turquoise"),
             "elements": [_md(body), _hr(), _note()],
         },
     }
@@ -496,7 +496,7 @@ def recovery_card(*, title: str, detail: str = "") -> dict[str, Any]:
     return {
         "msg_type": "interactive",
         "card": {
-            "header": _header(f"✅ [DATA-NOTIFY] {title}", "green"),
+            "header": _header(f"JBT 数据 ✅ [通知-恢复] {title}", "green"),
             "elements": [_md(body), _hr(), _note()],
         },
     }

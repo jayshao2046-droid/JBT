@@ -44,10 +44,10 @@
 ### 数据落档现状（已确认）
 
 **Mini 端**:
-- 路径: `~/jbt/data/` (宿主机，防 Docker 重置)
+- 路径: `~/JBT/data/` (宿主机，防 Docker 重置)
 - 总大小: 2.3 GB
-- 期货分钟数据: `~/jbt/data/futures_minute/1m/` (353 MB, 262 品种)
-- 股票分钟数据: `~/jbt/data/{股票代码}/stock_minute/records.parquet`
+- 期货分钟数据: `~/JBT/data/futures_minute/1m/` (353 MB, 262 品种)
+- 股票分钟数据: `~/JBT/data/{股票代码}/stock_minute/records.parquet`
 - Docker 挂载: 宿主机 `/Users/jaybot/jbt/data` → 容器内 `/data`
 - 环境变量: `DATA_STORAGE_ROOT=/data`
 
@@ -100,13 +100,13 @@ Jay.S 2026-04-16 确认：
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │  data 服务 (8105)                                     │  │
 │  │  ├── 数据采集器 (24/7)                                │  │
-│  │  │   └── 落档: ~/jbt/data/ (2.3GB)                   │  │
+│  │  │   └── 落档: ~/JBT/data/ (2.3GB)                   │  │
 │  │  ├── API 端点 (新增)                                  │  │
 │  │  │   ├── GET /api/v1/bars (供 Alienware 读取)        │  │
 │  │  │   ├── POST /api/v1/researcher/reports (接收报告)  │  │
 │  │  │   └── GET /api/v1/researcher/report/latest (供决策)│ │
 │  │  └── 报告存储                                         │  │
-│  │      └── ~/jbt/data/researcher/reports/              │  │
+│  │      └── ~/JBT/data/researcher/reports/              │  │
 │  └──────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                         ↕ 万兆内网

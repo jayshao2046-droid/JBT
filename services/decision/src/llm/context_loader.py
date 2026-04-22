@@ -7,6 +7,7 @@ TASK-0112 Batch A: 扩展 L1/L2 门控上下文加载（K线 + 研报）。
 import logging
 import os
 import time
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -117,6 +118,25 @@ def _is_stock_symbol(symbol: str) -> bool:
     return symbol and symbol[0].isdigit()
 
 
+def _recent_window(*, days: int = 0, hours: int = 0) -> Tuple[str, str]:
+    """返回 data API 可直接消费的最近时间窗。"""
+    end = datetime.utcnow().replace(microsecond=0)
+    start = end - timedelta(days=days, hours=hours)
+    return start.isoformat(), end.isoformat()
+
+
+def _extract_bars(payload: Any) -> List[Dict[str, Any]]:
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        return payload.get("bars", payload.get("data", []))
+    return []
+
+
+def _bar_time(bar: Dict[str, Any]) -> str:
+    return str(bar.get("datetime") or bar.get("timestamp") or "N/A")
+
+
 async def get_l1_context(symbol: str) -> Tuple[str, List[str]]:
     """获取 L1 快审上下文：5日日线K线。
 
@@ -131,21 +151,28 @@ async def get_l1_context(symbol: str) -> Tuple[str, List[str]]:
     data_api_url = os.getenv("DATA_API_URL", "http://localhost:8105")
     missing_sources = []
 
+    is_stock = _is_stock_symbol(symbol)
+
     # 判断是股票还是期货，选择对应的 API 端点
-    if _is_stock_symbol(symbol):
+    if is_stock:
         endpoint = f"{data_api_url.rstrip('/')}/api/v1/stocks/bars"
     else:
         endpoint = f"{data_api_url.rstrip('/')}/api/v1/bars"
 
+    start, end = _recent_window(days=14)
+    params: Dict[str, Any] = {
+        "symbol": symbol,
+        "start": start,
+        "end": end,
+    }
+    if not is_stock:
+        params["timeframe_minutes"] = 1440
+
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                endpoint,
-                params={"symbol": symbol, "duration": "1d", "count": 5},
-            )
+            response = await client.get(endpoint, params=params)
             response.raise_for_status()
-            data = response.json()
-            bars = data.get("bars", [])
+            bars = _extract_bars(response.json())[-5:]
 
             if not bars:
                 logger.warning(f"L1 上下文：{symbol} 5日K线为空")
@@ -156,7 +183,7 @@ async def get_l1_context(symbol: str) -> Tuple[str, List[str]]:
             context_parts = ["[L1 上下文 - 5日日线K线]"]
             for bar in bars:
                 context_parts.append(
-                    f"  {bar.get('timestamp', 'N/A')}: "
+                    f"  {_bar_time(bar)}: "
                     f"开 {bar.get('open', 0):.2f} "
                     f"高 {bar.get('high', 0):.2f} "
                     f"低 {bar.get('low', 0):.2f} "
@@ -199,16 +226,21 @@ async def get_l2_context(symbol: str) -> Tuple[str, List[str]]:
     is_stock = _is_stock_symbol(symbol)
     bars_endpoint = f"{data_api_url.rstrip('/')}/api/v1/stocks/bars" if is_stock else f"{data_api_url.rstrip('/')}/api/v1/bars"
 
+    daily_start, daily_end = _recent_window(days=45)
+    daily_params: Dict[str, Any] = {
+        "symbol": symbol,
+        "start": daily_start,
+        "end": daily_end,
+    }
+    if not is_stock:
+        daily_params["timeframe_minutes"] = 1440
+
     # 1. 拉取 20日日线
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                bars_endpoint,
-                params={"symbol": symbol, "duration": "1d", "count": 20},
-            )
+            response = await client.get(bars_endpoint, params=daily_params)
             response.raise_for_status()
-            data = response.json()
-            daily_bars = data.get("bars", [])
+            daily_bars = _extract_bars(response.json())[-20:]
 
             if not daily_bars:
                 logger.warning(f"L2 上下文：{symbol} 20日日线为空")
@@ -216,9 +248,9 @@ async def get_l2_context(symbol: str) -> Tuple[str, List[str]]:
                 context_parts.append("[DATA_DEGRADED] 20日日线K线缺失")
             else:
                 context_parts.append(f"\n20日日线K线（最近5条）:")
-                for bar in daily_bars[:5]:
+                for bar in daily_bars[-5:]:
                     context_parts.append(
-                        f"  {bar.get('timestamp', 'N/A')}: "
+                        f"  {_bar_time(bar)}: "
                         f"收 {bar.get('close', 0):.2f} "
                         f"量 {bar.get('volume', 0)}"
                     )
@@ -231,16 +263,22 @@ async def get_l2_context(symbol: str) -> Tuple[str, List[str]]:
         missing_sources.append("20日日线K线")
         context_parts.append(f"[DATA_DEGRADED] 20日日线拉取失败: {str(exc)}")
 
+    minute_start, minute_end = _recent_window(days=3)
+
     # 2. 拉取 60根分钟线
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
                 bars_endpoint,
-                params={"symbol": symbol, "duration": "1m", "count": 60},
+                params={
+                    "symbol": symbol,
+                    "start": minute_start,
+                    "end": minute_end,
+                    "timeframe_minutes": 1,
+                },
             )
             response.raise_for_status()
-            data = response.json()
-            minute_bars = data.get("bars", [])
+            minute_bars = _extract_bars(response.json())[-60:]
 
             if not minute_bars:
                 logger.warning(f"L2 上下文：{symbol} 60根分钟线为空")
@@ -248,9 +286,9 @@ async def get_l2_context(symbol: str) -> Tuple[str, List[str]]:
                 context_parts.append("\n[DATA_DEGRADED] 60根分钟线缺失")
             else:
                 context_parts.append(f"\n60根分钟线（最近5条）:")
-                for bar in minute_bars[:5]:
+                for bar in minute_bars[-5:]:
                     context_parts.append(
-                        f"  {bar.get('timestamp', 'N/A')}: "
+                        f"  {_bar_time(bar)}: "
                         f"收 {bar.get('close', 0):.2f}"
                     )
                 if len(minute_bars) < 60:

@@ -7,7 +7,7 @@ A股全量日线回补脚本 — 按交易日批量拉取，高效落盘。
 数据按月分文件存储: data/stock_daily/YYYYMM.parquet
 
 用法:
-  cd /Users/jaybot/jbt
+    cd /Users/jaybot/JBT
   source .venv/bin/activate
   python3 data_backfill/scripts/backfill_stock_daily.py --start 20160101
   python3 data_backfill/scripts/backfill_stock_daily.py --start 20160101 --end 20260419
@@ -25,7 +25,7 @@ from pathlib import Path
 import pandas as pd
 
 # ── 日志 ──
-LOG_DIR = Path("/Users/jaybot/jbt/data_backfill/logs")
+LOG_DIR = Path("/Users/jaybot/JBT/data_backfill/logs")
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
@@ -43,7 +43,7 @@ TUSHARE_TOKEN = os.environ.get(
     "TUSHARE_TOKEN",
     "e6db4d86105126f1f6f09fe933fb4c8cca044e7f94c4168317262eba",
 )
-TARGET_DIR = Path("/Users/jaybot/jbt/data/stock_daily")
+TARGET_DIR = Path("/Users/jaybot/JBT/data/stock_daily")
 
 
 def get_trade_cal(pro, start: str, end: str) -> list[str]:
@@ -52,6 +52,30 @@ def get_trade_cal(pro, start: str, end: str) -> list[str]:
     if cal is None or cal.empty:
         return []
     return sorted(cal["cal_date"].tolist())
+
+
+def get_existing_trade_dates(start_date: str, end_date: str) -> set[str]:
+    """扫描已落盘月文件，返回当前范围内已覆盖的交易日集合。"""
+    covered_dates: set[str] = set()
+
+    for month_file in sorted(TARGET_DIR.glob("*.parquet")):
+        if not month_file.is_file():
+            continue
+        try:
+            frame = pd.read_parquet(month_file, columns=["trade_date"])
+        except Exception as exc:
+            logger.warning("读取已有月文件失败 %s: %s", month_file.name, exc)
+            continue
+
+        if "trade_date" not in frame.columns:
+            continue
+
+        for value in frame["trade_date"].dropna().tolist():
+            trade_date = str(value)
+            if start_date <= trade_date <= end_date:
+                covered_dates.add(trade_date)
+
+    return covered_dates
 
 
 def backfill_stock_daily(start_date: str, end_date: str):
@@ -76,22 +100,17 @@ def backfill_stock_daily(start_date: str, end_date: str):
         logger.error("无交易日，退出")
         return
 
-    # 检查已有进度（跳过已下载的月份最后日期之前的数据）
-    existing_files = sorted(TARGET_DIR.glob("*.parquet"))
-    skip_before = None
-    if existing_files:
-        last_file = existing_files[-1]
-        try:
-            last_df = pd.read_parquet(last_file)
-            if not last_df.empty and "trade_date" in last_df.columns:
-                skip_before = last_df["trade_date"].max()
-                logger.info("发现已有数据到 %s，从下一天继续", skip_before)
-        except Exception:
-            pass
+    covered_dates = get_existing_trade_dates(start_date, end_date)
+    if covered_dates:
+        logger.info(
+            "发现已覆盖交易日 %d 个，最早=%s，最晚=%s",
+            len(covered_dates),
+            min(covered_dates),
+            max(covered_dates),
+        )
 
-    if skip_before:
-        trade_dates = [d for d in trade_dates if d > skip_before]
-        logger.info("跳过已完成日期后，剩余 %d 个交易日", len(trade_dates))
+    trade_dates = [d for d in trade_dates if d not in covered_dates]
+    logger.info("扣除已覆盖日期后，剩余 %d 个交易日", len(trade_dates))
 
     # 按月分组
     monthly_dates: dict[str, list[str]] = {}

@@ -45,6 +45,8 @@ def _save_records(
     data_type: str,
     symbol: str,
     records: list[dict[str, Any]],
+    dedup_by: str | list[str] | None = None,
+    mode: str = "a",
 ) -> int:
     return storage.write_records(
         data_type=data_type,
@@ -52,8 +54,44 @@ def _save_records(
         records=records,
         key="records",
         sort_by="timestamp",
-        mode="a",  # 修复：改为追加模式，避免覆盖历史数据
+        dedup_by=dedup_by,
+        mode=mode,
     )
+
+
+def _coerce_timestamp(value: Any):
+    import pandas as pd
+
+    def _normalize_parsed(parsed):
+        if parsed is None or pd.isna(parsed):
+            return None
+        if getattr(parsed, "tzinfo", None) is None:
+            return parsed
+        return parsed.tz_convert("Asia/Shanghai").tz_localize(None)
+
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        if any(sep in stripped for sep in ("-", ":", "T")):
+            return _normalize_parsed(pd.to_datetime(stripped, errors="coerce"))
+        try:
+            value = int(float(stripped))
+        except (TypeError, ValueError):
+            return _normalize_parsed(pd.to_datetime(stripped, errors="coerce"))
+    elif hasattr(value, "item"):
+        try:
+            value = value.item()
+        except Exception:
+            pass
+
+    if isinstance(value, (int, float)):
+        return _normalize_parsed(pd.to_datetime(int(value), unit="ns", utc=True, errors="coerce"))
+
+    return _normalize_parsed(pd.to_datetime(value, errors="coerce"))
 
 
 def _sync_minute_to_bars_dir(
@@ -79,8 +117,12 @@ def _sync_minute_to_bars_dir(
                 if not dt_str or dt_str.strip() == "":
                     _logger.warning("bars-sync: empty datetime for %s, skipping record: %s", sym, rec[:100])
                     continue
+                dt_val = _coerce_timestamp(dt_str)
+                if dt_val is None:
+                    _logger.warning("bars-sync: invalid datetime for %s, skipping record: %s", sym, dt_str)
+                    continue
                 rows.append({
-                    "datetime": dt_str,
+                    "datetime": dt_val,
                     "open": float(payload.get("open", 0)),
                     "high": float(payload.get("high", 0)),
                     "low": float(payload.get("low", 0)),
@@ -131,7 +173,6 @@ def _sync_minute_to_bars_dir(
                         df["datetime"].max() if len(df) > 0 else "N/A")
         except Exception as exc:
             _logger.warning("bars-sync minute failed for %s: %s", sym, exc)
-
 
 def _sync_daily_to_bars_dir(
     symbol: str,
@@ -317,7 +358,7 @@ def run_overseas_daily_pipeline(
     resolved_config = config or get_config()
     resolved_storage = storage or _build_storage(resolved_config)
 
-    from collectors.overseas_minute_collector import OverseasMinuteCollector
+    from collectors.overseas_minute_collector import DAILY_ONLY_MAP, OverseasMinuteCollector
     collector = OverseasMinuteCollector(config=resolved_config, storage=resolved_storage)
 
     result: dict[str, int] = {}
@@ -325,8 +366,9 @@ def run_overseas_daily_pipeline(
         # 1. 采集 yfinance 品种日线 (COMEX/NYMEX/CBOT/ICE/CME)
         yf_records = collector.collect_yfinance_daily(symbols=symbols)
 
-        # 2. 采集 AkShare 品种日线 (LME/SGX)
-        ak_records = collector.collect_daily_only()
+        # 2. 采集 AkShare 品种日线（仅限调度清单中声明的 daily-only 品种）
+        ak_targets = [symbol for symbol in symbols if symbol in DAILY_ONLY_MAP]
+        ak_records = collector.collect_daily_only(symbols=ak_targets)
 
         # 3. 合并所有记录
         all_records = yf_records + ak_records
@@ -343,7 +385,13 @@ def run_overseas_daily_pipeline(
         for rec in all_records:
             by_sym[rec.get("symbol_or_indicator", "unknown")].append(rec)
         for sym, recs in by_sym.items():
-            _save_records(storage=resolved_storage, data_type="daily", symbol=sym, records=recs)
+            _save_records(
+                storage=resolved_storage,
+                data_type="daily",
+                symbol=sym,
+                records=recs,
+                dedup_by="timestamp",
+            )
     except Exception as exc:
         _logger.error("overseas daily pipeline failed: %s", exc)
 
@@ -355,7 +403,10 @@ def run_overseas_minute_yf_pipeline(
     config: dict[str, Any] | None = None,
     storage: HDF5Storage | None = None,
 ) -> dict[str, int]:
-    """D107: 外盘分钟采集 (yfinance, 21 品种)."""
+    """D107: 外盘分钟采集 (yfinance, 21 品种).
+
+    维护 last-7d 的 1m 窗口；这是当前统一写入 `1min` 存储时可持续保留的最长一致口径。
+    """
     resolved_config = config or get_config()
     resolved_storage = storage or _build_storage(resolved_config)
 
@@ -364,13 +415,20 @@ def run_overseas_minute_yf_pipeline(
 
     result: dict[str, int] = {}
     try:
-        records = collector.collect(period="2d", interval="1m")
+        records = collector.collect(period="7d", interval="1m")
         from collections import defaultdict
         by_sym: dict[str, list] = defaultdict(list)
         for rec in records:
             by_sym[rec.get("symbol_or_indicator", "unknown")].append(rec)
         for sym, recs in by_sym.items():
-            written = _save_records(storage=resolved_storage, data_type="1min", symbol=sym, records=recs)
+            # yfinance 1m 仅提供滚动短窗口，按覆盖写入可避免每 5 分钟重复追加同一批 2d bars。
+            written = _save_records(
+                storage=resolved_storage,
+                data_type="1min",
+                symbol=sym,
+                records=recs,
+                mode="w",
+            )
             result[sym] = written
     except Exception as exc:
         _logger.error("overseas minute yfinance pipeline failed: %s", exc)
@@ -538,15 +596,39 @@ def run_macro_pipeline(
     except Exception as exc:
         _logger.warning("macro primary (AkShare) failed: %s, trying Tushare backup", exc)
         try:
+            from datetime import datetime
             from collectors.tushare_full_collector import TushareFullCollector
             ts_col = TushareFullCollector(config=resolved_config)
             shibor = ts_col.collect_shibor()
-            records = [{"symbol": symbol, "indicator": "shibor", "value": r} for r in shibor]
+            records = []
+            fallback_timestamp = as_of or datetime.utcnow().replace(microsecond=0).isoformat()
+            for row in shibor:
+                timestamp = (
+                    row.get("date")
+                    or row.get("trade_date")
+                    or row.get("month")
+                    or row.get("发布时间")
+                    or fallback_timestamp
+                )
+                records.append(
+                    {
+                        "source_type": "macro_backup",
+                        "symbol_or_indicator": "CN.shibor",
+                        "timestamp": str(timestamp),
+                        "payload": row,
+                    }
+                )
         except Exception as backup_exc:
             _logger.error("macro backup (Tushare) also failed: %s", backup_exc)
             records = []
 
-    written = _save_records(storage=resolved_storage, data_type="macro", symbol=symbol, records=records)
+    written = _save_records(
+        storage=resolved_storage,
+        data_type="macro",
+        symbol=symbol,
+        records=records,
+        dedup_by=["symbol_or_indicator", "timestamp"],
+    )
     return {symbol: written}
 
 
@@ -637,7 +719,7 @@ def run_news_api_pipeline(
     except Exception as exc:
         _logger.warning("news_score mapping failed: %s", exc)
 
-    written = _save_records(storage=resolved_storage, data_type="news_api", symbol=symbol, records=records)
+    written = _save_records(storage=resolved_storage, data_type="news_api", symbol=symbol, records=records, dedup_by="uid")
     return {symbol: written}
 
 
@@ -659,7 +741,7 @@ def run_rss_pipeline(
     resolved_collector = collector or RSSCollector(config=resolved_config, storage=resolved_storage, use_mock=False)
 
     try:
-        records = resolved_collector.collect(feeds=None, as_of=as_of)
+        records = resolved_collector.collect(feeds=None, as_of=as_of, try_rsshub=False)
     except Exception as exc:
         _logger.warning("RSS primary failed: %s, falling back to NewsAPI", exc)
         try:
@@ -669,7 +751,7 @@ def run_rss_pipeline(
             _logger.error("NewsAPI backup also failed: %s", backup_exc)
             records = []
 
-    written = _save_records(storage=resolved_storage, data_type="rss", symbol=symbol, records=records)
+    written = _save_records(storage=resolved_storage, data_type="rss", symbol=symbol, records=records, dedup_by="uid")
     return {symbol: written}
 
 
@@ -786,10 +868,9 @@ def run_tushare_futures_pipeline(
     collector: TushareFuturesCollector | None = None,
     symbol: str = "futures",
 ) -> dict[str, int]:
-    """Run Tushare futures collection and save to separate directories.
+    """Run Tushare futures supplement collection and save to separate directories.
 
     Data types:
-    - daily: fut_daily (日K线) -> hdf5/{symbol}/futures_daily/
     - holding: fut_holding (持仓排名) -> hdf5/{symbol}/futures_holding/
     - wsr: fut_wsr (仓单日报) -> hdf5/{symbol}/futures_wsr/
     - settle: fut_settle (结算参数) -> hdf5/{symbol}/futures_settle/

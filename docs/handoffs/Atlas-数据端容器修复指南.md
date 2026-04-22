@@ -35,7 +35,7 @@ volumes:
 
 **实际容器只有 2 个挂载**：
 - `jbt_jbt-data-storage` → `/data` (named volume)  
-- `bind: ~/jbt/services/data/configs` → `/app/services/data/configs`
+- `bind: ~/JBT/services/data/configs` → `/app/services/data/configs`
 
 **后果**: 容器运行在过时的 Docker image layer 上，不追踪宿主代码变更。`/app/` 目录只有 Dockerfile COPY 的旧文件。
 

@@ -7,7 +7,7 @@
 #   3. 禁用 crontab 中的旧采集任务
 #   4. 重命名旧目录以防误启
 #
-# 用法：ssh jaybot@192.168.31.74 'bash ~/jbt/services/data/scripts/disable_legacy.sh'
+# 用法：ssh jaybot@192.168.31.74 'bash ~/JBT/services/data/scripts/disable_legacy.sh'
 # ─────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -84,7 +84,7 @@ echo ""
 echo "[5/5] 创建迁移锁文件..."
 cat > "$LEGACY_DIR/.JBT_MIGRATED" <<EOF
 此目录的数据采集服务已于 $(date '+%Y-%m-%d %H:%M:%S') 迁移到 JBT。
-新数据服务：~/jbt/services/data/ (Docker: JBT-DATA-8105)
+新数据服务：~/JBT/services/data/ (Docker: JBT-DATA-8105)
 新数据目录：~/jbt-data/
 
 禁止在此目录重新启动任何采集进程。

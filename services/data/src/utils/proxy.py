@@ -31,9 +31,15 @@ def _cfg() -> dict:
 
 
 def get_proxy_url() -> str:
-    """Return the local HTTP proxy URL (e.g. http://127.0.0.1:7890)."""
-    port = _cfg().get("proxy_port", 7890)
-    return f"http://127.0.0.1:{port}"
+    """Return the local HTTP proxy URL (e.g. http://127.0.0.1:7890).
+
+    proxy_host defaults to 127.0.0.1 but can be overridden in vpn.yaml,
+    e.g. set to the Docker host IP so containers can reach the host proxy.
+    """
+    cfg = _cfg()
+    host = cfg.get("proxy_host", "127.0.0.1")
+    port = cfg.get("proxy_port", 7890)
+    return f"http://{host}:{port}"
 
 
 def get_proxy_latency_ms() -> float | None:

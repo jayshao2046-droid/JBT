@@ -163,7 +163,7 @@ echo ""
 
 info "检查 Studio decision 日志..."
 # 注意：需要 SSH 权限
-if ssh jay@${STUDIO_HOST} "tail -20 ~/jbt/services/decision/logs/app.log | grep -E '(收到研究员报告|评级)'" 2>/dev/null; then
+if ssh jay@${STUDIO_HOST} "tail -20 ~/JBT/services/decision/logs/app.log | grep -E '(收到研究员报告|评级)'" 2>/dev/null; then
     success "Studio 已收到报告并评级"
 else
     info "无法读取 Studio 日志（需要 SSH 权限）"
@@ -202,6 +202,6 @@ echo "  队列更新: $([ "$PENDING_COUNT_FINAL" -lt "$PENDING_COUNT_AFTER" ] &&
 echo ""
 echo "详细日志位置："
 echo "  Mini: ssh jaybot@${MINI_HOST} 'docker logs JBT-DATA-8105 | tail -50'"
-echo "  Alienware: C:\\Users\\17621\\jbt\\runtime\\researcher\\logs\\server.log"
-echo "  Studio: ssh jay@${STUDIO_HOST} 'tail -50 ~/jbt/services/decision/logs/app.log'"
+echo "  Alienware: C:\\Users\\17621\\JBT\\runtime\\researcher\\logs\\server.log"
+echo "  Studio: ssh jay@${STUDIO_HOST} 'tail -50 ~/JBT/services/decision/logs/app.log'"
 echo ""

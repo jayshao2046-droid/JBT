@@ -48,12 +48,12 @@ class CftcCollector(BaseCollector):
     ) -> list[dict[str, Any]]:
         indicator_list = indicators or DEFAULT_INDICATORS
         if self.use_mock:
-            return self._mock_records(indicator_list=indicator_list, as_of=as_of)
+            raise RuntimeError("mock data is forbidden for cftc collector")
         try:
             return self._fetch_live(indicator_list=indicator_list, as_of=as_of, full_history=full_history)
         except Exception as exc:
-            self.logger.warning("cftc live fetch failed: %s, falling back to mock", exc)
-            return self._mock_records(indicator_list=indicator_list, as_of=as_of)
+            self.logger.error("cftc live fetch failed: %s", exc)
+            raise
 
     def _fetch_live(
         self,

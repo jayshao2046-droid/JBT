@@ -280,7 +280,7 @@ def test_generate_summary_report():
 
 ```bash
 # 在 Studio 上执行
-cd ~/jbt/services/decision
+cd ~/JBT/services/decision
 source .venv/bin/activate
 python batch_evaluate_strategies.py
 ```

@@ -248,14 +248,15 @@ class StockRunner:
                 url,
                 params={
                     "symbol": symbol,
-                    "start_date": start_date,
-                    "end_date": end_date,
+                    "start": start_date,
+                    "end": end_date,
+                    "timeframe_minutes": 1,
                 },
                 timeout=30.0,
             )
             resp.raise_for_status()
             data = resp.json()
-            return data if isinstance(data, list) else data.get("bars", [])
+            return data if isinstance(data, list) else data.get("bars", data.get("data", []))
         except Exception as exc:
             logger.warning("从 data 服务获取股票 bars 失败: %s", exc)
             return []

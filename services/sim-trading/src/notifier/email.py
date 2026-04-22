@@ -60,11 +60,32 @@ class EmailNotifier:
             logger.error("EmailNotifier missing env vars: %s", missing)
             return False
 
-        level_icon = {"P0": "🚨", "P1": "⚠️", "P2": "🔔"}.get(event.risk_level, "📋")
-        header_color = {"P0": "#c0392b", "P1": "#e67e22", "P2": "#f39c12"}.get(event.risk_level, "#1abc9c")
-        from datetime import datetime
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        subject = f"[JBT-SIM-{event.risk_level}] {event.event_code}: {event.message or event.reason}"
+        # 颜色/图标按统一规范
+        _ci = {
+            "P0": ("🚨", "#c0392b"),
+            "P1": ("⚠️", "#e67e22"),
+            "P2": ("🔔", "#f39c12"),
+        }
+        level_icon, header_color = _ci.get(event.risk_level, ("📣", "#1abc9c"))
+        cat_label_map = {
+            "TRADE": ("📊", "#7f8c8d", "成交"),
+            "ORDER": ("📊", "#7f8c8d", "订单"),
+            "SIGNAL": ("📈", "#2980b9", "信号"),
+            "NOTIFY": ("📣", "#1abc9c", "通知"),
+            "SYSTEM": ("📣", "#1abc9c", "系统"),
+            "SESSION": ("📣", "#1abc9c", "收盘"),
+        }
+        from datetime import datetime, timezone, timedelta
+        CN_TZ = timezone(timedelta(hours=8))
+        ts = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
+        cat = (event.category or "").upper()
+        if cat in cat_label_map:
+            level_icon, header_color, cat_zh = cat_label_map[cat]
+            type_label = f"{cat_zh}"
+        else:
+            cat_zh = event.risk_level or "通知"
+            type_label = cat_zh
+        subject = f"JBT 模拟交易 {level_icon} [{event.risk_level or cat_zh}-{type_label}] {event.message or event.reason}"
         html_body = f"""
 <html>
 <head>
@@ -89,8 +110,8 @@ class EmailNotifier:
 <body>
 <div class="card">
   <div class="header">
-    <h2>{level_icon} [SIM-{event.risk_level}] {event.event_code}: {event.message or event.reason}</h2>
-    <div class="sub">JBT SimTrading 风险通知</div>
+    <h2>{level_icon} [{event.risk_level or cat_zh}-{type_label}] {event.message or event.reason}</h2>
+    <div class="sub">JBT 模拟交易 通知</div>
   </div>
   <div class="body">
     <p class="section-title">核心信息</p>
@@ -111,7 +132,7 @@ class EmailNotifier:
       <tr><td>追踪 ID</td><td>{event.trace_id or '-'}</td></tr>
     </table>
   </div>
-  <div class="footer">JBT SimTrading &nbsp;|&nbsp; {ts}</div>
+  <div class="footer">JBT-模拟交易 &nbsp;|&nbsp; {ts}</div>
 </div>
 </body></html>
 """
@@ -192,7 +213,7 @@ def send_daily_report_email(report_data: dict) -> bool:
 
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     header_color = "#2980b9"
-    subject = f"📈 [SIM-DAILY] 模拟交易日报 {report_date}"
+    subject = f"JBT 模拟交易 📈 [模拟-日报] {report_date} 收盘汇总"
 
     # 持仓汇总行
     if positions:
@@ -227,8 +248,8 @@ def send_daily_report_email(report_data: dict) -> bool:
 <body>
 <div class="card">
   <div class="header">
-    <h2>📈 [SIM-DAILY] 模拟交易日报 {report_date}</h2>
-    <div class="sub">JBT SimTrading 通知</div>
+    <h2>📈 [模拟-日报] {report_date} 收盘汇总</h2>
+    <div class="sub">JBT 模拟交易 通知</div>
   </div>
   <div class="body">
     <p class="section-title">核心信息</p>
@@ -245,7 +266,7 @@ def send_daily_report_email(report_data: dict) -> bool:
       {pos_rows}
     </table>
   </div>
-  <div class="footer">JBT SimTrading &nbsp;|&nbsp; {ts}</div>
+  <div class="footer">JBT-模拟交易 &nbsp;|&nbsp; {ts}</div>
 </div>
 </body></html>
 """

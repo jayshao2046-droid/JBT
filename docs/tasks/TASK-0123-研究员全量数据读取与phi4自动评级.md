@@ -39,8 +39,8 @@
 
 ### 问题 3: 数据分类不明确
 - Mini 上有多种数据类型：
-  - 期货分钟数据: `~/jbt/data/futures_minute/1m/` (353 MB, 262 品种)
-  - 股票分钟数据: `~/jbt/data/{股票代码}/stock_minute/records.parquet` (5368 只)
+  - 期货分钟数据: `~/JBT/data/futures_minute/1m/` (353 MB, 262 品种)
+  - 股票分钟数据: `~/JBT/data/{股票代码}/stock_minute/records.parquet` (5368 只)
   - 爬虫数据: 新闻、基本面、情绪数据
 - 当前研究员生成**单一报告**，包含所有数据
 - 用户希望按数据类型分类生成多份研报
@@ -62,7 +62,7 @@
 
 **实现**:
 1. 在 Mini `services/data/src/main.py` 添加 `/api/v1/bars` 端点
-2. 读取 `~/jbt/data/futures_minute/1m/{symbol}/` 下的 parquet 文件
+2. 读取 `~/JBT/data/futures_minute/1m/{symbol}/` 下的 parquet 文件
 3. 支持参数: `symbol`, `start`, `end`, `limit`
 
 **工作量**: 2 文件，约 1 小时
@@ -81,7 +81,7 @@
 - 跨平台兼容性问题（Mac → Windows）
 
 **实现**:
-1. Mini 配置 SMB 共享: `~/jbt/data` → `\\192.168.31.76\jbt\data`
+1. Mini 配置 SMB 共享: `~/JBT/data` → `\\192.168.31.76\jbt\data`
 2. Alienware 挂载网络驱动器: `net use Z: \\192.168.31.76\jbt\data`
 3. 修改研究员代码，直接读取 `Z:\futures_minute\1m\`
 

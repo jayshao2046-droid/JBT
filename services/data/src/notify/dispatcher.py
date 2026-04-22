@@ -131,16 +131,18 @@ def _webhook_for_type(notify_type: NotifyType) -> str:
 
 
 def _is_quiet_hours(now: datetime | None = None) -> bool:
-    """默认 22:00-08:00 静默时段。"""
+    """静默时段：00:11–07:59，即推送窗口为 08:00–24:10。"""
     now = now or datetime.now(CN_TZ)
-    return now.hour >= 22 or now.hour < 8
+    minutes = now.hour * 60 + now.minute
+    # 静默：00:11–07:59（minutes 11~479）
+    return 11 <= minutes < 480
 
 
 def _is_news_quiet_hours(now: datetime | None = None) -> bool:
-    """NEWS 专用静默时段：22:00-08:30。"""
+    """NEWS 专用静默时段：00:11–08:30。"""
     now = now or datetime.now(CN_TZ)
     minutes = now.hour * 60 + now.minute
-    return minutes >= 22 * 60 or minutes < 8 * 60 + 30
+    return 11 <= minutes < 510  # 510 = 08*60+30
 
 
 def _is_quiet_hours_for_type(notify_type: NotifyType, now: datetime | None = None) -> bool:

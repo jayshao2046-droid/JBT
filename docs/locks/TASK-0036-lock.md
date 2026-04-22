@@ -23,7 +23,7 @@
 
 - Git 提交：`300c77d` — `fix(data-overseas): U0热修 - 外盘分钟K线 0产出修复`
 - 推送至：`origin main`（GitHub）
-- 两地同步：MacBook（本地）+ Mini `jaybot@172.16.0.49:~/jbt/`（蒲公英）
+- 两地同步：MacBook（本地）+ Mini `jaybot@172.16.0.49:~/JBT/`（蒲公英）
 - 审查通过：`REVIEW-TASK-0036` PASS
 
 ---

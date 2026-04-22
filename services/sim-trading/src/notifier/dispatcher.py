@@ -1,19 +1,27 @@
 """
-NotifierDispatcher — TASK-0014 P1 / A3
-Dual-channel dispatch with risk state tracking, dedup/suppression/recovery/escalation.
+NotifierDispatcher — TASK-NOTIFY-20260423-A
+双通道调度 + 静默窗口 + alarm.log 反馈 + 3群路由。
 """
 import enum
+import json
 import logging
+import os
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
 
 from .feishu import FeishuNotifier
 from .email import EmailNotifier
+from .quiet_window import can_send
 
 logger = logging.getLogger(__name__)
 
 _dispatcher_singleton: Optional["NotifierDispatcher"] = None
+CN_TZ = timezone(timedelta(hours=8))
+
+# alarm.log 路径
+_ALARM_LOG = os.environ.get("NOTIFY_ALARM_LOG", "/data/logs/notify_alarm.log")
 
 
 @dataclass
@@ -78,6 +86,8 @@ class NotifierDispatcher:
         self._escalation_window_s = escalation_window_s
         self._dedup: Dict[str, _DedupEntry] = {}
         self._escalation_history: Dict[str, List[float]] = {}
+        # alarm.log 失败计数：{event_code: (count, first_ts)}
+        self._alarm_pending: Dict[str, tuple] = {}
 
     @property
     def state(self) -> SystemRiskState:
@@ -155,7 +165,7 @@ class NotifierDispatcher:
     def dispatch(self, event: RiskEvent) -> SystemRiskState:
         """
         调用双通道并更新系统风险状态。
-        包含去重、升级逻辑；被抑制的事件不实际发送。
+        包含去重、升级、静默窗口逻辑；被抑制 / 静默的事件不实际发送。
         """
         now = time.time()
 
@@ -170,6 +180,11 @@ class NotifierDispatcher:
             )
             return self._state
 
+        # 静默窗口检查：P0 / TRADE / ORDER 穿透；其余静默期丢弃
+        if not can_send(level=event.risk_level, category=event.category):
+            logger.debug("[dispatcher] 静默期，跳过事件 %s", event.event_code)
+            return self._state
+
         # Carry forward suppressed count into extra for summary notification
         old_entry = self._dedup.get(event.event_code)
         if old_entry and old_entry.suppressed > 0:
@@ -180,12 +195,15 @@ class NotifierDispatcher:
         return self._do_dispatch(event)
 
     def _do_dispatch(self, event: RiskEvent) -> SystemRiskState:
-        """实际执行双通道发送。"""
+        """实际执行双通道发送，记录 alarm.log，并附带 pending_banner。"""
         feishu_ok = False
         email_ok = False
 
+        # 构建 pending_banner（上次失败后首次成功时提示）
+        pending_banner = self._pop_pending_banner(event.event_code)
+
         try:
-            feishu_ok = self._feishu.send(event)
+            feishu_ok = self._feishu.send(event, pending_banner=pending_banner)
         except Exception as exc:
             logger.error("FeishuNotifier raised unexpected exception: %s", exc)
             feishu_ok = False
@@ -200,18 +218,58 @@ class NotifierDispatcher:
             self._state = SystemRiskState.NORMAL
         elif not feishu_ok and email_ok:
             logger.error("Feishu channel failed for event %s", event.event_code)
+            self._append_alarm_log(event, "feishu_failed")
+            self._mark_alarm_pending(event.event_code)
             self._state = SystemRiskState.FEISHU_FAILED
         elif feishu_ok and not email_ok:
             logger.error("Email channel failed for event %s", event.event_code)
+            self._append_alarm_log(event, "email_failed")
             self._state = SystemRiskState.EMAIL_FAILED
         else:
             logger.error(
                 "BOTH notification channels failed for event %s — ORDERS_BLOCKED",
                 event.event_code,
             )
+            self._append_alarm_log(event, "both_failed")
+            self._mark_alarm_pending(event.event_code)
             self._state = SystemRiskState.ORDERS_BLOCKED
 
         return self._state
+
+    # ---- alarm.log 反馈机制 ----
+
+    def _append_alarm_log(self, event: RiskEvent, reason: str) -> None:
+        """向 alarm.log 追加 JSONL 失败记录。"""
+        try:
+            ts = datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
+            record = json.dumps({
+                "ts": ts, "event_code": event.event_code,
+                "reason": reason, "risk_level": event.risk_level,
+                "category": event.category,
+            }, ensure_ascii=False)
+            log_path = _ALARM_LOG
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(record + "\n")
+        except Exception as exc:
+            logger.warning("[dispatcher] alarm.log 写入失败: %s", exc)
+
+    def _mark_alarm_pending(self, event_code: str) -> None:
+        """标记该 event_code 有待通知的失败。"""
+        now_ts = datetime.now(CN_TZ).strftime("%H:%M:%S")
+        if event_code not in self._alarm_pending:
+            self._alarm_pending[event_code] = (1, now_ts)
+        else:
+            cnt, first_ts = self._alarm_pending[event_code]
+            self._alarm_pending[event_code] = (cnt + 1, first_ts)
+
+    def _pop_pending_banner(self, event_code: str) -> str:
+        """若存在待通知的失败记录，消费并返回 banner 文本。"""
+        pending = self._alarm_pending.pop(event_code, None)
+        if pending:
+            cnt, first_ts = pending
+            return f"⚠️ 上次推送失败累计 {cnt} 条，最早 {first_ts}"
+        return ""
 
     def is_orders_blocked(self) -> bool:
         """当双通道均失败时返回 True，上层调用方应拒绝新开仓。"""

@@ -7,6 +7,8 @@ import time
 from datetime import datetime
 from typing import Any
 
+import pandas as pd
+
 from collectors.base import BaseCollector
 
 
@@ -28,12 +30,12 @@ class TqSdkCollector(BaseCollector):
     def collect(self, *, symbols: list[str] | None = None, duration: int = 60, as_of: str | None = None) -> list[dict[str, Any]]:
         symbol_list = symbols or self.DEFAULT_SYMBOLS
         if self.use_mock:
-            return self._mock_records(symbol_list=symbol_list, as_of=as_of)
+            raise RuntimeError("mock data is forbidden for tqsdk collector")
         try:
             return self._fetch_live(symbol_list=symbol_list, duration=duration, as_of=as_of)
         except Exception as exc:
-            self.logger.warning("tqsdk live fetch failed: %s, falling back to mock", exc)
-            return self._mock_records(symbol_list=symbol_list, as_of=as_of)
+            self.logger.error("tqsdk live fetch failed: %s", exc)
+            raise
 
     def _fetch_live(self, *, symbol_list: list[str], duration: int, as_of: str | None) -> list[dict[str, Any]]:
         from tqsdk import TqApi, TqAuth
@@ -71,7 +73,7 @@ class TqSdkCollector(BaseCollector):
                     if df is not None and len(df) > 0:
                         for idx in range(len(df)):
                             row = df.iloc[idx]
-                            dt_val = str(row.get("datetime", timestamp))
+                            dt_val = self._normalize_timestamp(row.get("datetime", timestamp), timestamp)
                             records.append({
                                 "source_type": "tqsdk_minute",
                                 "symbol_or_indicator": sym,
@@ -97,6 +99,46 @@ class TqSdkCollector(BaseCollector):
         if not records:
             raise RuntimeError("tqsdk fetched no data for any symbol")
         return records
+
+    @staticmethod
+    def _normalize_timestamp(raw_value: Any, fallback: str) -> str:
+        def _to_shanghai_iso(value: Any) -> str | None:
+            parsed = pd.to_datetime(value, errors="coerce")
+            if pd.isna(parsed):
+                return None
+            if getattr(parsed, "tzinfo", None) is None:
+                return parsed.isoformat()
+            return parsed.tz_convert("Asia/Shanghai").tz_localize(None).isoformat()
+
+        if raw_value is None:
+            return fallback
+
+        try:
+            if hasattr(raw_value, "item"):
+                raw_value = raw_value.item()
+        except Exception:
+            pass
+
+        if isinstance(raw_value, str):
+            stripped = raw_value.strip()
+            if not stripped:
+                return fallback
+            if any(sep in stripped for sep in ("-", ":", "T")):
+                normalized = _to_shanghai_iso(stripped)
+                return normalized or fallback
+            try:
+                raw_value = int(float(stripped))
+            except (TypeError, ValueError):
+                return fallback
+
+        if isinstance(raw_value, (int, float)):
+            parsed = pd.to_datetime(int(raw_value), unit="ns", utc=True, errors="coerce")
+            if pd.isna(parsed):
+                return fallback
+            return parsed.tz_convert("Asia/Shanghai").tz_localize(None).isoformat()
+
+        normalized = _to_shanghai_iso(raw_value)
+        return normalized or fallback
 
     def _mock_records(self, *, symbol_list: list[str], as_of: str | None) -> list[dict[str, Any]]:
         timestamp = as_of or datetime.utcnow().replace(microsecond=0).isoformat()

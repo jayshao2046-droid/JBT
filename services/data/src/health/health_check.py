@@ -40,6 +40,7 @@ if env_path.exists():
 
 # --------------- 配置加载 ---------------
 import yaml  # noqa: E402
+from utils.trading_calendar import GlobalTradingCalendar  # noqa: E402
 
 MONITOR_CFG_PATH = ROOT / "configs" / "monitoring.yaml"
 
@@ -52,6 +53,7 @@ def load_config() -> dict:
 
 CFG = load_config()
 TH = CFG.get("thresholds", {})
+GLOBAL_CALENDAR = GlobalTradingCalendar()
 
 # --------------- 设备识别 ---------------
 _hostname = (os.environ.get("JBT_DEVICE") or socket.gethostname()).lower()
@@ -76,20 +78,23 @@ COLLECTOR_STATUS_FILE = DATA_ROOT / "logs" / "collector_status_latest.json"
 # trading_only: True = 仅交易时段检查; False = 全天检查
 DATA_RULES: dict[str, dict] = {
     "futures_minute":  {"dir": DATA_ROOT / "futures_minute",       "max_age_h": 2,   "trading_only": True,  "weekend_skip": False, "label": "国内期货分钟"},
-    "futures_eod":     {"dir": DATA_ROOT / "futures_minute",       "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "国内期货EOD"},
-    "overseas_minute": {"dir": DATA_ROOT / "overseas_kline" / "1m",    "max_age_h": 48,  "trading_only": False, "weekend_skip": True,  "label": "外盘期货分钟", "paused_reason": "已暂停采集"},
+    "futures_eod":     {"dir": DATA_ROOT / "futures_daily",        "max_age_h": 26,  "delay_h": 24, "trading_only": False, "weekend_skip": True,  "label": "国内期货EOD"},
+    "overseas_minute": {"dir": DATA_ROOT / "NYMEX.CL" / "1min",        "max_age_h": 6,   "delay_h": 1,  "trading_only": True,  "weekend_skip": False, "label": "外盘期货分钟"},
     "overseas_daily":  {"dir": DATA_ROOT / "COMEX.GC" / "daily",      "max_age_h": 50,  "trading_only": False, "weekend_skip": True,  "label": "外盘期货日线"},
+    "symbol_features": {"max_age_h": 26, "trading_only": False, "weekend_skip": True, "label": "品种特征更新", "paused_reason": "宿主机 LaunchAgent 执行"},
+    "stock_daily":     {"dir": DATA_ROOT / "stock_daily",          "max_age_h": 26,  "delay_h": 24, "trading_only": False, "weekend_skip": True,  "label": "A股全量日线"},
     "stock_minute":    {"dir": DATA_ROOT / "stock_minute",             "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "A股分钟", "paused_reason": "已暂停采集"},
     "stock_realtime":  {"dir": DATA_ROOT / "stock_minute",          "max_age_h": 2,   "trading_only": True,  "weekend_skip": False, "label": "A股实时", "paused_reason": "已暂停采集"},
     "watchlist":       {"dir": DATA_ROOT / "logs",                  "max_age_h": 26,  "trading_only": False, "weekend_skip": False, "label": "自选股"},
     "macro_global":    {"dir": DATA_ROOT / "macro_global",          "max_age_h": 720, "trading_only": False, "weekend_skip": False, "label": "宏观数据"},
+    "news_api":        {"dir": DATA_ROOT / "news_api",              "max_age_h": 1,   "trading_only": False, "weekend_skip": False, "label": "新闻API"},
     "news_rss":        {"dirs": [DATA_ROOT / "news_rss", DATA_ROOT / "parquet" / "news_rss", DATA_ROOT / "parquet" / "rss_news"], "max_age_h": 3, "trading_only": False, "weekend_skip": False, "label": "新闻RSS"},
     "position_daily":  {"dir": DATA_ROOT / "position_daily",        "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "持仓日报"},
     "position_weekly": {"dir": DATA_ROOT / "position_daily",        "max_age_h": 200, "trading_only": False, "weekend_skip": False, "label": "持仓周报"},
     "volatility_cboe": {"dir": DATA_ROOT / "volatility_index",      "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "CBOE波动率"},
     "volatility_qvix": {"dir": DATA_ROOT / "volatility_index",      "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "QVIX波动率"},
     "shipping":        {"dir": DATA_ROOT / "shipping",              "max_age_h": 26,  "trading_only": False, "weekend_skip": False, "label": "海运运费"},
-    "tushare":         {"dir": DATA_ROOT / "stock_daily",            "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "Tushare日线"},
+    "tushare":         {"dir": DATA_ROOT / "stock_daily",            "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "Tushare期货持仓/仓单/结算"},
     "weather":         {"dir": DATA_ROOT / "weather",               "max_age_h": 14,  "trading_only": False, "weekend_skip": False, "label": "天气"},
     "sentiment":       {"dir": DATA_ROOT / "sentiment",             "max_age_h": 26,  "trading_only": False, "weekend_skip": False, "label": "情绪指数"},
     "forex":           {"dir": DATA_ROOT / "forex",                 "max_age_h": 26,  "trading_only": False, "weekend_skip": True,  "label": "外汇日线"},
@@ -128,6 +133,9 @@ def _is_intraday_stock() -> bool:
 
 def _is_intraday(name: str) -> bool:
     """根据数据源名称判断是否处于对应交易时段。"""
+    if name == "overseas_minute":
+        GLOBAL_CALENDAR.refresh()
+        return GLOBAL_CALENDAR.snapshot(datetime.now()).overseas.is_open
     if name in ("stock_realtime",):
         return _is_intraday_stock()
     return _is_intraday_futures()
@@ -357,6 +365,7 @@ def get_collector_freshness() -> list[dict[str, Any]]:
         age_h       — float: 最新文件距今小时数; -1 = 目录不存在或无文件
         age_str     — 格式化字符串 (如 "1.2h" 或 "目录不存在")
         threshold_h — float: 告警阈值 (小时)
+        delay_h     — float: dashboard 判定 delayed 的小时阈值
         trading_only— bool
         skipped     — bool: 非交易时段跳过检查
     """
@@ -365,12 +374,15 @@ def get_collector_freshness() -> list[dict[str, Any]]:
     is_weekend = _is_weekend()
 
     for name, rule in DATA_RULES.items():
+        threshold_h: float = rule["max_age_h"]
+        delay_h: float = float(rule.get("delay_h", threshold_h * 0.5 if threshold_h > 0 else 0.0))
+        trading_only: bool = rule["trading_only"]
         paused_reason = str(rule.get("paused_reason") or "")
         if paused_reason:
             results.append({
                 "name": name, "label": rule["label"],
                 "ok": True, "age_h": -1, "age_str": paused_reason,
-                "threshold_h": rule["max_age_h"], "trading_only": rule["trading_only"], "skipped": True,
+                "threshold_h": threshold_h, "delay_h": delay_h, "trading_only": trading_only, "skipped": True,
             })
             continue
 
@@ -378,9 +390,7 @@ def get_collector_freshness() -> list[dict[str, Any]]:
         if configured_dirs is None:
             configured_dirs = [rule["dir"]]
         dirs = [Path(p) for p in configured_dirs]
-        threshold_h: float = rule["max_age_h"]
         label: str = rule["label"]
-        trading_only: bool = rule["trading_only"]
         weekend_skip: bool = rule.get("weekend_skip", False)
 
         # 非交易时段跳过（分钟实时数据）
@@ -388,7 +398,7 @@ def get_collector_freshness() -> list[dict[str, Any]]:
             results.append({
                 "name": name, "label": label,
                 "ok": True, "age_h": -1, "age_str": "非交易时段",
-                "threshold_h": threshold_h, "trading_only": True, "skipped": True,
+                "threshold_h": threshold_h, "delay_h": delay_h, "trading_only": True, "skipped": True,
             })
             continue
 
@@ -397,7 +407,7 @@ def get_collector_freshness() -> list[dict[str, Any]]:
             results.append({
                 "name": name, "label": label,
                 "ok": True, "age_h": -1, "age_str": "周末休市",
-                "threshold_h": threshold_h, "trading_only": trading_only, "skipped": True,
+                "threshold_h": threshold_h, "delay_h": delay_h, "trading_only": trading_only, "skipped": True,
             })
             continue
 
@@ -416,14 +426,14 @@ def get_collector_freshness() -> list[dict[str, Any]]:
             except OSError as e:
                 logger.warning(f"Failed to scan futures directories: {e}")
 
-        # tushare: 新 pipeline 写入 {交易所}.{合约}/futures_holding|wsr|settle|daily/，动态发现
+        # tushare: 新 pipeline 写入 {交易所}.{合约}/futures_holding|wsr|settle/，动态发现
         if name == "tushare":
             _exchange_re = re.compile(r'^(SHFE|DCE|CZCE|INE|GFEX|CFFEX)\.')
             try:
                 for d in DATA_ROOT.iterdir():
                     if d.is_dir() and _exchange_re.match(d.name):
-                        # 检查 futures_holding, futures_wsr, futures_settle, futures_daily 四个子目录
-                        for subdir_name in ["futures_holding", "futures_wsr", "futures_settle", "futures_daily"]:
+                        # 检查 futures_holding, futures_wsr, futures_settle 三个子目录
+                        for subdir_name in ["futures_holding", "futures_wsr", "futures_settle"]:
                             sd = d / subdir_name
                             if sd.exists():
                                 existing_dirs.append(sd)
@@ -459,7 +469,7 @@ def get_collector_freshness() -> list[dict[str, Any]]:
             results.append({
                 "name": name, "label": label,
                 "ok": False, "age_h": -1, "age_str": "目录不存在",
-                "threshold_h": threshold_h, "trading_only": trading_only, "skipped": False,
+                "threshold_h": threshold_h, "delay_h": delay_h, "trading_only": trading_only, "skipped": False,
             })
             continue
 
@@ -482,7 +492,7 @@ def get_collector_freshness() -> list[dict[str, Any]]:
             results.append({
                 "name": name, "label": label,
                 "ok": False, "age_h": -1, "age_str": "无数据文件",
-                "threshold_h": threshold_h, "trading_only": trading_only, "skipped": False,
+                "threshold_h": threshold_h, "delay_h": delay_h, "trading_only": trading_only, "skipped": False,
             })
             continue
 
@@ -504,7 +514,7 @@ def get_collector_freshness() -> list[dict[str, Any]]:
         results.append({
             "name": name, "label": label,
             "ok": is_ok, "age_h": round(age_h, 3), "age_str": age_str,
-            "threshold_h": effective_threshold, "trading_only": trading_only, "skipped": False,
+            "threshold_h": effective_threshold, "delay_h": delay_h, "trading_only": trading_only, "skipped": False,
         })
 
     return results

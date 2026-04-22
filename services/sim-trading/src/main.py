@@ -127,7 +127,7 @@ async def start_report_scheduler():
 
 @app.on_event("startup")
 async def start_heartbeat_scheduler():
-    """启动心跳健康报告调度协程（每 2 小时整点）。"""
+    """启动心跳健康报告调度协程（每 4 小时整点，08:00–24:00 推送）。"""
     import asyncio
     asyncio.create_task(_heartbeat_scheduler())
 
@@ -171,22 +171,22 @@ async def _report_scheduler():
 
 
 async def _heartbeat_scheduler():
-    """每 2 小时整点触发心跳健康报告推送到飞书（00:00-08:00 静默）。"""
+    """每 4 小时整点触发心跳健康报告推送到飞书（00:11–07:59 静默，其余可推送）。"""
     import asyncio
     from datetime import datetime, timedelta
 
-    logger.info("[heartbeat] scheduler started, interval=2h, silent=00:00-08:00")
+    logger.info("[heartbeat] scheduler started, interval=4h, push_window=08:00-24:10")
 
-    # 等待到下一个整点（8/10/12/14/16/18/20/22，跳过 0/2/4/6）
+    # 等待到下一个 4 小时整点（08/12/16/20/00，00:00–00:10 允许，00:11–07:59 跳到 08:00）
     while True:
         now = datetime.now()
         current_hour = now.hour
 
-        # 计算下一个 2 小时整点（跳过 00:00-08:00）
-        next_hour = ((current_hour // 2) * 2 + 2) % 24
+        # 计算下一个 4 小时整点
+        next_hour = ((current_hour // 4) * 4 + 4) % 24
 
-        # 如果落在静默时段（0/2/4/6），跳到 8 点
-        if next_hour in [0, 2, 4, 6]:
+        # 如果落在静默时段（04，04:00 即 00:11–07:59 范围内），跳到 08 点
+        if 1 <= next_hour <= 7:
             next_hour = 8
 
         target = now.replace(hour=next_hour, minute=0, second=0, microsecond=0)
@@ -194,8 +194,8 @@ async def _heartbeat_scheduler():
         # 如果跨天或已过当前时间，加一天
         if target <= now:
             target += timedelta(days=1)
-            # 跨天后如果是静默时段，跳到 8 点
-            if target.hour in [0, 2, 4, 6]:
+            # 跨天后如果是静默时段（01–07），跳到 8 点
+            if 1 <= target.hour <= 7:
                 target = target.replace(hour=8, minute=0, second=0, microsecond=0)
 
         wait_seconds = (target - now).total_seconds()
@@ -630,3 +630,31 @@ if __name__ == "__main__":
     port = int(os.getenv("SERVICE_PORT", "8101"))
     logger.info("Starting sim-trading on port %d", port)
     uvicorn.run("src.main:app", host="0.0.0.0", port=port, reload=False)
+
+
+@app.get("/api/v1/notify/health", tags=["notify"])
+def notify_health():
+    """
+    通知通道健康检查端点。
+    返回当前 dispatcher 风险状态与飞书三群 Webhook 配置情况。
+    """
+    from src.notifier.dispatcher import get_dispatcher
+    dp = get_dispatcher()
+    state = dp.state.value if dp else "NOT_INITIALIZED"
+
+    feishu_enabled = os.environ.get("NOTIFY_FEISHU_ENABLED", "false").lower() == "true"
+    email_enabled = os.environ.get("NOTIFY_EMAIL_ENABLED", "false").lower() == "true"
+
+    webhooks = {
+        "alert": bool(os.environ.get("FEISHU_ALERT_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL")),
+        "trade": bool(os.environ.get("FEISHU_TRADE_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL")),
+        "info":  bool(os.environ.get("FEISHU_INFO_WEBHOOK_URL") or os.environ.get("FEISHU_WEBHOOK_URL")),
+    }
+
+    return {
+        "dispatcher_state": state,
+        "feishu_enabled": feishu_enabled,
+        "email_enabled": email_enabled,
+        "webhooks_configured": webhooks,
+        "service": "sim-trading",
+    }

@@ -121,7 +121,7 @@ class ManualRunner:
         long_window = (params or {}).get("long_window", 20)
 
         # 从 data 服务获取 K 线
-        bars = self._fetch_bars(strategy_id, start_date, end_date)
+        bars = self._fetch_bars(strategy_id, start_date, end_date, params)
 
         if len(bars) < long_window:
             return {
@@ -191,23 +191,31 @@ class ManualRunner:
         }
 
     def _fetch_bars(
-        self, strategy_id: str, start_date: str, end_date: str
+        self,
+        strategy_id: str,
+        start_date: str,
+        end_date: str,
+        params: dict | None = None,
     ) -> list[dict]:
         """从 data service 获取分钟 K 线数据。"""
         url = f"{self._data_service_url}/api/v1/bars"
+        request_params = params or {}
+        symbol = request_params.get("symbol") or strategy_id
+        timeframe_minutes = int(request_params.get("timeframe_minutes", 1))
         try:
             resp = httpx.get(
                 url,
                 params={
-                    "strategy_id": strategy_id,
-                    "start_date": start_date,
-                    "end_date": end_date,
+                    "symbol": symbol,
+                    "start": start_date,
+                    "end": end_date,
+                    "timeframe_minutes": timeframe_minutes,
                 },
                 timeout=30.0,
             )
             resp.raise_for_status()
             data = resp.json()
-            return data if isinstance(data, list) else data.get("bars", [])
+            return data if isinstance(data, list) else data.get("bars", data.get("data", []))
         except Exception as exc:
             logger.warning("从 data 服务获取 bars 失败: %s", exc)
             return []

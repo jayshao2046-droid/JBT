@@ -230,7 +230,7 @@ async def test_optimize_factor_weights(optimizer):
 
 ```bash
 # 在 Studio 上执行
-cd ~/jbt/services/decision
+cd ~/JBT/services/decision
 source .venv/bin/activate
 
 # 调优示例

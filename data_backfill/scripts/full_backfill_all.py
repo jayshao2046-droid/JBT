@@ -4,8 +4,8 @@
 分年度批次执行，避免 TqSdk data_length 溢出。
 
 用法:
-  cd /Users/jaybot/jbt/data_backfill/scripts
-  source /Users/jaybot/jbt/.venv/bin/activate
+    cd /Users/jaybot/JBT/data_backfill/scripts
+    source /Users/jaybot/JBT/.venv/bin/activate
   python3 full_backfill_all.py --mode minute   # 仅分钟回补
   python3 full_backfill_all.py --mode daily    # 仅日K回补
   python3 full_backfill_all.py --mode all      # 全量回补
@@ -16,6 +16,7 @@ import argparse
 import logging
 import os
 import sys
+import tempfile
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -23,7 +24,7 @@ from pathlib import Path
 import pandas as pd
 
 # ── 日志 ──────────────────────────────────────────────────
-LOG_DIR = Path("/Users/jaybot/jbt/data_backfill/logs")
+LOG_DIR = Path("/Users/jaybot/JBT/data_backfill/logs")
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
@@ -37,9 +38,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ── 常量 ──────────────────────────────────────────────────
-OUTPUT_DIR = Path("/Users/jaybot/jbt/data_backfill/output")
-TARGET_DIR = Path("/Users/jaybot/jbt/data/futures_minute/1m")
-DAILY_TARGET_DIR = Path("/Users/jaybot/jbt/data/futures_daily")
+OUTPUT_DIR = Path("/Users/jaybot/JBT/data_backfill/output")
+TARGET_DIR = Path("/Users/jaybot/JBT/data/futures_minute/1m")
+DAILY_TARGET_DIR = Path("/Users/jaybot/JBT/data/futures_daily")
 
 TQ_ACCOUNT = os.environ.get("TQSDK_PHONE", "17621181300")
 TQ_PASSWORD = os.environ.get("TQSDK_PASSWORD", "Jay.486858")
@@ -82,20 +83,97 @@ def symbol_to_dirname(symbol: str) -> str:
     return symbol.replace(".", "_").replace("@", "_")
 
 
-# ═══════════════════════════════════════════════════════════
-# Part 1: 分钟 K 线回补（TqSdk 回测法）
-# ═══════════════════════════════════════════════════════════
-
-def backfill_minute_chunk(
-    symbol: str,
-    start_date: str,
-    end_date: str,
+def _normalize_minute_frame(
+    df: pd.DataFrame,
+    start_dt: datetime,
+    end_dt: datetime,
 ) -> pd.DataFrame | None:
-    """回补单个品种某时间段的分钟K线，返回 DataFrame"""
-    from tqsdk import TqApi, TqAuth, TqBacktest
+    """统一清洗分钟线结果，兼容 CSV 下载与回测累积返回格式。"""
+    if df is None or df.empty or "datetime" not in df.columns:
+        return None
 
-    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+    frame = df.copy()
+    parsed = pd.to_datetime(frame["datetime"], errors="coerce")
+    if parsed.isna().all():
+        numeric = pd.to_numeric(frame["datetime"], errors="coerce")
+        parsed = pd.to_datetime(numeric, unit="ns", errors="coerce")
+
+    frame["datetime"] = parsed
+    frame = frame.dropna(subset=["datetime"])
+    frame = frame[(frame["datetime"] >= pd.Timestamp(start_dt)) & (frame["datetime"] < pd.Timestamp(end_dt))]
+    if frame.empty:
+        return None
+
+    return frame.sort_values("datetime").drop_duplicates(subset=["datetime"], keep="last")
+
+
+def _download_minute_chunk_with_data_downloader(
+    symbol: str,
+    start_dt: datetime,
+    end_dt: datetime,
+) -> pd.DataFrame | None:
+    """优先使用官方历史下载器；若权限不足则返回 None 交给回测路径。"""
+    try:
+        from tqsdk import TqApi, TqAuth
+        from tqsdk.tools import DataDownloader
+    except Exception as exc:
+        logger.info("  %s DataDownloader 不可用，回退回测: %s", symbol, exc)
+        return None
+
+    api: TqApi | None = None
+    csv_path: Path | None = None
+
+    try:
+        api = TqApi(auth=TqAuth(TQ_ACCOUNT, TQ_PASSWORD), web_gui=False)
+        fd, temp_name = tempfile.mkstemp(prefix=f"{symbol_to_dirname(symbol)}_", suffix=".csv")
+        os.close(fd)
+        csv_path = Path(temp_name)
+
+        downloader = DataDownloader(
+            api,
+            symbol_list=symbol,
+            dur_sec=60,
+            start_dt=start_dt,
+            end_dt=end_dt,
+            csv_file_name=str(csv_path),
+        )
+        while not downloader.is_finished():
+            api.wait_update()
+
+        if not csv_path.exists():
+            logger.warning("  %s DataDownloader 未产出文件，回退回测", symbol)
+            return None
+
+        frame = _normalize_minute_frame(pd.read_csv(csv_path), start_dt, end_dt)
+        if frame is None:
+            logger.warning("  %s DataDownloader 返回空数据，回退回测", symbol)
+            return None
+
+        logger.info("  %s 使用 DataDownloader 下载 %d bars", symbol, len(frame))
+        return frame
+
+    except Exception as exc:
+        logger.warning("  %s DataDownloader 不可用，回退回测: %s", symbol, exc)
+        return None
+    finally:
+        if api is not None:
+            try:
+                api.close()
+            except Exception:
+                pass
+        if csv_path is not None and csv_path.exists():
+            csv_path.unlink()
+
+
+def _download_minute_chunk_with_backtest(
+    symbol: str,
+    start_dt: datetime,
+    end_dt: datetime,
+) -> pd.DataFrame | None:
+    """无历史下载权限时，退回回测模式持续累积分钟线。"""
+    from tqsdk import TqApi, TqAuth, TqBacktest, BacktestFinished
+
+    api: TqApi | None = None
 
     try:
         api = TqApi(
@@ -105,33 +183,71 @@ def backfill_minute_chunk(
         )
         klines = api.get_kline_serial(symbol, duration_seconds=60, data_length=200000)
 
-        # 空转回测让 TqSdk 下载全部数据
-        deadline = time.time() + 300  # 5 分钟超时
+        collected_frames: list[pd.DataFrame] = []
+        last_id = -1
+        deadline = time.time() + 900  # 15 分钟超时，覆盖长年度回测
+
         while True:
-            api.wait_update()
-            if api.is_changing(klines.iloc[-1], "datetime"):
-                break
-            if time.time() > deadline:
-                logger.warning("  %s 超时，使用已有数据", symbol)
+            try:
+                api.wait_update(deadline=deadline)
+            except BacktestFinished:
                 break
 
-        df = klines.copy()
-        df = df[df["datetime"] != 0]
-        if df.empty:
-            api.close()
+            frame = klines.copy()
+            frame = frame[frame["datetime"] != 0]
+            if frame.empty:
+                if time.time() > deadline:
+                    logger.warning("  %s chunk %s~%s 超时且无有效数据", symbol, start_dt.date(), end_dt.date())
+                    break
+                continue
+
+            if time.time() > deadline:
+                logger.warning("  %s chunk %s~%s 超时，使用已累计数据", symbol, start_dt.date(), end_dt.date())
+                new_rows = frame[frame["id"] > last_id] if last_id >= 0 else frame
+                if not new_rows.empty:
+                    collected_frames.append(new_rows.copy())
+                break
+
+            new_rows = frame[frame["id"] > last_id] if last_id >= 0 else frame
+            if new_rows.empty:
+                continue
+
+            collected_frames.append(new_rows.copy())
+            last_id = int(new_rows["id"].max())
+
+        if not collected_frames:
             return None
 
-        df["datetime"] = pd.to_datetime(df["datetime"], unit="ns")
-        api.close()
+        return _normalize_minute_frame(pd.concat(collected_frames, ignore_index=True), start_dt, end_dt)
+
+    except Exception as exc:
+        logger.error("  %s chunk %s~%s 回测失败: %s", symbol, start_dt.date(), end_dt.date(), exc)
+        return None
+    finally:
+        if api is not None:
+            try:
+                api.close()
+            except Exception:
+                pass
+
+
+# ═══════════════════════════════════════════════════════════
+# Part 1: 分钟 K 线回补（Downloader 优先，回测兜底）
+# ═══════════════════════════════════════════════════════════
+
+def backfill_minute_chunk(
+    symbol: str,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame | None:
+    """回补单个品种某时间段的分钟K线，返回 DataFrame"""
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+    df = _download_minute_chunk_with_data_downloader(symbol, start_dt, end_dt)
+    if df is not None:
         return df
 
-    except Exception as e:
-        logger.error("  %s chunk %s~%s 失败: %s", symbol, start_date, end_date, e)
-        try:
-            api.close()
-        except Exception:
-            pass
-        return None
+    return _download_minute_chunk_with_backtest(symbol, start_dt, end_dt)
 
 
 def save_minute_to_parquet(df: pd.DataFrame, symbol: str) -> int:
@@ -311,7 +427,7 @@ def run_stock_daily_backfill(start_date: str = "20100101"):
     ts.set_token(TUSHARE_TOKEN)
     pro = ts.pro_api()
 
-    STOCK_DAILY_DIR = Path("/Users/jaybot/jbt/data/stock_daily")
+    STOCK_DAILY_DIR = Path("/Users/jaybot/JBT/data/stock_daily")
     STOCK_DAILY_DIR.mkdir(parents=True, exist_ok=True)
 
     # 主要指数和ETF

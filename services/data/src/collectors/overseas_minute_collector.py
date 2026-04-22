@@ -83,7 +83,7 @@ TWELVEDATA_MAP: dict[str, str] = {
     "NYMEX.PA": "PA", "NYMEX.PL": "PL",
 }
 
-# ── 仅日线品种 (10) → AkShare ────────────────────────────
+# ── 仅日线品种 (6) → AkShare ─────────────────────────────
 DAILY_ONLY_MAP: dict[str, tuple[str, str, str]] = {
     "LME.AHD": ("AHD", "LME铝", "LME"),   # AL对标
     "LME.CAD": ("CAD", "LME铜", "LME"),   # CU额外
@@ -91,7 +91,6 @@ DAILY_ONLY_MAP: dict[str, tuple[str, str, str]] = {
     "LME.PBD": ("PBD", "LME铅", "LME"),
     "LME.SND": ("SND", "LME锡", "LME"),
     "LME.ZSD": ("ZSD", "LME锌", "LME"),   # ZN对标
-    "SGX.CN": ("CN", "富时中国A50", "SGX"),
 }
 
 # ── 限流退避状态 (模块级) ─────────────────────────────────
@@ -523,10 +522,10 @@ class OverseasMinuteCollector(BaseCollector):
         *,
         symbols: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """采集仅日线品种 (LME/SGX/JPX) via AkShare."""
+        """采集仅日线品种 (LME) via AkShare."""
         import akshare as ak
 
-        symbol_list = symbols or list(DAILY_ONLY_MAP.keys())
+        symbol_list = list(DAILY_ONLY_MAP.keys()) if symbols is None else symbols
         records: list[dict[str, Any]] = []
 
         for internal_sym in symbol_list:

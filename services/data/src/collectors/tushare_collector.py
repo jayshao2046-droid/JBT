@@ -9,7 +9,7 @@ from collectors.base import BaseCollector
 
 
 class TushareDailyCollector(BaseCollector):
-    """Daily collector using Tushare Pro API with mock fallback."""
+    """Daily collector using Tushare Pro API."""
 
     def __init__(self, *, force_fail: bool = False, use_mock: bool = False, **kwargs: Any) -> None:
         kwargs.pop('name', None)
@@ -29,14 +29,16 @@ class TushareDailyCollector(BaseCollector):
     ) -> list[dict[str, Any]]:
         if self.force_fail:
             raise RuntimeError("forced primary failure for testing")
-        if self.use_mock or not self.token:
-            return self._mock_daily_records(symbol=symbol, start_date=start_date)
+        if self.use_mock:
+            raise RuntimeError("mock data is forbidden for daily collector")
+        if not self.token:
+            raise RuntimeError("tushare token not configured for daily collector")
         _ = freq
         try:
             return self._fetch_live(symbol=symbol, start_date=start_date, end_date=end_date)
         except Exception as exc:
-            self.logger.warning("tushare live fetch failed: %s, falling back to mock", exc)
-            return self._mock_daily_records(symbol=symbol, start_date=start_date)
+            self.logger.error("tushare live fetch failed: %s", exc)
+            raise
 
     def _convert_symbol(self, symbol: str) -> str:
         """Convert internal symbol to Tushare ts_code: SHFE.rb2405 -> RB2405.SHF"""

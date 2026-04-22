@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """每日更新品种特征（增量更新）
 
-在每天 17:30（日K线采集完成后）自动运行，更新35个期货品种的特征。
+在每天 17:30（日K线采集完成后）自动运行，更新 data API 当前支持的连续合约特征。
 """
 import asyncio
+import json
 import logging
+import re
 import sys
+from urllib import request as urllib_request
 from pathlib import Path
 
 # 添加项目路径
@@ -21,34 +24,66 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# 35个期货品种（主力连续合约）
-SYMBOLS = [
+DEFAULT_SYMBOLS = [
     # 上期所 (SHFE)
-    "SHFE.cu0", "SHFE.al0", "SHFE.zn0", "SHFE.pb0", "SHFE.ni0", "SHFE.sn0", "SHFE.au0",
-    "SHFE.ag0", "SHFE.rb0", "SHFE.wr0", "SHFE.hc0", "SHFE.ss0", "SHFE.fu0", "SHFE.bu0",
-    "SHFE.ru0", "SHFE.sp0", "SHFE.sc0",
+    "SHFE.cu0", "SHFE.al0", "SHFE.zn0", "SHFE.ru0", "SHFE.ss0", "SHFE.sp0", "SHFE.au0",
+    "SHFE.ag0", "SHFE.rb0", "SHFE.hc0",
 
     # 大商所 (DCE)
-    "DCE.c0", "DCE.cs0", "DCE.a0", "DCE.b0", "DCE.m0", "DCE.y0", "DCE.p0", "DCE.l0",
-    "DCE.v0", "DCE.pp0", "DCE.j0", "DCE.jm0", "DCE.i0", "DCE.eg0", "DCE.eb0", "DCE.pg0",
+    "DCE.i0", "DCE.m0", "DCE.pp0", "DCE.v0", "DCE.l0", "DCE.c0", "DCE.jd0", "DCE.y0",
+    "DCE.p0", "DCE.a0", "DCE.jm0", "DCE.j0", "DCE.eb0", "DCE.pg0", "DCE.lh0",
 
     # 郑商所 (CZCE)
-    "CZCE.SR0", "CZCE.CF0",
+    "CZCE.TA0", "CZCE.MA0", "CZCE.CF0", "CZCE.SR0", "CZCE.OI0",
+    "CZCE.RM0", "CZCE.FG0", "CZCE.SA0", "CZCE.PF0", "CZCE.UR0",
 ]
+
+SUPPORTED_CONTINUOUS_PATTERN = re.compile(r"^KQ_m_([A-Za-z]+)_([A-Za-z]+)$")
+
+
+def load_supported_symbols(api_base_url: str) -> list[str]:
+    """从 data API 动态读取当前支持的连续合约，避免脚本清单与采集配置漂移。"""
+    url = f"{api_base_url.rstrip('/')}/api/v1/symbols"
+
+    try:
+        with urllib_request.urlopen(url, timeout=10) as response:
+            payload = json.load(response)
+    except Exception as exc:
+        logger.warning("读取 data API symbols 失败，回退默认清单: %s", exc)
+        return DEFAULT_SYMBOLS
+
+    raw_symbols = payload.get("symbols", []) if isinstance(payload, dict) else payload
+    resolved: list[str] = []
+    for raw_symbol in raw_symbols:
+        match = SUPPORTED_CONTINUOUS_PATTERN.match(str(raw_symbol))
+        if not match:
+            continue
+        exchange, code = match.groups()
+        resolved.append(f"{exchange}.{code}0")
+
+    symbols = sorted(dict.fromkeys(resolved))
+    if not symbols:
+        logger.warning("data API 未返回可用连续合约，回退默认清单")
+        return DEFAULT_SYMBOLS
+
+    return symbols
 
 
 async def update_all_symbols():
     """更新所有品种的特征"""
+    data_service_url = "http://192.168.31.76:8105"
+    symbols = load_supported_symbols(data_service_url)
+
     logger.info("=" * 80)
     logger.info("开始更新品种特征（增量更新）")
     logger.info("=" * 80)
-    logger.info(f"品种数量: {len(SYMBOLS)}")
-    logger.info(f"数据源: Mini API (http://192.168.31.76:8105)")
+    logger.info(f"品种数量: {len(symbols)}")
+    logger.info(f"数据源: Mini API ({data_service_url})")
     logger.info(f"K线周期: 日K线 (1440分钟)")
     logger.info("=" * 80)
 
     profiler = SymbolProfiler(
-        data_service_url="http://192.168.31.76:8105",
+        data_service_url=data_service_url,
         interval=1440,  # 日K线
         enable_cache=True
     )
@@ -56,8 +91,8 @@ async def update_all_symbols():
     success_count = 0
     failed_symbols = []
 
-    for i, symbol in enumerate(SYMBOLS, 1):
-        logger.info(f"[{i}/{len(SYMBOLS)}] 更新 {symbol}...")
+    for i, symbol in enumerate(symbols, 1):
+        logger.info(f"[{i}/{len(symbols)}] 更新 {symbol}...")
 
         try:
             # 使用增量更新（如果缓存有效）
@@ -82,8 +117,8 @@ async def update_all_symbols():
     logger.info("=" * 80)
     logger.info("更新完成")
     logger.info("=" * 80)
-    logger.info(f"成功: {success_count}/{len(SYMBOLS)}")
-    logger.info(f"失败: {len(failed_symbols)}/{len(SYMBOLS)}")
+    logger.info(f"成功: {success_count}/{len(symbols)}")
+    logger.info(f"失败: {len(failed_symbols)}/{len(symbols)}")
 
     if failed_symbols:
         logger.warning(f"失败品种: {', '.join(failed_symbols)}")

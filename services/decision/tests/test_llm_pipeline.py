@@ -4,7 +4,7 @@ TASK-0083: 补充集成测试（data 拉取、auto_backtest）。
 """
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -282,4 +282,38 @@ async def test_pipeline_analyze_with_symbol():
         assert "error" not in result
         assert "analysis" in result
         mock_fetch.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_fetch_kline_data_fallback_uses_current_api_params():
+    """Mini fallback 应使用当前 data API 的 start/end/timeframe_minutes 口径。"""
+    mock_client = AsyncMock(spec=OllamaClient)
+    pipeline = LLMPipeline(client=mock_client)
+
+    with patch.object(pipeline, "_fetch_kline_via_tqsdk", new_callable=AsyncMock) as mock_tqsdk:
+        with patch("src.llm.pipeline.httpx.AsyncClient") as mock_client_class:
+            mock_tqsdk.return_value = []
+
+            mock_http = MagicMock()
+            mock_response = MagicMock()
+            mock_response.raise_for_status = MagicMock()
+            mock_response.json.return_value = {"bars": [{"close": 1.0}]}
+
+            mock_http.get = AsyncMock(return_value=mock_response)
+            mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+            mock_http.__aexit__ = AsyncMock()
+            mock_client_class.return_value = mock_http
+
+            bars = await pipeline._fetch_kline_data(
+                "http://localhost:8105",
+                "RB2505",
+                "1m",
+            )
+
+            assert bars == [{"close": 1.0}]
+            params = mock_http.get.call_args[1]["params"]
+            assert params["symbol"] == "RB2505"
+            assert params["timeframe_minutes"] == 1
+            assert "start" in params
+            assert "end" in params
 

@@ -87,12 +87,12 @@ class WeatherCollector(BaseCollector):
         """
         location_list = locations or list(self.LOCATIONS.keys())
         if self.use_mock:
-            return self._mock_records(location_list=location_list, as_of=as_of)
+            raise RuntimeError("mock data is forbidden for weather collector")
         try:
             return self._fetch_live(location_list=location_list, as_of=as_of, days=days)
         except Exception as exc:
-            self.logger.warning("weather live fetch failed: %s, falling back to mock", exc)
-            return self._mock_records(location_list=location_list, as_of=as_of)
+            self.logger.error("weather live fetch failed: %s", exc)
+            raise
 
     def _fetch_live(self, *, location_list: list[str], as_of: str | None, days: int) -> list[dict[str, Any]]:
         """从 Open-Meteo 获取实时天气数据。"""

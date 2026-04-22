@@ -23,12 +23,12 @@ class SentimentCollector(BaseCollector):
         _ = sources
         symbol_list = symbols or self.DEFAULT_SYMBOLS
         if self.use_mock:
-            return self._mock_records(symbol_list=symbol_list, as_of=as_of)
+            raise RuntimeError("mock data is forbidden for sentiment collector")
         try:
             return self._fetch_live(symbol_list=symbol_list, as_of=as_of)
         except Exception as exc:
-            self.logger.warning("sentiment live fetch failed: %s, falling back to mock", exc)
-            return self._mock_records(symbol_list=symbol_list, as_of=as_of)
+            self.logger.error("sentiment live fetch failed: %s", exc)
+            raise
 
     def _fetch_live(self, *, symbol_list: list[str], as_of: str | None) -> list[dict[str, Any]]:
         import akshare as ak

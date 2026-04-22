@@ -45,6 +45,70 @@ class ParquetStorage:
         file_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         return file_dir / "records.parquet"
 
+    @staticmethod
+    def _deduplicate_rows(
+        rows: list[dict[str, Any]],
+        dedup_by: str | list[str] | None,
+    ) -> list[dict[str, Any]]:
+        if dedup_by is None:
+            return rows
+
+        keys = [dedup_by] if isinstance(dedup_by, str) else list(dedup_by)
+        if not keys:
+            return rows
+
+        deduped: dict[tuple[Any, ...], dict[str, Any]] = {}
+        order: list[tuple[Any, ...]] = []
+        for row in rows:
+            dedup_key = tuple(row.get(key) for key in keys)
+            if dedup_key not in deduped:
+                order.append(dedup_key)
+            deduped[dedup_key] = row
+        return [deduped[key] for key in order]
+
+    @staticmethod
+    def _row_contains_mock_payload(row: dict[str, Any]) -> bool:
+        if row.get("mode") == "mock":
+            return True
+
+        payload = row.get("payload")
+        if isinstance(payload, dict):
+            if payload.get("mode") == "mock":
+                return True
+        elif isinstance(payload, str):
+            compact = payload.replace(" ", "")
+            if '"mode":"mock"' in compact:
+                return True
+            if payload.strip().startswith("{"):
+                try:
+                    parsed = json.loads(payload)
+                except Exception:
+                    parsed = None
+                if isinstance(parsed, dict) and parsed.get("mode") == "mock":
+                    return True
+
+        return False
+
+    @classmethod
+    def _assert_no_mock_rows(cls, rows: list[dict[str, Any]], *, data_type: str, symbol: str) -> None:
+        mock_rows = [row for row in rows if cls._row_contains_mock_payload(row)]
+        if not mock_rows:
+            return
+
+        sample = mock_rows[0]
+        raise StorageError(
+            "mock data is forbidden for runtime storage: "
+            f"symbol={symbol}, data_type={data_type}, mock_rows={len(mock_rows)}, sample={sample}"
+        )
+
+    @staticmethod
+    def _sortable_value(value: Any) -> tuple[int, str]:
+        if value is None:
+            return (0, "")
+        if isinstance(value, (int, float, bool)):
+            return (1, str(value))
+        return (2, str(value))
+
     def write_records(
         self,
         data_type: str,
@@ -54,6 +118,7 @@ class ParquetStorage:
         key: str = "records",
         index_field: str | None = None,
         sort_by: str | list[str] | None = None,
+        dedup_by: str | list[str] | None = None,
         complevel: int = 5,
         complib: str = "snappy",
         mode: str = "a",
@@ -67,30 +132,35 @@ class ParquetStorage:
         try:
             file_path = self._build_file_path(data_type=data_type, symbol=symbol)
             rows = [dict(item) for item in records]
+            incoming_count = len(rows)
             # Serialize nested dicts/lists to JSON strings so pyarrow
             # does not attempt struct schema inference on mixed-type payloads.
             for row in rows:
+                if "timestamp" in row and row["timestamp"] is not None:
+                    row["timestamp"] = str(row["timestamp"])
                 for k, v in row.items():
                     if isinstance(v, (dict, list)):
                         row[k] = json.dumps(v, ensure_ascii=False, default=str)
+
+            existing_count = 0
+            if mode == "a" and file_path.exists():
+                existing_rows = pq.read_table(file_path).to_pylist()
+                existing_count = len(existing_rows)
+                rows = existing_rows + rows
+
+            self._assert_no_mock_rows(rows, data_type=data_type, symbol=symbol)
+
+            rows = self._deduplicate_rows(rows, dedup_by)
             if sort_by is not None:
                 keys = [sort_by] if isinstance(sort_by, str) else list(sort_by)
-                rows = sorted(rows, key=lambda item: tuple(item.get(k) for k in keys))
+                rows = sorted(rows, key=lambda item: tuple(self._sortable_value(item.get(k)) for k in keys))
 
-            incoming_table = pa.Table.from_pylist(rows)
-            if mode == "a" and file_path.exists():
-                existing_table = pq.read_table(file_path)
-                try:
-                    table = pa.concat_tables([existing_table, incoming_table], promote_options="default")
-                except (pa.lib.ArrowTypeError, pa.lib.ArrowInvalid):
-                    # Schema changed (e.g. payload struct → JSON string); overwrite
-                    table = incoming_table
-            else:
-                table = incoming_table
+            table = pa.Table.from_pylist(rows)
 
             compression = "snappy" if complib.lower() == "snappy" else "zstd"
             pq.write_table(table, file_path, compression=compression)
-            return len(rows)
+            # 返回本轮真正新增条数（去重后最终行数 − 写入前已有行数）
+            return max(0, len(rows) - existing_count)
         except Exception as exc:
             raise StorageError(
                 f"failed to write records for symbol={symbol}, data_type={data_type}: {exc}"

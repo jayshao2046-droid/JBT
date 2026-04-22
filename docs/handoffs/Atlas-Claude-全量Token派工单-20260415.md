@@ -229,7 +229,7 @@ git push origin main
 ### 6b. Mini 同步（data 服务，D1 生效）
 
 ```bash
-ssh jaybot@192.168.31.76 "cd ~/jbt && git pull && echo 'MINI PULL OK'"
+ssh jaybot@192.168.31.76 "cd ~/JBT && git pull && echo 'MINI PULL OK'"
 ```
 
 > data scheduler 每日 21:00 自动触发 preread_generator，拉代码后隔天自动生效。
@@ -237,7 +237,7 @@ ssh jaybot@192.168.31.76 "cd ~/jbt && git pull && echo 'MINI PULL OK'"
 ### 6c. Studio 同步（decision 服务，D2 生效）
 
 ```bash
-ssh jaybot@192.168.31.142 "cd ~/jbt && git pull && echo 'STUDIO PULL OK'"
+ssh jaybot@192.168.31.142 "cd ~/JBT && git pull && echo 'STUDIO PULL OK'"
 ```
 
 > decision 服务重启由 Jay.S 手动决定（生产服务），只做 git pull 即可。

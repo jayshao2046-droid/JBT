@@ -53,6 +53,16 @@
 
 - 2026-04-22：已新建 `TASK-P1-20260422-Alienware真演练与现役74脚本收口`。本批拆成两个串行子项：先对 Alienware `researcher` 执行真实 deploy/rollback 演练，验证现有 Windows 发布链闭环；再只清理仍会真实执行的 `192.168.31.74` 脚本入口。当前预审结论：只给 `DEPLOY_MINUTE_KLINE_FIX.sh` 开写权限，`governance/scripts/jbt_rsync_deploy.sh` 与 `jbt_rsync_rollback.sh` 先按只读执行；`services/data/scripts/disable_legacy.sh` 因旧 IP 仅在注释/示例中出现，不纳入本批修改。
 
+- 2026-04-23：已新建批次 `TASK-NOTIFY-20260423` 全工作区通知体系重构。Jay.S 6 项硬约束已固化（中文显示 / RSS 必带链接 / 统一格式 + 落款 / 08:00–24:10 静默 / 送达反馈机制 / 整体规划执行）。已完成 5 份建档 + 项目架构师预审（5/5 通过，review-id `REVIEW-TASK-NOTIFY-20260423-PRE`）+ A/B/C/D 四枚 Token 全部签发完毕：
+  - A（sim-trading / 11文件）：`tok-7dfd4b0a-ed2d-406f-ad11-2de7f8d2b041`
+  - B（data / 12文件）：`tok-38cf910c-489c-417b-8516-10c0c4a4cd73`
+  - C（decision / 12文件）：`tok-f404d071-0126-4021-95d7-5cf1d4b93e1a`
+  - D（backtest / 10文件，Studio单点）：`tok-2c657332-e103-4707-bcb7-efb4f4183971`
+  - E（live-trading 占位）：可延后，待实盘开通前签发
+  - backtest 通知归属已澄清：Studio 单点，Air 体外循环不接入通知
+  - 各 Token TTL 4320 min，下一步：各执行 Agent 按 A→B→C→D 顺序实施，E 延后
+  【签名 Atlas】
+
 - 2026-04-11 01:30：已完成 `TASK-0043` lockback 与治理回写。Mini `data_scheduler` 已切换为 `LaunchAgent` 守护，`kill -9` 后可自动恢复，运行态收敛为单实例；当前灾备尾项仅剩 DR3 容器 restart policy。
 - 2026-04-11：已完成 `ISSUE-DR3-001` 只读边界研判并完成 A0 建档。结论：DR3 不是单服务问题，至少涉及 `docker-compose.mac.override.yml`，并可能条件性触及 `docker-compose.dev.yml`；已独立建档为 `TASK-0045 Mini macOS 容器自愈守护基线`。
 - 2026-04-11：RooCode 接入 JBT 业务流程已独立建档为 `TASK-0046`；A0 治理账本完成，A1 Token `tok-731e8346-50cc-4822-831d-8479fcdfe152` 已签发 validate 通过；Atlas 复核 + 项目架构师终审均通过（review-id `REVIEW-TASK-0046-A1`）；实施内容：`.roomodes`（3 模式：code/ask/debug）、`.roo/mcp.json`（jbt-governance MCP server）、`.roo/rules/01-jbt-governance.md`（治理规则）、`governance/roo_jbt_mcp_server.py`（MCP 桥接）。
@@ -107,6 +117,12 @@
   - TASK-0079-N Navbar导航补充（tok-60c4ba0a / decision / 1文件 / 480min）
   - TASK-0080 G0工作区切割（tok-b7a463ce / 治理 / 1文件 / 480min）
 - 2026-04-21：**数据Agent诊断完成**。用户报告"2026-04-21期货分钟K线没采集，只在17:00有数据"。根本原因：`_sync_minute_to_bars_dir()`中datetime验证失败导致早盘数据被无声过滤。修复已实施：添加datetime有效性检查、errors="coerce"强制转换、dropna()清理、增强日志。交付物：诊断报告225行、部署清单、验证测试（3测试场景全通过）、Git提交cdc17b78a/3a1a6eff5、5步部署前置验证全过。代码已就绪部署，待Mini重启容器后明日早盘验证。
+
+- 2026-04-23：**期权行情采集器全面检查 + BUG修复 + 04-22回补 ✅**。
+  - BUG-1 修复：`preread_generator.py` 第286行 `collector.collect(symbols=[...])` → `collector.collect(exchanges=["sse","szse","cffex"])` + 字段名 `symbol` → `symbol_or_indicator`（每次L2审核上下文生成都报WARNING已消除）
+  - 数据回补：04-22 期权数据（SSE:622+SZSE:526+CFFEX:674=1822条）已回补，parquet 当前3644行（04-21:1822 + 04-22:1822，全部 live，无 mock）
+  - 部署：rsync → docker cp → supervisorctl restart jbt-data-scheduler ✅
+  - git commit：e687b5ecd
 
 - 2026-04-21 16:15：**研究员 Agent U0 快速诊断 — 架构纠正与故障定位 ✅**
   - 【纠正 1】架构已验证正确：Alienware 8199 **直连 Decision 8104**，Mini 研报 API 是可选备用非关键路径

@@ -190,7 +190,7 @@ ResearcherLoader(data_service_url="http://192.168.31.223:8199")
 #### Priority 1 - 采样 Alienware 研报
 ```bash
 # 需要从 Alienware 远程访问报告文件
-ssh 17621@192.168.31.223 "ls -lh C:\\Users\\17621\\jbt\\services\\data\\runtime\\researcher\\reports\\2026-04-21\\"
+ssh 17621@192.168.31.223 "ls -lh C:\\Users\\17621\\JBT\\services\\data\\runtime\\researcher\\reports\\2026-04-21\\"
 ```
 - 确认今日是否有报告文件
 - 采样一份报告检查采集源覆盖

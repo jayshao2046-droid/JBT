@@ -15,8 +15,8 @@ JBT 24h 数据调度主入口
     Tushare期货    每日 17:00
     宏观数据       每日 09:00
     持仓量/仓单    每日 15:30
-    新闻API        每1分钟
-    RSS聚合        每10分钟
+    新闻API        每3分钟
+    RSS聚合        每3分钟
     波动率         每日 17:00
     情绪指数       每5分钟
     海运物流       每日 09:00
@@ -654,8 +654,6 @@ def _get_overseas_symbols() -> list[str]:
         "CME.NQ",      # 纳斯达克100
         "CBOT.YM",     # 道琼斯
         "CME.RTY",     # 罗素2000
-        # ── SGX（1）─────────────────────────────────────────────
-        "SGX.CN",      # 富时中国A50
     ]
 
 
@@ -960,7 +958,7 @@ def job_overseas_minute_close_summary(config: dict[str, Any]) -> None:
 
 
 def job_stock_daily(config: dict[str, Any]) -> None:
-    """A股全量日线 — 每日 16:00（收盘后30分钟），全市场一次性采集 ~5500 只。
+    """A股全量日线 — 每日 17:00，全市场一次性采集 ~5500 只。
 
     落盘: DATA_STORAGE_ROOT/stock_daily/YYYYMM.parquet（按月分文件）
     同时更新 stock_daily/index/ 下的6个主要指数。
@@ -1038,22 +1036,22 @@ def _build_tushare_ts_codes() -> list[str]:
 
 
 def job_tushare_futures(config: dict[str, Any]) -> None:
-    """Tushare期货五合一 — 每日 17:10，动态覆盖35个品种近月合约。
+    """Tushare期货持仓/仓单/结算 — 每日 17:10，动态覆盖35个品种近月合约。
 
-    数据内容: fut_daily / fut_holding / fut_wsr / fut_settle
+    数据内容: fut_holding / fut_wsr / fut_settle
     ts_code 由 _build_tushare_ts_codes() 按当前日期动态生成。
     """
     _calendar.refresh()
     ok, reason = _calendar.is_cn_trading_day(datetime.now())
     if not ok:
-        logger.info("跳过Tushare期货五合一: %s", reason)
+        logger.info("跳过Tushare期货持仓/仓单/结算: %s", reason)
         return
     from scheduler.pipeline import run_tushare_futures_pipeline
     today = datetime.now().strftime("%Y%m%d")
     ts_codes = _build_tushare_ts_codes()
     for ts_code in ts_codes:
         _safe_run(
-            f"Tushare期货({ts_code})",
+            f"Tushare持仓/仓单/结算({ts_code})",
             run_tushare_futures_pipeline,
             ts_code=ts_code,
             trade_date=today,
@@ -1085,13 +1083,13 @@ def job_position(config: dict[str, Any]) -> None:
 
 
 def job_news_api(config: dict[str, Any]) -> None:
-    """新闻API — 每1分钟。"""
+    """新闻API — 每3分钟。"""
     from scheduler.pipeline import run_news_api_pipeline
     _safe_run("新闻API", run_news_api_pipeline, config=config)
 
 
 def job_rss(config: dict[str, Any]) -> None:
-    """RSS聚合 — 每10分钟。"""
+    """RSS聚合 — 每3分钟。"""
     from scheduler.pipeline import run_rss_pipeline
     _safe_run("RSS聚合", run_rss_pipeline, config=config)
 
@@ -1120,12 +1118,15 @@ def job_symbol_features(config: dict[str, Any]) -> None:
     import sys
     from pathlib import Path
 
-    # 获取项目根目录
-    project_root = Path(__file__).parent.parent.parent.parent
-    script_path = project_root / "scripts" / "update_symbol_features.py"
+    script_path = None
+    for project_root in Path(__file__).resolve().parents:
+        candidate = project_root / "scripts" / "update_symbol_features.py"
+        if candidate.exists():
+            script_path = candidate
+            break
 
-    if not script_path.exists():
-        logger.error(f"品种特征更新脚本不存在: {script_path}")
+    if script_path is None:
+        logger.info("跳过品种特征更新: 当前 data 容器未挂载仓库根脚本，请由 Mini 宿主机 LaunchAgent com.jbt.symbol_features 执行")
         return
 
     try:
@@ -1143,6 +1144,7 @@ def job_symbol_features(config: dict[str, Any]) -> None:
         else:
             logger.warning(f"⚠️ 品种特征更新失败 (exit code: {result.returncode})")
             logger.warning(result.stderr)
+
 
     except subprocess.TimeoutExpired:
         logger.error("❌ 品种特征更新超时（10分钟）")
@@ -1695,19 +1697,19 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
         job_overseas_kline_lme, CronTrigger(hour=2, minute=0, day_of_week="tue-sat"),
         args=[config], id="overseas_daily_lme", name="LME金属日线",
     )
-    # [PAUSED 2026-04-17] 外盘分钟K线: 暂停采集，保留日线
-    # scheduler.add_job(
-    #     job_overseas_minute_yf, IntervalTrigger(minutes=5),
-    #     args=[config], id="overseas_minute_yf", name="外盘分钟K线(yfinance)",
-    # )
-    # # 外盘收盘摘要: 05:05 北京时间发送 session 完整度汇报并重置状态
-    # scheduler.add_job(
-    #     job_overseas_minute_close_summary, CronTrigger(hour=5, minute=5),
-    #     args=[config], id="overseas_minute_close_summary", name="外盘分钟K线收盘摘要",
-    # )
-    # A股全量日线: 16:00 收盘后30分钟采集（交易日）
+    # 外盘分钟K线: 每 5 分钟运行，交易时段门控由 job_overseas_minute_yf 内部基于 GlobalTradingCalendar 判断。
     scheduler.add_job(
-        job_stock_daily, CronTrigger(hour=16, minute=0, day_of_week="mon-fri"),
+        job_overseas_minute_yf, IntervalTrigger(minutes=5),
+        args=[config], id="overseas_minute_yf", name="外盘分钟K线(yfinance)",
+    )
+    # 外盘收盘摘要: 05:05 北京时间发送 session 完整度汇报并重置状态
+    scheduler.add_job(
+        job_overseas_minute_close_summary, CronTrigger(hour=5, minute=5),
+        args=[config], id="overseas_minute_close_summary", name="外盘分钟K线收盘摘要",
+    )
+    # A股全量日线: 17:00 采集（交易日，避开 Tushare 收盘后延迟出数窗口）
+    scheduler.add_job(
+        job_stock_daily, CronTrigger(hour=17, minute=0, day_of_week="mon-fri"),
         args=[config], id="stock_daily", name="A股全量日线",
     )
     if STOCK_MINUTE_ENABLED:
@@ -1717,10 +1719,10 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
         )
     else:
         logger.info("A股分钟K线任务当前已暂停，不注册 APScheduler 任务")
-    # [DEPRECATED LIFTED] Tushare期货五合一: 17:10，动态35品种近月合约。
+    # [DEPRECATED LIFTED] Tushare期货持仓/仓单/结算: 17:10，动态35品种近月合约。
     scheduler.add_job(
         job_tushare_futures, CronTrigger(hour=17, minute=10, day_of_week="mon-fri"),
-        args=[config], id="tushare_futures", name="Tushare期货五合一",
+        args=[config], id="tushare_futures", name="Tushare期货持仓/仓单/结算",
     )
     # [DEPRECATED LIFTED] 宏观数据: 09:00
     scheduler.add_job(
@@ -1732,14 +1734,14 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
         job_position, CronTrigger(hour=15, minute=30, day_of_week="mon-fri"),
         args=[config], id="position", name="持仓仓单日报",
     )
-    # [DEPRECATED LIFTED] 新闻API: 每1分钟
+    # [DEPRECATED LIFTED] 新闻API: 每3分钟
     scheduler.add_job(
-        job_news_api, IntervalTrigger(minutes=1),
+        job_news_api, IntervalTrigger(minutes=3),
         args=[config], id="news_api", name="新闻API",
     )
-    # [DEPRECATED LIFTED] RSS聚合: 每10分钟
+    # [DEPRECATED LIFTED] RSS聚合: 每3分钟
     scheduler.add_job(
-        job_rss, IntervalTrigger(minutes=10),
+        job_rss, IntervalTrigger(minutes=3),
         args=[config], id="rss", name="RSS聚合",
     )
     # [DEPRECATED LIFTED] 波动率: 17:15
@@ -1912,11 +1914,11 @@ _FALLBACK_JOBS: list[tuple[str, Callable[..., Any], int | None, str | None]] = [
     ("日线K线",                job_daily_kline,         None,  "17:00"),
     ("外盘日线(美/欧)",         job_overseas_kline,      None,  "06:00"),
     ("LME金属日线",            job_overseas_kline_lme,  None,  "02:00"),
-    ("Tushare期货五合一",      job_tushare_futures,     None,  "17:10"),
+    ("Tushare期货持仓/仓单/结算", job_tushare_futures,     None,  "17:10"),
     ("宏观数据",               job_macro,               None,  "09:00"),
     ("持仓仓单日报",           job_position,            None,  "15:30"),
-    ("新闻API",               job_news_api,             60,   None),
-    ("RSS聚合",               job_rss,                 600,   None),
+    ("新闻API",               job_news_api,            180,   None),
+    ("RSS聚合",               job_rss,                180,   None),
     ("波动率指数",             job_volatility,          None,  "17:15"),
     ("品种特征更新",           job_symbol_features,     None,  "17:30"),
     ("情绪指数",               job_sentiment,           300,   None),

@@ -36,10 +36,10 @@
 ## 只读基线（2026-04-22）
 
 1. `http://192.168.31.223:8101/health` 当前返回 `{"status":"ok","service":"sim-trading"}`。
-2. Alienware 远端存在 `C:/Users/17621/jbt/services/sim-trading/src/main.py`。
+2. Alienware 远端存在 `C:/Users/17621/JBT/services/sim-trading/src/main.py`。
 3. Alienware 远端同时存在：
-   - `C:/Users/17621/jbt/services/sim-trading/.venv/Scripts/python.exe`
-   - `C:/Users/17621/jbt/.venv/Scripts/python.exe`
+   - `C:/Users/17621/JBT/services/sim-trading/.venv/Scripts/python.exe`
+   - `C:/Users/17621/JBT/.venv/Scripts/python.exe`
 4. 当前最小假设：`jbt_rsync_deploy.sh` 里的 `windows_uvicorn` 分支可直接完成 sim-trading 真实 deploy；廉价反证检查已完成，未发现 researcher 类似的先验坏路径。
 
 ## 明确排除

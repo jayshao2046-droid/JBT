@@ -20,13 +20,15 @@ class PositionCollector(BaseCollector):
         self.token = str(data_sources.get("tushare", {}).get("token", "") or "")
 
     def collect(self, *, symbols: list[str] | None = None, trade_date: str | None = None) -> list[dict[str, Any]]:
-        if self.use_mock or not self.token:
-            return self._mock_records(symbol_list=symbols or [], trade_date=trade_date)
+        if self.use_mock:
+            raise RuntimeError("mock data is forbidden for position collector")
+        if not self.token:
+            raise RuntimeError("tushare token not configured for position collector")
         try:
             return self._fetch_live(symbol_list=symbols, trade_date=trade_date)
         except Exception as exc:
-            self.logger.warning("position live fetch failed: %s, falling back to mock", exc)
-            return self._mock_records(symbol_list=symbols or [], trade_date=trade_date)
+            self.logger.error("position live fetch failed: %s", exc)
+            raise
 
     def _fetch_live(self, *, symbol_list: list[str] | None, trade_date: str | None) -> list[dict[str, Any]]:
         import tushare as ts
@@ -34,14 +36,9 @@ class PositionCollector(BaseCollector):
         td = trade_date or datetime.now().strftime("%Y%m%d")
         records: list[dict[str, Any]] = []
         # 获取主力合约持仓排名
-        # 全量35个内盘期货品种
+        # 仅 SHFE 10个品种（Tushare fut_holding 仅对 SHFE 有历史数据）
         symbols_to_check = [
-            # SHFE（上期所）10个
             "RB", "HC", "CU", "AL", "ZN", "AU", "AG", "RU", "SS", "SP",
-            # DCE（大商所）15个
-            "I", "M", "PP", "V", "L", "C", "JD", "Y", "P", "A", "JM", "J", "EB", "PG", "LH",
-            # CZCE（郑商所）10个
-            "TA", "MA", "CF", "SR", "OI", "RM", "FG", "SA", "PF", "UR",
         ]
         for sym in symbols_to_check:
             try:
@@ -58,21 +55,6 @@ class PositionCollector(BaseCollector):
                     self.logger.info("position fetched: %s rows=%d", sym, min(20, len(df)))
             except Exception as exc:
                 self.logger.warning("position fetch failed for %s: %s", sym, exc)
-        # 获取仓单数据
-        try:
-            df_wsr = pro.fut_wsr(trade_date=td)
-            time.sleep(0.3)
-            if df_wsr is not None and not df_wsr.empty:
-                for _, row in df_wsr.iterrows():
-                    records.append({
-                        "source_type": "position",
-                        "symbol_or_indicator": "warehouse_receipt",
-                        "timestamp": td,
-                        "payload": dict(row),
-                    })
-                self.logger.info("warehouse receipt fetched: rows=%d", len(df_wsr))
-        except Exception as exc:
-            self.logger.warning("warehouse receipt fetch failed: %s", exc)
         if not records:
             raise RuntimeError("all position fetchers failed")
         return records

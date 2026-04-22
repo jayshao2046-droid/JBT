@@ -82,9 +82,9 @@ grep "router\." services/sim-trading/src/api/router.py | head -30
 **修复命令**：
 ```bash
 # Mini 同步
-ssh jaybot@192.168.31.74 "cd ~/jbt && git fetch origin && git reset --hard origin/main"
+ssh jaybot@192.168.31.74 "cd ~/JBT && git fetch origin && git reset --hard origin/main"
 # Studio 同步
-ssh jayshao@192.168.31.142 "cd ~/jbt && git fetch origin && git reset --hard origin/main"
+ssh jayshao@192.168.31.142 "cd ~/JBT && git fetch origin && git reset --hard origin/main"
 ```
 
 **注意**：执行前先确认网络连通性（Mini 报 HTTP2 framing error，Studio 报 SSH 连接关闭）。

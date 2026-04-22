@@ -44,13 +44,15 @@ class ForexCollector(BaseCollector):
         as_of: str | None = None,
     ) -> list[dict[str, Any]]:
         pair_list = pairs or DEFAULT_PAIRS
-        if self.use_mock or not self.token:
-            return self._mock_records(pair_list=pair_list, as_of=as_of)
+        if self.use_mock:
+            raise RuntimeError("mock data is forbidden for forex collector")
+        if not self.token:
+            raise RuntimeError("TUSHARE_TOKEN not set for forex collector")
         try:
             return self._fetch_live(pair_list=pair_list, start_date=start_date, end_date=end_date)
         except Exception as exc:
-            self.logger.warning("forex live fetch failed: %s, falling back to mock", exc)
-            return self._mock_records(pair_list=pair_list, as_of=as_of)
+            self.logger.error("forex live fetch failed: %s", exc)
+            raise
 
     def _fetch_live(
         self,

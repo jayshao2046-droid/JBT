@@ -37,8 +37,8 @@
 
 ## 四、接口与部署说明
 
-- Mini data 服务：`jaybot@172.16.0.49:~/jbt/`（蒲公英 172.16.0.49）
-- 重启调度器：`ssh jaybot@172.16.0.49 'cd ~/jbt && pkill -f data_scheduler; nohup .venv/bin/python -m services.data.src.scheduler.data_scheduler --daemon > /dev/null 2>&1 &'`
+- Mini data 服务：`jaybot@172.16.0.49:~/JBT/`（蒲公英 172.16.0.49）
+- 重启调度器：`ssh jaybot@172.16.0.49 'cd ~/JBT && pkill -f data_scheduler; nohup .venv/bin/python -m services.data.src.scheduler.data_scheduler --daemon > /dev/null 2>&1 &'`
 - 手动触发外盘采集测试：
   ```python
   from services.data.src.scheduler.pipeline import run_overseas_minute_yf_pipeline

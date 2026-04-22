@@ -32,8 +32,8 @@
 	- `--service sim-trading` 指向 Alienware Windows 路径
 	- `--service researcher` 指向 Alienware Windows 路径
 4. Alienware 远端只读验证通过：
-	- `C:/Users/17621/jbt/services/data`
-	- `C:/Users/17621/jbt/services/sim-trading`
+	- `C:/Users/17621/JBT/services/data`
+	- `C:/Users/17621/JBT/services/sim-trading`
 	均可通过 `powershell -EncodedCommand` 正常访问。
 
 ## 残留风险

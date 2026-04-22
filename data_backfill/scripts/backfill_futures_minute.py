@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """
 期货分钟K线数据回补工具
-使用 TqSdk 回测机制补全缺失的历史数据
+优先使用 TqSdk DataDownloader 按时间段下载历史数据，权限不足时回退到回测累积方案。
 """
 from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
+import tempfile
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
-from tqsdk import TqApi, TqAuth, TqBacktest
+from tqsdk import TqApi, TqAuth, TqBacktest, BacktestFinished
 
 # 配置日志
 logging.basicConfig(
@@ -47,6 +50,160 @@ def symbol_to_filename(symbol: str) -> str:
     return symbol.replace(".", "_").replace("@", "_")
 
 
+def _normalize_minute_frame(
+    df: pd.DataFrame,
+    start_dt: datetime,
+    end_dt: datetime,
+) -> pd.DataFrame | None:
+    """统一清洗分钟线结果，兼容 CSV 与回测返回格式。"""
+    if df is None or df.empty or "datetime" not in df.columns:
+        return None
+
+    frame = df.copy()
+    parsed = pd.to_datetime(frame["datetime"], errors="coerce")
+    if parsed.isna().all():
+        numeric = pd.to_numeric(frame["datetime"], errors="coerce")
+        parsed = pd.to_datetime(numeric, unit="ns", errors="coerce")
+
+    frame["datetime"] = parsed
+    frame = frame.dropna(subset=["datetime"])
+    frame = frame[(frame["datetime"] >= pd.Timestamp(start_dt)) & (frame["datetime"] < pd.Timestamp(end_dt))]
+    if frame.empty:
+        return None
+
+    return frame.sort_values("datetime").drop_duplicates(subset=["datetime"], keep="last")
+
+
+def _download_with_data_downloader(
+    symbol: str,
+    start_dt: datetime,
+    end_dt: datetime,
+    tq_account: str,
+    tq_password: str,
+) -> pd.DataFrame | None:
+    """优先走官方历史下载器，失败时返回 None 交给回测方案兜底。"""
+    try:
+        from tqsdk.tools import DataDownloader
+    except Exception as exc:
+        logger.info("  %s DataDownloader 不可用，回退回测: %s", symbol, exc)
+        return None
+
+    api: TqApi | None = None
+    csv_path: Path | None = None
+
+    try:
+        api = TqApi(auth=TqAuth(tq_account, tq_password), web_gui=False)
+        fd, temp_name = tempfile.mkstemp(prefix=f"{symbol_to_filename(symbol)}_", suffix=".csv")
+        os.close(fd)
+        csv_path = Path(temp_name)
+
+        downloader = DataDownloader(
+            api,
+            symbol_list=symbol,
+            dur_sec=60,
+            start_dt=start_dt,
+            end_dt=end_dt,
+            csv_file_name=str(csv_path),
+        )
+        while not downloader.is_finished():
+            api.wait_update()
+
+        if not csv_path.exists():
+            logger.warning("  %s DataDownloader 未产出文件，回退回测", symbol)
+            return None
+
+        frame = _normalize_minute_frame(pd.read_csv(csv_path), start_dt, end_dt)
+        if frame is None:
+            logger.warning("  %s DataDownloader 返回空数据，回退回测", symbol)
+            return None
+
+        logger.info("  %s 使用 DataDownloader 下载 %d bars", symbol, len(frame))
+        return frame
+
+    except Exception as exc:
+        logger.warning("  %s DataDownloader 不可用，回退回测: %s", symbol, exc)
+        return None
+    finally:
+        if api is not None:
+            try:
+                api.close()
+            except Exception:
+                pass
+        if csv_path is not None and csv_path.exists():
+            csv_path.unlink()
+
+
+def _download_with_backtest(
+    symbol: str,
+    start_dt: datetime,
+    end_dt: datetime,
+    tq_account: str,
+    tq_password: str,
+) -> pd.DataFrame | None:
+    """回测模式兜底，解决无历史下载权限时的分钟线回补。"""
+    api: TqApi | None = None
+
+    try:
+        api = TqApi(
+            auth=TqAuth(tq_account, tq_password),
+            backtest=TqBacktest(start_dt=start_dt, end_dt=end_dt),
+            web_gui=False,
+        )
+
+        klines = api.get_kline_serial(symbol, duration_seconds=60, data_length=200000)
+
+        logger.info("  %s 正在通过回测累积下载K线数据...", symbol)
+        collected_frames: list[pd.DataFrame] = []
+        last_id = -1
+        deadline = time.time() + 900
+
+        while True:
+            try:
+                api.wait_update(deadline=deadline)
+            except BacktestFinished:
+                break
+
+            frame = klines.copy()
+            frame = frame[frame["datetime"] != 0]
+            if frame.empty:
+                if time.time() > deadline:
+                    logger.warning("  %s 回测下载超时且无有效数据", symbol)
+                    break
+                continue
+
+            if time.time() > deadline:
+                logger.warning("  %s 回测下载超时，使用已累计数据", symbol)
+                new_rows = frame[frame["id"] > last_id] if last_id >= 0 else frame
+                if not new_rows.empty:
+                    collected_frames.append(new_rows.copy())
+                break
+
+            new_rows = frame[frame["id"] > last_id] if last_id >= 0 else frame
+            if new_rows.empty:
+                continue
+
+            collected_frames.append(new_rows.copy())
+            last_id = int(new_rows["id"].max())
+
+        if not collected_frames:
+            return None
+
+        frame = _normalize_minute_frame(pd.concat(collected_frames, ignore_index=True), start_dt, end_dt)
+        if frame is not None:
+            logger.info("  %s 使用回测累积下载 %d bars", symbol, len(frame))
+        return frame
+
+    except Exception as exc:
+        logger.error("  %s 回测下载失败: %s", symbol, exc)
+        return None
+    finally:
+        if api is not None:
+            try:
+                api.close()
+            except Exception:
+                pass
+
+
 def backfill_single_contract(
     symbol: str,
     start_date: str,
@@ -75,32 +232,13 @@ def backfill_single_contract(
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
         end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)  # 包含结束日期
 
-        # 初始化 TqApi（回测模式）
-        api = TqApi(
-            auth=TqAuth(tq_account, tq_password),
-            backtest=TqBacktest(start_dt=start_dt, end_dt=end_dt),
-            web_gui=False,  # 不启动 Web GUI
-        )
+        df = _download_with_data_downloader(symbol, start_dt, end_dt, tq_account, tq_password)
+        if df is None:
+            df = _download_with_backtest(symbol, start_dt, end_dt, tq_account, tq_password)
 
-        # 订阅分钟K线（增加数据长度以覆盖更长时间段）
-        klines = api.get_kline_serial(symbol, duration_seconds=60, data_length=200000)
-
-        # 空转回测，让 TqSdk 下载数据
-        logger.info(f"  正在下载 {symbol} 的K线数据...")
-        while not api.is_changing(klines.iloc[-1], "datetime"):
-            api.wait_update()
-
-        # 提取数据
-        df = klines.copy()
-        df = df[df["datetime"] != 0]  # 过滤无效数据
-
-        if df.empty:
-            logger.warning(f"  {symbol} 没有数据")
-            api.close()
+        if df is None or df.empty:
+            logger.warning(f"  {symbol} 没有可保存的数据")
             return False
-
-        # 转换时间格式
-        df["datetime"] = pd.to_datetime(df["datetime"], unit="ns")
 
         # 按月份分组保存
         filename = symbol_to_filename(symbol)
@@ -113,7 +251,6 @@ def backfill_single_contract(
             group.to_parquet(output_file, index=False, engine="pyarrow")
             logger.info(f"  已保存: {output_file} ({len(group)} 条记录)")
 
-        api.close()
         logger.info(f"✅ {symbol} 回补完成，共 {len(df)} 条记录")
         return True
 

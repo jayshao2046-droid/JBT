@@ -24,7 +24,7 @@
 
 - Git 提交：`84e441f` — `fix(data-notify): U0热修 - 新闻卡片路由/排版/推送修复`
 - 推送至：`origin main`（GitHub）
-- 两地同步：MacBook（本地）+ Mini `jaybot@172.16.0.49:~/jbt/`
+- 两地同步：MacBook（本地）+ Mini `jaybot@172.16.0.49:~/JBT/`
 - 审查通过：`REVIEW-TASK-0035` PASS
 
 ---
