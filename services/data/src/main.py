@@ -110,7 +110,7 @@ SOURCE_SCHEDULE_HINTS = {
     "weather": "30 6,18 * * *",
     "sentiment": "*/1 * * * *",
     "forex": "20 17 * * 1-5",  # 工作日 17:20（Tushare fx_daily）
-    "cftc": "0 8 * * 6",
+    "cftc": "0 10 * * 6",  # 周六 10:00（CFTC 周五发布，周六 CST 采集）
     "options": "*/15 9-15 * * 1-5",
     "health_log": "*/5 * * * *",
 }
@@ -198,7 +198,7 @@ _FRESHNESS_THRESHOLDS = {
     "macro_global": 48.0, "news_api": 1.0, "news_rss": 1.0, "position_daily": 26.0,
     "position_weekly": 170.0, "volatility_cboe": 26.0, "volatility_qvix": 26.0,
     "shipping": 26.0, "tushare": 26.0, "weather": 48.0, "sentiment": 1.0,
-    "forex": 26.0, "cftc": 170.0, "options": 26.0, "health_log": 1.0,
+    "forex": 26.0, "cftc": 200.0, "options": 26.0, "health_log": 1.0,  # cftc 周频 200h（8.3天）
     "watchlist": 26.0,
 }
 SOURCE_DELAY_THRESHOLDS = {
@@ -206,6 +206,7 @@ SOURCE_DELAY_THRESHOLDS = {
     "overseas_minute": 1.0,
     "shipping": 25.0,   # 工作日一次性任务，25h内不告警（默认 threshold*0.5=13h 过于激进）
     "forex": 25.0,      # 工作日 17:20 一次性任务，25h内不告警（默认 threshold*0.5=13h 过于激进）
+    "cftc": 165.0,     # 周频任务，165h（6.9天）内不告警，临近下次采集前才告警
 }
 
 # ── API Key 认证 ──────────────────────────────────────────
