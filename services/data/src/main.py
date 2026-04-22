@@ -64,13 +64,16 @@ SCHEDULER_LOG_FILE = Path("logs") / "scheduler.log"
 NEWS_DIRECTORIES = ("news_collected", "news_api", "news_rss")
 SOURCE_OUTPUT_DIRS = {
     "futures_minute": "futures_minute",
-    "futures_eod": "futures_minute",
-    "overseas_minute": "overseas_kline/1m",
+    "futures_eod": "futures_daily",
+    "overseas_minute": "NYMEX.CL/1min",
     "overseas_daily": "COMEX.GC/daily",
+    "symbol_features": "runtime/symbol_profiles",
+    "stock_daily": "stock_daily",
     "stock_minute": "stock_minute",
     "stock_realtime": "stock_minute",
     "watchlist": "logs",
     "macro_global": "macro_global",
+    "news_api": "news_api",
     "news_rss": "news_rss",
     "position_daily": "position",
     "position_weekly": "position",
@@ -87,21 +90,24 @@ SOURCE_OUTPUT_DIRS = {
 }
 SOURCE_SCHEDULE_HINTS = {
     "futures_minute": "*/1 * * * *",
-    "futures_eod": "0 18 * * 1-5",
+    "futures_eod": "0 17 * * 1-5",
     "overseas_minute": "*/5 * * * *",
     "overseas_daily": "0 6 * * *",
+    "symbol_features": "30 17 * * 1-5",
+    "stock_daily": "0 17 * * 1-5",
     "stock_minute": "*/1 9-15 * * 1-5",
     "stock_realtime": "*/1 9-15 * * 1-5",
     "watchlist": "0 18 * * 1-5",
     "macro_global": "0 */4 * * *",
-    "news_rss": "*/10 * * * *",
+    "news_api": "*/3 * * * *",
+    "news_rss": "*/3 * * * *",
     "position_daily": "30 16 * * 1-5",
     "position_weekly": "0 8 * * 6",
     "volatility_cboe": "0 * * * *",
     "volatility_qvix": "0 * * * *",
-    "shipping": "0 9 * * *",
+    "shipping": "10 9 * * 1-5",
     "tushare": "30 15 * * 1-5",
-    "weather": "0 6 * * *",
+    "weather": "30 6,18 * * *",
     "sentiment": "*/1 * * * *",
     "forex": "0 6 * * *",
     "cftc": "0 8 * * 6",
@@ -113,10 +119,13 @@ SOURCE_PROVIDER_HINTS = {
     "futures_eod": "CTP",
     "overseas_minute": "yfinance",
     "overseas_daily": "yfinance",
+    "symbol_features": "Host LaunchAgent",
+    "stock_daily": "Tushare",
     "stock_minute": "Tushare",
     "stock_realtime": "Tushare",
     "watchlist": "Internal",
     "macro_global": "AkShare",
+    "news_api": "NewsAPI",
     "news_rss": "RSS",
     "position_daily": "Internal",
     "position_weekly": "Internal",
@@ -136,10 +145,13 @@ SOURCE_CATEGORY_HINTS = {
     "futures_eod": "行情类",
     "overseas_minute": "行情类",
     "overseas_daily": "行情类",
+    "symbol_features": "研究类",
+    "stock_daily": "行情类",
     "stock_minute": "行情类",
     "stock_realtime": "行情类",
     "watchlist": "监控类",
     "macro_global": "宏观类",
+    "news_api": "新闻资讯类",
     "news_rss": "新闻资讯类",
     "position_daily": "持仓类",
     "position_weekly": "持仓类",
@@ -159,17 +171,20 @@ COLLECTOR_LABELS = {
     "futures_eod": "内盘日线K线",
     "overseas_minute": "外盘分钟K线",
     "overseas_daily": "外盘日线K线",
+    "symbol_features": "品种特征更新",
+    "stock_daily": "A股全量日线",
     "stock_minute": "A股分钟行情",
     "stock_realtime": "A股实时行情",
     "watchlist": "自选监控",
     "macro_global": "全球宏观数据",
+    "news_api": "新闻API",
     "news_rss": "RSS新闻聚合",
     "position_daily": "每日持仓仓单",
     "position_weekly": "每周持仓报告",
     "volatility_cboe": "CBOE波动率",
     "volatility_qvix": "QVIX波动率",
     "shipping": "海运物流指数",
-    "tushare": "Tushare五合一",
+    "tushare": "Tushare期货持仓/仓单/结算",
     "weather": "天气数据",
     "sentiment": "市场情绪指数",
     "forex": "外汇日线",
@@ -179,12 +194,17 @@ COLLECTOR_LABELS = {
 }
 _FRESHNESS_THRESHOLDS = {
     "futures_minute": 2.0, "futures_eod": 26.0, "overseas_minute": 6.0,
-    "overseas_daily": 26.0, "stock_minute": 2.0, "stock_realtime": 2.0,
-    "macro_global": 48.0, "news_rss": 1.0, "position_daily": 26.0,
+    "overseas_daily": 26.0, "symbol_features": 26.0, "stock_daily": 26.0, "stock_minute": 2.0, "stock_realtime": 2.0,
+    "macro_global": 48.0, "news_api": 1.0, "news_rss": 1.0, "position_daily": 26.0,
     "position_weekly": 170.0, "volatility_cboe": 26.0, "volatility_qvix": 26.0,
     "shipping": 26.0, "tushare": 26.0, "weather": 48.0, "sentiment": 1.0,
     "forex": 26.0, "cftc": 170.0, "options": 26.0, "health_log": 1.0,
     "watchlist": 26.0,
+}
+SOURCE_DELAY_THRESHOLDS = {
+    "futures_eod": 24.0,
+    "overseas_minute": 1.0,
+    "shipping": 25.0,   # 工作日一次性任务，25h内不告警（默认 threshold*0.5=13h 过于激进）
 }
 
 # ── API Key 认证 ──────────────────────────────────────────
@@ -869,6 +889,7 @@ def _fallback_collector_sources() -> list[dict[str, Any]]:
         output_dir = root / output_rel
         label = COLLECTOR_LABELS.get(name, name)
         threshold_h = _FRESHNESS_THRESHOLDS.get(name, 24.0)
+        delay_h = SOURCE_DELAY_THRESHOLDS.get(name, threshold_h * 0.5 if threshold_h > 0 else 0.0)
         age_h: float = -1.0
         age_str = "目录不存在"
         ok = False
@@ -892,7 +913,8 @@ def _fallback_collector_sources() -> list[dict[str, Any]]:
             "age_h": age_h,
             "age_str": age_str,
             "threshold_h": threshold_h,
-            "trading_only": name in {"futures_minute", "stock_minute", "stock_realtime", "options"},
+            "delay_h": delay_h,
+            "trading_only": name in {"futures_minute", "overseas_minute", "stock_minute", "stock_realtime", "options"},
             "skipped": False,
         })
     return sources
@@ -914,12 +936,20 @@ def _collector_status(raw: dict[str, Any]) -> str:
         return "failed"
     age_h = raw.get("age_h")
     threshold_h = raw.get("threshold_h")
+    name = str(raw.get("name") or "")
     try:
         age_value = float(age_h)
         threshold_value = float(threshold_h)
+        # SOURCE_DELAY_THRESHOLDS 中的配置始终优先于快照内存储的 delay_h，
+        # 避免快照刷新前旧值（如默认 threshold*0.5）继续误触发 delayed 告警。
+        if name in SOURCE_DELAY_THRESHOLDS:
+            delay_value = float(SOURCE_DELAY_THRESHOLDS[name])
+        else:
+            snapshot_delay = raw.get("delay_h")
+            delay_value = float(snapshot_delay) if snapshot_delay is not None else threshold_value * 0.5
     except (TypeError, ValueError):
         return "success"
-    if age_value >= 0 and threshold_value > 0 and age_value > threshold_value * 0.5:
+    if age_value >= 0 and delay_value > 0 and age_value > delay_value:
         return "delayed"
     return "success"
 
