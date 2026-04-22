@@ -69,7 +69,13 @@
   - decision (C) 已完成：feishu.py 三群路由+标题格式(JBT 决策 icon [级别-类型] 标题)+落款(JBT-决策)、dispatcher.py 静默窗口+alarm.log 反馈、.env.example 补三群 webhook
   - backtest (D) 已完成：notifier/ 模块新建（__init__.py/feishu.py/dispatcher.py）、manual_runner.py 钩入完成/失败通知、.env.example 补 webhook
   - 语法校验：全部 6 文件 python3 -m py_compile 通过 ✅
-  - 剩余：lockback + git commit + Mini/Studio 同步
+  - git commit d588e80fa（12 files changed, 406 insertions, 56 deletions）✅
+  - Mini rsync + docker restart JBT-DATA-8105 ✅ health:ok
+  - Studio rsync + docker restart JBT-DECISION-8104 ✅ health:ok
+  - Studio backtest notifier rsync ✅
+  - lockback：B/C/D 三 Token 均已 locked ✅
+  - 锁控记录：docs/locks/lock-NOTIFY-20260423-BCD.md ✅
+  - TASK-NOTIFY-20260423 全套收口完成 ✅
   【签名 Atlas】
 
 - 2026-04-11 01:30：已完成 `TASK-0043` lockback 与治理回写。Mini `data_scheduler` 已切换为 `LaunchAgent` 守护，`kill -9` 后可自动恢复，运行态收敛为单实例；当前灾备尾项仅剩 DR3 容器 restart policy。
