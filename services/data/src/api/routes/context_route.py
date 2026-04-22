@@ -163,7 +163,7 @@ def get_news_api_context(days: int = Query(3, ge=1, le=14)) -> dict[str, Any]:
 @router.get("/weather")
 def get_weather_context(days: int = Query(7, ge=1, le=30)) -> dict[str, Any]:
     """主产区天气数据（来自 Mini 采集）"""
-    records = _read_context_records("weather", "weather", days * 5)
+    records = _read_context_records("weather", "weather", days * 15)
     return {"data_type": "weather", "records": records, "count": len(records)}
 
 
