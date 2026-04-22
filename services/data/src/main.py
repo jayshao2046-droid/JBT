@@ -109,7 +109,7 @@ SOURCE_SCHEDULE_HINTS = {
     "tushare": "30 15 * * 1-5",
     "weather": "30 6,18 * * *",
     "sentiment": "*/1 * * * *",
-    "forex": "0 6 * * *",
+    "forex": "20 17 * * 1-5",  # 工作日 17:20（Tushare fx_daily）
     "cftc": "0 8 * * 6",
     "options": "*/15 9-15 * * 1-5",
     "health_log": "*/5 * * * *",
@@ -135,7 +135,7 @@ SOURCE_PROVIDER_HINTS = {
     "tushare": "Tushare",
     "weather": "API",
     "sentiment": "Internal",
-    "forex": "yfinance",
+    "forex": "Tushare",
     "cftc": "CFTC",
     "options": "CTP",
     "health_log": "Internal",
@@ -205,6 +205,7 @@ SOURCE_DELAY_THRESHOLDS = {
     "futures_eod": 24.0,
     "overseas_minute": 1.0,
     "shipping": 25.0,   # 工作日一次性任务，25h内不告警（默认 threshold*0.5=13h 过于激进）
+    "forex": 25.0,      # 工作日 17:20 一次性任务，25h内不告警（默认 threshold*0.5=13h 过于激进）
 }
 
 # ── API Key 认证 ──────────────────────────────────────────
