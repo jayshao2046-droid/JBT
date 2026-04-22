@@ -283,13 +283,13 @@ class PrereadGenerator:
         try:
             from collectors.options_collector import OptionsCollector
             collector = OptionsCollector()
-            options_records = collector.collect(symbols=["50ETF", "300ETF"])
+            options_records = collector.collect(exchanges=["sse", "szse", "cffex"])
             iv_snapshot = {}
             for record in options_records[-5:]:
-                symbol = record.get("symbol", "")
-                iv = record.get("payload", {}).get("implied_volatility", 0)
-                if symbol:
-                    iv_snapshot[symbol] = iv
+                exch = record.get("symbol_or_indicator", "")
+                iv = record.get("payload", {}).get("settle", 0)
+                if exch:
+                    iv_snapshot[exch] = iv
             context["iv_snapshot"] = iv_snapshot
             self.logger.info("L2 审核上下文: iv_snapshot=%d", len(iv_snapshot))
         except Exception as exc:
