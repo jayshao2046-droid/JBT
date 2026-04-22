@@ -255,3 +255,29 @@ def get_futures_minute_context(hours: int = Query(2, ge=1, le=8)) -> dict[str, A
     """获取所有期货品种近 N 小时分钟K行情摘要（按品种聚合，供宏观分析使用）"""
     summaries = _read_futures_minute_summary(hours)
     return {"data_type": "futures_minute", "hours": hours, "summaries": summaries, "count": len(summaries)}
+
+
+# ─── 期货 35 品种情绪端点（on-demand，依赖 researcher_store 最新研报）────────────
+
+@router.get("/futures_sentiment")
+def get_futures_sentiment_context(
+    symbol: Optional[str] = Query(None, description="品种短码（如 rb），不区分大小写；不传则返回全 35 品种"),
+) -> dict[str, Any]:
+    """获取期货 35 品种情绪聚合（基于 researcher 最新研报，on-demand 读取）。
+
+    Returns:
+        {
+            "data_type": "futures_sentiment",
+            "data": [{symbol, trend, confidence, sentiment_score, key_factors}, ...],
+            "stale": bool,
+            "last_updated": str | null,
+            "reason": str | null,
+            "symbol_count": int
+        }
+
+    当研报不可用时 data=[]，stale=True；绝不合成默认中性值。
+    """
+    from data.futures_sentiment import get_futures_sentiment
+
+    result = get_futures_sentiment(symbol=symbol)
+    return {"data_type": "futures_sentiment", **result}
