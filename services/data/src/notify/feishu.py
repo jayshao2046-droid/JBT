@@ -47,7 +47,7 @@ class FeishuSender:
             "msg_type": "interactive",
             "card": {
                 "header": {
-                    "title": {"tag": "plain_text", "content": f"JBT {event.title}"},
+                    "title": {"tag": "plain_text", "content": f"JBT 数据 📰 [新闻-{event.source_name or '综合'}] {event.title}"},
                     "template": "wathet",
                 },
                 "elements": elements,

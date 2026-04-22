@@ -1,13 +1,16 @@
 """
-NotifierDispatcher — TASK-0021 F batch + TASK-0025 failover integration
+NotifierDispatcher — TASK-0021 F batch + TASK-0025 failover integration + 静默窗口
 决策服务双通道通知调度器（飞书 + 邮件）+ SimNow 备用方案。
 """
 from __future__ import annotations
 
 import enum
+import json
 import logging
+import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from typing import Any, Optional
 
 from .email import DecisionEmailNotifier
@@ -16,6 +19,39 @@ from .feishu import DecisionFeishuNotifier
 logger = logging.getLogger(__name__)
 
 _dispatcher_singleton: Optional["NotifierDispatcher"] = None
+_TZ_CST = timezone(timedelta(hours=8))
+
+# 告警日志路径
+_ALARM_LOG = Path(os.environ.get("NOTIFY_ALARM_LOG", "/data/logs/notify_alarm.log"))
+
+
+def _is_quiet_hours(now: datetime | None = None) -> bool:
+    """静默时段：00:11–07:59，即推送窗口为 08:00–24:10。"""
+    now = now or datetime.now(_TZ_CST)
+    minutes = now.hour * 60 + now.minute
+    return 11 <= minutes < 480
+
+
+def _should_bypass_quiet(level: "NotifyLevel") -> bool:
+    """判断是否绕过静默窗口：P0/P1/SIGNAL 常通。"""
+    level_str = level.value if hasattr(level, "value") else str(level)
+    return level_str in ("P0", "P1", "SIGNAL")
+
+
+def _append_alarm_log(event: "DecisionEvent") -> None:
+    """双通道全失时写入本地告警日志，下次推送成功时附带 pending 标帜。"""
+    try:
+        _ALARM_LOG.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "ts": datetime.now(_TZ_CST).isoformat(),
+            "event_code": event.event_code,
+            "level": event.notify_level.value if hasattr(event.notify_level, "value") else str(event.notify_level),
+            "title": event.title,
+        }
+        with _ALARM_LOG.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as exc:
+        logger.warning("告警日志写入失败: %s", exc)
 
 
 class NotifyLevel(str, enum.Enum):
@@ -231,6 +267,14 @@ class NotifierDispatcher:
         ]
 
     def dispatch(self, event: DecisionEvent) -> DispatchState:
+        # 静默窗口检查：00:11–07:59 静默，P0/P1/SIGNAL 绕过
+        if _is_quiet_hours() and not _should_bypass_quiet(event.notify_level):
+            logger.debug(
+                "dispatch skipped (quiet hours) event=%s level=%s",
+                event.event_code, event.notify_level,
+            )
+            return self._state
+
         dispatched_at = datetime.now(timezone.utc).isoformat()
         feishu_ok = self._feishu.send(event)
         email_ok = self._email.send(event)
@@ -255,6 +299,10 @@ class NotifierDispatcher:
                 title=event.title,
                 body=event.body,
             )
+
+        # 双通道全失败时写入本地告警日志
+        if not feishu_ok and not email_ok:
+            _append_alarm_log(event)
 
         logger.info(
             "dispatch event=%s level=%s state=%s feishu=%s email=%s",

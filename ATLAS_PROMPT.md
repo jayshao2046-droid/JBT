@@ -61,6 +61,15 @@
   - E（live-trading 占位）：可延后，待实盘开通前签发
   - backtest 通知归属已澄清：Studio 单点，Air 体外循环不接入通知
   - 各 Token TTL 4320 min，下一步：各执行 Agent 按 A→B→C→D 顺序实施，E 延后
+
+- 2026-04-23【NOTIFY批次进度 Round-1 ✅】Atlas 直接实施：
+  - sim-trading (A) 已全量完成：quiet_window.py、trade_push.py、feishu.py、email.py、dispatcher.py、main.py、.env.example
+  - data (B) 已完成：dispatcher.py 静默窗口修复、card_templates.py 标题/落款、feishu.py 标题、news_pusher.py 60min、data_scheduler.py 4h心跳+23:30邮件
+  - data (B) 续 Round-1：关闭 collector_start 逐条噪音通知、删除 email_morning/afternoon、news_push_batch 改 hours=1、清理废弃 session_am/session_pm job 注册
+  - decision (C) 已完成：feishu.py 三群路由+标题格式(JBT 决策 icon [级别-类型] 标题)+落款(JBT-决策)、dispatcher.py 静默窗口+alarm.log 反馈、.env.example 补三群 webhook
+  - backtest (D) 已完成：notifier/ 模块新建（__init__.py/feishu.py/dispatcher.py）、manual_runner.py 钩入完成/失败通知、.env.example 补 webhook
+  - 语法校验：全部 6 文件 python3 -m py_compile 通过 ✅
+  - 剩余：lockback + git commit + Mini/Studio 同步
   【签名 Atlas】
 
 - 2026-04-11 01:30：已完成 `TASK-0043` lockback 与治理回写。Mini `data_scheduler` 已切换为 `LaunchAgent` 守护，`kill -9` 后可自动恢复，运行态收敛为单实例；当前灾备尾项仅剩 DR3 容器 restart policy。

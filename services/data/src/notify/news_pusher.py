@@ -116,7 +116,7 @@ def _is_market_related(title: str, url: str = "") -> bool:
 class NewsPusher:
     """新闻清洗 + 去重 + 批量推送管理器。"""
 
-    BATCH_INTERVAL_SEC = 1800  # 30 分钟
+    BATCH_INTERVAL_SEC = 3600  # 60 分钟（降低资讯群噪音）
     DEFAULT_SYNC_LIMIT_PER_SOURCE = 5000
     DEFAULT_STORAGE_SOURCES = (
         ("news_api", "news_api"),

@@ -436,22 +436,6 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
     d = _get_dispatcher()
     silent = name in _SILENT_COLLECTORS
 
-    # 发送启动通知（排除 24h 连续采集器）
-    if d and not silent:
-        try:
-            from notify.dispatcher import DataEvent, NotifyType
-            d.dispatch(DataEvent(
-                event_code="collector_start",
-                title=f"{name} 启动",
-                notify_type=NotifyType.NOTIFY,
-                body_md=f"{name} 启动",
-                body_rows=[("采集器", name), ("启动时间", datetime.now().strftime("%H:%M:%S"))],
-                source_name=name,
-                channels={"feishu"},
-            ))
-        except Exception:
-            pass
-
     try:
         logger.info("▶ 开始执行: %s", name)
         t0 = time.time()
@@ -1805,7 +1789,11 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
         args=[config], id="system_heartbeat", name="2h系统心跳",
         next_run_time=datetime.now(),  # 启动后立即推一次
     )
-    # 因子/信号分时段报告: 早盘11:35 / 午盘15:05 / 收盘23:05
+    # 每日邮件日报: 23:30 发送完整数据健康报告
+    scheduler.add_job(
+        job_daily_email_report, CronTrigger(hour=23, minute=30),
+        args=[config], id="daily_email_report", name="23:30邮件日报",
+    )
     scheduler.add_job(
         job_factor_signal_morning, CronTrigger(hour=11, minute=35, day_of_week="mon-fri"),
         args=[config], id="factor_signal_morning", name="因子/信号早盘报告",
@@ -1833,36 +1821,15 @@ def _run_with_apscheduler(config: dict[str, Any]) -> None:
         job_sla_reset, CronTrigger(hour=0, minute=5),
         args=[config], id="sla_reset", name="SLA计数器重置",
     )
-    # 早盘开盘通知: 09:30 (周一到周五)
-    scheduler.add_job(
-        job_session_notify, CronTrigger(hour=9, minute=30, day_of_week="mon-fri"),
-        args=[config], kwargs={"session_name": "早盘采集开始"},
-        id="session_am", name="早盘开盘通知",
-    )
-    # 夜盘开盘通知: 21:00 (周一到周四)
-    scheduler.add_job(
-        job_session_notify, CronTrigger(hour=21, minute=0, day_of_week="mon-thu"),
-        args=[config], kwargs={"session_name": "夜盘采集开始"},
-        id="session_pm", name="夜盘开盘通知",
-    )
     # NAS 备份: 每日 03:00
     scheduler.add_job(
         job_nas_backup, CronTrigger(hour=3, minute=0),
         args=[config], id="nas_backup", name="NAS备份",
     )
     # ── 新通知系统 ──
-    # 邮件日报: 09:30 + 16:30
+    # 新闻批量推送: 每60分钟（清单批次，含链接）
     scheduler.add_job(
-        job_daily_email_report, CronTrigger(hour=9, minute=30, day_of_week="mon-fri"),
-        args=[config], id="email_morning", name="邮件晨报",
-    )
-    scheduler.add_job(
-        job_daily_email_report, CronTrigger(hour=16, minute=30, day_of_week="mon-fri"),
-        args=[config], id="email_afternoon", name="邮件午报",
-    )
-    # 新闻批量推送: 每30分钟
-    scheduler.add_job(
-        job_news_push_batch, IntervalTrigger(minutes=30),
+        job_news_push_batch, IntervalTrigger(hours=1),
         args=[config], id="news_push_batch", name="新闻批量推送",
     )
     # 夜间预读投喂: 每日 21:00

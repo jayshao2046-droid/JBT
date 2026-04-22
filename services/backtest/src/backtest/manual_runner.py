@@ -62,6 +62,9 @@ class ManualRunner:
         )
         self._results[run_id] = result
 
+        import time as _time
+        _t0 = _time.time()
+
         try:
             metrics = self._execute_backtest(strategy_id, start_date, end_date, params)
             result.status = "completed"
@@ -72,6 +75,18 @@ class ManualRunner:
             result.metrics = {"error": str(exc)}
 
         result.end_time = datetime.now(timezone.utc).isoformat()
+        _elapsed = round(_time.time() - _t0, 1)
+
+        # 发送通知
+        try:
+            from notifier import notify_backtest_done, notify_backtest_failed
+            if result.status == "completed":
+                notify_backtest_done(run_id, strategy_id, result.metrics, _elapsed)
+            else:
+                notify_backtest_failed(run_id, strategy_id, result.metrics.get("error", "未知错误"), _elapsed)
+        except Exception:
+            pass
+
         return result
 
     # ── 查询 ──────────────────────────────────────────────────────────

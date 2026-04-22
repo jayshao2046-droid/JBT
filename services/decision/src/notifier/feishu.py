@@ -1,6 +1,6 @@
 """
-DecisionFeishuNotifier — TASK-0021 F batch
-飞书 Webhook 卡片通知，遵循 JBT 统一颜色标准。
+DecisionFeishuNotifier — TASK-0021 F batch + 三群路由重写
+飞书 Webhook 卡片通知，遵循 JBT 统一颜色标准 + 三群路由。
 """
 import json
 import logging
@@ -36,13 +36,61 @@ _LEVEL_ICON = {
     "NOTIFY": "📣",
 }
 
+# 级别标签（中文）
+_LEVEL_LABEL = {
+    "P0": "报警-P0",
+    "P1": "报警-P1",
+    "P2": "告警-P2",
+    "SIGNAL": "信号",
+    "RESEARCH": "研究",
+    "NOTIFY": "通知",
+}
+
+# 事件类型标签（中文）
+_EVENT_TYPE_LABEL = {
+    "RESEARCH": "研究",
+    "SIGNAL": "信号",
+    "STRATEGY": "策略",
+    "DAILY": "日报",
+    "SYSTEM": "系统",
+    "HEALTH": "健康",
+    "GATE": "门控",
+}
+
+
+def _first_nonempty(*values: str) -> str:
+    for v in values:
+        if v:
+            return v
+    return ""
+
+
+def _get_webhook_url(level_str: str) -> str:
+    """按级别选择三群 Webhook，降级到通用 URL。"""
+    if level_str in ("P0", "P1", "P2"):
+        return _first_nonempty(
+            os.environ.get("FEISHU_ALERT_WEBHOOK_URL", ""),
+            os.environ.get("FEISHU_WEBHOOK_URL", ""),
+        )
+    if level_str == "SIGNAL":
+        return _first_nonempty(
+            os.environ.get("FEISHU_TRADE_WEBHOOK_URL", ""),
+            os.environ.get("FEISHU_WEBHOOK_URL", ""),
+        )
+    # RESEARCH / NOTIFY → 资讯群
+    return _first_nonempty(
+        os.environ.get("FEISHU_INFO_WEBHOOK_URL", ""),
+        os.environ.get("FEISHU_WEBHOOK_URL", ""),
+    )
+
 
 class DecisionFeishuNotifier:
-    """飞书 Webhook 通道。通过 NOTIFY_FEISHU_ENABLED 整体开关。"""
+    """飞书三群路由通知器。通过 NOTIFY_FEISHU_ENABLED 整体开关。"""
 
     def __init__(self) -> None:
         raw = os.environ.get("NOTIFY_FEISHU_ENABLED", "false").strip().lower()
         self._enabled = raw == "true"
+        # 保留向后兼容属性，供 dispatcher 检查 webhook 配置
         self._webhook_url: str = os.environ.get("FEISHU_WEBHOOK_URL", "")
 
     def send(self, event: "DecisionEvent") -> bool:
@@ -50,13 +98,16 @@ class DecisionFeishuNotifier:
             logger.debug("FeishuNotifier disabled, skipping %s", event.event_code)
             return True
 
-        if not self._webhook_url:
-            logger.error("FEISHU_WEBHOOK_URL not set")
+        level_str = event.notify_level.value if hasattr(event.notify_level, "value") else str(event.notify_level)
+        webhook_url = _get_webhook_url(level_str)
+        if not webhook_url:
+            logger.error("飞书 Webhook 未配置 (level=%s)", level_str)
             return False
 
-        level_str = event.notify_level.value if hasattr(event.notify_level, "value") else str(event.notify_level)
         color = _LEVEL_COLOR.get(level_str, "blue")
         icon = _LEVEL_ICON.get(level_str, "📋")
+        level_label = _LEVEL_LABEL.get(level_str, level_str)
+        event_type_label = _EVENT_TYPE_LABEL.get(event.event_type, event.event_type)
         ts = datetime.now(_TZ_CST).strftime("%Y-%m-%d %H:%M:%S")
 
         # 追踪信息行
@@ -74,13 +125,14 @@ class DecisionFeishuNotifier:
         track_line = " | ".join(track_parts) if track_parts else "-"
 
         body_text = f"**{event.event_code}**\n{event.body}"
+        title_text = f"JBT 决策 {icon} [{level_label}-{event_type_label}] {event.title}"
         payload = {
             "msg_type": "interactive",
             "card": {
                 "header": {
                     "title": {
                         "tag": "plain_text",
-                        "content": f"{icon} [DECISION-{level_str}] {event.title}",
+                        "content": title_text,
                     },
                     "template": color,
                 },
@@ -106,7 +158,7 @@ class DecisionFeishuNotifier:
                         "elements": [
                             {
                                 "tag": "plain_text",
-                                "content": f"JBT Decision | {ts}",
+                                "content": f"JBT-决策 | {ts}",
                             }
                         ],
                     },
@@ -117,7 +169,7 @@ class DecisionFeishuNotifier:
         try:
             data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(
-                self._webhook_url,
+                webhook_url,
                 data=data,
                 headers={"Content-Type": "application/json"},
                 method="POST",
@@ -148,7 +200,11 @@ class FeishuNotifier:
     """简化的飞书通知器，用于研究员评级通知"""
 
     def __init__(self) -> None:
-        self._webhook_url: str = os.environ.get("FEISHU_WEBHOOK_URL", "")
+        # 研究员评分通知发到资讯群
+        self._webhook_url: str = _first_nonempty(
+            os.environ.get("FEISHU_INFO_WEBHOOK_URL", ""),
+            os.environ.get("FEISHU_WEBHOOK_URL", ""),
+        )
 
     async def send_researcher_score(
         self,
@@ -242,7 +298,7 @@ class FeishuNotifier:
                         "elements": [
                             {
                                 "tag": "plain_text",
-                                "content": f"qwen3 评级 | {ts}",
+                                "content": f"JBT-决策 | {ts}",
                             }
                         ],
                     },
