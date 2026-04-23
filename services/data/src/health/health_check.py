@@ -520,6 +520,29 @@ def get_collector_freshness() -> list[dict[str, Any]]:
     return results
 
 
+def persist_collector_status_snapshot(
+    *,
+    ts: str,
+    sources: list[dict[str, Any]],
+    cpu_percent: float,
+    mem_percent: float,
+    disk_percent: float,
+) -> None:
+    """持久化看板消费的采集器快照。"""
+    payload = {
+        "ts": ts,
+        "sources": sources,
+        "cpu": cpu_percent,
+        "mem": mem_percent,
+        "disk": disk_percent,
+    }
+    COLLECTOR_STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    COLLECTOR_STATUS_FILE.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
 def load_alarm_state() -> dict[str, Any]:
     """加载持久化告警状态（连续失败次数、首次失败时间）。"""
     try:
@@ -955,14 +978,13 @@ def main():
 
         # 写 collector_status_latest.json（供看板读取）
         try:
-            COLLECTOR_STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            COLLECTOR_STATUS_FILE.write_text(json.dumps({
-                "ts": report["ts"],
-                "sources": report["collector_freshness"],
-                "cpu": report["cpu"]["usage_percent"],
-                "mem": report["memory"]["used_percent"],
-                "disk": report["disk"][0]["used_percent"] if report["disk"] else 0,
-            }, ensure_ascii=False, indent=2))
+            persist_collector_status_snapshot(
+                ts=report["ts"],
+                sources=report["collector_freshness"],
+                cpu_percent=report["cpu"]["usage_percent"],
+                mem_percent=report["memory"]["used_percent"],
+                disk_percent=report["disk"][0]["used_percent"] if report["disk"] else 0,
+            )
         except Exception as e:
             print(f"[健康检查] 写 collector_status_latest.json 失败: {e}")
 

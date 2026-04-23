@@ -2,7 +2,7 @@
 
 ## 快速开始
 
-在 Alienware (192.168.31.223) 上以**管理员身份**打开 PowerShell，执行：
+在 Alienware (192.168.31.187) 上以**管理员身份**打开 PowerShell，执行：
 
 ```powershell
 cd C:\Users\17621\jbt\scripts
@@ -154,10 +154,10 @@ Invoke-RestMethod -Uri "http://localhost:8199/run?hour=14" -Method Post
 **检查**：
 ```bash
 # 测试网络连通性
-curl http://192.168.31.223:8199/health
+curl http://192.168.31.187:8199/health
 
 # 测试报告读取
-curl http://192.168.31.223:8199/reports/latest
+curl http://192.168.31.187:8199/reports/latest
 ```
 
 ## 日志位置

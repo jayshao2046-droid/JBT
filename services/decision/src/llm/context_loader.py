@@ -301,7 +301,7 @@ async def get_l2_context(symbol: str) -> Tuple[str, List[str]]:
         context_parts.append(f"\n[DATA_DEGRADED] 60根分钟线拉取失败: {str(exc)}")
 
     # 3. 拉取研报摘要（从 Alienware researcher 服务直连，不走 Mini data）
-    researcher_api_url = os.getenv("RESEARCHER_SERVICE_URL", "http://192.168.31.223:8199")
+    researcher_api_url = os.getenv("RESEARCHER_SERVICE_URL", "http://192.168.31.187:8199")
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(

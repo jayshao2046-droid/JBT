@@ -3,7 +3,7 @@
 import requests
 import time
 
-ALIENWARE = "http://192.168.31.223:8199"
+ALIENWARE = "http://192.168.31.187:8199"
 
 print("=" * 60)
 print("测试修复后的研究员数据流")

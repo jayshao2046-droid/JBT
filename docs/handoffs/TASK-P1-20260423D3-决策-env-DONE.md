@@ -11,7 +11,7 @@
 
 ```
 # ----- 研究员服务集成（Alienware，与 DATA_SERVICE_URL 独立）-----
-RESEARCHER_SERVICE_URL=http://192.168.31.223:8199
+RESEARCHER_SERVICE_URL=http://192.168.31.187:8199
 # 研究员报告来源，指向 Alienware researcher 服务，不可复用 DATA_SERVICE_URL
 ```
 

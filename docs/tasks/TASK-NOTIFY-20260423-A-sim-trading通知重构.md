@@ -109,7 +109,7 @@ OnRtnOrder → 仅在状态变化为终态（全成/拒单/撤单）或部成时
 3. 任一非 P0 在 02:00 触发 → 飞书无推送，08:00 整点收到"夜间累积"卡。
 4. 手工 unset webhook 后触发一次告警 → `sim_trading_alarm.log` 出现一行；恢复 webhook 后下次推送顶部出现 `⚠️ 上次推送失败累计 1 条`。
 5. 抓样 5 张飞书卡片：100% 中文 + 标题 `JBT 模拟交易 [...] xxx` + 落款 `JBT-模拟交易`。
-6. `curl http://192.168.31.223:8101/api/v1/notify/health` 返回 200 + JSON。
+6. `curl http://192.168.31.187:8101/api/v1/notify/health` 返回 200 + JSON。
 7. 23:10 邮件日报：HTML Card + 中文 + 主题 `[JBT-模拟交易] 收盘日报 YYYY-MM-DD`。
 
 ## 风险与回滚

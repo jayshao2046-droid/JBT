@@ -9,7 +9,7 @@
 ## 真实架构确认
 
 ✅ **Alienware 直连 Decision**（已验证）
-- Decision `ResearcherLoader` 配置：`http://192.168.31.223:8199`
+- Decision `ResearcherLoader` 配置：`http://192.168.31.187:8199`
 - 端点：`GET /reports/latest`
 - Mini 研报 API 是**可选备用**，不是关键路径
 - P0"实现 Mini API"的需求**已作废**
@@ -64,14 +64,14 @@
 
 ```bash
 # Alienware 上检查进程
-ssh 17621@192.168.31.223 'tasklist | findstr python'
+ssh 17621@192.168.31.187 'tasklist | findstr python'
 
 # 如果研究员进程不存在，需要重启
-ssh 17621@192.168.31.223 'C:\Users\17621\jbt\services\data\start_researcher.bat'
+ssh 17621@192.168.31.187 'C:\Users\17621\jbt\services\data\start_researcher.bat'
 
 # 验证重启后是否有新报告生成
 sleep 5
-ssh 17621@192.168.31.223 'powershell -Command "Get-ChildItem C:\Users\17621\jbt\services\data\runtime\researcher\reports\2026-04-21\ -Filter *.json | Sort-Object LastWriteTime | Select-Object -Last 3"'
+ssh 17621@192.168.31.187 'powershell -Command "Get-ChildItem C:\Users\17621\jbt\services\data\runtime\researcher\reports\2026-04-21\ -Filter *.json | Sort-Object LastWriteTime | Select-Object -Last 3"'
 ```
 
 ### Priority 2 - 调查 04-17 20:54 的故障原因

@@ -47,7 +47,7 @@ class NewsScorer:
         """
         # researcher 报告源统一走 Alienware researcher 服务，不走 data 服务
         self.researcher_api_url = os.getenv(
-            "RESEARCHER_SERVICE_URL", "http://192.168.31.223:8199"
+            "RESEARCHER_SERVICE_URL", "http://192.168.31.187:8199"
         )
         self.ollama_url = ollama_url or os.getenv(
             "OLLAMA_BASE_URL", "http://192.168.31.142:11434"

@@ -27,7 +27,7 @@
 1. 运行态四设备架构冻结为 Mini / Studio / Alienware / Air；MacBook 仅保留开发/控制，不计入运行态四设备。
 2. Mini：`192.168.31.76`，`data:8105`、`sim-trading:8101`、`sim-trading-web:3002`；角色为“数据源 + 情报落库存储 + 快速投喂节点”，且这是当前 JBT sim-trading 的现网部署面。
 3. Studio：`192.168.31.142`，`decision:8104`、`decision-web:3003`、`dashboard:8106/3005`；角色为“决策/开发主控节点”，本地常驻模型冻结为 `deepcoder:14b` + `phi4-reasoning:14b`，不再把 `qwen3:14b` 记在 Studio 常驻里。
-4. Alienware：`192.168.31.223`；角色固定为“Windows 交易端 + 情报研究员节点”，当前只保留 `qwen3:14b`；负责读取 Mini 同源数据、生成 Studio / Jay.S 双报告，并承载期货公司官方 Windows 交易软件 24h 在线主机。
+4. Alienware：`192.168.31.187`；角色固定为“Windows 交易端 + 情报研究员节点”，当前只保留 `qwen3:14b`；负责读取 Mini 同源数据、生成 Studio / Jay.S 双报告，并承载期货公司官方 Windows 交易软件 24h 在线主机。
 5. Air：`192.168.31.245`，`backtest:8103`、`backtest-web:3001`；继续作为回测生产节点。
 6. 端口语义固定：Web `3001~3006`，API `8101~8106`；只允许主机名 / IP 变化，不允许改端口语义。
 

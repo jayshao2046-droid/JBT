@@ -120,11 +120,12 @@ class NewsCrawler:
                     "timestamp": datetime.now().isoformat()
                 }
 
+                # 安全修复：P0-6 - 明确捕获预期异常类型
                 try:
                     self.queue.put_nowait(event)
                     logger.info(f"News: {title[:50]}")
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Queue full, dropping news: {title[:50]}")
 
         except Exception as e:
             logger.debug(f"Error crawling {source['name']}: {e}")

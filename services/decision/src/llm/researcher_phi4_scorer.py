@@ -52,7 +52,7 @@ class ResearcherPhi4Scorer:
         self,
         client=None,
         model: str = "qwen3:14b-q4_K_M",
-        researcher_api_url: str = "http://192.168.31.223:8199"
+        researcher_api_url: str = "http://192.168.31.187:8199"
     ):
         """初始化评级器
 

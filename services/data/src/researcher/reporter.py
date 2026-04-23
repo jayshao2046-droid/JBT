@@ -57,13 +57,15 @@ class Reporter:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_report_date ON report_index(date, hour)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_report_symbol ON report_index(date, symbols)")
             # 迁移：为已存在的旧表补充 decision 列
-            for col_def in [
-                "ADD COLUMN decision_confidence  REAL DEFAULT NULL",
-                "ADD COLUMN decision_reviewed_at TEXT DEFAULT NULL",
-                "ADD COLUMN decision_reason      TEXT DEFAULT NULL",
-            ]:
+            # 安全修复：P0-1 - 使用白名单验证，防止 SQL 注入
+            valid_columns = {
+                "decision_confidence": ("decision_confidence", "REAL DEFAULT NULL"),
+                "decision_reviewed_at": ("decision_reviewed_at", "TEXT DEFAULT NULL"),
+                "decision_reason": ("decision_reason", "TEXT DEFAULT NULL"),
+            }
+            for col_key, (col_name, col_type) in valid_columns.items():
                 try:
-                    cursor.execute(f"ALTER TABLE report_index {col_def}")
+                    cursor.execute(f"ALTER TABLE report_index ADD COLUMN {col_name} {col_type}")
                 except Exception:
                     pass  # 列已存在
             conn.commit()

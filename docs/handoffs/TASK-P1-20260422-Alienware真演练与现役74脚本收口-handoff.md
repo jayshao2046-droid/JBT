@@ -33,7 +33,7 @@
 3. 真实 deploy 成功：
 	- Windows 文件同步完成
 	- researcher 重启成功
-	- `http://192.168.31.223:8199/health` 首次通过
+	- `http://192.168.31.187:8199/health` 首次通过
 4. 第一次 rollback 失败原因已定位：回滚快照来自修复前的坏状态。
 5. 通过两次同版本 deploy 重新生成已知健康快照后，第二次真实 rollback 成功：
 	- researcher 重启成功

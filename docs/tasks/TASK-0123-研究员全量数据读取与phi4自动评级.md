@@ -208,7 +208,7 @@ def _trigger_phi4_evaluation(self, report):
         studio_url = "http://192.168.31.142:8104/api/v1/evaluate_report"
         resp = httpx.post(studio_url, json={
             "report_id": report["report_id"],
-            "report_path": f"http://192.168.31.223:8199/reports/latest"
+            "report_path": f"http://192.168.31.187:8199/reports/latest"
         }, timeout=5.0)
         logger.info(f"Triggered phi4 evaluation: {resp.status_code}")
     except Exception as e:

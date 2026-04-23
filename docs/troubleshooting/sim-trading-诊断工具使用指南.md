@@ -11,7 +11,7 @@
 
 ```bash
 # SSH 到 Alienware
-ssh jayshao@192.168.31.223
+ssh jayshao@192.168.31.187
 
 # 进入 JBT 目录
 cd ~/JBT
@@ -120,7 +120,7 @@ TRADE_EXECUTED 详细分析 (共 45 条)
 
 ```bash
 # SSH 到 Alienware
-ssh jayshao@192.168.31.223
+ssh jayshao@192.168.31.187
 
 # 进入 JBT 目录
 cd ~/JBT
@@ -251,8 +251,8 @@ rm /tmp/ctp_disconnect_diagnosis.jsonl
 ### Q5: 可以远程分析吗？
 **A**: 可以。把日志文件从 Alienware 拷贝到 MacBook：
 ```bash
-scp jayshao@192.168.31.223:/tmp/feishu_trace.jsonl /tmp/
-scp jayshao@192.168.31.223:/tmp/ctp_disconnect_diagnosis.jsonl /tmp/
+scp jayshao@192.168.31.187:/tmp/feishu_trace.jsonl /tmp/
+scp jayshao@192.168.31.187:/tmp/ctp_disconnect_diagnosis.jsonl /tmp/
 python3 scripts/analyze_feishu_trace.py
 python3 scripts/analyze_ctp_disconnect.py
 ```

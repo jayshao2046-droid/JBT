@@ -89,7 +89,7 @@ def _notify_researcher_on_collection_complete(collector_name: str, record_count:
     else:
         segment = "夜盘"
 
-    researcher_url = os.getenv("RESEARCHER_TRIGGER_URL", "http://192.168.31.223:8199/run")
+    researcher_url = os.getenv("RESEARCHER_TRIGGER_URL", "http://192.168.31.187:8199/run")
 
     try:
         import httpx
@@ -510,77 +510,91 @@ def _safe_run(name: str, func: Callable[..., Any], **kwargs: Any) -> None:
 # 管道任务定义
 # ─────────────────────────────────────────────
 def _get_domestic_symbols() -> list[str]:
-    """获取内盘全量 35 品种合约列表（主力+次主力，动态维护）。
+    """获取内盘全量 42 品种合约列表（主力+次主力，动态维护）。
 
-    覆盖 35 个品种，每品种取 2 个活跃合约（近月+次主力），合计约 70 个合约。
+    覆盖 42 个品种，每品种取 2 个活跃合约（近月+次主力），合计约 84 个合约。
 
     合约代码格式：
-      SHFE/DCE  4位年月格式：rb2605 = 螺纹钢 2026年5月
-      CZCE      3位格式：MA605 = 甲醇 2026年5月（年末尾数字 + 两位月份）
+      SHFE/DCE/INE  4位年月格式：rb2605 = 螺纹钢 2026年5月
+      CZCE          3位格式：MA605 = 甲醇 2026年5月（年末尾数字 + 两位月份）
 
-    35 品种（按交易所分组）：
+    42 品种（按交易所分组）：
       SHFE: rb(螺纹钢), hc(热卷), cu(铜), al(铝), zn(锌), au(黄金), ag(白银),
-            ru(橡胶), ss(不锈钢), sp(纸浆)
+            ru(橡胶), ss(不锈钢), sp(纸浆), ni(镍), fu(燃料油), bu(沥青)
+      INE:  sc(原油)
       DCE:  i(铁矿石), m(豆粕), pp(聚丙烯), v(PVC), l(塑料), c(玉米), jd(鸡蛋),
             y(豆油), p(棕榈油), a(豆一), jm(焦煤), j(焦炭), eb(苯乙烯),
-            pg(液化气), lh(生猪)
+            pg(液化气), lh(生猪), eg(乙二醇), cs(淀粉)
       CZCE: TA(PTA), MA(甲醇), CF(棉花), SR(白糖), OI(菜油), RM(菜粕),
-            FG(玻璃), SA(纯碱), PF(短纤), UR(尿素)
+            FG(玻璃), SA(纯碱), PF(短纤), UR(尿素), AP(苹果)
     """
     return [
-        # ── SHFE 上期所（10品种）────────────────────────────────────
+        # ── SHFE 上期所（13品种）────────────────────────────────────
         "SHFE.rb2605", "SHFE.rb2610",      # 螺纹钢
         "SHFE.hc2605", "SHFE.hc2610",      # 热卷板
         "SHFE.cu2605", "SHFE.cu2606",      # 铜
-        "SHFE.al2605", "SHFE.al2606",      # 铝（新增）
-        "SHFE.zn2605", "SHFE.zn2606",      # 锌（新增）
+        "SHFE.al2605", "SHFE.al2606",      # 铝
+        "SHFE.zn2605", "SHFE.zn2606",      # 锌
         "SHFE.au2606", "SHFE.au2612",      # 黄金（双月合约）
         "SHFE.ag2606", "SHFE.ag2612",      # 白银（双月合约）
-        "SHFE.ru2605", "SHFE.ru2609",      # 橡胶（新增）
-        "SHFE.ss2605", "SHFE.ss2606",      # 不锈钢（新增）
-        "SHFE.sp2605", "SHFE.sp2609",      # 纸浆（新增）
-        # ── DCE 大商所（15品种）─────────────────────────────────────
+        "SHFE.ru2605", "SHFE.ru2609",      # 橡胶
+        "SHFE.ss2605", "SHFE.ss2606",      # 不锈钢
+        "SHFE.sp2605", "SHFE.sp2609",      # 纸浆
+        "SHFE.ni2605", "SHFE.ni2606",      # 镍（新增）
+        "SHFE.fu2605", "SHFE.fu2609",      # 燃料油（新增）
+        "SHFE.bu2606", "SHFE.bu2609",      # 沥青（新增）
+        # ── INE 上期能源（1品种）────────────────────────────────────
+        "INE.sc2606",  "INE.sc2607",       # 原油（新增）
+        # ── DCE 大商所（17品种）─────────────────────────────────────
         "DCE.i2605",  "DCE.i2609",         # 铁矿石
         "DCE.m2605",  "DCE.m2609",         # 豆粕
-        "DCE.pp2605", "DCE.pp2609",        # 聚丙烯（新增）
-        "DCE.v2605",  "DCE.v2609",         # PVC（新增）
-        "DCE.l2605",  "DCE.l2609",         # 塑料（新增）
+        "DCE.pp2605", "DCE.pp2609",        # 聚丙烯
+        "DCE.v2605",  "DCE.v2609",         # PVC
+        "DCE.l2605",  "DCE.l2609",         # 塑料
         "DCE.c2605",  "DCE.c2609",         # 玉米
-        "DCE.jd2605", "DCE.jd2606",        # 鸡蛋（月月合约，新增）
+        "DCE.jd2605", "DCE.jd2606",        # 鸡蛋（月月合约）
         "DCE.y2605",  "DCE.y2609",         # 豆油
         "DCE.p2605",  "DCE.p2609",         # 棕榈油
-        "DCE.a2605",  "DCE.a2609",         # 豆一（新增）
-        "DCE.jm2605", "DCE.jm2609",        # 焦煤（新增）
-        "DCE.j2605",  "DCE.j2609",         # 焦炭（新增）
-        "DCE.eb2605", "DCE.eb2609",        # 苯乙烯（新增）
-        "DCE.pg2605", "DCE.pg2606",        # 液化气（新增）
-        "DCE.lh2607", "DCE.lh2609",        # 生猪（奇数月合约，新增）
-        # ── CZCE 郑商所（10品种）────────────────────────────────────
+        "DCE.a2605",  "DCE.a2609",         # 豆一
+        "DCE.jm2605", "DCE.jm2609",        # 焦煤
+        "DCE.j2605",  "DCE.j2609",         # 焦炭
+        "DCE.eb2605", "DCE.eb2609",        # 苯乙烯
+        "DCE.pg2605", "DCE.pg2606",        # 液化气
+        "DCE.lh2607", "DCE.lh2609",        # 生猪（奇数月合约）
+        "DCE.eg2605", "DCE.eg2609",        # 乙二醇（新增）
+        "DCE.cs2605", "DCE.cs2609",        # 玉米淀粉（新增）
+        # ── CZCE 郑商所（11品种）────────────────────────────────────
         "CZCE.TA605", "CZCE.TA609",        # PTA
         "CZCE.MA605", "CZCE.MA609",        # 甲醇
         "CZCE.CF605", "CZCE.CF609",        # 棉花
-        "CZCE.SR605", "CZCE.SR609",        # 白糖（新增）
-        "CZCE.OI605", "CZCE.OI609",        # 菜油（新增）
-        "CZCE.RM605", "CZCE.RM609",        # 菜粕（新增）
-        "CZCE.FG605", "CZCE.FG609",        # 玻璃（新增）
+        "CZCE.SR605", "CZCE.SR609",        # 白糖
+        "CZCE.OI605", "CZCE.OI609",        # 菜油
+        "CZCE.RM605", "CZCE.RM609",        # 菜粕
+        "CZCE.FG605", "CZCE.FG609",        # 玻璃
         "CZCE.SA605", "CZCE.SA609",        # 纯碱
-        "CZCE.PF605", "CZCE.PF609",        # 短纤（新增）
-        "CZCE.UR605", "CZCE.UR609",        # 尿素（新增）
+        "CZCE.PF605", "CZCE.PF609",        # 短纤
+        "CZCE.UR605", "CZCE.UR609",        # 尿素
+        "CZCE.AP605", "CZCE.AP609",        # 苹果（新增）
     ]
 
 
 def _get_domestic_symbols_tushare() -> list[str]:
-    """返回全 35 品种的 Tushare 品种代码（用于 fut_holding / fut_wsr API）。
+    """返回全 42 品种的 Tushare 品种代码（用于 fut_holding / fut_wsr API）。
 
     格式为大写品种代码，不含交易所和合约月份。
     """
     return [
-        # SHFE（10品种）
+        # SHFE（13品种）
         "RB", "HC", "CU", "AL", "ZN", "AU", "AG", "RU", "SS", "SP",
-        # DCE（15品种）
+        "NI", "FU", "BU",  # 新增：镍、燃料油、沥青
+        # INE（1品种）
+        "SC",  # 新增：原油
+        # DCE（17品种）
         "I", "M", "PP", "V", "L", "C", "JD", "Y", "P", "A", "JM", "J", "EB", "PG", "LH",
-        # CZCE（10品种）
+        "EG", "CS",  # 新增：乙二醇、玉米淀粉
+        # CZCE（11品种）
         "TA", "MA", "CF", "SR", "OI", "RM", "FG", "SA", "PF", "UR",
+        "AP",  # 新增：苹果
     ]
 
 
@@ -1245,6 +1259,17 @@ def job_heartbeat(config: dict[str, Any]) -> None:
         mini_cpu = float(cpu.get("usage_percent", 0.0))
         mini_mem = float(mem.get("used_percent", 0.0))
         mini_disk = float(disks[0]["used_percent"]) if disks else 0.0
+
+        try:
+            _mod.persist_collector_status_snapshot(
+                ts=_mod.datetime.now(_mod.CN_TZ).isoformat(),
+                sources=freshness,
+                cpu_percent=mini_cpu,
+                mem_percent=mini_mem,
+                disk_percent=mini_disk,
+            )
+        except Exception as _e:
+            logger.warning("⚠️ 刷新 collector_status_latest.json 失败: %s", _e)
 
         # ── 通过 psutil 检测 JBT 进程（容器内无 ps 命令）──────────────
         import psutil as _psutil

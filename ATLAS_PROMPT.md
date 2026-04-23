@@ -23,7 +23,7 @@
 
 - `2026-04-14` 已冻结运行态四设备架构：Mini / Studio / Alienware / Air；MacBook 仅保留开发/控制，不计入运行态四设备。
 - Mini 当前口径更新为“数据源 + 情报落库存储 + 快速投喂节点”，并继续承载当前已部署的 sim-trading 容器/API 现网事实；Studio 更新为“决策/开发主控节点”，本地常驻模型只记 `deepcoder:14b` + `phi4-reasoning:14b`，不再把 `qwen3:14b` 记在 Studio 常驻里。
-- Alienware（192.168.31.223）已作为新增节点冻结：角色固定为“Windows 交易端 + 情报研究员节点”，当前只保留 `qwen3:14b`；负责读取 Mini 同源投喂数据并输出两份格式化研究报告（Studio / Jay.S），同时承载期货公司官方 Windows 交易软件 24h 在线主机。
+- Alienware（192.168.31.187）已作为新增节点冻结：角色固定为“Windows 交易端 + 情报研究员节点”，当前只保留 `qwen3:14b`；负责读取 Mini 同源投喂数据并输出两份格式化研究报告（Studio / Jay.S），同时承载期货公司官方 Windows 交易软件 24h 在线主机。
 - 研究范围冻结为：期货优先且仅跟踪已有策略覆盖品种；股票只分析策略筛出的 30 只股票池；搜索/外部信息只作为“排除项增强”，负面或不确定信息权重更高，不作为无条件加分项。
 - 关键过渡事实已冻结：Alienware 上线不等于 JBT sim-trading 已迁移；任何把交易执行正式切到 Alienware 的服务级改造，都必须后续单独建任务、预审、白名单、Token。
 - `TASK-0029`、`TASK-0030`、`TASK-0031`、`TASK-0032` 已完成并锁回；其中 `TASK-0034` 已补建为 `TASK-0031` 后续 data 单服务 U0 直修的事后审计锚点。
@@ -45,7 +45,7 @@
 
 ## 最近动作
 
-- 2026-04-22：已新建 `TASK-P1-20260422-Alienware-sim-trading真演练`，作为 researcher 演练闭环后的独立下一批。当前 todo 已冻结为：`1)` 建档/预审/锁定；`2)` 只读确认 sim-trading Windows 启动路径；`3)` 执行真实 deploy；`4)` 执行真实 rollback；`5)` 收口治理留痕。只读基线已确认：`http://192.168.31.223:8101/health` 正常返回，Alienware 上 `services/sim-trading/src/main.py`、服务目录 `.venv` 与仓库根 `.venv` 均存在。当前假设：现有 `windows_uvicorn` 分支可直接完成真实演练；若失败，再按补充预审最小扩白名单，不与 researcher 批次混单。
+- 2026-04-22：已新建 `TASK-P1-20260422-Alienware-sim-trading真演练`，作为 researcher 演练闭环后的独立下一批。当前 todo 已冻结为：`1)` 建档/预审/锁定；`2)` 只读确认 sim-trading Windows 启动路径；`3)` 执行真实 deploy；`4)` 执行真实 rollback；`5)` 收口治理留痕。只读基线已确认：`http://192.168.31.187:8101/health` 正常返回，Alienware 上 `services/sim-trading/src/main.py`、服务目录 `.venv` 与仓库根 `.venv` 均存在。当前假设：现有 `windows_uvicorn` 分支可直接完成真实演练；若失败，再按补充预审最小扩白名单，不与 researcher 批次混单。
 
 - 2026-04-22：`TASK-P1-20260422-Alienware-sim-trading真演练` 续推进。已确认首个失败根因是 `services/sim-trading/参考文档/` 中的 macOS symlink 结构会导致 Windows `robocopy` 返回 `RC=8`，因此已在白名单内对白应治理脚本做最小排除；随后继续只读定位到第二层根因：Alienware 现网 `services/sim-trading/.venv` 实际不存在，已知可用解释器是仓库根 `C:/Users/17621/jbt/.venv/Scripts/python.exe`。基于此，已在白名单内对 `governance/scripts/jbt_rsync_deploy.sh` 与 `governance/scripts/jbt_rsync_rollback.sh` 连续做 3 轮最小修复并各自执行真实 deploy 复验：`1)` 补 `..\\..\\.venv` 回退；`2)` 直拉 `python` 改为 `cmd.exe /c` 后台命令；`3)` 再切到 `wmic process call create` 优先。三轮后 `8101 /health` 仍持续失败，且远端未留下有效 sim-trading 启动痕迹，说明剩余阻塞已超出当前两条治理脚本的最小控制面，更可能落在 Alienware 远端启动资产/计划任务缺失，而非仓内脚本小改即可闭环。为避免运行态停机，已用已验证命令 `C:/Users/17621/jbt/.venv/Scripts/python.exe -m uvicorn src.main:app --port 8101` 手工恢复服务，`/health` 已重新返回 ok。当前状态：脚本侧证据已收集充分，但真演练尚未闭环；若继续，下一步应转向 Alienware 远端启动链专项诊断/补建，而不是继续在同两条脚本上盲改。
 
@@ -141,7 +141,7 @@
 
 - 2026-04-21 16:15：**研究员 Agent U0 快速诊断 — 架构纠正与故障定位 ✅**
   - 【纠正 1】架构已验证正确：Alienware 8199 **直连 Decision 8104**，Mini 研报 API 是可选备用非关键路径
-    - ResearcherLoader 配置：`http://192.168.31.223:8199/reports/latest`
+    - ResearcherLoader 配置：`http://192.168.31.187:8199/reports/latest`
     - curl 验证端点存在 ✅，返回 404 + 正确的文件缺失提示
     - 之前的 P0"实现 Mini API"需求**已作废**
   - 【故障 1】**Alienware 报告生成进程已停止 5 天**
@@ -159,7 +159,7 @@
     - ❌ **Decision 消费**：无新报告可用
   - 【紧急行动】Priority 1：重启 Alienware 研究员进程（尚未执行，待 Jay.S 确认）
     ```bash
-    ssh 17621@192.168.31.223 'C:\Users\17621\jbt\services\data\start_researcher.bat'
+    ssh 17621@192.168.31.187 'C:\Users\17621\jbt\services\data\start_researcher.bat'
     ```
   - 【诊断文档】
     - `docs/reports/RESEARCHER_SYSTEM_DIAGNOSIS_U0_COMPLETED_20260421.md`（完整总结）
@@ -176,7 +176,7 @@
   - Studio重建计划：完成Phase1 Claude任务后，Atlas执行SSH重建命令（Jay.S确认）
   - G0执行顺序：Studio重建完成 → Claude做TASK-0080 → Jay.S/Atlas停legacy容器
 
-- 2026-04-14：**四设备架构冻结回写 ✅**。JBT 运行态正式冻结为 Mini / Studio / Alienware / Air，其中 Alienware（192.168.31.223）为新增节点。
+- 2026-04-14：**四设备架构冻结回写 ✅**。JBT 运行态正式冻结为 Mini / Studio / Alienware / Air，其中 Alienware（192.168.31.187）为新增节点。
   - Mini：数据源 + 情报落库存储 + 快速投喂节点；继续承载现网 sim-trading 容器/API。
   - Studio：决策/开发主控节点；本地常驻模型冻结为 `deepcoder:14b` + `phi4-reasoning:14b`，不再把 `qwen3:14b` 记为 Studio 本地常驻。
   - Alienware：Windows 交易端 + 情报研究员节点；当前只保留 `qwen3:14b`，负责读取 Mini 同源数据并输出 Studio / Jay.S 双报告。

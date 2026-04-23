@@ -9,7 +9,7 @@ import sys
 import time
 import requests
 
-HOST = "17621@192.168.31.223"
+HOST = "17621@192.168.31.187"
 LOCAL_PATH = "/Users/jayshao/JBT"
 REMOTE_PATH = "C:/Users/17621/jbt"
 
@@ -82,7 +82,7 @@ def main():
     for i in range(10):
         time.sleep(1)
         try:
-            r = requests.get("http://192.168.31.223:8199/health", timeout=2)
+            r = requests.get("http://192.168.31.187:8199/health", timeout=2)
             if r.status_code == 200:
                 print(f"✓ 服务已启动 ({i+1}秒)")
                 break
@@ -95,7 +95,7 @@ def main():
     # 4. 验证队列 API
     print("\n[4/5] 验证队列 API...")
     try:
-        r = requests.get("http://192.168.31.223:8199/queue/status", timeout=5)
+        r = requests.get("http://192.168.31.187:8199/queue/status", timeout=5)
         data = r.json()
 
         if "pending_count" in data:

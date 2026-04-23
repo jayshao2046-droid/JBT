@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/Users/jayshao/JBT/optimize_cf_strategy.py", line 22, in <module>
+    from research.strategy_param_optimizer import StrategyParamOptimizer
+  File "/Users/jayshao/JBT/services/decision/src/research/strategy_param_optimizer.py", line 28, in <module>
+    from .yaml_signal_executor import YAMLSignalExecutor, SignalBacktestResult
+  File "/Users/jayshao/JBT/services/decision/src/research/yaml_signal_executor.py", line 27, in <module>
+    from ..llm.client import OllamaClient
+ImportError: attempted relative import beyond top-level package

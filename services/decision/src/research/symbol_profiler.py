@@ -29,6 +29,28 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+BARE_SYMBOL_EXCHANGE_MAP = {
+    # SHFE
+    "rb": "SHFE", "hc": "SHFE", "cu": "SHFE", "al": "SHFE", "zn": "SHFE",
+    "ni": "SHFE", "ss": "SHFE", "au": "SHFE", "ag": "SHFE", "fu": "SHFE",
+    "bu": "SHFE", "ru": "SHFE", "sp": "SHFE", "sn": "SHFE", "pb": "SHFE",
+    "wr": "SHFE",
+    # INE
+    "sc": "INE", "nr": "INE", "lu": "INE", "bc": "INE", "ec": "INE",
+    # DCE
+    "i": "DCE", "j": "DCE", "jm": "DCE", "a": "DCE", "b": "DCE",
+    "m": "DCE", "y": "DCE", "p": "DCE", "c": "DCE", "cs": "DCE",
+    "jd": "DCE", "lh": "DCE", "l": "DCE", "v": "DCE", "pp": "DCE",
+    "eg": "DCE", "eb": "DCE", "pg": "DCE",
+    # CZCE
+    "sr": "CZCE", "cf": "CZCE", "ta": "CZCE", "ma": "CZCE", "oi": "CZCE",
+    "rm": "CZCE", "fg": "CZCE", "sa": "CZCE", "ur": "CZCE", "ap": "CZCE",
+    "cj": "CZCE", "pk": "CZCE", "pf": "CZCE",
+    # CFFEX
+    "if": "CFFEX", "ih": "CFFEX", "ic": "CFFEX", "im": "CFFEX",
+    "t": "CFFEX", "tf": "CFFEX", "ts": "CFFEX",
+}
+
 
 @dataclass
 class FeatureMetadata:
@@ -255,6 +277,27 @@ class SymbolProfiler:
             return None
 
     @staticmethod
+    def _normalize_symbol(symbol: str) -> str:
+        """将裸品种/裸合约代码补全为 data API 可接受的带交易所前缀格式。"""
+        raw = symbol.strip()
+        if not raw or raw.startswith("KQ_m_") or "." in raw:
+            return raw
+
+        import re
+
+        match = re.fullmatch(r"([A-Za-z]+)(\d+)?", raw)
+        if not match:
+            return raw
+
+        product, month = match.groups()
+        exchange = BARE_SYMBOL_EXCHANGE_MAP.get(product.lower())
+        if exchange is None:
+            return raw
+
+        normalized_product = product.upper() if exchange == "CZCE" else product.lower()
+        return f"{exchange}.{normalized_product}{month or ''}"
+
+    @staticmethod
     def _to_kq_symbol(symbol: str) -> str:
         """将交易所.品种格式转为 KQ_m_ 主力合约格式
 
@@ -263,6 +306,7 @@ class SymbolProfiler:
         CZCE.CF → KQ_m_CZCE_CF
         已是 KQ_m_ 格式则原样返回。
         """
+        symbol = SymbolProfiler._normalize_symbol(symbol)
         if symbol.startswith("KQ_m_"):
             return symbol
         if "." in symbol:

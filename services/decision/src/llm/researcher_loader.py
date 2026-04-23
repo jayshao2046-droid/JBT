@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class ResearcherLoader:
     """研究员报告加载器"""
 
-    def __init__(self, data_service_url: str = "http://192.168.31.223:8199"):
+    def __init__(self, data_service_url: str = "http://192.168.31.187:8199"):
         self.data_service_url = data_service_url
         self.api_endpoint = f"{data_service_url}/reports"
 

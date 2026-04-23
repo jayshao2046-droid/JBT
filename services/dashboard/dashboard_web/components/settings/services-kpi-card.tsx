@@ -105,7 +105,7 @@ const SERVICES: ServiceDef[] = [
     id: 'sim-trading',
     name: '模拟交易',
     device: 'Alienware',
-    ip: '192.168.31.223',
+    ip: '192.168.31.187',
     port: 8101,
     dockerName: 'JBT-SIM-8101',
     sshUser: '17621',

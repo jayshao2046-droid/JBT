@@ -31,9 +31,9 @@ AIR_HOST="jayshao@192.168.31.245"
 AIR_PATH="~/JBT/services"
 AIR_IP="192.168.31.245"
 
-ALIENWARE_HOST="17621@192.168.31.223"
+ALIENWARE_HOST="17621@192.168.31.187"
 ALIENWARE_PATH="C:/Users/17621/jbt/services"
-ALIENWARE_IP="192.168.31.223"
+ALIENWARE_IP="192.168.31.187"
 
 # ============================================================
 # 服务配置查询函数（兼容 bash 3.2，不使用 declare -A）

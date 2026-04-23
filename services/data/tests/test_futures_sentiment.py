@@ -181,6 +181,30 @@ class TestFuturesSentimentModule:
         assert result["stale"] is True
         assert result["reason"] == "stale_report"
 
+    def test_historical_fallback_via_store_returns_stale_data(self, tmp_path, monkeypatch):
+        """store 只有历史研报时，情绪接口应回退并标记 stale=true"""
+        import importlib
+        import researcher_store as rs
+
+        historical_report = {
+            **_SAMPLE_REPORT,
+            "date": "2026-01-14",
+            "generated_at": "2026-01-14T12:00:00",
+        }
+
+        monkeypatch.setattr(rs, "STORE_ROOT", tmp_path)
+        monkeypatch.setattr(rs, "DB_PATH", tmp_path / "test.db")
+        rs.save(historical_report)
+
+        with patch.dict("sys.modules", {"researcher_store": rs}):
+            import data.futures_sentiment as fs_mod
+            importlib.reload(fs_mod)
+            result = fs_mod.get_futures_sentiment()
+
+        assert result["stale"] is True
+        assert result["reason"] == "stale_report"
+        assert result["symbol_count"] == 35
+
     def test_bearish_trend_score(self):
         """偏空趋势 sentiment_score=0.25"""
         import importlib
@@ -212,42 +236,88 @@ class TestFuturesSentimentModule:
 class TestFuturesSentimentEndpoint:
     """通过 TestClient 验证 API 端点"""
 
-    def _get_client_with_mock(self, report):
-        """构建带 mock researcher_store 的 TestClient"""
+    def _build_mock_store(self, report):
+        """构建带指定研报的 researcher_store mock。"""
         mock_rs = MagicMock()
         mock_rs.get_latest.return_value = report
+        return mock_rs
 
+    def test_endpoint_returns_200(self):
+        """GET /api/v1/context/futures_sentiment 返回 200"""
+        mock_rs = self._build_mock_store(_SAMPLE_REPORT)
         with patch.dict("sys.modules", {"researcher_store": mock_rs}):
-            # 确保 futures_sentiment 模块使用 patched researcher_store
             import importlib
             import data.futures_sentiment as fs_mod
             importlib.reload(fs_mod)
 
             from fastapi.testclient import TestClient
             from main import app  # type: ignore[import]
-            return TestClient(app)
 
-    def test_endpoint_returns_200(self):
-        """GET /api/v1/context/futures_sentiment 返回 200"""
-        client = self._get_client_with_mock(_SAMPLE_REPORT)
-        resp = client.get("/api/v1/context/futures_sentiment")
+            client = TestClient(app)
+            resp = client.get("/api/v1/context/futures_sentiment")
         assert resp.status_code == 200
 
     def test_endpoint_data_type(self):
         """端点响应包含 data_type=futures_sentiment"""
-        client = self._get_client_with_mock(_SAMPLE_REPORT)
-        resp = client.get("/api/v1/context/futures_sentiment")
+        mock_rs = self._build_mock_store(_SAMPLE_REPORT)
+        with patch.dict("sys.modules", {"researcher_store": mock_rs}):
+            import importlib
+            import data.futures_sentiment as fs_mod
+            importlib.reload(fs_mod)
+
+            from fastapi.testclient import TestClient
+            from main import app  # type: ignore[import]
+
+            client = TestClient(app)
+            resp = client.get("/api/v1/context/futures_sentiment")
         body = resp.json()
         assert body["data_type"] == "futures_sentiment"
         assert body["symbol_count"] == 35
 
     def test_endpoint_symbol_filter(self):
         """?symbol=rb 只返回 rb"""
-        client = self._get_client_with_mock(_SAMPLE_REPORT)
-        resp = client.get("/api/v1/context/futures_sentiment?symbol=rb")
+        mock_rs = self._build_mock_store(_SAMPLE_REPORT)
+        with patch.dict("sys.modules", {"researcher_store": mock_rs}):
+            import importlib
+            import data.futures_sentiment as fs_mod
+            importlib.reload(fs_mod)
+
+            from fastapi.testclient import TestClient
+            from main import app  # type: ignore[import]
+
+            client = TestClient(app)
+            resp = client.get("/api/v1/context/futures_sentiment?symbol=rb")
         assert resp.status_code == 200
         body = resp.json()
         assert body["symbol_count"] == 1
+
+    def test_endpoint_historical_report_fallback_marks_stale(self, tmp_path, monkeypatch):
+        """存在历史研报但当天为空时，端点应回退并显式标记 stale=true"""
+        import researcher_store as _rs
+        from fastapi.testclient import TestClient
+        from main import app  # type: ignore[import]
+
+        historical_date = str(datetime.date.today() - datetime.timedelta(days=1))
+        historical_report = {
+            **_SAMPLE_REPORT,
+            "date": historical_date,
+            "generated_at": f"{historical_date}T10:00:00",
+        }
+
+        monkeypatch.setattr(_rs, "STORE_ROOT", tmp_path)
+        monkeypatch.setattr(_rs, "DB_PATH", tmp_path / "test.db")
+
+        _rs.save(historical_report)
+
+        client = TestClient(app)
+        resp = client.get("/api/v1/context/futures_sentiment")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["stale"] is True
+        assert body["reason"] == "stale_report"
+        assert body["symbol_count"] == 35
+        assert len(body["data"]) == 35
 
     def test_existing_sentiment_endpoint_intact(self):
         """原有 /api/v1/context/sentiment 端点不受影响"""

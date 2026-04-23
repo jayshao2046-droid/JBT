@@ -65,10 +65,10 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
 | Mini | 纯数据采集 | 192.168.31.76 | 172.16.0.49 | data:8105 |
 | Air | 回测生产 | 192.168.31.245 | — | backtest:8103, backtest-web:3001 |
 | Studio | 决策/开发主控 | 192.168.31.142 | 172.16.1.130 | decision:8104, decision-web:3003, dashboard:8106 |
-| Alienware | 交易执行+情报研究员节点 | 192.168.31.223 | — | sim-trading:8101、Windows 官方交易软件（24h）、qwen3:14b |
+| Alienware | 交易执行+情报研究员节点 | 192.168.31.187 | — | sim-trading:8101、Windows 官方交易软件（24h）、qwen3:14b |
 | ~~ECS~~ | ❌ 已永久停用 | 47.103.36.144 | — | [修订 2026-04-12] ECS永久停用，全部ECS相关任务取消 |
 
-> **[修订 2026-04-15] TASK-0107 完成：** sim-trading API 已正式迁移至 Alienware（192.168.31.223:8101），验证通过（`curl /health` → 200，42 个端点可用）。Mini 不再承载 sim-trading，仅保留纯数据采集（data:8105）。本次迁移为裸 Python 部署；Docker 化部署待 BIOS 虚拟化开启后另行完成，不阻塞当前口径。
+> **[修订 2026-04-15] TASK-0107 完成：** sim-trading API 已正式迁移至 Alienware（192.168.31.187:8101），验证通过（`curl /health` → 200，42 个端点可用）。Mini 不再承载 sim-trading，仅保留纯数据采集（data:8105）。本次迁移为裸 Python 部署；Docker 化部署待 BIOS 虚拟化开启后另行完成，不阻塞当前口径。
 
 ### 端口分配（冻结）
 
@@ -725,7 +725,7 @@ JBT 是一个多服务量化交易系统工作区，包含 6 个核心服务 + 1
   1. **deepcoder:14b**：策略开发 / 因子挖掘 / 研究结果结构化转译。
   2. **phi4-reasoning:14b**：盘中门控 / 快速分析 / 读取 Mini 投喂数据与 Alienware 研究报告。
   3. 不再把 `qwen3:14b` 记为 Studio 本地常驻模型。
-- **Alienware 定位：** 交易执行 + 情报研究员节点（192.168.31.223）；sim-trading:8101 已正式部署（TASK-0107，2026-04-15）；本地模型 `qwen3:14b`，不再记录 deepcoder / phi4。
+- **Alienware 定位：** 交易执行 + 情报研究员节点（192.168.31.187）；sim-trading:8101 已正式部署（TASK-0107，2026-04-15）；本地模型 `qwen3:14b`，不再记录 deepcoder / phi4。
 - **Mini 定位：** 纯数据采集节点；仅负责采集与数据供数（data:8105），不再承载 sim-trading 或研究投喂存储职责。
 - **Alienware 承担：**
   1. 运行 sim-trading:8101 API，承接 CTP 交易执行（光大期货）。

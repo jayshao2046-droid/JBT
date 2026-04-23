@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
@@ -60,9 +61,19 @@ class ResearchStore:
         """保存一条评级结果"""
         record.setdefault("stored_at", datetime.now().isoformat())
         self._cache[report_type].append(record)
+
         # 保留最近 N 条
         if len(self._cache[report_type]) > _MAX_HISTORY:
             self._cache[report_type] = self._cache[report_type][-_MAX_HISTORY:]
+
+        # 时间维度清理：保留最近 N 天（默认 7 天）
+        max_age_days = int(os.getenv("RESEARCH_STORE_MAX_AGE_DAYS", "7"))
+        cutoff = datetime.now() - timedelta(days=max_age_days)
+        self._cache[report_type] = [
+            r for r in self._cache[report_type]
+            if datetime.fromisoformat(r.get("stored_at", "1970-01-01")) > cutoff
+        ]
+
         self._persist(report_type)
         logger.info("ResearchStore: 保存 %s (score=%.1f)", report_type, record.get("score", 0))
 

@@ -9,6 +9,7 @@ LLM 分析器 - 使用 qwen3:14b 分析数据
 """
 import logging
 import time
+import queue
 from datetime import datetime
 import requests
 import multiprocessing as mp
@@ -36,9 +37,10 @@ class LLMAnalyzer:
         while not self.stop_event.is_set():
             try:
                 # 从队列获取数据（超时1秒）
+                # 安全修复：P0-6 - 明确捕获预期异常类型
                 try:
                     event = self.queue.get(timeout=1)
-                except:
+                except queue.Empty:
                     continue
 
                 # 分析数据

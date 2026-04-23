@@ -9,7 +9,7 @@
 # 1. 以管理员身份运行 PowerShell
 # 2. 执行：.\setup_researcher_windows_task.ps1
 #
-# 部署位置：Alienware (192.168.31.223)
+# 部署位置：Alienware (192.168.31.187)
 
 # 配置参数
 $TaskName = "JBT_Researcher_Service"

@@ -716,12 +716,13 @@ class ResearcherScheduler:
                 date_dir = os.path.join(ResearcherConfig.REPORTS_DIR, report.date)
                 for ext in (".json", ".md"):
                     local_path = os.path.join(date_dir, f"{safe_segment}{ext}")
+                    # 安全修复：P0-8 - 添加文件删除错误日志
                     try:
                         if os.path.exists(local_path):
                             os.remove(local_path)
                             logger.info(f"[PUSH] 删除本地文件: {local_path}")
-                    except Exception:
-                        pass  # 删除失败不影响主流程
+                    except OSError as e:
+                        logger.warning(f"[PUSH] 删除文件失败 {local_path}: {e}")
 
             return success
         except Exception as e:
@@ -1001,7 +1002,8 @@ class ResearcherScheduler:
             "00": ("夜盘报", self.daily_digest.generate_evening_session_digest, self.email_sender.send_evening_session_report),
         }
         # 夜盘报00点用前一天日期（汇总昨晚20-24点）
-        digest_date = (now - __import__('datetime').timedelta(days=1)).strftime("%Y-%m-%d") if hour == 0 else today
+        # 安全修复：P0-3 - 移除不安全的 __import__ 动态导入
+        digest_date = (now - timedelta(days=1)).strftime("%Y-%m-%d") if hour == 0 else today
         if hkey in _email_slots and self._email_sent.get(hkey) != today:
             label, gen_fn, send_fn = _email_slots[hkey]
             try:

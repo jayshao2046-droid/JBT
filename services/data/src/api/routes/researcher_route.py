@@ -1,14 +1,17 @@
 """研究员 REST API — 报告查询 / 采集源 CRUD / 状态 / 手动触发"""
 
+import importlib
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict, Any, Optional
-from datetime import datetime
 import os
 import json
 import re
 import logging
 from pathlib import Path
 import sys
+from urllib.parse import urlparse
+
+import httpx
 
 # 添加 src 到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -137,42 +140,70 @@ def get_scheduler() -> ResearcherScheduler:
     return _scheduler
 
 
+def _get_report_store() -> Optional[Any]:
+    """延迟导入 researcher_store，兼容测试中的 monkeypatch。"""
+    try:
+        return importlib.import_module("researcher_store")
+    except ImportError:
+        logger.error("researcher_store 不可用")
+        return None
+
+
+def _load_latest_report(date: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    store = _get_report_store()
+    if store is None:
+        raise HTTPException(status_code=503, detail="researcher_store unavailable")
+    return store.get_latest(date)
+
+
+def _researcher_health_url() -> str:
+    configured_url = os.getenv("RESEARCHER_SERVICE_URL", "").strip()
+    if configured_url:
+        return f"{configured_url.rstrip('/')}/health"
+
+    ollama_url = str(ResearcherConfig.OLLAMA_URL).rstrip("/")
+    parsed = urlparse(ollama_url)
+    host = parsed.hostname or "192.168.31.187"
+    scheme = parsed.scheme or "http"
+    return f"{scheme}://{host}:8199/health"
+
+
+def _get_resource_status() -> Dict[str, bool]:
+    """返回 Alienware 可达性与 Ollama 可用性，避免硬编码口径。"""
+    ollama_url = str(ResearcherConfig.OLLAMA_URL).rstrip("/")
+    timeout = ResearcherConfig.HTTP_TIMEOUT_SHORT
+
+    try:
+        resp = httpx.get(_researcher_health_url(), timeout=timeout)
+        alienware_reachable = resp.is_success
+    except httpx.HTTPError as exc:
+        logger.warning("Alienware reachability check failed: %s", exc)
+        alienware_reachable = False
+
+    ollama_available = False
+    if alienware_reachable:
+        try:
+            resp = httpx.get(f"{ollama_url}/api/tags", timeout=timeout)
+            ollama_available = resp.is_success
+        except httpx.HTTPError as exc:
+            logger.warning("Ollama availability check failed: %s", exc)
+
+    return {
+        "alienware_reachable": alienware_reachable,
+        "ollama_available": ollama_available,
+    }
+
+
 @router.get("/report/latest")
-async def get_latest_report() -> Dict[str, Any]:
+async def get_latest_report(date: Optional[str] = Query(None, description="可选日期 YYYY-MM-DD")) -> Dict[str, Any]:
     """获取最新一期研究员报告（JSON 决策版）"""
-    reports_dir = Path(ResearcherConfig.REPORTS_DIR)
+    if date is not None and not _validate_path_component(date, "date"):
+        raise HTTPException(status_code=400, detail="Invalid date format")
 
-    if not reports_dir.exists():
+    latest_report = _load_latest_report(date)
+    if latest_report is None:
         raise HTTPException(status_code=404, detail="No reports found")
-
-    # 遍历所有日期目录，找到最新报告
-    all_reports = []
-    for date_dir in sorted(reports_dir.iterdir(), reverse=True):
-        if not date_dir.is_dir():
-            continue
-
-        for segment_file in date_dir.glob("*.json"):
-            # 安全修复：P0-2 - 使用安全读取函数
-            try:
-                report = _safe_read_json_file(segment_file)
-                all_reports.append(report)
-            except HTTPException:
-                # 跳过无法读取的文件
-                logger.warning(f"Skipping unreadable file: {segment_file}")
-                continue
-
-        if all_reports:
-            break  # 只取最新日期的报告
-
-    if not all_reports:
-        raise HTTPException(status_code=404, detail="No reports found")
-
-    # 按生成时间排序，取最新（如果没有 generated_at 则使用 date+segment）
-    all_reports.sort(
-        key=lambda x: x.get("generated_at") or f"{x.get('date', '')}T{x.get('segment', '').replace('-', ':')}",
-        reverse=True
-    )
-    return all_reports[0]
+    return latest_report
 
 
 @router.get("/report/{date}")
@@ -227,18 +258,19 @@ async def get_report_by_date_segment(date: str, segment: str) -> Dict[str, Any]:
 @router.get("/status")
 async def get_status() -> Dict[str, Any]:
     """研究员子系统状态"""
-    scheduler = get_scheduler()
-
     # 获取最新报告信息
+    last_run = None
     try:
-        latest_report = await get_latest_report()
-        last_run = {
-            "report_id": latest_report["report_id"],
-            "segment": latest_report["segment"],
-            "generated_at": latest_report["generated_at"]
-        }
-    except HTTPException:
-        last_run = None
+        latest_report = _load_latest_report()
+        if latest_report is not None:
+            last_run = {
+                "report_id": latest_report["report_id"],
+                "segment": latest_report["segment"],
+                "generated_at": latest_report["generated_at"]
+            }
+    except HTTPException as exc:
+        if exc.status_code == 503:
+            raise
 
     return {
         "status": "running",
@@ -249,10 +281,7 @@ async def get_status() -> Dict[str, Any]:
             "盘后": "15:20",
             "夜盘": "23:10"
         },
-        "resource_status": {
-            "alienware_reachable": True,  # TODO: 实际检查
-            "ollama_available": True  # TODO: 实际检查
-        }
+        "resource_status": _get_resource_status()
     }
 
 

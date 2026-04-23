@@ -28,7 +28,7 @@
 
 ## 验收标准
 1. `.env.example` 中明确存在 researcher 专用 URL 配置项。
-2. 默认值指向 Alienware `http://192.168.31.223:8199`。
+2. 默认值指向 Alienware `http://192.168.31.187:8199`。
 3. 未引入与 researcher URL 无关的其他配置改动。
 
 ## 约束

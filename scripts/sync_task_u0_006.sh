@@ -12,12 +12,12 @@ echo "=========================================="
 echo ""
 
 # 配置
-ALIENWARE_HOST="17621@192.168.31.223"
+ALIENWARE_HOST="17621@192.168.31.187"
 ALIENWARE_PATH="C:/Users/17621/JBT/services/data/"
 STUDIO_HOST="jay@192.168.31.142"
 STUDIO_PATH="~/JBT/services/decision/"
 
-echo "[1/2] 同步 data 服务到 Alienware (192.168.31.223)..."
+echo "[1/2] 同步 data 服务到 Alienware (192.168.31.187)..."
 echo ""
 
 # 同步 data 服务
@@ -67,6 +67,6 @@ echo "   pkill -f 'uvicorn.*decision'"
 echo "   nohup python -m uvicorn src.api.app:app --host 0.0.0.0 --port 8104 > logs/decision.log 2>&1 &"
 echo ""
 echo "3. 验证服务"
-echo "   curl http://192.168.31.223:8199/health"
+echo "   curl http://192.168.31.187:8199/health"
 echo "   curl http://192.168.31.142:8104/health"
 echo ""

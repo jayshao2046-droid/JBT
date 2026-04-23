@@ -55,7 +55,7 @@ SERVICE_CHECKS: list[ServiceCheck] = [
         service_name="模拟交易",
         device="Alienware",
         port=8101,
-        url="http://192.168.31.223:8101/health",
+        url="http://192.168.31.187:8101/health",
         expected_statuses=("ok",),
     ),
     ServiceCheck(
@@ -63,7 +63,7 @@ SERVICE_CHECKS: list[ServiceCheck] = [
         service_name="研究员",
         device="Alienware",
         port=8199,
-        url="http://192.168.31.223:8199/health",
+        url="http://192.168.31.187:8199/health",
         expected_statuses=("ok",),
     ),
     ServiceCheck(

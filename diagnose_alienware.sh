@@ -9,17 +9,17 @@ echo ""
 
 # 1. 检查 sim-trading 服务状态
 echo "1. 检查 sim-trading 服务健康状态..."
-curl -s http://192.168.31.223:8101/health || echo "❌ 服务不可达"
+curl -s http://192.168.31.187:8101/health || echo "❌ 服务不可达"
 echo ""
 
 # 2. 检查系统状态
 echo "2. 检查系统状态..."
-curl -s http://192.168.31.223:8101/api/v1/system/state | python3 -m json.tool 2>/dev/null || echo "❌ 无法获取系统状态"
+curl -s http://192.168.31.187:8101/api/v1/system/state | python3 -m json.tool 2>/dev/null || echo "❌ 无法获取系统状态"
 echo ""
 
 # 3. 检查最近订单
 echo "3. 检查最近订单..."
-curl -s http://192.168.31.223:8101/api/v1/orders | python3 -m json.tool 2>/dev/null || echo "❌ 无法获取订单"
+curl -s http://192.168.31.187:8101/api/v1/orders | python3 -m json.tool 2>/dev/null || echo "❌ 无法获取订单"
 echo ""
 
 # 4. 检查 Studio decision 服务

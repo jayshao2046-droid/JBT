@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
-  const SIM_TRADING_URL = process.env.SIM_TRADING_URL ?? 'http://192.168.31.223:8101'
+  const SIM_TRADING_URL = process.env.SIM_TRADING_URL ?? 'http://192.168.31.187:8101'
   const SIM_API_KEY     = process.env.SIM_API_KEY     ?? ''
 
   let body: { action: string; reason?: string }

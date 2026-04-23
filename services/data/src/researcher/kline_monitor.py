@@ -98,11 +98,12 @@ class KlineMonitor:
                 }
 
                 # 推送到队列
+                # 安全修复：P0-6 - 明确捕获预期异常类型
                 try:
                     self.queue.put_nowait(event)
                     logger.info(f"Alert: {symbol} {change_pct:+.2f}%")
-                except:
-                    pass  # 队列满了就丢弃
+                except Exception as e:
+                    logger.warning(f"Queue full, dropping kline alert for {symbol}")
 
         except Exception as e:
             logger.debug(f"Error checking {symbol}: {e}")

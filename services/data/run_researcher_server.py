@@ -8,7 +8,7 @@
 4. 推送报告到 Studio decision
 5. 提供报告读取和状态管理 API
 
-部署位置：Alienware (192.168.31.223)
+部署位置：Alienware (192.168.31.187)
 运行方式：Windows 任务计划 / 手动启动
 """
 

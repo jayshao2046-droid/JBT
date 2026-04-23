@@ -25,137 +25,137 @@ class DeduplicationManager:
 
     def _init_db(self):
         """初始化数据库"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # 安全修复：P0-5 - 使用 with 语句防止资源泄漏
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        # 新闻去重表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS news_dedup (
-                url TEXT PRIMARY KEY,
-                title TEXT,
-                source TEXT,
-                first_seen_at TEXT,
-                last_seen_at TEXT
-            )
-        """)
+            # 新闻去重表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS news_dedup (
+                    url TEXT PRIMARY KEY,
+                    title TEXT,
+                    source TEXT,
+                    first_seen_at TEXT,
+                    last_seen_at TEXT
+                )
+            """)
 
-        # K 线分析去重表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS kline_dedup (
-                symbol TEXT,
-                timestamp TEXT,
-                analyzed_at TEXT,
-                PRIMARY KEY (symbol, timestamp)
-            )
-        """)
+            # K 线分析去重表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS kline_dedup (
+                    symbol TEXT,
+                    timestamp TEXT,
+                    analyzed_at TEXT,
+                    PRIMARY KEY (symbol, timestamp)
+                )
+            """)
 
-        # 基本面数据去重表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS fundamental_dedup (
-                source TEXT,
-                data_type TEXT,
-                data_date TEXT,
-                fetched_at TEXT,
-                PRIMARY KEY (source, data_type, data_date)
-            )
-        """)
+            # 基本面数据去重表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS fundamental_dedup (
+                    source TEXT,
+                    data_type TEXT,
+                    data_date TEXT,
+                    fetched_at TEXT,
+                    PRIMARY KEY (source, data_type, data_date)
+                )
+            """)
 
-        conn.commit()
-        conn.close()
+            conn.commit()
 
     def is_news_seen(self, url: str) -> bool:
         """检查新闻是否已处理"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # 安全修复：P0-5 - 使用 with 语句防止资源泄漏
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        cursor.execute("SELECT 1 FROM news_dedup WHERE url = ?", (url,))
-        result = cursor.fetchone()
+            cursor.execute("SELECT 1 FROM news_dedup WHERE url = ?", (url,))
+            result = cursor.fetchone()
 
-        conn.close()
         return result is not None
 
     def mark_news_seen(self, url: str, title: str, source: str):
         """标记新闻已处理"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # 安全修复：P0-5 - 使用 with 语句防止资源泄漏
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        now = datetime.now().isoformat()
+            now = datetime.now().isoformat()
 
-        cursor.execute("""
-            INSERT OR REPLACE INTO news_dedup (url, title, source, first_seen_at, last_seen_at)
-            VALUES (?, ?, ?, COALESCE((SELECT first_seen_at FROM news_dedup WHERE url = ?), ?), ?)
-        """, (url, title, source, url, now, now))
+            cursor.execute("""
+                INSERT OR REPLACE INTO news_dedup (url, title, source, first_seen_at, last_seen_at)
+                VALUES (?, ?, ?, COALESCE((SELECT first_seen_at FROM news_dedup WHERE url = ?), ?), ?)
+            """, (url, title, source, url, now, now))
 
-        conn.commit()
-        conn.close()
+            conn.commit()
 
     def is_kline_analyzed(self, symbol: str, timestamp: str) -> bool:
         """检查 K 线是否已分析"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # 安全修复：P0-5 - 使用 with 语句防止资源泄漏
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        cursor.execute("SELECT 1 FROM kline_dedup WHERE symbol = ? AND timestamp = ?", (symbol, timestamp))
-        result = cursor.fetchone()
+            cursor.execute("SELECT 1 FROM kline_dedup WHERE symbol = ? AND timestamp = ?", (symbol, timestamp))
+            result = cursor.fetchone()
 
-        conn.close()
         return result is not None
 
     def mark_kline_analyzed(self, symbol: str, timestamp: str):
         """标记 K 线已分析"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # 安全修复：P0-5 - 使用 with 语句防止资源泄漏
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        now = datetime.now().isoformat()
+            now = datetime.now().isoformat()
 
-        cursor.execute("""
-            INSERT OR IGNORE INTO kline_dedup (symbol, timestamp, analyzed_at)
-            VALUES (?, ?, ?)
-        """, (symbol, timestamp, now))
+            cursor.execute("""
+                INSERT OR IGNORE INTO kline_dedup (symbol, timestamp, analyzed_at)
+                VALUES (?, ?, ?)
+            """, (symbol, timestamp, now))
 
-        conn.commit()
-        conn.close()
+            conn.commit()
 
     def is_fundamental_fetched(self, source: str, data_type: str, data_date: str) -> bool:
         """检查基本面数据是否已获取"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # 安全修复：P0-5 - 使用 with 语句防止资源泄漏
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        cursor.execute(
-            "SELECT 1 FROM fundamental_dedup WHERE source = ? AND data_type = ? AND data_date = ?",
-            (source, data_type, data_date)
-        )
-        result = cursor.fetchone()
+            cursor.execute(
+                "SELECT 1 FROM fundamental_dedup WHERE source = ? AND data_type = ? AND data_date = ?",
+                (source, data_type, data_date)
+            )
+            result = cursor.fetchone()
 
-        conn.close()
         return result is not None
 
     def mark_fundamental_fetched(self, source: str, data_type: str, data_date: str):
         """标记基本面数据已获取"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # 安全修复：P0-5 - 使用 with 语句防止资源泄漏
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        now = datetime.now().isoformat()
+            now = datetime.now().isoformat()
 
-        cursor.execute("""
-            INSERT OR IGNORE INTO fundamental_dedup (source, data_type, data_date, fetched_at)
-            VALUES (?, ?, ?, ?)
-        """, (source, data_type, data_date, now))
+            cursor.execute("""
+                INSERT OR IGNORE INTO fundamental_dedup (source, data_type, data_date, fetched_at)
+                VALUES (?, ?, ?, ?)
+            """, (source, data_type, data_date, now))
 
-        conn.commit()
-        conn.close()
+            conn.commit()
 
     def cleanup_old_records(self, days: int = 30):
         """清理旧记录"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # 安全修复：P0-5 - 使用 with 语句防止资源泄漏
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+            cutoff = (datetime.now() - timedelta(days=days)).isoformat()
 
-        cursor.execute("DELETE FROM news_dedup WHERE last_seen_at < ?", (cutoff,))
-        cursor.execute("DELETE FROM kline_dedup WHERE analyzed_at < ?", (cutoff,))
-        cursor.execute("DELETE FROM fundamental_dedup WHERE fetched_at < ?", (cutoff,))
+            cursor.execute("DELETE FROM news_dedup WHERE last_seen_at < ?", (cutoff,))
+            cursor.execute("DELETE FROM kline_dedup WHERE analyzed_at < ?", (cutoff,))
+            cursor.execute("DELETE FROM fundamental_dedup WHERE fetched_at < ?", (cutoff,))
 
-        conn.commit()
-        conn.close()
+            conn.commit()
 
         logger.info(f"Cleaned up records older than {days} days")

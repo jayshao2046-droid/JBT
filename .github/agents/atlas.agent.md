@@ -1,7 +1,7 @@
 ---
 name: "Atlas"
 description: "JBT 总项目经理。适用场景：任务编排、Token 签发推进、结果复核、终审收口、独立提交、两地同步、项目架构师协同、治理门禁"
-tools: [read, edit, search, execute]
+tools: [vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vscode/newWorkspace, vscode/resolveMemoryFileUri, vscode/runCommand, vscode/vscodeAPI, vscode/extensions, vscode/askQuestions, execute/runNotebookCell, execute/testFailure, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/getNotebookSummary, read/problems, read/readFile, read/viewImage, read/terminalSelection, read/terminalLastCommand, agent/runSubagent, edit/createDirectory, edit/createFile, edit/createJupyterNotebook, edit/editFiles, edit/editNotebook, edit/rename, search/changes, search/codebase, search/fileSearch, search/listDirectory, search/textSearch, search/usages, web/fetch, web/githubRepo, context7/get-library-docs, context7/resolve-library-id, browser/openBrowserPage, gitkraken/git_add_or_commit, gitkraken/git_blame, gitkraken/git_branch, gitkraken/git_checkout, gitkraken/git_fetch, gitkraken/git_log_or_diff, gitkraken/git_pull, gitkraken/git_push, gitkraken/git_stash, gitkraken/git_status, gitkraken/git_worktree, gitkraken/gitkraken_workspace_list, gitkraken/gitlens_commit_composer, gitkraken/gitlens_launchpad, gitkraken/gitlens_start_review, gitkraken/gitlens_start_work, gitkraken/issues_add_comment, gitkraken/issues_assigned_to_me, gitkraken/issues_get_detail, gitkraken/pull_request_assigned_to_me, gitkraken/pull_request_create, gitkraken/pull_request_create_review, gitkraken/pull_request_get_comments, gitkraken/pull_request_get_detail, gitkraken/repository_get_file_content, pylance-mcp-server/pylanceDocString, pylance-mcp-server/pylanceDocuments, pylance-mcp-server/pylanceFileSyntaxErrors, pylance-mcp-server/pylanceImports, pylance-mcp-server/pylanceInstalledTopLevelModules, pylance-mcp-server/pylanceInvokeRefactoring, pylance-mcp-server/pylancePythonEnvironments, pylance-mcp-server/pylanceRunCodeSnippet, pylance-mcp-server/pylanceSettings, pylance-mcp-server/pylanceSyntaxErrors, pylance-mcp-server/pylanceUpdatePythonEnvironment, pylance-mcp-server/pylanceWorkspaceRoots, pylance-mcp-server/pylanceWorkspaceUserFiles, vscode.mermaid-chat-features/renderMermaidDiagram, ms-azuretools.vscode-containers/containerToolsConfig, ms-python.python/getPythonEnvironmentInfo, ms-python.python/getPythonExecutableCommand, ms-python.python/installPythonPackage, ms-python.python/configurePythonEnvironment, todo]
 model: "claude-sonnet-4-6-high"
 ---
 
@@ -30,7 +30,7 @@ JBT 采用 **四设备分布式架构**，每个设备承担不同职责：
 | 设备 | IP地址 | Tailscale | 蒲公英 | 用户 | 操作系统 | 角色定位 |
 |------|--------|-----------|--------|------|---------|---------|
 | **Mini** | 192.168.31.76 | 100.83.139.52 | 172.16.0.49 | jaybot | macOS | 数据采集节点 |
-| **Alienware** | 192.168.31.223 | 100.91.19.67 | — | 17621 | Windows | 交易执行 + 研究员节点 |
+| **Alienware** | 192.168.31.187 | 100.91.19.67 | — | 17621 | Windows | 交易执行 + 研究员节点 |
 | **Studio** | 192.168.31.142 | 100.86.182.114 | 172.16.1.130 | jaybot | macOS | 决策/开发主控节点 |
 | **Air** | 192.168.31.245 | 100.118.65.55 | — | jayshao | macOS | 回测生产节点 |
 
@@ -66,9 +66,9 @@ SSH：ssh jaybot@192.168.31.76
 
 #### **Alienware（交易执行 + 研究员节点）**
 ```
-IP地址：192.168.31.223
+IP地址：192.168.31.187
 Tailscale：100.91.19.67
-SSH：ssh 17621@192.168.31.223
+SSH：ssh 17621@192.168.31.187
 操作系统：Windows x86_64
 
 部署服务：
@@ -152,9 +152,9 @@ ssh jaybot@192.168.31.76
 curl http://192.168.31.76:8105/health
 
 # Alienware
-ssh 17621@192.168.31.223
-curl http://192.168.31.223:8101/health
-curl http://192.168.31.223:8199/health
+ssh 17621@192.168.31.187
+curl http://192.168.31.187:8101/health
+curl http://192.168.31.187:8199/health
 
 # Studio
 ssh jaybot@192.168.31.142
@@ -202,16 +202,16 @@ curl http://172.16.1.130:8104/health
 | 服务 | 端口 | 部署位置 | 访问地址 |
 |------|------|---------|---------|
 | **API 服务** | | | |
-| sim-trading API | 8101 | Alienware | http://192.168.31.223:8101 |
+| sim-trading API | 8101 | Alienware | http://192.168.31.187:8101 |
 | live-trading API | 8102 | （待部署） | — |
 | backtest API | 8103 | Air / Studio | http://192.168.31.245:8103 |
 | decision API | 8104 | Studio | http://192.168.31.142:8104 |
 | data API | 8105 | Mini | http://192.168.31.76:8105 |
 | dashboard API | 8106 | Studio | http://192.168.31.142:8106 |
-| researcher API | 8199 | Alienware | http://192.168.31.223:8199 |
+| researcher API | 8199 | Alienware | http://192.168.31.187:8199 |
 | **Web 服务** | | | |
 | backtest-web | 3001 | Air / Studio | http://192.168.31.245:3001 |
-| sim-trading-web | 3002 | Alienware | http://192.168.31.223:3002 |
+| sim-trading-web | 3002 | Alienware | http://192.168.31.187:3002 |
 | decision-web | 3003 | Studio | http://192.168.31.142:3003 |
 | data-web | 3004 | Mini | http://192.168.31.76:3004 |
 | dashboard-web | 3005 | Studio | http://192.168.31.142:3005 |
@@ -236,7 +236,7 @@ curl http://172.16.1.130:8104/health
                     ▼                    ▼                    ▼
         ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐
         │   Mini (macOS)    │ │ Alienware (Win)   │ │  Studio (macOS)   │
-        │  192.168.31.76    │ │  192.168.31.223   │ │  192.168.31.142   │
+        │  192.168.31.76    │ │  192.168.31.187   │ │  192.168.31.142   │
         │  Tailscale:       │ │  Tailscale:       │ │  Tailscale:       │
         │  100.83.139.52    │ │  100.91.19.67     │ │  100.86.182.114   │
         │  蒲公英:           │ │                   │ │  蒲公英:           │
@@ -568,7 +568,7 @@ curl http://172.16.1.130:8104/health
 ```bash
 # === 局域网 SSH ===
 ssh jaybot@192.168.31.76      # Mini
-ssh 17621@192.168.31.223      # Alienware
+ssh 17621@192.168.31.187      # Alienware
 ssh jaybot@192.168.31.142     # Studio
 ssh jayshao@192.168.31.245    # Air
 
@@ -590,8 +590,8 @@ ssh jaybot@172.16.1.130       # Studio
 curl http://192.168.31.76:8105/health
 
 # === Alienware ===
-curl http://192.168.31.223:8101/health  # sim-trading
-curl http://192.168.31.223:8199/health  # researcher
+curl http://192.168.31.187:8101/health  # sim-trading
+curl http://192.168.31.187:8199/health  # researcher
 
 # === Studio ===
 curl http://192.168.31.142:8104/health  # decision
@@ -622,7 +622,7 @@ rsync -avz --delete \
 
 # === MacBook → Alienware（Windows，使用 SCP）===
 scp -r /Users/jayshao/JBT/services/sim-trading/ \
-  17621@192.168.31.223:C:/Users/17621/jbt/services/sim-trading/
+  17621@192.168.31.187:C:/Users/17621/jbt/services/sim-trading/
 ```
 
 ### 6.4 容器管理

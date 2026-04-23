@@ -8,7 +8,7 @@ import subprocess
 import sys
 import time
 
-HOST = "17621@192.168.31.223"
+HOST = "17621@192.168.31.187"
 JBT_PATH = "C:/Users/17621/jbt"
 
 def run_ssh(command, description):
@@ -88,7 +88,7 @@ def main():
 
     import requests
     try:
-        r = requests.get("http://192.168.31.223:8199/health", timeout=5)
+        r = requests.get("http://192.168.31.187:8199/health", timeout=5)
         if r.status_code == 200:
             print("✓ 服务健康检查通过")
         else:
@@ -100,7 +100,7 @@ def main():
 
     # 测试队列状态
     try:
-        r = requests.get("http://192.168.31.223:8199/queue/status", timeout=5)
+        r = requests.get("http://192.168.31.187:8199/queue/status", timeout=5)
         data = r.json()
 
         if "pending_count" in data:

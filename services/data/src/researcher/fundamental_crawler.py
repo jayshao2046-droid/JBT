@@ -98,11 +98,12 @@ class FundamentalCrawler:
                 "content": f"Crawled from {source['name']}"  # 实际应解析具体数据
             }
 
+            # 安全修复：P0-6 - 明确捕获预期异常类型
             try:
                 self.queue.put_nowait(event)
                 logger.info(f"Fundamental: {source['name']}")
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Queue full, dropping fundamental data from {source['name']}")
 
         except Exception as e:
             logger.debug(f"Error crawling {source['name']}: {e}")

@@ -48,10 +48,10 @@ curl "http://192.168.31.76:8105/api/v1/bars?symbol=KQ.m@SHFE.rb&start=2026-04-09
 curl "http://192.168.31.76:8105/api/v1/bars?symbol=KQ.m@SHFE.rb&start=2026-04-15&end=2026-04-18&interval=60" 
 
 # 2. 触发 Alienware 研究员
-curl -X POST "http://192.168.31.223:8199/api/v1/researcher/run"
+curl -X POST "http://192.168.31.187:8199/api/v1/researcher/run"
 
 # 3. 验证报告生成
-curl "http://192.168.31.223:8199/api/v1/researcher/reports?limit=5"
+curl "http://192.168.31.187:8199/api/v1/researcher/reports?limit=5"
 
 # 4. 确认飞书通知发送（观察飞书群）
 ```

@@ -3,6 +3,7 @@
 import pytest
 import sys
 import os
+import importlib
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 import json
@@ -100,11 +101,10 @@ class TestResearcherAPI:
 
     def test_get_latest_report_not_found(self):
         """测试获取最新报告（无报告）"""
-        with patch("api.routes.researcher_route.Path") as mock_path:
-            mock_path.return_value.exists.return_value = False
-
+        with patch("api.routes.researcher_route._load_latest_report", return_value=None):
             response = client.get("/api/v1/researcher/report/latest")
-            assert response.status_code == 404
+
+        assert response.status_code == 404
 
     def test_get_reports_by_date_not_found(self):
         """测试获取指定日期报告（无报告）"""
@@ -182,6 +182,31 @@ class TestResearcherStoreAPI:
         assert resp.status_code == 200
         assert resp.json()["report_id"] == _SAMPLE_REPORT["report_id"]
 
+    def test_get_latest_falls_back_to_history(self, tmp_path, monkeypatch):
+        """当日无报告时，latest 应回退到最近一份历史研报"""
+        import researcher_store as _rs
+        from researcher.config import ResearcherConfig
+
+        reports_dir = tmp_path / "reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+
+        historical_report = {
+            **_SAMPLE_REPORT,
+            "report_id": "RPT-TEST-HISTORY-001",
+            "date": "2026-01-14",
+            "generated_at": "2026-01-14T12:00:00",
+        }
+
+        monkeypatch.setattr(_rs, "STORE_ROOT", tmp_path)
+        monkeypatch.setattr(_rs, "DB_PATH", tmp_path / "test.db")
+        monkeypatch.setattr(ResearcherConfig, "REPORTS_DIR", str(reports_dir))
+
+        client.post("/api/v1/researcher/reports", json=historical_report)
+        resp = client.get("/api/v1/researcher/report/latest")
+
+        assert resp.status_code == 200
+        assert resp.json()["report_id"] == historical_report["report_id"]
+
     def test_list_reports_empty(self, tmp_path, monkeypatch):
         """GET /api/v1/researcher/reports 空日期返回空列表"""
         import researcher_store as _rs
@@ -205,6 +230,27 @@ class TestResearcherStoreAPI:
         assert len(items) == 1
         assert items[0]["report_id"] == _SAMPLE_REPORT["report_id"]
         assert items[0]["symbol_count"] == 2
+
+    def test_status_resource_status_uses_probe_result(self):
+        """/status 不再把资源状态硬编码为 true"""
+        with patch(
+            "api.routes.researcher_route._get_resource_status",
+            return_value={"alienware_reachable": False, "ollama_available": True},
+        ):
+            response = client.get("/api/v1/researcher/status")
+
+        assert response.status_code == 200
+        assert response.json()["resource_status"] == {
+            "alienware_reachable": False,
+            "ollama_available": True,
+        }
+
+    def test_researcher_config_importable(self):
+        """researcher.config 不应在导入阶段因 logger 未定义而失败"""
+        mod = importlib.reload(importlib.import_module("researcher.config"))
+
+        assert getattr(mod, "logger", None) is not None
+        assert hasattr(mod.ResearcherConfig, "DAILY_KLINE_TRIGGER_HOUR")
 
     def test_post_idempotent(self, tmp_path, monkeypatch):
         """相同 report_id 二次 POST 应覆盖，列表中仍只有一条"""

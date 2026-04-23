@@ -12,7 +12,7 @@
   - Alienware 远端同步：src/, configs/, requirements.txt（只读复制，不修改源）
   - Alienware 远端配置：`.env`、Python 启动脚本、schtasks 定时任务
 - 是否需要 Token：是（远端部署无锁控文件，但遵守治理流程）
-- 计划验证方式：`curl http://192.168.31.223:8101/health` 返回 200，CTP 连接状态确认
+- 计划验证方式：`curl http://192.168.31.187:8101/health` 返回 200，CTP 连接状态确认
 - 当前状态：✅ 已完成并锁回（`tok-6c984fae-f518-4fdc-82c8-772e0601e598` approved，2026-04-15）
 
 ## 任务目标
@@ -47,7 +47,7 @@
 
 ## 交付标准
 
-1. `curl http://192.168.31.223:8101/health` 返回 `{"status":"ok"}`
+1. `curl http://192.168.31.187:8101/health` 返回 `{"status":"ok"}`
 2. MacBook 可通过内网 IP 访问 Alienware 8101 端口
 3. Alienware 已成为正式 sim-trading 承载面；Mini 不再承载 sim-trading
 4. 后续 Docker 化部署单独建任务推进，不影响当前验收成立

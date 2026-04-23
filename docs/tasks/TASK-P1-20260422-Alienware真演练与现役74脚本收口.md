@@ -66,7 +66,7 @@
 1. `DEPLOY_MINUTE_KLINE_FIX.sh` 已将 Mini 默认目标从 `192.168.31.74` 收口到 `192.168.31.76`，本地 `bash -n` 通过。
 2. `governance/scripts/jbt_rsync_deploy.sh` 与 `governance/scripts/jbt_rsync_rollback.sh` 已将 `researcher` 的 Windows 重启路径优先切到既有 `JBT_Researcher_Service` 计划任务，避免继续依赖 SSH 会话内直接后台拉起 Python 进程。
 3. `services/data/src/researcher/scheduler.py` 已完成单文件最小修复：移除未完成的 `HealthMonitor` 接入，不新增 `health_monitor.py`，不扩展到 notifier 或其他 researcher 文件；本地导入与编辑器诊断均通过。
-4. `researcher` 真实 deploy 已成功执行，`http://192.168.31.223:8199/health` 在首次尝试即通过。
+4. `researcher` 真实 deploy 已成功执行，`http://192.168.31.187:8199/health` 在首次尝试即通过。
 5. 第一次真实 rollback 使用的是修复前污染状态生成的旧快照，健康检查失败；该现象已定位为“快照源无效”而非 rollback 脚本回归。
 6. 随后通过两次同版本 deploy 重新生成“已知健康”的有效快照，并再次执行真实 rollback；`8199 /health` 在首次尝试即通过，deploy/rollback 演练闭环完成。
 7. 本批所有关键文件本地校验通过：

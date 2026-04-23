@@ -133,34 +133,38 @@ def get_latest(date: Optional[str] = None) -> Optional[Dict[str, Any]]:
     返回最新一份完整研报 JSON。
 
     Args:
-        date: YYYY-MM-DD，None 表示今天
+        date: YYYY-MM-DD。传入时只查该日；不传时回退到最近一份历史研报。
 
     Returns:
         研报字典，无数据返回 None
     """
     _init_db()  # 确保数据库表已创建
-    target = date or str(datetime.date.today())
     with get_db_connection() as conn:
-        row = conn.execute(
-            "SELECT file_path FROM researcher_reports WHERE date=? ORDER BY hour DESC LIMIT 1",
-            (target,),
-        ).fetchone()
+        if date is None:
+            rows = conn.execute(
+                """SELECT file_path FROM researcher_reports
+                   ORDER BY date DESC, hour DESC, stored_at DESC"""
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT file_path FROM researcher_reports
+                   WHERE date=?
+                   ORDER BY hour DESC, stored_at DESC""",
+                (date,),
+            ).fetchall()
 
-    if not row:
-        return None
+    for row in rows:
+        try:
+            with open(row["file_path"], encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            logger.warning(f"Report file not found: {row['file_path']}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in report file {row['file_path']}: {e}")
+        except Exception as e:
+            logger.error(f"Failed to load report from {row['file_path']}: {e}", exc_info=True)
 
-    try:
-        with open(row["file_path"], encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        logger.warning(f"Report file not found: {row['file_path']}")
-        return None
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in report file {row['file_path']}: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Failed to load report from {row['file_path']}: {e}", exc_info=True)
-        return None
+    return None
 
 
 def list_reports(date: Optional[str] = None, limit: int = 24) -> List[Dict[str, Any]]:

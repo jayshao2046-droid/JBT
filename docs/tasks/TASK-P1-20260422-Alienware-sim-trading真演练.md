@@ -35,7 +35,7 @@
 
 ## 只读基线（2026-04-22）
 
-1. `http://192.168.31.223:8101/health` 当前返回 `{"status":"ok","service":"sim-trading"}`。
+1. `http://192.168.31.187:8101/health` 当前返回 `{"status":"ok","service":"sim-trading"}`。
 2. Alienware 远端存在 `C:/Users/17621/JBT/services/sim-trading/src/main.py`。
 3. Alienware 远端同时存在：
    - `C:/Users/17621/JBT/services/sim-trading/.venv/Scripts/python.exe`

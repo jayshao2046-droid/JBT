@@ -1246,6 +1246,15 @@ def run_backtest(payload: BacktestRunPayload, request: Request) -> dict[str, Any
                     daily_loss_limit=local_risk_limits["daily_loss_limit"],
                 )
             )
+        except FileNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error": "strategy_yaml_not_found",
+                    "message": f"策略 YAML 文件不存在: {exc}",
+                    "hint": "请确认策略 YAML 已上传到 TQSDK_STRATEGY_YAML_DIR（/runtime/strategies）目录",
+                },
+            ) from exc
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 

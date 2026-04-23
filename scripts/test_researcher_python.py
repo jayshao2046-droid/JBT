@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 
 # 配置
-ALIENWARE_API = "http://192.168.31.223:8199"
+ALIENWARE_API = "http://192.168.31.187:8199"
 STUDIO_API = "http://192.168.31.142:8104"
 
 def print_step(step, total, msg):

@@ -1,14 +1,18 @@
 """配置管理 — 研究员子系统"""
 
+import logging
 import os
 from typing import List, Dict, Any
+
+
+logger = logging.getLogger(__name__)
 
 
 class ResearcherConfig:
     """研究员配置"""
 
     # Alienware Ollama 配置
-    OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.31.223:11434")
+    OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.31.187:11434")
     OLLAMA_MODEL = "qwen3:14b"
     OLLAMA_TEMPERATURE = 0.3
     OLLAMA_NUM_CTX = 8192
@@ -113,8 +117,17 @@ class ResearcherConfig:
 
     # Tushare 日 K 配置（盘后日线分析）
     TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN", "")
-    DAILY_KLINE_TRIGGER_HOUR = int(os.getenv("DAILY_KLINE_TRIGGER_HOUR", "16"))
-    DAILY_KLINE_COUNT = int(os.getenv("DAILY_KLINE_COUNT", "60"))
+    # 安全修复：P1-12 - 添加环境变量验证
+    if not TUSHARE_TOKEN:
+        logger.warning("TUSHARE_TOKEN not set, daily kline analysis will be disabled")
+
+    try:
+        DAILY_KLINE_TRIGGER_HOUR = int(os.getenv("DAILY_KLINE_TRIGGER_HOUR", "16"))
+        DAILY_KLINE_COUNT = int(os.getenv("DAILY_KLINE_COUNT", "60"))
+    except ValueError as e:
+        logger.error(f"Invalid configuration: {e}")
+        DAILY_KLINE_TRIGGER_HOUR = 16
+        DAILY_KLINE_COUNT = 60
 
     # 资源监控阈值
     RESOURCE_THRESHOLDS = {

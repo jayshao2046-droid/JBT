@@ -165,7 +165,7 @@ Decision 决策端 (Studio)
 
 **真实架构**（更正后）：
 - ✅ Decision 通过 `ResearcherLoader` **直接连接 Alienware 8199**
-- ✅ 拉取端点：`GET http://192.168.31.223:8199/reports/latest`
+- ✅ 拉取端点：`GET http://192.168.31.187:8199/reports/latest`
 - ✅ Alienware 8199 已启动并验证工作
 - ✅ Mini 的研报 API 只是被动存档（Alienware 主动推送），**不是消费路径**
 

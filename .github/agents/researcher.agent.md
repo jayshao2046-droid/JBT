@@ -32,12 +32,12 @@ model: "claude-sonnet-4-6-high"
 
 | 设备 | IP地址 | 角色定位 | 部署服务 | 本地模型 |
 |------|--------|---------|---------|---------|
-| **Alienware** | 192.168.31.223 | **数据研究员节点** | researcher:8199 | qwen3:14b (RTX 2070 8GB) |
+| **Alienware** | 192.168.31.187 | **数据研究员节点** | researcher:8199 | qwen3:14b (RTX 2070 8GB) |
 | **Studio** | 192.168.31.142 | 决策/开发主控 | decision:8104 | **qwen3:14b-q4_K_M** (M2 Max 32GB) |
 | **Mini** | 192.168.31.76 | 数据源 | data:8105 | — |
 
 **SSH 访问**：
-- Alienware: `ssh 17621@192.168.31.223`
+- Alienware: `ssh 17621@192.168.31.187`
 - Studio: `ssh jaybot@192.168.31.142`
 - Mini: `ssh jaybot@192.168.31.76`
 
@@ -87,7 +87,7 @@ OLLAMA_ANALYST_MODEL=qwen3:14b-q4_K_M     # 策略分析
 ### 2.1 Alienware 数据研究员系统
 
 #### **服务定位**
-- **部署位置**：Alienware (192.168.31.223)
+- **部署位置**：Alienware (192.168.31.187)
 - **服务端口**：8199 (HTTP 控制端口)
 - **本地模型**：qwen3:14b (Ollama, RTX 2070 8GB)
 - **运行模式**：24/7 全天候运行（24 整点槽位）
@@ -339,7 +339,7 @@ C:\Users\17621\jbt\services\data\start_researcher.bat
 #### **健康检查**
 ```bash
 # 从 MacBook/Studio 检查
-curl http://192.168.31.223:8199/health
+curl http://192.168.31.187:8199/health
 
 # 预期返回
 {"status":"ok","ollama_url":"http://localhost:11434","model":"qwen3:14b"}
@@ -614,7 +614,7 @@ cd C:\Users\17621\jbt\services\data
 python -m src.researcher.scheduler
 
 # 健康检查
-curl http://192.168.31.223:8199/health
+curl http://192.168.31.187:8199/health
 
 # 查看最新研报
 type C:\Users\17621\jbt\services\data\runtime\researcher\reports\2026-04-20\14-00.json

@@ -104,7 +104,7 @@ class LLMPipeline:
 
         # TASK-0121-D1: 初始化研究员报告加载器和评分器
         # D2: researcher 专用 URL，不再复用 DATA_SERVICE_URL
-        researcher_service_url = os.getenv("RESEARCHER_SERVICE_URL", "http://192.168.31.223:8199")
+        researcher_service_url = os.getenv("RESEARCHER_SERVICE_URL", "http://192.168.31.187:8199")
         self.researcher_loader = ResearcherLoader(researcher_service_url)
         self.researcher_scorer = ResearcherScorer()
         self.researcher_phi4_scorer = ResearcherPhi4Scorer(client=self.client)

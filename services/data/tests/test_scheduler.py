@@ -13,11 +13,18 @@
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 import types
+from pathlib import Path
 from typing import Any
 
 import pytest
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def test_scheduler_importable() -> None:
@@ -276,6 +283,76 @@ def test_health_check_accepts_multiple_news_dirs(tmp_path, monkeypatch: pytest.M
     assert len(results) == 1
     assert results[0]["name"] == "news_rss"
     assert results[0]["ok"] is True
+
+
+def test_health_check_persists_dashboard_snapshot(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.data.src.health import health_check
+
+    snapshot_file = tmp_path / "collector_status_latest.json"
+    monkeypatch.setattr(health_check, "COLLECTOR_STATUS_FILE", snapshot_file)
+
+    health_check.persist_collector_status_snapshot(
+        ts="2026-04-23T12:00:00+08:00",
+        sources=[{"name": "futures_minute", "ok": True}],
+        cpu_percent=12.5,
+        mem_percent=34.5,
+        disk_percent=56.5,
+    )
+
+    payload = json.loads(snapshot_file.read_text(encoding="utf-8"))
+    assert payload == {
+        "ts": "2026-04-23T12:00:00+08:00",
+        "sources": [{"name": "futures_minute", "ok": True}],
+        "cpu": 12.5,
+        "mem": 34.5,
+        "disk": 56.5,
+    }
+
+
+def test_heartbeat_refreshes_collector_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+    from datetime import datetime
+    from services.data.src.scheduler import data_scheduler
+
+    snapshot_calls: list[dict[str, Any]] = []
+
+    class FakeLoader:
+        def exec_module(self, module: Any) -> None:
+            return None
+
+    fake_health_module = types.SimpleNamespace(
+        get_cpu_info=lambda: {"usage_percent": 12.5},
+        get_memory_info=lambda: {"used_percent": 34.5},
+        get_disk_info=lambda: [{"used_percent": 56.5}],
+        get_collector_freshness=lambda: [{"name": "futures_minute", "ok": True, "skipped": False}],
+        persist_collector_status_snapshot=lambda **kwargs: snapshot_calls.append(kwargs),
+        datetime=types.SimpleNamespace(now=lambda tz=None: datetime(2026, 4, 23, 12, 0, 0)),
+        CN_TZ=None,
+    )
+
+    monkeypatch.setattr(data_scheduler, "_get_dispatcher", lambda: None)
+    monkeypatch.setitem(
+        sys.modules,
+        "psutil",
+        types.SimpleNamespace(
+            process_iter=lambda attrs=None: [],
+            NoSuchProcess=Exception,
+            AccessDenied=Exception,
+        ),
+    )
+    monkeypatch.setattr(
+        importlib.util,
+        "spec_from_file_location",
+        lambda *args, **kwargs: types.SimpleNamespace(loader=FakeLoader()),
+    )
+    monkeypatch.setattr(importlib.util, "module_from_spec", lambda spec: fake_health_module)
+
+    data_scheduler.job_heartbeat({})
+
+    assert len(snapshot_calls) == 1
+    assert snapshot_calls[0]["sources"] == [{"name": "futures_minute", "ok": True, "skipped": False}]
+    assert snapshot_calls[0]["cpu_percent"] == 12.5
+    assert snapshot_calls[0]["mem_percent"] == 34.5
+    assert snapshot_calls[0]["disk_percent"] == 56.5
 
 
 # ── get_factor_notifier / get_sla_tracker 存根 ──────────────

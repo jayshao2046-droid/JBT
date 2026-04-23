@@ -25,62 +25,62 @@ class ContextManager:
 
     def _init_db(self):
         """初始化数据库"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # 安全修复：P0-4 - 使用 with 语句防止资源泄漏
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        # 分析历史表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS analysis_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                symbol TEXT,
-                analysis_type TEXT,
-                content TEXT,
-                timestamp TEXT,
-                segment TEXT
-            )
-        """)
+            # 分析历史表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS analysis_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    symbol TEXT,
+                    analysis_type TEXT,
+                    content TEXT,
+                    timestamp TEXT,
+                    segment TEXT
+                )
+            """)
 
-        # 创建索引
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_symbol_timestamp
-            ON analysis_history(symbol, timestamp DESC)
-        """)
+            # 创建索引
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_symbol_timestamp
+                ON analysis_history(symbol, timestamp DESC)
+            """)
 
-        conn.commit()
-        conn.close()
+            conn.commit()
 
     def add_analysis(self, symbol: str, analysis_type: str, content: str, segment: str = ""):
         """添加分析记录"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # 安全修复：P0-4 - 使用 with 语句防止资源泄漏
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        now = datetime.now().isoformat()
+            now = datetime.now().isoformat()
 
-        cursor.execute("""
-            INSERT INTO analysis_history (symbol, analysis_type, content, timestamp, segment)
-            VALUES (?, ?, ?, ?, ?)
-        """, (symbol, analysis_type, content, now, segment))
+            cursor.execute("""
+                INSERT INTO analysis_history (symbol, analysis_type, content, timestamp, segment)
+                VALUES (?, ?, ?, ?, ?)
+            """, (symbol, analysis_type, content, now, segment))
 
-        conn.commit()
-        conn.close()
+            conn.commit()
 
     def get_recent_analysis(self, symbol: str, hours: int = 24, limit: int = 10) -> List[Dict]:
         """获取最近的分析记录"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # 安全修复：P0-4 - 使用 with 语句防止资源泄漏
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
+            cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
 
-        cursor.execute("""
-            SELECT analysis_type, content, timestamp, segment
-            FROM analysis_history
-            WHERE symbol = ? AND timestamp > ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-        """, (symbol, cutoff, limit))
+            cursor.execute("""
+                SELECT analysis_type, content, timestamp, segment
+                FROM analysis_history
+                WHERE symbol = ? AND timestamp > ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (symbol, cutoff, limit))
 
-        rows = cursor.fetchall()
-        conn.close()
+            rows = cursor.fetchall()
 
         return [
             {
@@ -94,18 +94,18 @@ class ContextManager:
 
     def get_segment_summary(self, segment: str) -> List[Dict]:
         """获取某个时段的所有分析"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # 安全修复：P0-4 - 使用 with 语句防止资源泄漏
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT symbol, analysis_type, content, timestamp
-            FROM analysis_history
-            WHERE segment = ?
-            ORDER BY timestamp DESC
-        """, (segment,))
+            cursor.execute("""
+                SELECT symbol, analysis_type, content, timestamp
+                FROM analysis_history
+                WHERE segment = ?
+                ORDER BY timestamp DESC
+            """, (segment,))
 
-        rows = cursor.fetchall()
-        conn.close()
+            rows = cursor.fetchall()
 
         return [
             {
@@ -119,14 +119,14 @@ class ContextManager:
 
     def cleanup_old_records(self, days: int = 7):
         """清理旧记录"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        # 安全修复：P0-4 - 使用 with 语句防止资源泄漏
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+            cutoff = (datetime.now() - timedelta(days=days)).isoformat()
 
-        cursor.execute("DELETE FROM analysis_history WHERE timestamp < ?", (cutoff,))
+            cursor.execute("DELETE FROM analysis_history WHERE timestamp < ?", (cutoff,))
 
-        conn.commit()
-        conn.close()
+            conn.commit()
 
         logger.info(f"Cleaned up context records older than {days} days")

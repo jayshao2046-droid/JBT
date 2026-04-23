@@ -14,7 +14,7 @@
 │              JBT 研究员系统正确数据流                          │
 └─────────────────────────────────────────────────────────────┘
 
-Mini (192.168.31.76:8105)              Alienware (192.168.31.223:8199)
+Mini (192.168.31.76:8105)              Alienware (192.168.31.187:8199)
   采集源1                                  研报生成 + API 提供
   采集源2        ─────────┐                │
   采集源N        ─────────┼──────────────┤
@@ -39,7 +39,7 @@ Mini (192.168.31.76:8105)              Alienware (192.168.31.223:8199)
 **主路径（已实现，工作中）**：
 1. **Alienware 8199 生成研报** → 存储在 D 盘 `C:\Users\17621\jbt\services\data\runtime\researcher\reports\YYYY-MM-DD\HH-MM.json`
 2. **Alienware 8199 暴露 API** → `GET /reports/latest` 端点
-3. **Decision 8104 直连 Alienware 8199** → `ResearcherLoader` 拉取 `http://192.168.31.223:8199/reports/latest`
+3. **Decision 8104 直连 Alienware 8199** → `ResearcherLoader` 拉取 `http://192.168.31.187:8199/reports/latest`
 4. ✅ **流程完整，无阻塞**
 
 **备用路径（可选存档）**：
@@ -59,7 +59,7 @@ Mini (192.168.31.76:8105)              Alienware (192.168.31.223:8199)
 | Alienware 8199 | 文件系统存储 | ✅ 工作 | HTTP 404 但正确反映文件缺失 |
 | Mini 采集管道 | news_api 采集 | ✅ 实时 | 123,582 条，最新 2026-04-21 12:56 |
 | Mini 调度器 | 定时任务 | ✅ 运行 | 39 个任务已注册，每分钟执行 |
-| Decision 链接 | ResearcherLoader | ✅ 实现 | 代码中配置 `http://192.168.31.223:8199` |
+| Decision 链接 | ResearcherLoader | ✅ 实现 | 代码中配置 `http://192.168.31.187:8199` |
 
 ### ⚠️ 需要进一步验证的项目
 
@@ -161,7 +161,7 @@ Alienware 在 `C:\Users\17621\jbt\services\data\runtime\researcher\reports\YYYY-
 
 ```python
 # Decision ResearcherLoader 应该这样工作：
-ResearcherLoader(data_service_url="http://192.168.31.223:8199")
+ResearcherLoader(data_service_url="http://192.168.31.187:8199")
   → GET /reports/latest
   → 返回最新报告 JSON
   → Decision 评分器评估报告
@@ -190,7 +190,7 @@ ResearcherLoader(data_service_url="http://192.168.31.223:8199")
 #### Priority 1 - 采样 Alienware 研报
 ```bash
 # 需要从 Alienware 远程访问报告文件
-ssh 17621@192.168.31.223 "ls -lh C:\\Users\\17621\\JBT\\services\\data\\runtime\\researcher\\reports\\2026-04-21\\"
+ssh 17621@192.168.31.187 "ls -lh C:\\Users\\17621\\JBT\\services\\data\\runtime\\researcher\\reports\\2026-04-21\\"
 ```
 - 确认今日是否有报告文件
 - 采样一份报告检查采集源覆盖

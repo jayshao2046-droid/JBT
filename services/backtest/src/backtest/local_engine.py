@@ -1007,7 +1007,7 @@ class LocalBacktestEngine:
         if strategy_root not in candidate.parents:
             raise ValueError("strategy_yaml_filename must stay within TQSDK_STRATEGY_YAML_DIR")
         if not candidate.exists():
-            raise FileNotFoundError(f"strategy YAML not found: {strategy_yaml_filename}")
+            raise ValueError(f"strategy YAML not found: {strategy_yaml_filename}")
         return candidate
 
     def _select_provider(self, params: LocalBacktestParams) -> DataProvider:

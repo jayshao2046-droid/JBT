@@ -1,7 +1,7 @@
 # PowerShell 远程执行脚本
 # 在 Alienware 上执行完整部署
 
-$hostname = "192.168.31.223"
+$hostname = "192.168.31.187"
 $username = "17621"
 $scriptPath = "~/JBT/scripts/deploy_full_alienware.sh"
 
