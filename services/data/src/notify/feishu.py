@@ -43,11 +43,13 @@ class FeishuSender:
         if event.trace_md:
             elements.append(_md(event.trace_md))
         elements.append(_note())
+        _src = event.source_name or ""
+        _src_label = "综合" if (not _src or _src.startswith(("news_batch:", "collector_window:"))) else _src
         return {
             "msg_type": "interactive",
             "card": {
                 "header": {
-                    "title": {"tag": "plain_text", "content": f"JBT 数据 📰 [新闻-{event.source_name or '综合'}] {event.title}"},
+                    "title": {"tag": "plain_text", "content": f"JBT 数据 📰 [新闻-{_src_label}] {event.title}"},
                     "template": "wathet",
                 },
                 "elements": elements,

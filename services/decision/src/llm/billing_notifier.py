@@ -31,7 +31,7 @@ class BillingNotifier:
     def __init__(self) -> None:
         self._webhook_url = os.environ.get("FEISHU_WEBHOOK_URL", "")
         self._enabled = (
-            os.environ.get("BILLING_NOTIFY_ENABLED", "true").strip().lower() == "true"
+            os.environ.get("BILLING_NOTIFY_ENABLED", "false").strip().lower() == "true"
         )
         self._task: Optional[asyncio.Task] = None
 
