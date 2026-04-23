@@ -10,8 +10,8 @@
 ## 背景
 
 Studio 部署后 dashboard 的 API proxy 全部指向 `localhost`，但：
-- sim-trading:8101 主力在 Mini（192.168.31.76），Studio 上为容灾备份
-- data:8105 在 Mini（192.168.31.76）
+- sim-trading:8101 主力在 Mini（192.168.31.74），Studio 上为容灾备份
+- data:8105 在 Mini（192.168.31.74）
 
 需要让 `next.config.ts` 支持读环境变量覆盖各服务地址，Studio 通过 `.env.local`（不进 git）指向 Mini，MacBook 开发默认 localhost 不受影响。
 

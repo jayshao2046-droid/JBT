@@ -88,7 +88,7 @@ JBT 回测系统由 **三个独立部分** 组成：
 
 数据流：
 1. Air 回测：Mini 本地分钟 K 线（直接文件访问）
-2. Studio 回测：Mini data API (192.168.31.76:8105)
+2. Studio 回测：Mini data API (192.168.31.74:8105)
 3. 因子注册表：Air ↔ Studio（双地同步）
 ```
 
@@ -102,7 +102,7 @@ ssh jayshao@192.168.31.245
 ssh jaybot@192.168.31.142
 
 # Mini 数据节点
-ssh jaybot@192.168.31.76
+ssh jaybot@192.168.31.74
 ```
 
 ---
@@ -149,7 +149,7 @@ ssh jaybot@192.168.31.76
 - **Web 端口**：3001（看板）
 - **容器名称**：`JBT-BACKTEST-8103` (API), `JBT-BACKTEST-WEB-3001` (前端)
 - **代码位置**：`services/backtest/`（与 Air 相同代码）
-- **数据来源**：Mini data API (`http://192.168.31.76:8105`)
+- **数据来源**：Mini data API (`http://192.168.31.74:8105`)
 
 #### **核心功能**
 1. **为 LLM Pipeline 服务**：
@@ -496,7 +496,7 @@ ssh jaybot@192.168.31.142 "cd ~/JBT && git log -1 --oneline"
 - **引擎**：TqSdk TqBacktest + Local 本地引擎
 
 **Studio 回测系统**：
-- **数据来源**：Mini data API (`http://192.168.31.76:8105/api/v1/bars`)
+- **数据来源**：Mini data API (`http://192.168.31.74:8105/api/v1/bars`)
 - **引擎**：TqSdk TqBacktest
 
 **禁止**：

@@ -23,9 +23,9 @@ set -euo pipefail
 # ============================================================
 # 设备配置（内网优先）
 # ============================================================
-MINI_HOST="jaybot@192.168.31.76"
+MINI_HOST="jaybot@192.168.31.74"
 MINI_PATH="~/JBT/services"
-MINI_IP="192.168.31.76"
+MINI_IP="192.168.31.74"
 
 STUDIO_HOST="jaybot@192.168.31.142"
 STUDIO_PATH="~/JBT/services"

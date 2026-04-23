@@ -359,11 +359,9 @@ def _should_require_formal_or_fail(execution_profile: dict[str, Any]) -> bool:
 
 
 def _reject_runtime_overrides_for_formal(payload: BacktestRunPayload) -> None:
-    if payload.params:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="正式回测不接受 runtime params 覆盖。请先修改 YAML 并重新导入，系统不会在执行前静默改写策略参数。",
-        )
+    # TqSdk 正式回测引擎不读取 runtime params（使用 YAML 文件），因此静默忽略 params 字段。
+    # 不再 raise 422，避免前端 execution_profile 未加载时误发 params 导致请求失败。
+    pass
 
 
 def _get_formal_runner(request: Request) -> Any:

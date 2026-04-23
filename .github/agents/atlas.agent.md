@@ -29,7 +29,7 @@ JBT 采用 **四设备分布式架构**，每个设备承担不同职责：
 
 | 设备 | IP地址 | Tailscale | 蒲公英 | 用户 | 操作系统 | 角色定位 |
 |------|--------|-----------|--------|------|---------|---------|
-| **Mini** | 192.168.31.76 | 100.83.139.52 | 172.16.0.49 | jaybot | macOS | 数据采集节点 |
+| **Mini** | 192.168.31.74 | 100.83.139.52 | 172.16.0.49 | jaybot | macOS | 数据采集节点 |
 | **Alienware** | 192.168.31.187 | 100.91.19.67 | — | 17621 | Windows | 交易执行 + 研究员节点 |
 | **Studio** | 192.168.31.142 | 100.86.182.114 | 172.16.1.130 | jaybot | macOS | 决策/开发主控节点 |
 | **Air** | 192.168.31.245 | 100.118.65.55 | — | jayshao | macOS | 回测生产节点 |
@@ -40,10 +40,10 @@ JBT 采用 **四设备分布式架构**，每个设备承担不同职责：
 
 #### **Mini（数据采集节点）**
 ```
-IP地址：192.168.31.76
+IP地址：192.168.31.74
 Tailscale：100.83.139.52
 蒲公英：172.16.0.49
-SSH：ssh jaybot@192.168.31.76
+SSH：ssh jaybot@192.168.31.74
 操作系统：macOS
 
 部署服务：
@@ -148,8 +148,8 @@ SSH：ssh jayshao@192.168.31.245
 #### **局域网访问**（主要方式）
 ```bash
 # Mini
-ssh jaybot@192.168.31.76
-curl http://192.168.31.76:8105/health
+ssh jaybot@192.168.31.74
+curl http://192.168.31.74:8105/health
 
 # Alienware
 ssh 17621@192.168.31.187
@@ -206,14 +206,14 @@ curl http://172.16.1.130:8104/health
 | live-trading API | 8102 | （待部署） | — |
 | backtest API | 8103 | Air / Studio | http://192.168.31.245:8103 |
 | decision API | 8104 | Studio | http://192.168.31.142:8104 |
-| data API | 8105 | Mini | http://192.168.31.76:8105 |
+| data API | 8105 | Mini | http://192.168.31.74:8105 |
 | dashboard API | 8106 | Studio | http://192.168.31.142:8106 |
 | researcher API | 8199 | Alienware | http://192.168.31.187:8199 |
 | **Web 服务** | | | |
 | backtest-web | 3001 | Air / Studio | http://192.168.31.245:3001 |
 | sim-trading-web | 3002 | Alienware | http://192.168.31.187:3002 |
 | decision-web | 3003 | Studio | http://192.168.31.142:3003 |
-| data-web | 3004 | Mini | http://192.168.31.76:3004 |
+| data-web | 3004 | Mini | http://192.168.31.74:3004 |
 | dashboard-web | 3005 | Studio | http://192.168.31.142:3005 |
 | live-trading-web | 3006 | （待部署） | — |
 
@@ -236,7 +236,7 @@ curl http://172.16.1.130:8104/health
                     ▼                    ▼                    ▼
         ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐
         │   Mini (macOS)    │ │ Alienware (Win)   │ │  Studio (macOS)   │
-        │  192.168.31.76    │ │  192.168.31.187   │ │  192.168.31.142   │
+        │  192.168.31.74    │ │  192.168.31.187   │ │  192.168.31.142   │
         │  Tailscale:       │ │  Tailscale:       │ │  Tailscale:       │
         │  100.83.139.52    │ │  100.91.19.67     │ │  100.86.182.114   │
         │  蒲公英:           │ │                   │ │  蒲公英:           │
@@ -567,7 +567,7 @@ curl http://172.16.1.130:8104/health
 
 ```bash
 # === 局域网 SSH ===
-ssh jaybot@192.168.31.76      # Mini
+ssh jaybot@192.168.31.74      # Mini
 ssh 17621@192.168.31.187      # Alienware
 ssh jaybot@192.168.31.142     # Studio
 ssh jayshao@192.168.31.245    # Air
@@ -587,7 +587,7 @@ ssh jaybot@172.16.1.130       # Studio
 
 ```bash
 # === Mini ===
-curl http://192.168.31.76:8105/health
+curl http://192.168.31.74:8105/health
 
 # === Alienware ===
 curl http://192.168.31.187:8101/health  # sim-trading
@@ -608,7 +608,7 @@ curl http://192.168.31.245:8103/health  # backtest
 # === MacBook → Mini ===
 rsync -avz --delete \
   /Users/jayshao/JBT/services/data/ \
-  jaybot@192.168.31.76:~/JBT/services/data/
+  jaybot@192.168.31.74:~/JBT/services/data/
 
 # === MacBook → Studio ===
 rsync -avz --delete \
@@ -629,7 +629,7 @@ scp -r /Users/jayshao/JBT/services/sim-trading/ \
 
 ```bash
 # === Mini ===
-ssh jaybot@192.168.31.76 'docker restart JBT-DATA-8105'
+ssh jaybot@192.168.31.74 'docker restart JBT-DATA-8105'
 
 # === Studio ===
 ssh jaybot@192.168.31.142 'docker restart JBT-DECISION-8104'

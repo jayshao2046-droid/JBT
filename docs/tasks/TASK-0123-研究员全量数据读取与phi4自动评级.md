@@ -29,13 +29,13 @@
 ## 当前问题诊断
 
 ### 问题 1: Mini API 端点缺失
-- 研究员通过 `MiniClient` 调用 `http://192.168.31.76:8105/api/v1/bars`
+- 研究员通过 `MiniClient` 调用 `http://192.168.31.74:8105/api/v1/bars`
 - **该端点不存在**（TASK-0121 已确认）
 - 导致研究员无法读取 Mini 的 2.3GB 数据
 
 ### 问题 2: 网络共享不可用
 - Alienware 无法通过 SMB/NFS 访问 Mini 的文件系统
-- 测试 `\\192.168.31.76\jbt\data` 返回 False
+- 测试 `\\192.168.31.74\jbt\data` 返回 False
 
 ### 问题 3: 数据分类不明确
 - Mini 上有多种数据类型：
@@ -81,8 +81,8 @@
 - 跨平台兼容性问题（Mac → Windows）
 
 **实现**:
-1. Mini 配置 SMB 共享: `~/JBT/data` → `\\192.168.31.76\jbt\data`
-2. Alienware 挂载网络驱动器: `net use Z: \\192.168.31.76\jbt\data`
+1. Mini 配置 SMB 共享: `~/JBT/data` → `\\192.168.31.74\jbt\data`
+2. Alienware 挂载网络驱动器: `net use Z: \\192.168.31.74\jbt\data`
 3. 修改研究员代码，直接读取 `Z:\futures_minute\1m\`
 
 **工作量**: 配置 + 2 文件，约 2 小时

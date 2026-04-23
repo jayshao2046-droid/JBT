@@ -35,11 +35,11 @@
 
 ## Mini 数据节点只读规则（永久硬约束，2026-04-23 Jay.S 确认）
 
-**Mini（192.168.31.76）上的 `services/data/` 目录及相关文件属于永久禁改区，适用以下约束：**
+**Mini（192.168.31.74）上的 `services/data/` 目录及相关文件属于永久禁改区，适用以下约束：**
 
 1. **即使在 U0 直修模式下，无 Token 也不得修改 Mini data 服务的任何文件。**
 2. **禁止通过 rsync / scp / ssh 直写 Mini 上的任何 `services/data/**` 文件。**
-3. **所有对 Mini 数据的读取和查询，必须通过 API 接入（`http://192.168.31.76:8105`），不得直接操作 Mini 文件系统。**
+3. **所有对 Mini 数据的读取和查询，必须通过 API 接入（`http://192.168.31.74:8105`），不得直接操作 Mini 文件系统。**
 4. **本规则不因任何模式（V2 / U0 / 标准流程）而豁免；U0 的"单服务无 Token 直修"权限不覆盖 Mini data 服务。**
 5. **若 Mini data 服务确需修改，必须在 MacBook 本地 `services/data/` 完成开发、通过标准流程签发 Token 后，再通过 rsync 同步并 docker restart 验证，且每次同步须留 handoff 记录。**
 

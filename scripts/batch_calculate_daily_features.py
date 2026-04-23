@@ -30,7 +30,7 @@ async def main():
     print("=" * 80)
     print("批量计算35个期货品种的日K线特征")
     print("=" * 80)
-    print(f"数据源: Mini API (http://192.168.31.76:8105)")
+    print(f"数据源: Mini API (http://192.168.31.74:8105)")
     print(f"K线周期: 日K线 (1440分钟)")
     print(f"品种数量: {len(SYMBOLS)}")
     print("=" * 80)
@@ -38,7 +38,7 @@ async def main():
 
     # 使用日K线（1440分钟）
     profiler = SymbolProfiler(
-        data_service_url="http://192.168.31.76:8105",
+        data_service_url="http://192.168.31.74:8105",
         interval=1440  # 日K线
     )
 

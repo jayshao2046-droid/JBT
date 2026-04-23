@@ -167,7 +167,7 @@ async def main():
     logger.info("="*80)
     local_results = await backtest_with_source(
         strategies=strategies,
-        data_source="http://192.168.31.76:8105",
+        data_source="http://192.168.31.74:8105",
         source_name="本地Mini数据服务"
     )
 
@@ -178,7 +178,7 @@ async def main():
     with open(local_report_path, 'w', encoding='utf-8') as f:
         json.dump({
             "timestamp": datetime.now().isoformat(),
-            "data_source": "本地Mini数据服务 (http://192.168.31.76:8105)",
+            "data_source": "本地Mini数据服务 (http://192.168.31.74:8105)",
             "period": f"{(datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')} 至 {datetime.now().strftime('%Y-%m-%d')}",
             "total": len(local_results),
             "success": sum(1 for r in local_results if r["status"] == "success"),

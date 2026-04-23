@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-DEFAULT_HOST = "jaybot@192.168.31.76"
+DEFAULT_HOST = "jaybot@192.168.31.74"
 DEFAULT_TARGET_DIR = "/Users/jaybot/JBT/data/futures_minute/1m"
 DEFAULT_LOG_DIR = "/Users/jaybot/JBT/data_backfill/logs"
 

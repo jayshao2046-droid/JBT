@@ -7,7 +7,7 @@ def test_decision_client_init():
     """测试决策客户端初始化"""
     client = DecisionClient()
 
-    assert client.mini_api == "http://192.168.31.76:8105/api/v1/researcher/reports"
+    assert client.mini_api == "http://192.168.31.74:8105/api/v1/researcher/reports"
     assert client.email_to is not None
 
 

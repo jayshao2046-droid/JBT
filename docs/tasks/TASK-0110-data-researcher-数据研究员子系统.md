@@ -241,7 +241,7 @@ if researcher_report:
 
 ### decision `.env` 无需新增变量
 
-复用现有的 `DATA_API_URL=http://192.168.31.76:8105`，路由路径不同（`/context/daily` vs `/researcher/report/latest`）。
+复用现有的 `DATA_API_URL=http://192.168.31.74:8105`，路由路径不同（`/context/daily` vs `/researcher/report/latest`）。
 
 ### 数据流全景
 

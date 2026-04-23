@@ -154,7 +154,7 @@ start_researcher.bat
 ```cmd
 cd /d C:\Users\17621\jbt\services\data
 set OLLAMA_URL=http://localhost:11434
-set DATA_API_URL=http://192.168.31.76:8105
+set DATA_API_URL=http://192.168.31.74:8105
 set DECISION_API_URL=http://192.168.31.142:8104
 set TUSHARE_TOKEN=e6db4d86105126f1f6f09fe933fb4c8cca044e7f94c4168317262eba
 python run_researcher_server.py
@@ -178,7 +178,7 @@ python -c "import tushare as ts; pro=ts.pro_api(); df=pro.fut_daily(ts_code='RB2
 :: 也可以查 Windows 事件查看器或加文件日志：
 cd /d C:\Users\17621\jbt\services\data
 set OLLAMA_URL=http://localhost:11434
-set DATA_API_URL=http://192.168.31.76:8105
+set DATA_API_URL=http://192.168.31.74:8105
 set DECISION_API_URL=http://192.168.31.142:8104
 set TUSHARE_TOKEN=e6db4d86105126f1f6f09fe933fb4c8cca044e7f94c4168317262eba
 python run_researcher_server.py > researcher.log 2>&1

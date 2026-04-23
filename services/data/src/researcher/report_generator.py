@@ -22,7 +22,7 @@ class ReportGenerator:
 
     def __init__(self, stop_event: mp.Event):
         self.stop_event = stop_event
-        self.mini_api = "http://192.168.31.76:8105/api/v1/researcher/reports"
+        self.mini_api = "http://192.168.31.74:8105/api/v1/researcher/reports"
 
         # 报告时段
         self.schedules = [

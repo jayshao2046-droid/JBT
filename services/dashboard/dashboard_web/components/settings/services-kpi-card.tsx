@@ -316,7 +316,7 @@ const SERVICES: ServiceDef[] = [
     id: 'data',
     name: '数据服务',
     device: 'Mini',
-    ip: '192.168.31.76',
+    ip: '192.168.31.74',
     port: 8105,
     dockerName: 'JBT-DATA-8105',
     sshUser: 'jaybot',

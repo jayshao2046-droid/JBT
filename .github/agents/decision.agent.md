@@ -226,7 +226,7 @@ PublishGate.check()
 2. 更新策略状态 = pending_execution
    ↓
 3. SimTradingAdapter.publish() → 推送策略包
-   POST http://192.168.31.76:8101/api/v1/strategy/publish
+   POST http://192.168.31.74:8101/api/v1/strategy/publish
    ↓
 4. 根据推送结果更新策略状态
    ├─ 202 Accepted → in_production
@@ -342,7 +342,7 @@ services/decision/
    ↓
 6. 推送到 sim-trading
    SimTradingAdapter.publish()
-   POST http://192.168.31.76:8101/api/v1/strategy/publish
+   POST http://192.168.31.74:8101/api/v1/strategy/publish
    ↓
 7. 更新策略状态
    lifecycle_status = in_production
@@ -483,8 +483,8 @@ curl -X POST http://192.168.31.142:8104/api/v1/backtest/certs \
 
 ### 5.2 数据边界
 
-- **数据来源**：Mini data API (http://192.168.31.76:8105)
-- **策略推送**：Mini sim-trading API (http://192.168.31.76:8101)
+- **数据来源**：Mini data API (http://192.168.31.74:8105)
+- **策略推送**：Mini sim-trading API (http://192.168.31.74:8101)
 - **禁止**：不得直接维护订单、成交、持仓主账本
 - **禁止**：不得直接写交易服务目录
 

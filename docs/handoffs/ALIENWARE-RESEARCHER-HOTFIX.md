@@ -343,7 +343,7 @@ netstat -ano | Select-String "8199"
 
 ```powershell
 # Mini data API
-curl http://192.168.31.76:8105/api/v1/health -UseBasicParsing | Select-Object StatusCode
+curl http://192.168.31.74:8105/api/v1/health -UseBasicParsing | Select-Object StatusCode
 
 # Studio decision API
 curl http://192.168.31.142:8104/api/v1/health -UseBasicParsing -ErrorAction SilentlyContinue | Select-Object StatusCode

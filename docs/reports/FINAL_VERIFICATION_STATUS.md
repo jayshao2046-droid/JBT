@@ -71,7 +71,7 @@ cdc17b78a  fix(data): 增强分钟K线同步日志，修复早盘数据丢失诊
 - 验证时机: 2026-04-22 09:30+ (下一个交易时段)
 - 验证方法:
   ```bash
-  ssh jaybot@192.168.31.76
+  ssh jaybot@192.168.31.74
   docker logs JBT-DATA-8105 | grep "bars-sync minute"
   # 预期看到: SHFE_rb2605 → 70 bars (from 70 records), first=2026-04-22 09:30:00
   ```
@@ -139,7 +139,7 @@ Parquet文件应包含:
 ### 立即行动 (需要Jay.S或用户执行)
 ```bash
 # 在Mini上执行:
-ssh jaybot@192.168.31.76
+ssh jaybot@192.168.31.74
 cd ~/JBT
 git pull origin main
 docker restart JBT-DATA-8105
@@ -151,7 +151,7 @@ docker logs JBT-DATA-8105 | tail -50
 ### 明天行动 (2026-04-22 09:30+)
 ```bash
 # 检查早盘采集:
-ssh jaybot@192.168.31.76
+ssh jaybot@192.168.31.74
 docker exec JBT-DATA-8105 tail -100 /data/logs/info_*.log | grep "bars-sync"
 
 # 检查数据文件:

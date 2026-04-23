@@ -188,7 +188,7 @@ class GenericTemplateConfig:
             market_filter_conditions=market_filter_conditions,
             long_condition=long_condition,
             short_condition=signal_config.get("short_condition"),
-            confirm_bars=max(1, _read_positive_int(signal_config.get("confirm_bars", 1), label="signal.confirm_bars")),
+            confirm_bars=_clamp_positive_int(signal_config.get("confirm_bars", 1), min_val=1),
             legacy_factor_mode=legacy_factor_mode,
             position_method=position_method,
             position_ratio=position_ratio,
@@ -2336,6 +2336,22 @@ def _read_positive_int(value: Any, *, label: str) -> int:
     if not math.isfinite(float(coerced)) or float(coerced) != float(value) or coerced <= 0:
         raise StrategyConfigError(f"{label} must be a positive integer")
     return coerced
+
+
+def _clamp_positive_int(value: Any, *, min_val: int = 1) -> int:
+    """Convert value to int and clamp to min_val.
+
+    Unlike _read_positive_int, this never raises — invalid or non-positive
+    values silently become min_val.  Use only for fields that have a safe
+    default (e.g. confirm_bars where 0 should map to 1, not to an error).
+    """
+    if isinstance(value, bool):
+        return min_val
+    try:
+        coerced = int(value)
+        return max(min_val, coerced)
+    except (TypeError, ValueError):
+        return min_val
 
 
 def _read_positive_float(value: Any, *, label: str) -> float:

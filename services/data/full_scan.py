@@ -39,7 +39,7 @@ import httpx
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("full_scan")
 
-MINI_SSH = "jaybot@192.168.31.76"
+MINI_SSH = "jaybot@192.168.31.74"
 MINI_DATA_ROOT = "/Users/jaybot/jbt/data"
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://192.168.31.187:11434")
 FEISHU_WEBHOOK = os.environ.get("FEISHU_WEBHOOK_URL", "")

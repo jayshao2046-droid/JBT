@@ -13,7 +13,7 @@
 
 在 data 服务内新增"数据研究员"子系统：
 - **设备**：Alienware（192.168.31.187），RTX 2070 8GB，qwen3:14b via Ollama (http://192.168.31.187:11434)
-- **数据源**：Mini（192.168.31.76:8105）全量采集数据 + 双模式爬虫
+- **数据源**：Mini（192.168.31.74:8105）全量采集数据 + 双模式爬虫
 - **产出**：四段制双格式报告（JSON 决策版 + Markdown Jay 版）
 - **消费者**：决策端（Studio 192.168.31.142:8104）通过 `/api/v1/researcher/report/latest` 读取
 
@@ -34,7 +34,7 @@ result = resp.json()["response"]
 
 ### Mini 数据 API 读取（暂存区用）
 ```python
-DATA_API_URL = "http://192.168.31.76:8105"
+DATA_API_URL = "http://192.168.31.74:8105"
 # 获取 K 线数据
 resp = httpx.get(f"{DATA_API_URL}/api/v1/bars", params={...})
 # 获取预研上下文

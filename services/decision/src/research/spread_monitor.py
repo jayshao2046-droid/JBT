@@ -35,7 +35,7 @@ class SpreadMonitor:
             data_api_url: 数据服务 API 地址，默认从环境变量读取
         """
         self.data_api_url = data_api_url or os.getenv(
-            "DATA_SERVICE_URL", "http://192.168.31.76:8105"
+            "DATA_SERVICE_URL", "http://192.168.31.74:8105"
         )
         self._triggered_today: Dict[Tuple[str, str], bool] = {}  # 防止重复触发
 

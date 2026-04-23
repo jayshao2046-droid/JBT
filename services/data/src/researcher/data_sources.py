@@ -108,7 +108,7 @@ REPORT_SCHEDULES = [
 
 # Mini API 配置
 MINI_API_CONFIG = {
-    "base_url": "http://192.168.31.76:8105",
+    "base_url": "http://192.168.31.74:8105",
     "bars_endpoint": "/api/v1/bars",
     "reports_endpoint": "/api/v1/researcher/reports",
     "timeout": 10

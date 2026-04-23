@@ -13,12 +13,12 @@
 ## 修改摘要
 
 1. `governance/scripts/jbt_rsync_deploy.sh`
-	- Mini 默认地址 `192.168.31.74` → `192.168.31.76`
+	- Mini 默认地址 `192.168.31.74` → `192.168.31.74`
 	- 新增 `sim-trading` / `researcher` 服务发布入口
 	- 新增 Alienware Windows 快照、重启、健康检查分支
 	- 新增 manifest 字段：`ip`、`remote_dest`
 2. `governance/scripts/jbt_rsync_rollback.sh`
-	- Mini 默认地址 `192.168.31.74` → `192.168.31.76`
+	- Mini 默认地址 `192.168.31.74` → `192.168.31.74`
 	- 新增 `sim-trading` / `researcher` 服务回滚入口
 	- 新增 Windows 快照存在性检查、恢复、重启分支
 	- 兼容读取新 manifest 字段
@@ -28,7 +28,7 @@
 1. `bash -n governance/scripts/jbt_rsync_deploy.sh` 通过。
 2. `bash -n governance/scripts/jbt_rsync_rollback.sh` 通过。
 3. deploy dry-run 验证通过：
-	- `--service data` 指向 Mini `192.168.31.76`
+	- `--service data` 指向 Mini `192.168.31.74`
 	- `--service sim-trading` 指向 Alienware Windows 路径
 	- `--service researcher` 指向 Alienware Windows 路径
 4. Alienware 远端只读验证通过：
@@ -43,7 +43,7 @@
 
 ## 向 Jay.S 汇报摘要
 
-rsync 发布链现役入口已收口：Mini 默认目标统一为 `192.168.31.76`，Alienware 已补齐 Windows 发布/回滚分支，`sim-trading` 和 `researcher` 两条线都能进入同一套 git-free 交付链。历史审计文档没有批量清洗，保留原始事实。
+rsync 发布链现役入口已收口：Mini 默认目标统一为 `192.168.31.74`，Alienware 已补齐 Windows 发布/回滚分支，`sim-trading` 和 `researcher` 两条线都能进入同一套 git-free 交付链。历史审计文档没有批量清洗，保留原始事实。
 
 ## 下一步建议
 

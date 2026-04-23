@@ -143,7 +143,7 @@ class SymbolProfiler:
 
     def __init__(
         self,
-        data_service_url: str = "http://192.168.31.76:8105",
+        data_service_url: str = "http://192.168.31.74:8105",
         interval: int = 1440,
         cache_dir: str = "runtime/symbol_profiles",
         enable_cache: bool = True
@@ -582,7 +582,7 @@ class SymbolProfiler:
         )
 
         return FeatureMetadata(
-            data_source="Mini API (http://192.168.31.76:8105)",
+            data_source="Mini API (http://192.168.31.74:8105)",
             calculation_time=now,
             data_start_date=data_start or "Unknown",
             data_end_date=data_end or "Unknown",

@@ -28,13 +28,13 @@
 |------|--------|------|
 | MacBook | eeacf8c | ✅ |
 | GitHub | eeacf8c | ✅ |
-| Mini (192.168.31.76) | eeacf8c | ✅（已 rebase）|
+| Mini (192.168.31.74) | eeacf8c | ✅（已 rebase）|
 | Studio (192.168.31.142) | 463bb0c→eeacf8c | ⚠️ pull 进行中 |
 
 ## 遗留事项
 
 1. Studio pull 确认：Studio 网络到 GitHub 较慢，pull 完成后变为 eeacf8c（无需重新 build，只改了服务端 Python 文件）
-2. Mini IP 已变更：旧 .74 → 新 **192.168.31.76**，请更新记忆和 SSH config
+2. Mini IP 已变更：旧 .74 → 新 **192.168.31.74**，请更新记忆和 SSH config
 
 ---
 

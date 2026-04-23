@@ -19,7 +19,7 @@ from services.decision.src.research.multi_source_validator import MultiSourceVal
 
 async def main():
     validator = MultiSourceValidator(
-        mini_api_url="http://192.168.31.76:8105",
+        mini_api_url="http://192.168.31.74:8105",
         tushare_token=None  # 暂不启用 Tushare
     )
 

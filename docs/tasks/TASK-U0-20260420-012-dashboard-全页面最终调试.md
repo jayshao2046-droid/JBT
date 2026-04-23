@@ -85,7 +85,7 @@ http://localhost:3005
 ```bash
 NEXT_PUBLIC_SIM_TRADING_URL=http://192.168.31.187:8101
 NEXT_PUBLIC_DECISION_URL=http://192.168.31.142:8104
-NEXT_PUBLIC_DATA_URL=http://192.168.31.76:8105
+NEXT_PUBLIC_DATA_URL=http://192.168.31.74:8105
 NEXT_PUBLIC_BACKTEST_URL=http://192.168.31.245:8103
 ```
 
@@ -212,8 +212,8 @@ NEXT_PUBLIC_BACKTEST_URL=http://192.168.31.245:8103
 
 ### 2026-04-21 Mini IP 二次修正
 - **问题**：`.env.local` 中 `DATA_URL=http://192.168.31.74:8105` 指向错误 IP，导致 EHOSTDOWN 白屏
-- **根因**：Mini 正确 IP 为 `192.168.31.76`（jaybot），`.74` 不可达
-- **修复**：`DATA_URL=http://192.168.31.76:8105` ✅
+- **根因**：Mini 正确 IP 为 `192.168.31.74`（jaybot），`.74` 不可达
+- **修复**：`DATA_URL=http://192.168.31.74:8105` ✅
 - **日志验证**：重启后无 EHOSTDOWN/EHOSTUNREACH 报错
 - **受影响文件**：`services/dashboard/dashboard_web/.env.local`
 
@@ -342,8 +342,8 @@ f3abae7aa docs(reports): Dashboard 通知系统实测证据 - 19 条规则全部
 
 | API 端点 | 数据来源 | 实测结果 | 状态 |
 |---------|---------|---------|-----|
-| `/api/data/api/v1/dashboard/collectors` | Mini 192.168.31.76:8105 | 21 个采集器，返回 id/name/category/status/age_str | ✅ 真实 |
-| `/api/data/api/v1/dashboard/system` | Mini 192.168.31.76:8105 | CPU 0.2% / 内存 17.1% / 磁盘 2% / 40 条日志 | ✅ 真实 |
+| `/api/data/api/v1/dashboard/collectors` | Mini 192.168.31.74:8105 | 21 个采集器，返回 id/name/category/status/age_str | ✅ 真实 |
+| `/api/data/api/v1/dashboard/system` | Mini 192.168.31.74:8105 | CPU 0.2% / 内存 17.1% / 磁盘 2% / 40 条日志 | ✅ 真实 |
 
 ### 采集源状态矩阵（21 个，实测）
 

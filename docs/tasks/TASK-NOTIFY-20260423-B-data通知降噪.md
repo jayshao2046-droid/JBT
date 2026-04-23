@@ -118,7 +118,7 @@ services/data/.env.example                         # 复核 ALERT/TRADE/INFO 三
 4. 02:00 触发任一非 P0 → 飞书无推送，08:00 收到"夜间累积"。
 5. 抓样 5 张卡：100% 中文 + 标题 + 落款 + RSS 必带链接。
 6. 23:30 收到邮件夜报，HTML Card 格式。
-7. `curl http://192.168.31.76:8105/api/v1/notify/health` 返回 200。
+7. `curl http://192.168.31.74:8105/api/v1/notify/health` 返回 200。
 8. 模拟双通道失败 → `data_alarm.log` 出现条目。
 
 ## 风险与回滚

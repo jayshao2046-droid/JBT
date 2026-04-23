@@ -34,12 +34,12 @@ model: "claude-sonnet-4-6-high"
 |------|--------|---------|---------|---------|
 | **Alienware** | 192.168.31.187 | **数据研究员节点** | researcher:8199 | qwen3:14b (RTX 2070 8GB) |
 | **Studio** | 192.168.31.142 | 决策/开发主控 | decision:8104 | **qwen3:14b-q4_K_M** (M2 Max 32GB) |
-| **Mini** | 192.168.31.76 | 数据源 | data:8105 | — |
+| **Mini** | 192.168.31.74 | 数据源 | data:8105 | — |
 
 **SSH 访问**：
 - Alienware: `ssh 17621@192.168.31.187`
 - Studio: `ssh jaybot@192.168.31.142`
-- Mini: `ssh jaybot@192.168.31.76`
+- Mini: `ssh jaybot@192.168.31.74`
 
 **实际模型配置**（基于代码扫描）：
 ```bash
@@ -167,7 +167,7 @@ class LLMPipeline:
 class ResearcherLoader:
     """从 Mini API 拉取 Alienware 研报"""
     def load_latest_report(self):
-        # GET http://192.168.31.76:8105/api/v1/researcher/report/latest
+        # GET http://192.168.31.74:8105/api/v1/researcher/report/latest
 ```
 
 **3. 研究员评分器**
@@ -420,7 +420,7 @@ ssh jaybot@192.168.31.142 "curl -s http://localhost:11434/api/tags"
 ### 5.2 数据边界
 
 - **Alienware 数据来源**：
-  - Mini data API (`http://192.168.31.76:8105/api/v1/*`)
+  - Mini data API (`http://192.168.31.74:8105/api/v1/*`)
   - 国际新闻源爬虫（mysteel/eastmoney_futures 等）
   - 本地 qwen3:14b 推理结果
 
@@ -555,8 +555,8 @@ pytest services/decision/tests/test_research_pipeline.py -v
 症状：研究员日志显示 "Failed to fetch from Mini"
 原因：Mini data 服务不可达或返回错误
 解决：
-1. 检查 Mini 服务：curl http://192.168.31.76:8105/health
-2. 检查网络连通性：ping 192.168.31.76
+1. 检查 Mini 服务：curl http://192.168.31.74:8105/health
+2. 检查网络连通性：ping 192.168.31.74
 3. 检查防火墙规则
 ```
 

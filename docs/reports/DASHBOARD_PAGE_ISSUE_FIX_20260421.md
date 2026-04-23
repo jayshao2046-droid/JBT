@@ -49,7 +49,7 @@ pnpm dev
 - ✅ Next.js 15.2.6 就绪
 
 ### 5. 部署验证
-- ✅ 代码已同步到 Mini (192.168.31.76)
+- ✅ 代码已同步到 Mini (192.168.31.74)
 - ✅ API 响应正常 (HTTP 307)
 
 ---
@@ -127,7 +127,7 @@ ps aux | grep "next-server" | grep -v grep
 curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:3005/data
 
 # 3. 检查代码同步
-ssh jaybot@192.168.31.76 'grep -n "getLogs(200)" ~/JBT/services/dashboard/dashboard_web/components/data/logs-viewer.tsx'
+ssh jaybot@192.168.31.74 'grep -n "getLogs(200)" ~/JBT/services/dashboard/dashboard_web/components/data/logs-viewer.tsx'
 
 # 4. 查看编译日志
 tail -20 /tmp/pnpm_dev.log

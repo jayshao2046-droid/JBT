@@ -21,7 +21,7 @@
     "liquidity": "Low"
   },
   "metadata": {
-    "data_source": "Mini API (http://192.168.31.76:8105)",
+    "data_source": "Mini API (http://192.168.31.74:8105)",
     "calculation_time": "2026-04-18 01:10:54",
     "data_start_date": "2021-04-19T01:00:00",
     "data_end_date": "2026-04-09T14:59:00",

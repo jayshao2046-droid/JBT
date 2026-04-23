@@ -68,7 +68,7 @@ class StrategyOptimizationLoop:
         )
 
         # 初始化组件
-        self.profiler = SymbolProfiler(data_service_url="http://192.168.31.76:8105")
+        self.profiler = SymbolProfiler(data_service_url="http://192.168.31.74:8105")
         self.architect = StrategyArchitect(client=self.v3_client)
         self.code_gen = CodeGenerator(client=self.coder_client)
 

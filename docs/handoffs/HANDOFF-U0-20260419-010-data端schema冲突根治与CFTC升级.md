@@ -3,7 +3,7 @@
 【日期】2026-04-19  
 【类型】U0 事后交接  
 【状态】✅ 已收口  
-【设备】Mini (192.168.31.76)，容器 JBT-DATA-8105
+【设备】Mini (192.168.31.74)，容器 JBT-DATA-8105
 
 ## 问题背景
 
@@ -37,7 +37,7 @@ Mini JBT-DATA-8105 健康报告 17/21 红，情绪/RSS/新闻API/天气采集失
 1. **容器重启后 cftc_collector.py 会被旧镜像覆盖**：
    ```bash
    rsync -avz /Users/jayshao/JBT/services/data/src/collectors/cftc_collector.py \
-     jaybot@192.168.31.76:~/JBT/services/data/src/collectors/cftc_collector.py
+     jaybot@192.168.31.74:~/JBT/services/data/src/collectors/cftc_collector.py
    ```
    然后重建镜像，或在 Dockerfile 中更新依赖。
 

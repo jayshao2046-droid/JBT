@@ -239,12 +239,12 @@ async def main():
     online_client = OpenAICompatibleClient()
     profiler = SymbolProfiler(
         online_client=online_client,
-        data_service_url="http://192.168.31.76:8105"
+        data_service_url="http://192.168.31.74:8105"
     )
     architect = StrategyArchitect(online_client=online_client)
     generator = CodeGenerator(online_client=online_client)
     executor = YAMLSignalExecutor(
-        data_service_url="http://192.168.31.76:8105",
+        data_service_url="http://192.168.31.74:8105",
         initial_capital=500_000.0
     )
 

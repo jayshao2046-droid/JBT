@@ -18,7 +18,7 @@ from services.decision.src.research.adaptive_parameter_mapper import AdaptivePar
 
 
 async def main():
-    profiler = SymbolProfiler(data_service_url="http://192.168.31.76:8105")
+    profiler = SymbolProfiler(data_service_url="http://192.168.31.74:8105")
     mapper = AdaptiveParameterMapper()
 
     # 测试品种列表

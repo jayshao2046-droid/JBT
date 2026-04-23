@@ -8,9 +8,9 @@ from decision.src.llm.pipeline import LLMPipeline
 
 def test_researcher_loader_init():
     """测试研究员加载器初始化"""
-    loader = ResearcherLoader("http://192.168.31.76:8105")
-    assert loader.data_service_url == "http://192.168.31.76:8105"
-    assert loader.api_endpoint == "http://192.168.31.76:8105/api/v1/researcher/reports"
+    loader = ResearcherLoader("http://192.168.31.74:8105")
+    assert loader.data_service_url == "http://192.168.31.74:8105"
+    assert loader.api_endpoint == "http://192.168.31.74:8105/api/v1/researcher/reports"
 
 
 def test_researcher_scorer_init():
@@ -173,7 +173,7 @@ def test_researcher_scorer_filter_high_value():
 @patch('decision.src.llm.researcher_loader.requests.get')
 def test_researcher_loader_get_latest_report(mock_get):
     """测试获取最新报告"""
-    loader = ResearcherLoader("http://192.168.31.76:8105")
+    loader = ResearcherLoader("http://192.168.31.74:8105")
 
     # 模拟 API 响应
     mock_response = Mock()
@@ -202,7 +202,7 @@ def test_researcher_loader_get_latest_report(mock_get):
 @patch('decision.src.llm.researcher_loader.requests.get')
 def test_researcher_loader_get_reports_since(mock_get):
     """测试获取最近 N 小时的报告"""
-    loader = ResearcherLoader("http://192.168.31.76:8105")
+    loader = ResearcherLoader("http://192.168.31.74:8105")
 
     # 模拟 API 响应
     mock_response = Mock()
@@ -226,7 +226,7 @@ def test_researcher_loader_get_reports_since(mock_get):
 
 def test_researcher_loader_extract_key_points():
     """测试提取关键要点"""
-    loader = ResearcherLoader("http://192.168.31.76:8105")
+    loader = ResearcherLoader("http://192.168.31.74:8105")
 
     report = {
         "summary": "市场整体平稳",
@@ -252,7 +252,7 @@ def test_researcher_loader_extract_key_points():
 
 def test_researcher_loader_format_for_llm():
     """测试格式化报告供 LLM 使用"""
-    loader = ResearcherLoader("http://192.168.31.76:8105")
+    loader = ResearcherLoader("http://192.168.31.74:8105")
 
     report = {
         "timestamp": "2026-04-16T10:00:00Z",

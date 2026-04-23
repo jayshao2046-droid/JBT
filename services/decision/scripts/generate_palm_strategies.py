@@ -49,7 +49,7 @@ SYMBOL = "SHFE.rb0"  # 螺纹钢主力合约（测试用，棕榈油数据暂缺
 SYMBOL_NAME = "rb"
 START_DATE = "2023-01-01"
 END_DATE = "2025-12-31"
-DATA_URL = "http://192.168.31.76:8105"
+DATA_URL = "http://192.168.31.74:8105"
 OLLAMA_URL = "http://192.168.31.142:11434"
 
 # 在线模型配置（通义千问）

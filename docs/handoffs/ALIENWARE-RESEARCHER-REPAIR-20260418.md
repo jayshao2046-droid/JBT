@@ -39,7 +39,7 @@ Unregister-ScheduledTask -TaskName "JBT_Researcher_Service" -Confirm:$false
 # 重建 — 关键改动：LogonType 改为 S4U（不需要登录桌面）
 $Action = New-ScheduledTaskAction `
     -Execute "cmd.exe" `
-    -Argument '/c cd /d C:\Users\17621\jbt\services\data && set OLLAMA_URL=http://localhost:11434 && set DATA_API_URL=http://192.168.31.76:8105 && python run_researcher_server.py >> C:\Users\17621\jbt\runtime\researcher\logs\task_stdout.log 2>&1' `
+    -Argument '/c cd /d C:\Users\17621\jbt\services\data && set OLLAMA_URL=http://localhost:11434 && set DATA_API_URL=http://192.168.31.74:8105 && python run_researcher_server.py >> C:\Users\17621\jbt\runtime\researcher\logs\task_stdout.log 2>&1' `
     -WorkingDirectory "C:\Users\17621\jbt\services\data"
 
 $Trigger = New-ScheduledTaskTrigger -AtStartup -RandomDelay (New-TimeSpan -Seconds 30)
@@ -79,7 +79,7 @@ Get-ScheduledTask -TaskName "JBT_Researcher_Service" | Format-List TaskName, Sta
 # 手动前台运行，观察完整错误
 cd C:\Users\17621\jbt\services\data
 set OLLAMA_URL=http://localhost:11434
-set DATA_API_URL=http://192.168.31.76:8105
+set DATA_API_URL=http://192.168.31.74:8105
 python -u run_researcher_server.py
 ```
 
@@ -324,7 +324,7 @@ async def _push_rich_report_to_decision(self, article_reports, kline_reports, da
 
 - 服务 PID：18404（通过 S4U 任务计划启动）
 - 健康检查：✅ `{"status":"ok","model":"qwen3:14b"}`
-- Mini 连接：✅ ESTABLISHED（192.168.31.76:61773）
+- Mini 连接：✅ ESTABLISHED（192.168.31.74:61773）
 - Watchdog：✅ 已恢复启用
 - Studio 评级消费：⏳ 待开盘后验证
 - 签名：Alienware Copilot + Atlas（远程切换）

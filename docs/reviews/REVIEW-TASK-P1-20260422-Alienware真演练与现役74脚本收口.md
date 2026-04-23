@@ -47,7 +47,7 @@
 
 ### 复核证据
 
-1. `bash -n DEPLOY_MINUTE_KLINE_FIX.sh` 通过，脚本内 `MINI_IP="192.168.31.76"` 已生效。
+1. `bash -n DEPLOY_MINUTE_KLINE_FIX.sh` 通过，脚本内 `MINI_IP="192.168.31.74"` 已生效。
 2. `bash -n governance/scripts/jbt_rsync_deploy.sh` 与 `bash -n governance/scripts/jbt_rsync_rollback.sh` 通过。
 3. `services/data/src/researcher/scheduler.py` 单文件修复后，本地最小导入检查通过，编辑器诊断为 `No errors found`。
 4. `bash governance/scripts/jbt_rsync_deploy.sh --service researcher` 非 dry-run 真实执行成功，Windows 文件同步完成，`8199 /health` 首次通过。

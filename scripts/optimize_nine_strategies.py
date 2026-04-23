@@ -63,7 +63,7 @@ async def main():
     context_compressor = ContextCompressor(
         ollama_url=os.getenv("LOCAL_MODEL_BASE_URL", "http://192.168.31.142:11434")
     )
-    executor = YAMLSignalExecutor(data_service_url="http://192.168.31.76:8105")
+    executor = YAMLSignalExecutor(data_service_url="http://192.168.31.74:8105")
 
     optimizer = ThreeTierOptimizer(
         online_client=online_client,
