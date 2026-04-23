@@ -95,7 +95,7 @@ Host studio
     HostName 192.168.31.142
     User jaybot
 Host mini
-    HostName 192.168.31.156
+    HostName 192.168.31.74
     User jaybot
 # 外网通过 Tailscale IP 直接 SSH，无需单独 Host 条目
 ```

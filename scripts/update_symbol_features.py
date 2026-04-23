@@ -71,7 +71,7 @@ def load_supported_symbols(api_base_url: str) -> list[str]:
 
 async def update_all_symbols():
     """更新所有品种的特征"""
-    data_service_url = "http://192.168.31.156:8105"
+    data_service_url = "http://192.168.31.74:8105"
     symbols = load_supported_symbols(data_service_url)
 
     logger.info("=" * 80)

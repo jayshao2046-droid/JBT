@@ -32,8 +32,8 @@ JBT 是 BotQuant 的下一代微服务架构量化交易系统，目标是从 le
 | 设备 | 角色 | 内网 IP | 蒲公英 IP | 部署服务 |
 |------|------|---------|----------|---------|
 | MacBook | 开发/控制 | localhost | 172.16.3.136 | 全部开发环境 |
-| Mini | 数据+模拟交易 | 192.168.31.156 | 172.16.0.49 | data:8105, sim-trading:8101, sim-trading-web:3002 |
-| Air | 回测生产 | 192.168.31.245 | — | backtest:8103, backtest-web:3001 |
+| Mini | 数据+模拟交易 | 192.168.31.74 | 172.16.0.49 | data:8105, sim-trading:8101, sim-trading-web:3002 |
+| Air | 回测生产 | 192.168.31.156 | — | backtest:8103, backtest-web:3001 |
 | Studio | 决策+看板 | 192.168.31.142 | 172.16.1.130 | decision:8104, decision-web:3003, dashboard:8106 |
 | ECS | 云端（备用） | 47.103.36.144 | — | 暂停，待域名+SSH就绪 |
 

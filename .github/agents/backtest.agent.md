@@ -27,7 +27,7 @@ JBT 回测系统由 **三个独立部分** 组成：
 
 | 系统 | 部署位置 | 端口 | 主要用途 | 数据来源 |
 |------|---------|------|---------|---------|
-| **1. Air 期货手动回测** | Air (192.168.31.245) | 8103/3001 | 期货手动回测、人工审核 | **Mini data 本地分钟 K 线** + TqSdk TqBacktest |
+| **1. Air 期货手动回测** | Air (192.168.31.156) | 8103/3001 | 期货手动回测、人工审核 | **Mini data 本地分钟 K 线** + TqSdk TqBacktest |
 | **2. Studio 看板回测** | Studio (192.168.31.142) | 8103/3001 | 为 LLM 服务、dashboard 回测 | Mini data API + TqSdk TqBacktest |
 | **3. 因子注册表** | 双地同步 | — | 43 个技术因子 | Air + Studio 双地维护 |
 
@@ -48,7 +48,7 @@ JBT 回测系统由 **三个独立部分** 组成：
 
 ┌──────────────────────────────────────────────────────────────┐
 │              Air 独立回测系统（期货手动回测）                   │
-│           192.168.31.245:8103 (API) + :3001 (看板)           │
+│           192.168.31.156:8103 (API) + :3001 (看板)           │
 │                                                              │
 │  ┌────────────────┐         ┌────────────────┐              │
 │  │  TqSdk 引擎    │         │  Local 引擎    │              │
@@ -88,7 +88,7 @@ JBT 回测系统由 **三个独立部分** 组成：
 
 数据流：
 1. Air 回测：Mini 本地分钟 K 线（直接文件访问）
-2. Studio 回测：Mini data API (192.168.31.156:8105)
+2. Studio 回测：Mini data API (192.168.31.74:8105)
 3. 因子注册表：Air ↔ Studio（双地同步）
 ```
 
@@ -96,13 +96,13 @@ JBT 回测系统由 **三个独立部分** 组成：
 
 ```bash
 # Air 回测节点
-ssh jayshao@192.168.31.245
+ssh jayshao@192.168.31.156
 
 # Studio 回测节点
 ssh jaybot@192.168.31.142
 
 # Mini 数据节点
-ssh jaybot@192.168.31.156
+ssh jaybot@192.168.31.74
 ```
 
 ---
@@ -112,7 +112,7 @@ ssh jaybot@192.168.31.156
 ### 2.1 Air 期货手动回测系统
 
 #### **服务定位**
-- **部署位置**：Air (192.168.31.245)
+- **部署位置**：Air (192.168.31.156)
 - **API 端口**：8103
 - **Web 端口**：3001（独立看板）
 - **容器名称**：`JBT-BACKTEST-8103` (API), `JBT-BACKTEST-WEB-3001` (前端)
@@ -135,7 +135,7 @@ ssh jaybot@192.168.31.156
    - 专注于期货手动回测
 
 #### **独立看板**
-- **访问地址**：`http://192.168.31.245:3001`
+- **访问地址**：`http://192.168.31.156:3001`
 - **页面**：
   - `/agent-network`：策略管理页
   - `/operations`：回测详情页
@@ -149,7 +149,7 @@ ssh jaybot@192.168.31.156
 - **Web 端口**：3001（看板）
 - **容器名称**：`JBT-BACKTEST-8103` (API), `JBT-BACKTEST-WEB-3001` (前端)
 - **代码位置**：`services/backtest/`（与 Air 相同代码）
-- **数据来源**：Mini data API (`http://192.168.31.156:8105`)
+- **数据来源**：Mini data API (`http://192.168.31.74:8105`)
 
 #### **核心功能**
 1. **为 LLM Pipeline 服务**：
@@ -202,7 +202,7 @@ BACKTEST_URL=http://192.168.31.142:8103  # Studio 本地回测服务
 #### **同步流程**
 ```bash
 # 从 Air 同步到 Studio
-rsync -avz jayshao@192.168.31.245:~/JBT/services/backtest/src/backtest/factor_registry.py \
+rsync -avz jayshao@192.168.31.156:~/JBT/services/backtest/src/backtest/factor_registry.py \
   services/backtest/src/backtest/factor_registry.py
 
 # 或通过 git 提交同步
@@ -294,7 +294,7 @@ services/dashboard/dashboard_web/
    ↓
 2. 提交策略 YAML
    ↓
-3. POST http://192.168.31.245:8103/api/backtest/run
+3. POST http://192.168.31.156:8103/api/backtest/run
    ↓
 4. 引擎路由（tqsdk/local）
    ├─ TqSdk: 使用 TqBacktest
@@ -350,7 +350,7 @@ services/dashboard/dashboard_web/
 #### **容器启动**
 ```bash
 # SSH 登录 Air
-ssh jayshao@192.168.31.245
+ssh jayshao@192.168.31.156
 
 # 进入项目目录
 cd ~/JBT
@@ -369,10 +369,10 @@ docker logs JBT-BACKTEST-WEB-3001 -f
 #### **健康检查**
 ```bash
 # API 健康检查
-curl http://192.168.31.245:8103/api/health
+curl http://192.168.31.156:8103/api/health
 
 # Web 健康检查
-curl http://192.168.31.245:3001
+curl http://192.168.31.156:3001
 ```
 
 ### 4.2 Studio 回测节点部署
@@ -419,7 +419,7 @@ git commit -m "feat: 回测系统更新"
 git push
 
 # 同步到 Air
-ssh jayshao@192.168.31.245
+ssh jayshao@192.168.31.156
 cd ~/JBT
 git pull
 docker compose -f docker-compose.dev.yml restart backtest backtest-web
@@ -433,7 +433,7 @@ docker compose -f docker-compose.dev.yml restart backtest backtest-web
 # 方式 2：rsync 直接同步（紧急情况）
 # 从 MacBook 同步到 Air
 rsync -avz --exclude='runtime' --exclude='__pycache__' \
-  services/backtest/ jayshao@192.168.31.245:~/JBT/services/backtest/
+  services/backtest/ jayshao@192.168.31.156:~/JBT/services/backtest/
 
 # 从 MacBook 同步到 Studio
 rsync -avz --exclude='runtime' --exclude='__pycache__' \
@@ -444,16 +444,16 @@ rsync -avz --exclude='runtime' --exclude='__pycache__' \
 ```bash
 # 比较 Air 和 Studio 的代码
 # 方式 1：比较关键文件
-diff <(ssh jayshao@192.168.31.245 "cat ~/JBT/services/backtest/src/backtest/factor_registry.py") \
+diff <(ssh jayshao@192.168.31.156 "cat ~/JBT/services/backtest/src/backtest/factor_registry.py") \
      <(ssh jaybot@192.168.31.142 "cat ~/JBT/services/backtest/src/backtest/factor_registry.py")
 
 # 方式 2：比较整个目录（排除 runtime）
 rsync -avzn --exclude='runtime' --exclude='__pycache__' \
-  jayshao@192.168.31.245:~/JBT/services/backtest/ \
+  jayshao@192.168.31.156:~/JBT/services/backtest/ \
   jaybot@192.168.31.142:~/JBT/services/backtest/
 
 # 方式 3：比较 git commit
-ssh jayshao@192.168.31.245 "cd ~/JBT && git log -1 --oneline"
+ssh jayshao@192.168.31.156 "cd ~/JBT && git log -1 --oneline"
 ssh jaybot@192.168.31.142 "cd ~/JBT && git log -1 --oneline"
 ```
 
@@ -496,7 +496,7 @@ ssh jaybot@192.168.31.142 "cd ~/JBT && git log -1 --oneline"
 - **引擎**：TqSdk TqBacktest + Local 本地引擎
 
 **Studio 回测系统**：
-- **数据来源**：Mini data API (`http://192.168.31.156:8105/api/v1/bars`)
+- **数据来源**：Mini data API (`http://192.168.31.74:8105/api/v1/bars`)
 - **引擎**：TqSdk TqBacktest
 
 **禁止**：
@@ -579,10 +579,10 @@ ssh jaybot@192.168.31.142 "cd ~/JBT && git log -1 --oneline"
 
 ```bash
 # === Air 回测服务 ===
-ssh jayshao@192.168.31.245
+ssh jayshao@192.168.31.156
 cd ~/JBT
 docker compose -f docker-compose.dev.yml up -d backtest backtest-web
-curl http://192.168.31.245:8103/api/health
+curl http://192.168.31.156:8103/api/health
 
 # === Studio 回测服务 ===
 ssh jaybot@192.168.31.142
@@ -598,13 +598,13 @@ git commit -m "feat: 回测系统更新"
 git push
 
 # 同步到 Air
-ssh jayshao@192.168.31.245 "cd ~/JBT && git pull && docker compose -f docker-compose.dev.yml restart backtest backtest-web"
+ssh jayshao@192.168.31.156 "cd ~/JBT && git pull && docker compose -f docker-compose.dev.yml restart backtest backtest-web"
 
 # 同步到 Studio
 ssh jaybot@192.168.31.142 "cd ~/JBT && git pull && docker compose -f docker-compose.dev.yml restart backtest backtest-web"
 
 # 验证代码对齐
-ssh jayshao@192.168.31.245 "cd ~/JBT && git log -1 --oneline"
+ssh jayshao@192.168.31.156 "cd ~/JBT && git log -1 --oneline"
 ssh jaybot@192.168.31.142 "cd ~/JBT && git log -1 --oneline"
 ```
 

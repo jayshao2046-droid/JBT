@@ -52,7 +52,7 @@ YamlSignalExecutor 的回测引擎缺少关键风控参数的实现，导致：
 # Line 355: 构造函数参数
 def __init__(
     self,
-    data_service_url: str = "http://192.168.31.156:8105",
+    data_service_url: str = "http://192.168.31.74:8105",
     ollama_url: str = "http://192.168.31.142:11434",
     researcher_model: str = "deepcoder:14b",
     auditor_model: str = "phi4-reasoning:14b",

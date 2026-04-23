@@ -21,8 +21,8 @@ def test_local_sim_engine_init():
 
 def test_local_sim_engine_custom_data_url():
     """测试自定义 data_service_url。"""
-    engine = LocalSimEngine(data_service_url="http://192.168.31.156:8105")
-    assert engine.sandbox.data_service_url == "http://192.168.31.156:8105"
+    engine = LocalSimEngine(data_service_url="http://192.168.31.74:8105")
+    assert engine.sandbox.data_service_url == "http://192.168.31.74:8105"
 
 
 # ------------------------------------------------------------------

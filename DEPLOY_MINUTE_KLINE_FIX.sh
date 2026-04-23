@@ -9,7 +9,7 @@ echo "部署期货分钟K线采集修复"
 echo "=========================================="
 
 # Configuration
-MINI_IP="192.168.31.156"
+MINI_IP="192.168.31.74"
 MINI_USER="jaybot"
 CONTAINER_NAME="JBT-DATA-8105"
 REPO_PATH="~/JBT"

@@ -12,7 +12,7 @@
 ## 本批修改
 
 1. `DEPLOY_MINUTE_KLINE_FIX.sh`
-	- Mini 默认地址 `192.168.31.156` → `192.168.31.156`
+	- Mini 默认地址 `192.168.31.74` → `192.168.31.74`
 2. `governance/scripts/jbt_rsync_deploy.sh`
 	- researcher Windows 重启分支优先切到 `JBT_Researcher_Service` 计划任务
 3. `governance/scripts/jbt_rsync_rollback.sh`
@@ -47,4 +47,4 @@
 
 ## 向 Jay.S 汇报摘要
 
-Alienware researcher 已完成真实 deploy/rollback 演练闭环。Windows 侧不需要进桌面手工起服务，现有计划任务可由 Mac 侧远程触发；仓内 researcher 还顺带修掉了一个单文件代码一致性问题。另一个独立子项 `DEPLOY_MINUTE_KLINE_FIX.sh` 也已从 `192.168.31.156` 收口到 `192.168.31.156`。
+Alienware researcher 已完成真实 deploy/rollback 演练闭环。Windows 侧不需要进桌面手工起服务，现有计划任务可由 Mac 侧远程触发；仓内 researcher 还顺带修掉了一个单文件代码一致性问题。另一个独立子项 `DEPLOY_MINUTE_KLINE_FIX.sh` 也已从 `192.168.31.74` 收口到 `192.168.31.74`。

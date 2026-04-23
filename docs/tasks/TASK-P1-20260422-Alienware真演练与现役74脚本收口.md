@@ -8,8 +8,8 @@
 
 ## 背景
 
-1. 上一批已完成 rsync 发布链对 Mini `192.168.31.156` 与 Alienware Windows 分支的脚本兼容收口，但还缺一次真实 deploy/rollback 闭环演练。
-2. 仓库内仍有少量 `192.168.31.156` 残留；其中真正会影响执行的现役脚本已收敛到根目录 `DEPLOY_MINUTE_KLINE_FIX.sh`。
+1. 上一批已完成 rsync 发布链对 Mini `192.168.31.74` 与 Alienware Windows 分支的脚本兼容收口，但还缺一次真实 deploy/rollback 闭环演练。
+2. 仓库内仍有少量 `192.168.31.74` 残留；其中真正会影响执行的现役脚本已收敛到根目录 `DEPLOY_MINUTE_KLINE_FIX.sh`。
 3. `services/data/scripts/disable_legacy.sh` 等命中仅在注释/示例中出现旧 IP，不进入脚本实际执行逻辑，本批不纳入修改。
 
 ## 本批边界
@@ -58,12 +58,12 @@
 2. deploy 后 `8199` 健康检查通过，并写入 manifest。
 3. 从刚生成的有效快照完成一次真实 rollback。
 4. rollback 后 `8199` 健康检查再次通过，并写入 rollback manifest。
-5. `DEPLOY_MINUTE_KLINE_FIX.sh` 不再把 Mini 默认目标指向 `192.168.31.156`。
+5. `DEPLOY_MINUTE_KLINE_FIX.sh` 不再把 Mini 默认目标指向 `192.168.31.74`。
 6. 本批无白名单外写入。
 
 ## 实际完成
 
-1. `DEPLOY_MINUTE_KLINE_FIX.sh` 已将 Mini 默认目标从 `192.168.31.156` 收口到 `192.168.31.156`，本地 `bash -n` 通过。
+1. `DEPLOY_MINUTE_KLINE_FIX.sh` 已将 Mini 默认目标从 `192.168.31.74` 收口到 `192.168.31.74`，本地 `bash -n` 通过。
 2. `governance/scripts/jbt_rsync_deploy.sh` 与 `governance/scripts/jbt_rsync_rollback.sh` 已将 `researcher` 的 Windows 重启路径优先切到既有 `JBT_Researcher_Service` 计划任务，避免继续依赖 SSH 会话内直接后台拉起 Python 进程。
 3. `services/data/src/researcher/scheduler.py` 已完成单文件最小修复：移除未完成的 `HealthMonitor` 接入，不新增 `health_monitor.py`，不扩展到 notifier 或其他 researcher 文件；本地导入与编辑器诊断均通过。
 4. `researcher` 真实 deploy 已成功执行，`http://192.168.31.187:8199/health` 在首次尝试即通过。

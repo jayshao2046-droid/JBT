@@ -119,7 +119,7 @@ async def main():
     logger.info("="*80)
     local_result = await backtest_strategy(
         strategy_path=strategy_path,
-        data_source="http://192.168.31.156:8105",
+        data_source="http://192.168.31.74:8105",
         source_name="本地Mini数据服务"
     )
 
@@ -147,7 +147,7 @@ async def main():
         "symbol": "SHFE.rb2505",
         "period": f"{(datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')} 至 {datetime.now().strftime('%Y-%m-%d')}",
         "local_mini": {
-            "data_source": "本地Mini数据服务 (http://192.168.31.156:8105)",
+            "data_source": "本地Mini数据服务 (http://192.168.31.74:8105)",
             **local_result
         },
         "tqsdk": {

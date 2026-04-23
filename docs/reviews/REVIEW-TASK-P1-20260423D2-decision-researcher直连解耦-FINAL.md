@@ -21,7 +21,7 @@
 
 ### 3. `services/decision/src/llm/pipeline.py`
 
-- `LLMPipeline.__init__()` 中 `ResearcherLoader` 初始化：从 `DATA_SERVICE_URL`（`http://192.168.31.156:8105`）改为 `RESEARCHER_SERVICE_URL`（`http://192.168.31.187:8199`）
+- `LLMPipeline.__init__()` 中 `ResearcherLoader` 初始化：从 `DATA_SERVICE_URL`（`http://192.168.31.74:8105`）改为 `RESEARCHER_SERVICE_URL`（`http://192.168.31.187:8199`）
 
 ## 验证结果
 

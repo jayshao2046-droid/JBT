@@ -175,7 +175,7 @@
 
 ### M1 验收标准
 ```bash
-curl "http://192.168.31.156:8105/api/v1/bars?symbol=KQ.m@SHFE.rb&start=2026-04-15T09:00:00&limit=10"
+curl "http://192.168.31.74:8105/api/v1/bars?symbol=KQ.m@SHFE.rb&start=2026-04-15T09:00:00&limit=10"
 # 返回 10 条 K 线数据
 ```
 ✅ 明确，可验证

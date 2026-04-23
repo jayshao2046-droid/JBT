@@ -23,17 +23,17 @@ set -euo pipefail
 # ============================================================
 # 设备配置（内网优先）
 # ============================================================
-MINI_HOST="jaybot@192.168.31.156"
+MINI_HOST="jaybot@192.168.31.74"
 MINI_PATH="~/JBT/services"
-MINI_IP="192.168.31.156"
+MINI_IP="192.168.31.74"
 
 STUDIO_HOST="jaybot@192.168.31.142"
 STUDIO_PATH="~/JBT/services"
 STUDIO_IP="192.168.31.142"
 
-AIR_HOST="jayshao@192.168.31.245"
+AIR_HOST="jayshao@192.168.31.156"
 AIR_PATH="~/JBT/services"
-AIR_IP="192.168.31.245"
+AIR_IP="192.168.31.156"
 
 ALIENWARE_HOST="17621@192.168.31.187"
 ALIENWARE_PATH="C:/Users/17621/jbt/services"

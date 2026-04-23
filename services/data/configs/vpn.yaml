@@ -1,7 +1,7 @@
 # Mini 小火箭代理配置（2026-04-23 同步自容器）
 # proxy_fwd.py (TCP forwarder: 0.0.0.0:17082 → 127.0.0.1:1082)
 # 小火箭本机代理: 127.0.0.1:1082（Docker 容器无法直连，需中继）
-proxy_host: 192.168.31.156
+proxy_host: 192.168.31.74
 proxy_port: 17082
 test_url: https://www.google.com
 health_timeout_sec: 15

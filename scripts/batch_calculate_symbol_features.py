@@ -68,7 +68,7 @@ SYMBOLS = [
 
 
 async def main():
-    profiler = SymbolProfiler(data_service_url="http://192.168.31.156:8105")
+    profiler = SymbolProfiler(data_service_url="http://192.168.31.74:8105")
 
     # 创建输出目录
     output_dir = Path("runtime/symbol_profiles")
@@ -77,7 +77,7 @@ async def main():
     print("=" * 80)
     print(f"批量计算 {len(SYMBOLS)} 个品种的特征画像")
     print("=" * 80)
-    print(f"数据源: Mini API (http://192.168.31.156:8105)")
+    print(f"数据源: Mini API (http://192.168.31.74:8105)")
     print(f"输出目录: {output_dir}")
     print(f"开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 80)

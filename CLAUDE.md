@@ -35,11 +35,11 @@
 
 ## Mini 数据节点只读规则（永久硬约束，2026-04-23 Jay.S 确认）
 
-**Mini（192.168.31.156）上的 `services/data/` 目录及相关文件属于永久禁改区，适用以下约束：**
+**Mini（192.168.31.74）上的 `services/data/` 目录及相关文件属于永久禁改区，适用以下约束：**
 
 1. **即使在 U0 直修模式下，无 Token 也不得修改 Mini data 服务的任何文件。**
 2. **禁止通过 rsync / scp / ssh 直写 Mini 上的任何 `services/data/**` 文件。**
-3. **所有对 Mini 数据的读取和查询，必须通过 API 接入（`http://192.168.31.156:8105`），不得直接操作 Mini 文件系统。**
+3. **所有对 Mini 数据的读取和查询，必须通过 API 接入（`http://192.168.31.74:8105`），不得直接操作 Mini 文件系统。**
 4. **本规则不因任何模式（V2 / U0 / 标准流程）而豁免；U0 的"单服务无 Token 直修"权限不覆盖 Mini data 服务。**
 5. **若 Mini data 服务确需修改，必须在 MacBook 本地 `services/data/` 完成开发、通过标准流程签发 Token 后，再通过 rsync 同步并 docker restart 验证，且每次同步须留 handoff 记录。**
 
@@ -108,25 +108,25 @@
 
 | 设备 | 角色 | 内网 IP | Tailscale | 蒲公英 | SSH 用户 | 主要服务 |
 |------|------|---------|-----------|--------|---------|--------|
-| **Mini** | 数据采集节点 | 192.168.31.156 | 100.83.139.52 | 172.16.0.49 | jaybot | data:8105, data-web:3004 |
+| **Mini** | 数据采集节点 | 192.168.31.74 | 100.83.139.52 | 172.16.0.49 | jaybot | data:8105, data-web:3004 |
 | **Alienware** | 交易执行 + 研究员节点 | 192.168.31.187 | 100.91.19.67 | — | 17621 | sim-trading:8101, researcher:8199 |
 | **Studio** | 决策/看板/回测主控 | 192.168.31.142 | 100.86.182.114 | 172.16.1.130 | jaybot | decision:8104, backtest:8103, dashboard:8106/3005 |
-| **Air** | 回测生产节点 | 192.168.31.245 | 100.118.65.55 | — | jayshao | backtest:8103, backtest-web:3001 |
+| **Air** | 回测生产节点 | 192.168.31.156 | 100.118.65.55 | — | jayshao | backtest:8103, backtest-web:3001 |
 
 **SSH 快速参考**：
 ```bash
-ssh jaybot@192.168.31.156       # Mini
+ssh jaybot@192.168.31.74       # Mini
 ssh 17621@192.168.31.187       # Alienware
 ssh jaybot@192.168.31.142      # Studio
-ssh jayshao@192.168.31.245     # Air
+ssh jayshao@192.168.31.156     # Air
 ```
 
 **代码同步（rsync，禁止 GitHub 中转）**：
 ```bash
 # MacBook → Mini
-rsync -avz --delete /Users/jayshao/JBT/services/data/ jaybot@192.168.31.156:~/jbt/services/data/ --exclude="__pycache__" --exclude="*.pyc" --exclude=".env"
+rsync -avz --delete /Users/jayshao/JBT/services/data/ jaybot@192.168.31.74:~/jbt/services/data/ --exclude="__pycache__" --exclude="*.pyc" --exclude=".env"
 # MacBook → Studio
 rsync -avz --delete /Users/jayshao/JBT/services/decision/ jaybot@192.168.31.142:~/jbt/services/decision/ --exclude="__pycache__" --exclude="*.pyc" --exclude=".env"
 # MacBook → Air
-rsync -avz --delete /Users/jayshao/JBT/services/backtest/ jayshao@192.168.31.245:~/jbt/services/backtest/ --exclude="__pycache__" --exclude="*.pyc" --exclude=".env"
+rsync -avz --delete /Users/jayshao/JBT/services/backtest/ jayshao@192.168.31.156:~/jbt/services/backtest/ --exclude="__pycache__" --exclude="*.pyc" --exclude=".env"
 ```

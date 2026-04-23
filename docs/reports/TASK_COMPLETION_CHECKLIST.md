@@ -176,7 +176,7 @@ cdc17b78a  fix(data): 增强分钟K线同步日志，修复早盘数据丢失诊
 ./DEPLOY_MINUTE_KLINE_FIX.sh
 
 # 或手动步骤:
-ssh jaybot@192.168.31.156
+ssh jaybot@192.168.31.74
 cd ~/JBT
 git pull origin main
 docker restart JBT-DATA-8105
@@ -188,9 +188,9 @@ docker restart JBT-DATA-8105
 ### 方案C: 远程同步
 ```bash
 # 从MacBook使用rsync同步到Mini
-rsync -avz --delete services/data/ jaybot@192.168.31.156:~/JBT/services/data/ \
+rsync -avz --delete services/data/ jaybot@192.168.31.74:~/JBT/services/data/ \
   --exclude="__pycache__" --exclude="*.pyc" --exclude=".env"
-ssh jaybot@192.168.31.156 "docker restart JBT-DATA-8105"
+ssh jaybot@192.168.31.74 "docker restart JBT-DATA-8105"
 ```
 
 ---

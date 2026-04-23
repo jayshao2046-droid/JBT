@@ -16,7 +16,7 @@ class DecisionClient:
     """决策端客户端"""
 
     def __init__(self):
-        self.mini_api = "http://192.168.31.156:8105/api/v1/researcher/reports"
+        self.mini_api = "http://192.168.31.74:8105/api/v1/researcher/reports"
         self.feishu_webhook = ""  # 需要配置
         self.email_to = "jay@example.com"  # 需要配置
 

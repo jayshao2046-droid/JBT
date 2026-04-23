@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class MiniClient:
     """Mini API 客户端"""
 
-    def __init__(self, base_url: str = "http://192.168.31.156:8105"):
+    def __init__(self, base_url: str = "http://192.168.31.74:8105"):
         self.base_url = base_url
         self.bars_endpoint = f"{base_url}/api/v1/bars"
 

@@ -22,7 +22,7 @@ Strategy YAML Import Error Fixer
   python scripts/fix_strategy_yaml.py 参考文件/策略/ --dry-run
 
   # 修复后通过 API 重新导入到 Air backtest 服务
-  python scripts/fix_strategy_yaml.py path/to/strategy.yaml --reimport --api http://192.168.31.153:8103
+  python scripts/fix_strategy_yaml.py path/to/strategy.yaml --reimport --api http://192.168.31.156:8103
 """
 from __future__ import annotations
 
@@ -207,8 +207,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--api",
-        default="http://192.168.31.153:8103",
-        help="backtest 服务 API 地址（默认: http://192.168.31.153:8103）",
+        default="http://192.168.31.156:8103",
+        help="backtest 服务 API 地址（默认: http://192.168.31.156:8103）",
     )
     args = parser.parse_args()
 

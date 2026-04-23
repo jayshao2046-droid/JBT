@@ -29,10 +29,10 @@ JBT 采用 **四设备分布式架构**，每个设备承担不同职责：
 
 | 设备 | IP地址 | Tailscale | 蒲公英 | 用户 | 操作系统 | 角色定位 |
 |------|--------|-----------|--------|------|---------|---------|
-| **Mini** | 192.168.31.156 | 100.83.139.52 | 172.16.0.49 | jaybot | macOS | 数据采集节点 |
+| **Mini** | 192.168.31.74 | 100.83.139.52 | 172.16.0.49 | jaybot | macOS | 数据采集节点 |
 | **Alienware** | 192.168.31.187 | 100.91.19.67 | — | 17621 | Windows | 交易执行 + 研究员节点 |
 | **Studio** | 192.168.31.142 | 100.86.182.114 | 172.16.1.130 | jaybot | macOS | 决策/开发主控节点 |
-| **Air** | 192.168.31.245 | 100.118.65.55 | — | jayshao | macOS | 回测生产节点 |
+| **Air** | 192.168.31.156 | 100.118.65.55 | — | jayshao | macOS | 回测生产节点 |
 
 **MacBook**：开发/控制端（不计入运行态四设备）
 
@@ -44,7 +44,7 @@ JBT 采用 **四设备分布式架构**，每个设备承担不同职责：
 └─────────────────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────────────────────┐
-│  Mini (192.168.31.156) — 数据采集节点                                              │
+│  Mini (192.168.31.74) — 数据采集节点                                              │
 │  Tailscale: 100.83.139.52  |  蒲公英: 172.16.0.49  |  用户: jaybot                │
 ├──────────────────────────────────────────────────────────────────────────────────┤
 │  服务：                                                                           │
@@ -89,7 +89,7 @@ JBT 采用 **四设备分布式架构**，每个设备承担不同职责：
 └──────────────────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────────────────────┐
-│  Air (192.168.31.245) — 回测生产节点                                              │
+│  Air (192.168.31.156) — 回测生产节点                                              │
 │  Tailscale: 100.118.65.55  |  用户: jayshao                                      │
 ├──────────────────────────────────────────────────────────────────────────────────┤
 │  服务：                                                                           │
@@ -106,18 +106,18 @@ JBT 采用 **四设备分布式架构**，每个设备承担不同职责：
 | 服务 | 端口 | 部署位置 | 访问地址 | 部署方式 |
 |------|------|---------|---------|---------|
 | **API 服务** | | | | |
-| data API | 8105 | Mini | http://192.168.31.156:8105 | Docker |
+| data API | 8105 | Mini | http://192.168.31.74:8105 | Docker |
 | sim-trading API | 8101 | Alienware | http://192.168.31.187:8101 | 裸 Python |
 | researcher API | 8199 | Alienware | http://192.168.31.187:8199 | 裸 Python |
-| backtest API | 8103 | Air / Studio | http://192.168.31.245:8103 | Docker |
+| backtest API | 8103 | Air / Studio | http://192.168.31.156:8103 | Docker |
 | decision API | 8104 | Studio | http://192.168.31.142:8104 | Docker |
 | dashboard API | 8106 | Studio | http://192.168.31.142:8106 | Docker |
 | live-trading API | 8102 | （待部署） | — | — |
 | **Web 服务** | | | | |
-| backtest-web | 3001 | Air / Studio | http://192.168.31.245:3001 | Docker |
+| backtest-web | 3001 | Air / Studio | http://192.168.31.156:3001 | Docker |
 | sim-trading-web | 3002 | Alienware | http://192.168.31.187:3002 | 裸 Python |
 | decision-web | 3003 | Studio | http://192.168.31.142:3003 | Docker |
-| data-web | 3004 | Mini | http://192.168.31.156:3004 | Docker |
+| data-web | 3004 | Mini | http://192.168.31.74:3004 | Docker |
 | dashboard-web | 3005 | Studio | http://192.168.31.142:3005 | Docker |
 | live-trading-web | 3006 | （待部署） | — | — |
 
@@ -126,8 +126,8 @@ JBT 采用 **四设备分布式架构**，每个设备承担不同职责：
 #### **局域网访问**（主要方式）
 ```bash
 # Mini
-ssh jaybot@192.168.31.156
-curl http://192.168.31.156:8105/health
+ssh jaybot@192.168.31.74
+curl http://192.168.31.74:8105/health
 
 # Alienware
 ssh 17621@192.168.31.187
@@ -141,8 +141,8 @@ curl http://192.168.31.142:8103/health
 curl http://192.168.31.142:3005
 
 # Air
-ssh jayshao@192.168.31.245
-curl http://192.168.31.245:8103/health
+ssh jayshao@192.168.31.156
+curl http://192.168.31.156:8103/health
 ```
 
 #### **Tailscale 访问**（远程访问）
@@ -363,10 +363,10 @@ ssh jaybot@172.16.1.130
 
 ```bash
 # === 局域网 SSH ===
-ssh jaybot@192.168.31.156      # Mini
+ssh jaybot@192.168.31.74      # Mini
 ssh 17621@192.168.31.187      # Alienware
 ssh jaybot@192.168.31.142     # Studio
-ssh jayshao@192.168.31.245    # Air
+ssh jayshao@192.168.31.156    # Air
 
 # === Tailscale SSH ===
 ssh jaybot@100.83.139.52      # Mini
@@ -379,24 +379,24 @@ ssh jayshao@100.118.65.55     # Air
 
 ```bash
 # === 所有服务健康检查 ===
-curl http://192.168.31.156:8105/health      # Mini data
+curl http://192.168.31.74:8105/health      # Mini data
 curl http://192.168.31.187:8101/health     # Alienware sim-trading
 curl http://192.168.31.187:8199/health     # Alienware researcher
 curl http://192.168.31.142:8104/health     # Studio decision
 curl http://192.168.31.142:8103/health     # Studio backtest
 curl http://192.168.31.142:3005            # Studio dashboard
-curl http://192.168.31.245:8103/health     # Air backtest
+curl http://192.168.31.156:8103/health     # Air backtest
 ```
 
 ### 6.3 容器管理
 
 ```bash
 # === 重启服务容器 ===
-ssh jaybot@192.168.31.156 'docker restart JBT-DATA-8105'
+ssh jaybot@192.168.31.74 'docker restart JBT-DATA-8105'
 ssh jaybot@192.168.31.142 'docker restart JBT-DECISION-8104'
 ssh jaybot@192.168.31.142 'docker restart JBT-BACKTEST-8103'
 ssh jaybot@192.168.31.142 'docker restart JBT-DASHBOARD-8106'
-ssh jayshao@192.168.31.245 'docker restart JBT-BACKTEST-8103'
+ssh jayshao@192.168.31.156 'docker restart JBT-BACKTEST-8103'
 ```
 
 ---

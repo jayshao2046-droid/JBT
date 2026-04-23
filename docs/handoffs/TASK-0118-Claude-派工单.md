@@ -43,7 +43,7 @@ services/data/tests/test_researcher_api.py       新建
 |------|----|------|--------------|
 | Alienware | 192.168.31.187 | 研究员生成端（Windows） | :8199 researcher, :11434 qwen3:14b |
 | Studio | 192.168.31.142 | phi4 推理端（macOS） | :11434 phi4-reasoning:14b |
-| Mini | 192.168.31.156 | data 存储端（macOS） | :8105 data API |
+| Mini | 192.168.31.74 | data 存储端（macOS） | :8105 data API |
 | MacBook | 本地 | 开发/代码仓库 | — |
 
 ---
@@ -474,10 +474,10 @@ scp services/data/src/researcher/researcher_health.py alienware@192.168.31.187:/
 ssh alienware@192.168.31.187 "taskkill /F /IM python.exe /FI \"WINDOWTITLE eq researcher\" 2>nul; cd /Users/17621/jbt && start /B python services/data/run_researcher.py"
 
 # Batch B: SCP 到 Mini（data API）
-scp services/data/src/main.py mini@192.168.31.156:~/JBT/services/data/src/main.py
-scp services/data/src/researcher_store.py mini@192.168.31.156:~/JBT/services/data/src/researcher_store.py
+scp services/data/src/main.py mini@192.168.31.74:~/JBT/services/data/src/main.py
+scp services/data/src/researcher_store.py mini@192.168.31.74:~/JBT/services/data/src/researcher_store.py
 # 重启 Mini data API
-ssh mini@192.168.31.156 "cd ~/JBT && pkill -f 'uvicorn.*data' 2>/dev/null; nohup python -m uvicorn services.data.src.main:app --host 0.0.0.0 --port 8105 &"
+ssh mini@192.168.31.74 "cd ~/JBT && pkill -f 'uvicorn.*data' 2>/dev/null; nohup python -m uvicorn services.data.src.main:app --host 0.0.0.0 --port 8105 &"
 ```
 
 ---
@@ -487,7 +487,7 @@ ssh mini@192.168.31.156 "cd ~/JBT && pkill -f 'uvicorn.*data' 2>/dev/null; nohup
 Claude 实施完成后，逐项自校验并在此处打勾：
 
 - [ ] `pytest services/data/tests/test_researcher_api.py -q` ≥ 6 passed
-- [ ] Mini: `GET http://192.168.31.156:8105/api/v1/researcher/report/latest` → 200（有历史数据后）
+- [ ] Mini: `GET http://192.168.31.74:8105/api/v1/researcher/report/latest` → 200（有历史数据后）
 - [ ] Mini: `POST /api/v1/researcher/reports` → 接收测试负载返回 200
 - [ ] Alienware: 手动触发 `POST /run` → 飞书收到研报通知（全中文）+ phi4 评级卡片
 - [ ] Alienware: `runtime/researcher/reports/` 在推送成功后无残留 JSON/MD

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────
 # disable_legacy_data.sh
-# 在 Mini (jaybot@192.168.31.156) 上执行，用于：
+# 在 Mini (jaybot@192.168.31.74) 上执行，用于：
 #   1. 停止旧 J_BotQuant 的所有数据采集进程
 #   2. 移除 launchctl 守护
 #   3. 禁用 crontab 中的旧采集任务
 #   4. 重命名旧目录以防误启
 #
-# 用法：ssh jaybot@192.168.31.156 'bash ~/JBT/services/data/scripts/disable_legacy.sh'
+# 用法：ssh jaybot@192.168.31.74 'bash ~/JBT/services/data/scripts/disable_legacy.sh'
 # ─────────────────────────────────────────────────────────────────
 set -euo pipefail
 

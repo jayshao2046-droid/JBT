@@ -394,7 +394,7 @@ class YAMLSignalExecutor:
 
     def __init__(
         self,
-        data_service_url: str = "http://192.168.31.156:8105",
+        data_service_url: str = "http://192.168.31.74:8105",
         ollama_url: str = "http://192.168.31.142:11434",
         researcher_model: str = "qwen3:14b-q4_K_M",
         auditor_model: str = "qwen3:14b-q4_K_M",

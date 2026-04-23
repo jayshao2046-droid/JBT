@@ -7,7 +7,7 @@ def test_mini_client_init():
     """测试 Mini 客户端初始化"""
     client = MiniClient()
 
-    assert client.base_url == "http://192.168.31.156:8105"
+    assert client.base_url == "http://192.168.31.74:8105"
     assert "/api/v1/bars" in client.bars_endpoint
 
 

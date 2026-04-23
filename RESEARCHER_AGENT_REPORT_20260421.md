@@ -15,7 +15,7 @@
 
 ### 2. Decision 端消费端 ⚠️
 - **已有逻辑**：`services/decision/src/research/news_scorer.py` 完整实现
-- **期望数据源**：Mini `http://192.168.31.156:8105/api/v1/researcher/report/latest`
+- **期望数据源**：Mini `http://192.168.31.74:8105/api/v1/researcher/report/latest`
 - **实际状态**：✗ 端点**未实现**，返回 404/null，决策端无法消费研报
 
 ### 3. Mini 中转层 ❌

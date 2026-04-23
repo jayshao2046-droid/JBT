@@ -18,7 +18,7 @@ from services.decision.src.research.symbol_profiler import SymbolProfiler
 
 
 async def main():
-    profiler = SymbolProfiler(data_service_url="http://192.168.31.156:8105")
+    profiler = SymbolProfiler(data_service_url="http://192.168.31.74:8105")
 
     # 测试品种列表
     test_symbols = [

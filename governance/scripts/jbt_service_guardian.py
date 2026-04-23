@@ -47,7 +47,7 @@ SERVICE_CHECKS: list[ServiceCheck] = [
         service_name="数据服务",
         device="Mini",
         port=8105,
-        url="http://192.168.31.156:8105/health",
+        url="http://192.168.31.74:8105/health",
         expected_statuses=("ok", "healthy"),
     ),
     ServiceCheck(

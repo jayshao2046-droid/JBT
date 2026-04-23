@@ -38,11 +38,11 @@ pytest tests/test_futures_sentiment.py::TestFuturesSentimentModule -v
 ```bash
 # 容器重启：JBT-DATA-8105 ✅
 # 新端点
-curl http://192.168.31.156:8105/api/v1/context/futures_sentiment
+curl http://192.168.31.74:8105/api/v1/context/futures_sentiment
 → stale: True | count: 0 | reason: no_report_available  ✅（无研报时正确 stale）
 
 # 原有端点
-curl -o /dev/null -w "%{http_code}" http://192.168.31.156:8105/api/v1/context/sentiment
+curl -o /dev/null -w "%{http_code}" http://192.168.31.74:8105/api/v1/context/sentiment
 → 200  ✅（原有端点不受影响）
 ```
 

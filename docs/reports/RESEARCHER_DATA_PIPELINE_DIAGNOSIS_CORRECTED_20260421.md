@@ -14,7 +14,7 @@
 │              JBT 研究员系统正确数据流                          │
 └─────────────────────────────────────────────────────────────┘
 
-Mini (192.168.31.156:8105)              Alienware (192.168.31.187:8199)
+Mini (192.168.31.74:8105)              Alienware (192.168.31.187:8199)
   采集源1                                  研报生成 + API 提供
   采集源2        ─────────┐                │
   采集源N        ─────────┼──────────────┤
@@ -206,7 +206,7 @@ docker logs JBT-DECISION-8104 | grep -i researcher | tail -50
 #### Priority 3 - 调查宏观源采集中断
 ```bash
 # Mini 中是否有 sentiment / macro 采集任务正在运行
-ssh jaybot@192.168.31.156 "docker exec JBT-DATA-8105 tail -100 /data/logs/scheduler.log | grep -E 'sentiment|macro|shipping'"
+ssh jaybot@192.168.31.74 "docker exec JBT-DATA-8105 tail -100 /data/logs/scheduler.log | grep -E 'sentiment|macro|shipping'"
 ```
 - 确认这些采集任务是否注册并运行
 - 如果中断，需要独立任务修复

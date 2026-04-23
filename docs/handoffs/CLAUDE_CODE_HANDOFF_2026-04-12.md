@@ -82,7 +82,7 @@ grep "router\." services/sim-trading/src/api/router.py | head -30
 **修复命令**：
 ```bash
 # Mini 同步
-ssh jaybot@192.168.31.156 "cd ~/JBT && git fetch origin && git reset --hard origin/main"
+ssh jaybot@192.168.31.74 "cd ~/JBT && git fetch origin && git reset --hard origin/main"
 # Studio 同步
 ssh jayshao@192.168.31.142 "cd ~/JBT && git fetch origin && git reset --hard origin/main"
 ```
@@ -202,8 +202,8 @@ ssh jayshao@192.168.31.142 "cd ~/JBT && git fetch origin && git reset --hard ori
 | 设备 | 内网 IP | 蒲公英 IP | 服务 |
 |------|---------|----------|------|
 | MacBook | localhost | 172.16.3.136 | 全部开发环境 |
-| Mini | 192.168.31.156 | 172.16.0.49 | data:8105, sim-trading:8101 |
-| Air | 192.168.31.245 | — | backtest:8103 |
+| Mini | 192.168.31.74 | 172.16.0.49 | data:8105, sim-trading:8101 |
+| Air | 192.168.31.156 | — | backtest:8103 |
 | Studio | 192.168.31.142 | 172.16.1.130 | decision:8104, dashboard:8106 |
 
 ---
@@ -261,7 +261,7 @@ origin/main: a69df54 (同步)
 
 两地同步状态:
  ✅ GitHub: 已推送
- ❌ Mini (192.168.31.156): HTTP2 framing layer 错误
+ ❌ Mini (192.168.31.74): HTTP2 framing layer 错误
  ❌ Studio (192.168.31.142): SSH 连接关闭
 ```
 

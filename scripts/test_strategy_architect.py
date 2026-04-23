@@ -51,7 +51,7 @@ async def main():
 
     # 初始化组件
     online_client = OpenAICompatibleClient()
-    symbol_profiler = SymbolProfiler(data_service_url="http://192.168.31.156:8105")
+    symbol_profiler = SymbolProfiler(data_service_url="http://192.168.31.74:8105")
     strategy_architect = StrategyArchitect(online_client=online_client, model="deepseek-chat")
 
     # 输出目录

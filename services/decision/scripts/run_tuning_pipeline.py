@@ -12,7 +12,7 @@
     source ../../.venv/bin/activate
     python scripts/run_tuning_pipeline.py \\
         --symbol p \\
-        --data-url http://192.168.31.156:8105 \\
+        --data-url http://192.168.31.74:8105 \\
         --ollama-url http://192.168.31.142:11434 \\
         --start 2021-01-01 \\
         --end 2026-01-01 \\
@@ -384,7 +384,7 @@ def print_summary(results: list[dict[str, Any]]) -> None:
 async def main() -> None:
     parser = argparse.ArgumentParser(description="策略调优串行流水线 TASK-0122-B")
     parser.add_argument("--symbol", required=True, help="品种代码，如 p（棕榈油）")
-    parser.add_argument("--data-url", default="http://192.168.31.156:8105", help="Mini data API URL")
+    parser.add_argument("--data-url", default="http://192.168.31.74:8105", help="Mini data API URL")
     parser.add_argument("--ollama-url", default="http://192.168.31.142:11434", help="Studio Ollama URL")
     parser.add_argument("--start", default="2021-01-01", help="回测起始日期 YYYY-MM-DD")
     parser.add_argument("--end", default="2026-01-01", help="回测结束日期 YYYY-MM-DD")
