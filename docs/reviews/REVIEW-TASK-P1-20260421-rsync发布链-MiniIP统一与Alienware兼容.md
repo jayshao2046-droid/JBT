@@ -34,7 +34,7 @@
 
 1. `bash -n governance/scripts/jbt_rsync_deploy.sh` 通过。
 2. `bash -n governance/scripts/jbt_rsync_rollback.sh` 通过。
-3. `jbt_rsync_deploy.sh --service data --dry-run` 输出目标为 `jaybot@192.168.31.74:~/JBT/services/data/`。
+3. `jbt_rsync_deploy.sh --service data --dry-run` 输出目标为 `jaybot@192.168.31.156:~/JBT/services/data/`。
 4. `jbt_rsync_deploy.sh --service sim-trading --dry-run` 输出目标为 `17621@192.168.31.187:C:/Users/17621/JBT/services/sim-trading/`。
 5. `jbt_rsync_deploy.sh --service researcher --dry-run` 输出目标为 `17621@192.168.31.187:C:/Users/17621/JBT/services/data/`。
 6. 只读远端验证通过：Alienware 上 `C:/Users/17621/JBT/services/data` 与 `C:/Users/17621/JBT/services/sim-trading` 均可通过 `powershell -EncodedCommand` 正常访问。

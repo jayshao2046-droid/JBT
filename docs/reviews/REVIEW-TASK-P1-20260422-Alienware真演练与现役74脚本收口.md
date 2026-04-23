@@ -12,7 +12,7 @@
 
 1. 真实演练优先使用 `researcher`，因为其当前健康、监听正常，且风险低于 `sim-trading`。
 2. 本批默认不修改 `governance/scripts/jbt_rsync_deploy.sh` 与 `governance/scripts/jbt_rsync_rollback.sh`；先验证现有脚本是否已能真实闭环。
-3. `192.168.31.74` 的仓内残留只处理“仍会真实执行”的脚本入口，不纳入历史文档、测试或注释型口径清理。
+3. `192.168.31.156` 的仓内残留只处理“仍会真实执行”的脚本入口，不纳入历史文档、测试或注释型口径清理。
 4. `services/data/scripts/disable_legacy.sh` 中旧 IP 仅位于注释与示例命令，不影响脚本运行逻辑，本批排除。
 
 ## 白名单
@@ -38,7 +38,7 @@
 
 1. `researcher` 真实 deploy 成功并通过 `8199 /health`。
 2. `researcher` 真实 rollback 成功并再次通过 `8199 /health`。
-3. `DEPLOY_MINUTE_KLINE_FIX.sh` 收口后不再指向 `192.168.31.74`。
+3. `DEPLOY_MINUTE_KLINE_FIX.sh` 收口后不再指向 `192.168.31.156`。
 4. 不夹带历史文档批量替换。
 
 ## 复核结果
@@ -47,7 +47,7 @@
 
 ### 复核证据
 
-1. `bash -n DEPLOY_MINUTE_KLINE_FIX.sh` 通过，脚本内 `MINI_IP="192.168.31.74"` 已生效。
+1. `bash -n DEPLOY_MINUTE_KLINE_FIX.sh` 通过，脚本内 `MINI_IP="192.168.31.156"` 已生效。
 2. `bash -n governance/scripts/jbt_rsync_deploy.sh` 与 `bash -n governance/scripts/jbt_rsync_rollback.sh` 通过。
 3. `services/data/src/researcher/scheduler.py` 单文件修复后，本地最小导入检查通过，编辑器诊断为 `No errors found`。
 4. `bash governance/scripts/jbt_rsync_deploy.sh --service researcher` 非 dry-run 真实执行成功，Windows 文件同步完成，`8199 /health` 首次通过。

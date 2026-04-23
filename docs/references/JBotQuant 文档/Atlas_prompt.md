@@ -1270,7 +1270,7 @@ CORS_ALLOWED: http://192.168.31.142:3000,http://100.86.182.114:3000,... ✅
 
 | 设备 | 服务 | LAN IP | Tailscale IP | 状态 |
 |---|---|---|---|---|
-| Mini M2 | data:8001 | 192.168.31.74 | 100.82.139.52 | ✅ 运行中（uptime 370345s） |
+| Mini M2 | data:8001 | 192.168.31.156 | 100.82.139.52 | ✅ 运行中（uptime 370345s） |
 | Studio M2 Max | decision:8002 | 192.168.31.142 | 100.86.182.114 | ✅ 运行中 |
 | Studio M2 Max | **trading:8003** | 192.168.31.142 | 100.86.182.114 | ✅ 迁移完成（uptime 41s） |
 | Studio M2 Max | **dashboard（Next.js）** | 192.168.31.142 | 100.86.182.114 | ⏳ T111 后部署 |
@@ -1279,7 +1279,7 @@ CORS_ALLOWED: http://192.168.31.142:3000,http://100.86.182.114:3000,... ✅
 ### 迁移操作
 - Mini trading:8003 进程已 kill（port 8003 free）
 - Studio trading:8003 启动（`nohup uvicorn trading_api:app --port 8003 --env-file .env`）
-- `src/api/network_switcher.py`: trading LAN `192.168.31.74` → `192.168.31.142`，TS `100.82.139.52` → `100.86.182.114`
+- `src/api/network_switcher.py`: trading LAN `192.168.31.156` → `192.168.31.142`，TS `100.82.139.52` → `100.86.182.114`
 - `configs/api_architecture.yaml`: trading device `Mini` → `Studio`，IP 对应更新
 - Studio + Mini `.env`: `BOTQUANT_TRADING_TS` 修正为 `100.86.182.114:8003`
 - `PROJECT_CONTEXT.md`: 架构表、网络配置全面更新（蒲公英移除，Tailscale 登记）
@@ -1331,9 +1331,9 @@ LAN (2s timeout) → Tailscale (8s timeout) → 返回 LAN 地址等待重连
 
 | 端 | 服务 | IP:端口 | 状态 | 备注 |
 |---|---|---|---|---|
-| Mini | data API | 192.168.31.74:8001 | ✅ ok | uptime 102.6h，持续运行 |
+| Mini | data API | 192.168.31.156:8001 | ✅ ok | uptime 102.6h，持续运行 |
 | Studio | decision API | 192.168.31.142:8002 | ✅ ok | 代码 3a331c3，新启动 |
-| Mini | trading API | 192.168.31.74:8003 | ✅ ok | 新启动，instance: default |
+| Mini | trading API | 192.168.31.156:8003 | ✅ ok | 新启动，instance: default |
 
 ### 连通性验证
 

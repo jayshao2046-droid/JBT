@@ -65,7 +65,7 @@ SOURCE_DELAY_THRESHOLDS = {
 
 ## 验收标准
 
-1. `curl http://192.168.31.74:8105/api/v1/dashboard/collectors` → shipping.status = "success"
+1. `curl http://192.168.31.156:8105/api/v1/dashboard/collectors` → shipping.status = "success"
 2. shipping.age_h 约 13.x（未变）
 3. 其他采集器状态不受影响
 

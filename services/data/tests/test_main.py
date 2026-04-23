@@ -222,7 +222,7 @@ def test_dashboard_system_and_collectors(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "logs").mkdir(parents=True, exist_ok=True)
     (tmp_path / "logs" / "scheduler.log").write_text(
         "2026-04-09 10:41:00 INFO scheduler started\n"
-        "2026-04-09 10:42:00 ERROR collector failed path=/Users/demo/private.log url=https://internal.service.local ip=192.168.31.74\n",
+        "2026-04-09 10:42:00 ERROR collector failed path=/Users/demo/private.log url=https://internal.service.local ip=192.168.31.156\n",
         encoding="utf-8",
     )
 
@@ -242,7 +242,7 @@ def test_dashboard_system_and_collectors(tmp_path: Path, monkeypatch) -> None:
     assert all("endpoint_count" in item for item in system_payload["settings"]["schedules"])
     assert "/Users/" not in system_payload["logs"][-1]["message"]
     assert "https://" not in system_payload["logs"][-1]["message"]
-    assert "192.168.31.74" not in system_payload["logs"][-1]["message"]
+    assert "192.168.31.156" not in system_payload["logs"][-1]["message"]
 
     collectors_response = client.get("/api/v1/dashboard/collectors")
     assert collectors_response.status_code == 200

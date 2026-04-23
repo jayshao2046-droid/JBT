@@ -2,7 +2,7 @@
 
 **修复版本**：cdc17b78a、3a1a6eff5  
 **修复范围**：services/data/src/scheduler/pipeline.py  
-**部署目标**：Mini（192.168.31.74）  
+**部署目标**：Mini（192.168.31.156）  
 **部署环境**：容器 JBT-DATA-8105  
 **部署截止**：明天早盘之前（2026-04-22 09:00）
 
@@ -13,7 +13,7 @@
 ### 步骤 1：在 Mini 上拉取最新代码
 
 ```bash
-ssh jaybot@192.168.31.74
+ssh jaybot@192.168.31.156
 cd ~/JBT
 git fetch origin
 git checkout backup-settings-p0p1-20260420-193000
@@ -83,7 +83,7 @@ bars-sync minute: SHFE_rb2605 has no valid rows after filtering
 **执行时间**：2026-04-22 12:00+  
 **命令**：
 ```bash
-ssh jaybot@192.168.31.74
+ssh jaybot@192.168.31.156
 python3 << 'EOF'
 import pyarrow.parquet as pq
 import pandas as pd

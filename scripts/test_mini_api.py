@@ -6,7 +6,7 @@ symbol = "KQ.m@SHFE.rb"
 since = datetime.now() - timedelta(hours=24)
 now = datetime.now()
 
-url = "http://192.168.31.74:8105/api/v1/bars"
+url = "http://192.168.31.156:8105/api/v1/bars"
 params = {
     "symbol": symbol,
     "start": since.isoformat(),

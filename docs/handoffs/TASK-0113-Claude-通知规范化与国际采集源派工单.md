@@ -19,7 +19,7 @@
 2. **飞书每小时推送**：工作时间内每整点执行一次研究，精炼飞书卡片（有标题、有结果、有研判）
 3. **邮件只收日报**：每天两封（早报+晚报），内容详尽全中文，**必须包含信息来源和重大策略建议**
 4. **国际采集源**：新增 7 个国际期货/宏观资讯源 + 解析器
-5. **数据推送 Mini**：每次研究完成后，将报告 JSON 推送到 Mini data API (`http://192.168.31.74:8105`)，供 Studio 决策端消费
+5. **数据推送 Mini**：每次研究完成后，将报告 JSON 推送到 Mini data API (`http://192.168.31.156:8105`)，供 Studio 决策端消费
 
 ---
 
@@ -98,7 +98,7 @@ services/data/
 
 每次研究完成后（每整点），调用 Mini data API：
 ```
-POST http://192.168.31.74:8105/api/v1/researcher/reports
+POST http://192.168.31.156:8105/api/v1/researcher/reports
 Content-Type: application/json
 Body: ResearchReport.dict()
 ```
@@ -367,7 +367,7 @@ EMAIL_MORNING_HOURS = [8, 9, 10, 11, 13, 14, 15, 16]  # 早报汇总这些整点
 EMAIL_EVENING_HOURS = [21, 22, 23]                      # 晚报汇总这些整点
 
 # Mini data API 推送（研究报告推送到 Mini 供决策端消费）
-DATA_API_PUSH_URL = os.getenv("DATA_API_URL", "http://192.168.31.74:8105") + "/api/v1/researcher/reports"
+DATA_API_PUSH_URL = os.getenv("DATA_API_URL", "http://192.168.31.156:8105") + "/api/v1/researcher/reports"
 
 # 突发关键词（中文 + 英文）
 URGENT_KEYWORDS = [

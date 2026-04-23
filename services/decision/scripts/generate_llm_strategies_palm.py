@@ -56,7 +56,7 @@ logger = logging.getLogger("llm_pipeline_palm")
 SYMBOL = "KQ_m_DCE_p"  # Mini data API 主力连续合约格式
 SYMBOL_NAME = "p"
 SYMBOL_CN = "棕榈油"
-DATA_URL = "http://192.168.31.74:8105"
+DATA_URL = "http://192.168.31.156:8105"
 
 # 输出目录
 OUTPUT_DIR = _BASE / "strategies" / "llm_generated" / SYMBOL_NAME

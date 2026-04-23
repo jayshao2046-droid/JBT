@@ -18,7 +18,7 @@ async def test_full_calculation():
     print("=" * 80)
 
     profiler = SymbolProfiler(
-        data_service_url="http://192.168.31.74:8105",
+        data_service_url="http://192.168.31.156:8105",
         interval=1440,  # 日K线
         enable_cache=True
     )
@@ -48,7 +48,7 @@ async def test_incremental_update():
     print("=" * 80)
 
     profiler = SymbolProfiler(
-        data_service_url="http://192.168.31.74:8105",
+        data_service_url="http://192.168.31.156:8105",
         interval=1440,
         enable_cache=True
     )
@@ -101,7 +101,7 @@ async def test_multiple_symbols():
     print("=" * 80)
 
     profiler = SymbolProfiler(
-        data_service_url="http://192.168.31.74:8105",
+        data_service_url="http://192.168.31.156:8105",
         interval=1440,
         enable_cache=True
     )
@@ -123,7 +123,7 @@ async def main():
     print("=" * 80)
     print("SymbolProfiler 增量更新功能测试")
     print("=" * 80)
-    print(f"数据源: Mini API (http://192.168.31.74:8105)")
+    print(f"数据源: Mini API (http://192.168.31.156:8105)")
     print(f"K线周期: 日K线 (1440分钟)")
     print(f"缓存目录: runtime/symbol_profiles/")
     print("=" * 80)

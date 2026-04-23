@@ -19,7 +19,7 @@
     cd /Users/jayshao/JBT/services/decision
     source ../../.venv/bin/activate
     python scripts/run_full_pipeline_35_symbols.py \\
-        --data-url http://192.168.31.74:8105 \\
+        --data-url http://192.168.31.156:8105 \\
         --backtest-url http://192.168.31.142:8103 \\
         --ollama-url http://192.168.31.142:11434 \\
         --feishu-webhook https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_TOKEN \\
@@ -837,7 +837,7 @@ async def process_one_symbol(
 
 async def main():
     parser = argparse.ArgumentParser(description="35 品种 LLM 策略自动化生产主控脚本")
-    parser.add_argument("--data-url", default="http://192.168.31.74:8105")
+    parser.add_argument("--data-url", default="http://192.168.31.156:8105")
     parser.add_argument("--backtest-url", default="http://192.168.31.142:8103")
     parser.add_argument("--ollama-url", default="http://192.168.31.142:11434")
     parser.add_argument("--feishu-webhook", required=True)

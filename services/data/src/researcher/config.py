@@ -20,7 +20,7 @@ class ResearcherConfig:
     OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "120.0"))
 
     # Mini data API 配置
-    DATA_API_URL = os.getenv("DATA_API_URL", "http://192.168.31.74:8105")
+    DATA_API_URL = os.getenv("DATA_API_URL", "http://192.168.31.156:8105")
 
     # 期货品种列表 — Jay.S 2026-04-15 确认的 35 个有4年以上连续数据品种
     # （KQ.m@ 格式，Mini API 内部解析为 KQ_m_ 格式）
@@ -98,7 +98,7 @@ class ResearcherConfig:
     EMAIL_EVENING_HOURS = list(range(13, 20))
 
     # Mini data API 推送（研究报告推送到 Mini 供决策端消费）
-    DATA_API_PUSH_URL = os.getenv("DATA_API_URL", "http://192.168.31.74:8105") + "/api/v1/researcher/reports"
+    DATA_API_PUSH_URL = os.getenv("DATA_API_URL", "http://192.168.31.156:8105") + "/api/v1/researcher/reports"
 
     # 突发关键词（中文 + 英文）
     URGENT_KEYWORDS = [

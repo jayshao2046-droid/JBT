@@ -132,7 +132,7 @@ async def backtest_and_evaluate(yaml_content: str, symbol: str) -> dict:
 
     # 执行回测
     executor = YAMLSignalExecutor(
-        data_service_url="http://192.168.31.74:8105",
+        data_service_url="http://192.168.31.156:8105",
         initial_capital=500_000.0
     )
 

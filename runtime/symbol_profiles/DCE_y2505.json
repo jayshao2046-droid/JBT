@@ -13,7 +13,7 @@
   "kurtosis": 1010.260078131411,
   "liquidity": "Low",
   "metadata": {
-    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "data_source": "Mini API (http://192.168.31.156:8105)",
     "calculation_time": "2026-04-17 22:53:45",
     "data_start_date": "2021-04-19T01:00:00",
     "data_end_date": "2026-04-08T14:59:00",

@@ -62,7 +62,7 @@ class MultiSourceValidator:
 
     def __init__(
         self,
-        mini_api_url: str = "http://192.168.31.74:8105",
+        mini_api_url: str = "http://192.168.31.156:8105",
         tushare_token: Optional[str] = None,
     ):
         self.mini_profiler = SymbolProfiler(data_service_url=mini_api_url)

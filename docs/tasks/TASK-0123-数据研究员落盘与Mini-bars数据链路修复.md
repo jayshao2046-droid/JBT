@@ -61,7 +61,7 @@ ls -lh $DATA_STORAGE_ROOT/futures_minute/1m/ 2>/dev/null | head -10
 `scheduler._push_to_data_api()` 调用：
 ```python
 resp = await client.post(
-    ResearcherConfig.DATA_API_PUSH_URL,  # http://192.168.31.74:8105/api/v1/researcher/reports
+    ResearcherConfig.DATA_API_PUSH_URL,  # http://192.168.31.156:8105/api/v1/researcher/reports
     json=report.dict(),
     ...
 )

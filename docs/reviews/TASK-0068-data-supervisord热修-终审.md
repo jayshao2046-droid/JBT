@@ -16,7 +16,7 @@ jbt-data 容器（Mini:8105）三个 supervisord 进程全部 FATAL：
 - `jbt-data-scheduler`：同上
 - `jbt-data-health`：每秒重启（ModuleNotFoundError）
 
-外部访问 http://192.168.31.74:8105/health 返回 200 是 healthcheck 误报（false positive）。
+外部访问 http://192.168.31.156:8105/health 返回 200 是 healthcheck 误报（false positive）。
 
 ## 根因
 
@@ -54,10 +54,10 @@ volumes:
 
 ```
 # Atlas 独立验收（2026-04-12 15:08）
-$ curl -s http://192.168.31.74:8105/health
+$ curl -s http://192.168.31.156:8105/health
 {"status":"ok","service":"jbt-data","version":"1.0.0"}
 
-$ ssh jaybot@192.168.31.74 "/usr/local/bin/docker exec JBT-DATA-8105 supervisorctl status"
+$ ssh jaybot@192.168.31.156 "/usr/local/bin/docker exec JBT-DATA-8105 supervisorctl status"
 jbt-data-api        RUNNING   pid 7, uptime 0:02:10  ✅
 jbt-data-health     EXITED    Apr 12 02:52 PM        ✅（一次性任务，exit 0，正常）
 jbt-data-scheduler  RUNNING   pid 9, uptime 0:02:10  ✅

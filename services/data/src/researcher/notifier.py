@@ -18,7 +18,7 @@ class ResearcherNotifier:
 
     def __init__(self):
         self.feishu_webhook = os.getenv("FEISHU_WEBHOOK_URL", "")
-        self.data_api_url = os.getenv("DATA_API_URL", "http://192.168.31.74:8105")
+        self.data_api_url = os.getenv("DATA_API_URL", "http://192.168.31.156:8105")
 
     async def _post_feishu(self, payload: Dict[str, Any], timeout: float = 10.0, retries: int = 2) -> bool:
         """发送飞书消息并校验业务返回码。"""

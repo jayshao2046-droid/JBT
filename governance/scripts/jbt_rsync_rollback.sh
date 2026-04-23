@@ -19,9 +19,9 @@ MANIFEST_FILE="${HOME}/jbt-governance/deploy-manifest.jsonl"
 # ============================================================
 # 设备配置（与 deploy 保持一致）
 # ============================================================
-MINI_HOST="jaybot@192.168.31.74"
+MINI_HOST="jaybot@192.168.31.156"
 MINI_PATH="~/JBT/services"
-MINI_IP="192.168.31.74"
+MINI_IP="192.168.31.156"
 
 STUDIO_HOST="jaybot@192.168.31.142"
 STUDIO_PATH="~/JBT/services"
@@ -132,7 +132,7 @@ restart_windows_researcher_service() {
     local port="$3"
 
     local ps_cmd
-    ps_cmd="\$work='${remote_path%/}'; \$task='JBT_Researcher_Service'; \$logDir='C:/Users/17621/jbt/runtime/researcher/logs'; \$logFile='C:/Users/17621/jbt/runtime/researcher/logs/server.log'; Set-Location \$work; try { Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id \$_ -Force -ErrorAction SilentlyContinue } } catch {}; Start-Sleep -Seconds 2; cmd.exe /c \"schtasks /Query /TN \"\"\$task\"\" >nul 2>nul\"; if (\$LASTEXITCODE -eq 0) { schtasks.exe /Run /TN \$task | Out-Null; exit 0 }; if (Test-Path 'start_researcher.bat') { Start-Process -FilePath 'cmd.exe' -WorkingDirectory \$work -ArgumentList '/c','start_researcher.bat' -WindowStyle Hidden } else { if (Test-Path '.venv\\Scripts\\python.exe') { \$py = (Resolve-Path '.venv\\Scripts\\python.exe').Path } elseif (Test-Path '..\\.venv\\Scripts\\python.exe') { \$py = (Resolve-Path '..\\.venv\\Scripts\\python.exe').Path } elseif (Test-Path '..\\..\\.venv\\Scripts\\python.exe') { \$py = (Resolve-Path '..\\..\\.venv\\Scripts\\python.exe').Path } else { \$py = 'python' }; New-Item -ItemType Directory -Force -Path \$logDir | Out-Null; \$cmd = 'cd /d "' + \$work + '" && set OLLAMA_URL=http://localhost:11434 && set DATA_API_URL=http://192.168.31.74:8105 && set PYTHONUNBUFFERED=1 && "' + \$py + '" -u run_researcher_server.py >> "' + \$logFile + '" 2>&1'; Start-Process -FilePath 'cmd.exe' -WorkingDirectory \$work -ArgumentList '/c', \$cmd -WindowStyle Hidden }"
+    ps_cmd="\$work='${remote_path%/}'; \$task='JBT_Researcher_Service'; \$logDir='C:/Users/17621/jbt/runtime/researcher/logs'; \$logFile='C:/Users/17621/jbt/runtime/researcher/logs/server.log'; Set-Location \$work; try { Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id \$_ -Force -ErrorAction SilentlyContinue } } catch {}; Start-Sleep -Seconds 2; cmd.exe /c \"schtasks /Query /TN \"\"\$task\"\" >nul 2>nul\"; if (\$LASTEXITCODE -eq 0) { schtasks.exe /Run /TN \$task | Out-Null; exit 0 }; if (Test-Path 'start_researcher.bat') { Start-Process -FilePath 'cmd.exe' -WorkingDirectory \$work -ArgumentList '/c','start_researcher.bat' -WindowStyle Hidden } else { if (Test-Path '.venv\\Scripts\\python.exe') { \$py = (Resolve-Path '.venv\\Scripts\\python.exe').Path } elseif (Test-Path '..\\.venv\\Scripts\\python.exe') { \$py = (Resolve-Path '..\\.venv\\Scripts\\python.exe').Path } elseif (Test-Path '..\\..\\.venv\\Scripts\\python.exe') { \$py = (Resolve-Path '..\\..\\.venv\\Scripts\\python.exe').Path } else { \$py = 'python' }; New-Item -ItemType Directory -Force -Path \$logDir | Out-Null; \$cmd = 'cd /d "' + \$work + '" && set OLLAMA_URL=http://localhost:11434 && set DATA_API_URL=http://192.168.31.156:8105 && set PYTHONUNBUFFERED=1 && "' + \$py + '" -u run_researcher_server.py >> "' + \$logFile + '" 2>&1'; Start-Process -FilePath 'cmd.exe' -WorkingDirectory \$work -ArgumentList '/c', \$cmd -WindowStyle Hidden }"
 
     run_windows_powershell "$host" "$ps_cmd"
 }

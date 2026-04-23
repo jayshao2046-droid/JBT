@@ -82,7 +82,7 @@ class ContractResolver:
         "eg": 5,  # 乙二醇
     }
 
-    def __init__(self, data_url: str = "http://192.168.31.74:8105"):
+    def __init__(self, data_url: str = "http://192.168.31.156:8105"):
         """初始化合约解析器
 
         Args:

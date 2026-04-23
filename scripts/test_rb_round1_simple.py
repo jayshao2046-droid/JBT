@@ -32,7 +32,7 @@ async def main():
 
     # 初始化执行器
     executor = YAMLSignalExecutor(
-        data_service_url="http://192.168.31.74:8105",
+        data_service_url="http://192.168.31.156:8105",
         initial_capital=500_000.0
     )
 

@@ -51,7 +51,7 @@
 
 - 2026-04-22：`TASK-P1-20260422-Alienware-sim-trading真演练` 已闭环。后续只读对比确认，真正阻塞点不是 `services/sim-trading` 业务代码，而是 Windows 发布链和远端启动资产之间的错位：`参考文档/` 中的 macOS symlink 先让 `robocopy` 报 `RC=8`，而无保护的 `/MIR` 又把 Alienware live 目录里的 `.venv`、`.env`、`start_sim_trading.ps1`、`watchdog_sim_trading.ps1` 等远端独有启动资产删掉。已在白名单内完成最小修复：sim-trading payload 继续排除 `参考文档/`，Windows 同步保留远端启动资产，`restart_windows_uvicorn_service()` 优先触发现有 `JBT_SimTrading_Watchdog`，其次才回退到 `start_sim_trading.ps1` / 通用 uvicorn。为修复此前已被删除的 live 资产，曾从健康快照 `sim-trading-20260422-013258` 一次性恢复远端启动资产。随后真实 deploy 已成功生成有效快照 `sim-trading-20260422-020522`，`8101 /health` 第 2 次通过；真实 rollback 也已从该快照恢复成功，`8101 /health` 第 2 次通过。本批现已完成收口，后续若要修改计划任务本体或远端 `start_sim_trading.ps1`，必须另开新任务。
 
-- 2026-04-22：已新建 `TASK-P1-20260422-Alienware真演练与现役74脚本收口`。本批拆成两个串行子项：先对 Alienware `researcher` 执行真实 deploy/rollback 演练，验证现有 Windows 发布链闭环；再只清理仍会真实执行的 `192.168.31.74` 脚本入口。当前预审结论：只给 `DEPLOY_MINUTE_KLINE_FIX.sh` 开写权限，`governance/scripts/jbt_rsync_deploy.sh` 与 `jbt_rsync_rollback.sh` 先按只读执行；`services/data/scripts/disable_legacy.sh` 因旧 IP 仅在注释/示例中出现，不纳入本批修改。
+- 2026-04-22：已新建 `TASK-P1-20260422-Alienware真演练与现役74脚本收口`。本批拆成两个串行子项：先对 Alienware `researcher` 执行真实 deploy/rollback 演练，验证现有 Windows 发布链闭环；再只清理仍会真实执行的 `192.168.31.156` 脚本入口。当前预审结论：只给 `DEPLOY_MINUTE_KLINE_FIX.sh` 开写权限，`governance/scripts/jbt_rsync_deploy.sh` 与 `jbt_rsync_rollback.sh` 先按只读执行；`services/data/scripts/disable_legacy.sh` 因旧 IP 仅在注释/示例中出现，不纳入本批修改。
 
 - 2026-04-23：已新建批次 `TASK-NOTIFY-20260423` 全工作区通知体系重构。Jay.S 6 项硬约束已固化（中文显示 / RSS 必带链接 / 统一格式 + 落款 / 08:00–24:10 静默 / 送达反馈机制 / 整体规划执行）。已完成 5 份建档 + 项目架构师预审（5/5 通过，review-id `REVIEW-TASK-NOTIFY-20260423-PRE`）+ A/B/C/D 四枚 Token 全部签发完毕：
   - A（sim-trading / 11文件）：`tok-7dfd4b0a-ed2d-406f-ad11-2de7f8d2b041`

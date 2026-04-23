@@ -50,7 +50,7 @@ class TqSdkBacktestClient:
         self,
         backtest_url: str = "http://192.168.31.142:8103",
         timeout: float = 600.0,
-        data_url: str = "http://192.168.31.74:8105",
+        data_url: str = "http://192.168.31.156:8105",
     ):
         """初始化 TqSdk 回测客户端
 

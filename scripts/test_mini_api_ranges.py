@@ -12,7 +12,7 @@ test_cases = [
     ("过去7天", timedelta(days=7)),
 ]
 
-url = "http://192.168.31.74:8105/api/v1/bars"
+url = "http://192.168.31.156:8105/api/v1/bars"
 
 for label, delta in test_cases:
     since = now - delta

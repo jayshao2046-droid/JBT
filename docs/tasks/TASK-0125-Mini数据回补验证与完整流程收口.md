@@ -30,7 +30,7 @@ TASK-U0-20260417-005 已完成 Mini 数据保存故障四项根因修复：
 
 ```bash
 # 等待夜盘开始后执行
-ssh jaybot@192.168.31.74 "docker exec JBT-DATA-8105 find /data -name 'records.parquet' -newer /data/SHFE.rb2605/1min/records.parquet -type f | wc -l"
+ssh jaybot@192.168.31.156 "docker exec JBT-DATA-8105 find /data -name 'records.parquet' -newer /data/SHFE.rb2605/1min/records.parquet -type f | wc -l"
 # 预期：有新文件被修改（说明实时采集正在写入）
 ```
 
@@ -38,14 +38,14 @@ ssh jaybot@192.168.31.74 "docker exec JBT-DATA-8105 find /data -name 'records.pa
 
 ```bash
 # 检查 4月9日之后是否有新数据
-curl "http://192.168.31.74:8105/api/v1/bars?symbol=KQ.m@SHFE.rb&start=2026-04-09&end=2026-04-18&interval=60" | python3 -c "import json,sys; d=json.load(sys.stdin); print(f'count={d.get(\"count\")}, latest={d.get(\"bars\",[[]])[-1][0] if d.get(\"bars\") else \"empty\"}')"
+curl "http://192.168.31.156:8105/api/v1/bars?symbol=KQ.m@SHFE.rb&start=2026-04-09&end=2026-04-18&interval=60" | python3 -c "import json,sys; d=json.load(sys.stdin); print(f'count={d.get(\"count\")}, latest={d.get(\"bars\",[[]])[-1][0] if d.get(\"bars\") else \"empty\"}')"
 ```
 
 ### 2.3 完整数据流端到端测试
 
 ```bash
 # 1. 确认 Mini 数据可读
-curl "http://192.168.31.74:8105/api/v1/bars?symbol=KQ.m@SHFE.rb&start=2026-04-15&end=2026-04-18&interval=60" 
+curl "http://192.168.31.156:8105/api/v1/bars?symbol=KQ.m@SHFE.rb&start=2026-04-15&end=2026-04-18&interval=60" 
 
 # 2. 触发 Alienware 研究员
 curl -X POST "http://192.168.31.187:8199/api/v1/researcher/run"

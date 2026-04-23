@@ -58,7 +58,7 @@ async def main():
 
     # 初始化执行器
     executor = YAMLSignalExecutor(
-        data_service_url="http://192.168.31.74:8105",
+        data_service_url="http://192.168.31.156:8105",
         initial_capital=500_000.0
     )
 
@@ -157,7 +157,7 @@ async def main():
     with open(report_path, 'w', encoding='utf-8') as f:
         json.dump({
             "timestamp": datetime.now().isoformat(),
-            "data_source": "Mini数据服务 (http://192.168.31.74:8105)",
+            "data_source": "Mini数据服务 (http://192.168.31.156:8105)",
             "period": f"{start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}",
             "total": len(results),
             "success": sum(1 for r in results if r["status"] == "success"),

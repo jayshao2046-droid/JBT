@@ -117,8 +117,8 @@ if push_success:
 
 1. `pytest services/data/tests/test_researcher_api.py -q` ≥ 6 passed
 2. 手动触发 `POST /run` → 飞书收到研报通知 + phi4 评级卡片（均为中文）
-3. `GET http://192.168.31.74:8105/api/v1/researcher/report/latest` 返回 200 + 完整 JSON
-4. `GET http://192.168.31.74:8105/api/v1/researcher/reports?date=今日` 返回非空列表
+3. `GET http://192.168.31.156:8105/api/v1/researcher/report/latest` 返回 200 + 完整 JSON
+4. `GET http://192.168.31.156:8105/api/v1/researcher/reports?date=今日` 返回非空列表
 5. Alienware 本地 `runtime/researcher/reports/` 在推送成功后不留 JSON/MD 文件
 6. 2 小时健康度飞书卡片正常推送（可 POST /run_health 手动触发验证）
 

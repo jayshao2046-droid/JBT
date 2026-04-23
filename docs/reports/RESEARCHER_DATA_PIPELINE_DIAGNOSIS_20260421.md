@@ -191,7 +191,7 @@ Decision 决策端 (Studio)
 
 - [ ] **Mini news_api 采集源明细**：Mini 中有 123,582 条新闻，来自哪些源？
   ```bash
-  ssh jaybot@192.168.31.74 "docker exec JBT-DATA-8105 python3 -c \"
+  ssh jaybot@192.168.31.156 "docker exec JBT-DATA-8105 python3 -c \"
   import pandas as pd
   df = pd.read_parquet('/data/news_api/news_api/records.parquet')
   print(df['source'].value_counts())

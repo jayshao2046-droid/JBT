@@ -50,7 +50,7 @@ async def main():
 
     # 初始化组件（使用阿里云模型）
     online_client = OpenAICompatibleClient()
-    symbol_profiler = SymbolProfiler(data_service_url="http://192.168.31.74:8105")
+    symbol_profiler = SymbolProfiler(data_service_url="http://192.168.31.156:8105")
     strategy_architect = StrategyArchitect(online_client=online_client, model="qwen-plus")  # 改用 qwen-plus
     code_generator = CodeGenerator(online_client=online_client, model="qwen-coder-plus")
 
