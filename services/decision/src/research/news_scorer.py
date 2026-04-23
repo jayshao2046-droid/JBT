@@ -42,11 +42,12 @@ class NewsScorer:
         """初始化资讯打分器。
 
         Args:
-            data_api_url: 数据服务 API 地址
+            data_api_url: 数据服务 API 地址（保留兼容，当前未使用）
             ollama_url: Ollama API 地址
         """
-        self.data_api_url = data_api_url or os.getenv(
-            "DATA_SERVICE_URL", "http://192.168.31.76:8105"
+        # researcher 报告源统一走 Alienware researcher 服务，不走 data 服务
+        self.researcher_api_url = os.getenv(
+            "RESEARCHER_SERVICE_URL", "http://192.168.31.223:8199"
         )
         self.ollama_url = ollama_url or os.getenv(
             "OLLAMA_BASE_URL", "http://192.168.31.142:11434"
@@ -109,13 +110,13 @@ class NewsScorer:
         return results
 
     async def _fetch_latest_report(self) -> Optional[Dict[str, Any]]:
-        """拉取最新研报。
+        """拉取最新研报（从 Alienware researcher 服务直连）。
 
         Returns:
             研报 JSON，失败时返回 None
         """
         try:
-            url = f"{self.data_api_url}/api/v1/researcher/report/latest"
+            url = f"{self.researcher_api_url}/reports/latest"
 
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(url)

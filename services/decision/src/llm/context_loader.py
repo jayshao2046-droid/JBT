@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class DailyContextLoader:
     """Load daily preread context from data service with TTL cache."""
 
-    TTL_SECONDS = 8 * 3600  # 8 小时缓存
+    TTL_SECONDS = 12 * 3600  # 12 小时缓存（覆盖 21:00 → 08:30 时差，避免开盘前缓存失效）
     DATA_API_URL = os.getenv("DATA_API_URL", "http://localhost:8105")
 
     def __init__(self):
@@ -300,16 +300,17 @@ async def get_l2_context(symbol: str) -> Tuple[str, List[str]]:
         missing_sources.append("60根分钟线")
         context_parts.append(f"\n[DATA_DEGRADED] 60根分钟线拉取失败: {str(exc)}")
 
-    # 3. 拉取研报摘要（TASK-0110 就绪前 graceful fallback）
+    # 3. 拉取研报摘要（从 Alienware researcher 服务直连，不走 Mini data）
+    researcher_api_url = os.getenv("RESEARCHER_SERVICE_URL", "http://192.168.31.223:8199")
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
-                f"{data_api_url.rstrip('/')}/api/v1/researcher/report/latest",
-                params={"symbol": symbol},
+                f"{researcher_api_url.rstrip('/')}/reports/latest",
             )
             response.raise_for_status()
             data = response.json()
-            report = data.get("report", {})
+            # Alienware /reports/latest 直接返回报告对象（含 report_id 字段），不是 {report: {...}} 包装格式
+            report = data if (data and data.get("report_id")) else data.get("report", {})
 
             if not report:
                 logger.info(f"L2 上下文：{symbol} 研报为空（TASK-0110 未就绪或无数据）")
@@ -321,7 +322,7 @@ async def get_l2_context(symbol: str) -> Tuple[str, List[str]]:
 
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 404:
-            logger.info(f"L2 上下文：研报 API 未就绪 (404)，TASK-0110 可能未部署")
+            logger.warning(f"L2 上下文：研报 API 未就绪 (404)，TASK-0110 可能未部署")
             missing_sources.append("研报摘要")
             context_parts.append("\n[DATA_DEGRADED] 研报摘要缺失（API 未就绪）")
         else:

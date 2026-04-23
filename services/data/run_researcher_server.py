@@ -335,9 +335,13 @@ async def data_collection_callback(request: CallbackRequest):
 @app.get("/reports/latest")
 async def get_latest_report():
     """
-    获取最新研究报告
+    获取最新研究报告（latest 语义：最新且可读的报告）
 
-    供 Studio decision 服务调用
+    供 Studio decision 服务调用。
+    修复：原实现用 get_pending(limit=1) 返回 FIFO 最旧条目，
+    导致 stale 旧文件阻塞后续所有报告。
+    现改为：取全量 pending，按文件路径倒序（路径含日期目录），
+    跳过文件不存在的 stale 记录，返回最新可读报告。
     """
     global queue_manager
 
@@ -345,22 +349,31 @@ async def get_latest_report():
         raise HTTPException(status_code=500, detail="队列管理器未初始化")
 
     try:
-        # 获取待读队列中的最新报告
-        pending = queue_manager.get_pending(limit=1)
+        # 取全量 pending（上限 200 条），按文件路径倒序找最新可读报告
+        pending = queue_manager.get_pending(limit=200)
         if not pending:
             raise HTTPException(status_code=404, detail="无待读报告")
 
-        report_record = pending[0]
-        file_path = report_record["file_path"]
+        # 按 file_path 降序排列（路径含 YYYY-MM-DD/HH-MM.json，字典序即时间序）
+        pending_sorted = sorted(pending, key=lambda r: r.get("file_path", ""), reverse=True)
 
-        # 读取报告文件
-        if not os.path.exists(file_path):
-            raise HTTPException(status_code=404, detail=f"报告文件不存在: {file_path}")
+        report_record = None
+        file_path = None
+        for record in pending_sorted:
+            fp = record.get("file_path", "")
+            if fp and os.path.exists(fp):
+                report_record = record
+                file_path = fp
+                break
+
+        if not report_record:
+            logger.warning("[API] pending 队列中所有报告文件均不存在（stale），无可读报告")
+            raise HTTPException(status_code=404, detail="无可读待读报告（所有记录均为 stale）")
 
         with open(file_path, "r", encoding="utf-8") as f:
             report_data = json.load(f)
 
-        logger.info(f"[API] 读取最新报告: {report_record['report_id']}")
+        logger.info(f"[API] 读取最新报告: {report_record['report_id']} ({file_path})")
 
         return report_data
 

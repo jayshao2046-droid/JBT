@@ -103,8 +103,9 @@ class LLMPipeline:
             self.analyst_model = os.getenv("OLLAMA_ANALYST_MODEL", "qwen3:14b-q4_K_M")
 
         # TASK-0121-D1: 初始化研究员报告加载器和评分器
-        data_service_url = os.getenv("DATA_SERVICE_URL", "http://192.168.31.76:8105")
-        self.researcher_loader = ResearcherLoader(data_service_url)
+        # D2: researcher 专用 URL，不再复用 DATA_SERVICE_URL
+        researcher_service_url = os.getenv("RESEARCHER_SERVICE_URL", "http://192.168.31.223:8199")
+        self.researcher_loader = ResearcherLoader(researcher_service_url)
         self.researcher_scorer = ResearcherScorer()
         self.researcher_phi4_scorer = ResearcherPhi4Scorer(client=self.client)
 
@@ -627,6 +628,11 @@ class LLMPipeline:
         """同步 tqsdk 拉取（在 executor 中运行）。"""
         api = None
         try:
+            # 配置检查：tqsdk 账号未配置时明确提示
+            if not username or not password:
+                logger.warning("[KLINE] tqsdk 账号未配置（TQSDK_AUTH_USERNAME/PASSWORD 环境变量缺失），跳过实时 K 线拉取")
+                return []
+
             from tqsdk import TqApi, TqAuth
             api = TqApi(auth=TqAuth(username, password))
             klines = api.get_kline_serial(symbol, duration_seconds, data_length=120)
