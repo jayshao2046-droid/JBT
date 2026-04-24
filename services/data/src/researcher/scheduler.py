@@ -5,6 +5,7 @@ import os
 import time
 import json
 import logging
+import threading
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import httpx
@@ -70,7 +71,13 @@ class ResearcherScheduler:
         self.mini_client = MiniClient(ResearcherConfig.DATA_API_URL)
         self._context_cache: Dict[str, Any] = {}
         self._context_fetched_at: Optional[datetime] = None
+        self._futures_minute_lookback_hours: int = 2
         self._pending_macro_report: Optional[Dict] = None
+        self._last_macro_report_slot: Optional[str] = None
+        self._last_futures_context_report_slot: Optional[str] = None
+        self._stream_cycle_requested = threading.Event()
+        self._stream_cycle_request_reason: Optional[str] = None
+        self._stream_cycle_request_lock = threading.Lock()
         # 服务启动时记录到当日统计
         self.reporter.stats_tracker.record_startup()
 
@@ -89,6 +96,24 @@ class ResearcherScheduler:
             # Bug-2 修复：捕获初始化错误
             logger.error(f"Failed to initialize health reporter: {e}", exc_info=True)
             self.health_reporter = None
+
+    def request_stream_cycle(self, reason: str = "manual") -> None:
+        """登记一次即时 stream cycle 请求，由持续运行主链消费。"""
+        with self._stream_cycle_request_lock:
+            self._stream_cycle_request_reason = reason
+            self._stream_cycle_requested.set()
+
+    def wait_for_stream_cycle_request(self, timeout_seconds: float) -> Optional[str]:
+        """等待即时 stream cycle 请求；超时返回 None。"""
+        if not self._stream_cycle_requested.wait(timeout_seconds):
+            return None
+
+        with self._stream_cycle_request_lock:
+            reason = self._stream_cycle_request_reason or "manual"
+            self._stream_cycle_request_reason = None
+            self._stream_cycle_requested.clear()
+
+        return reason
 
     async def execute_hourly(self, hour: int) -> Dict[str, Any]:
         """
@@ -310,13 +335,16 @@ class ResearcherScheduler:
                 logger.warning("[CONTEXT] %s 获取失败: %s", data_type, exc)
                 ctx[data_type] = []
         # 期货分钟K单独拉取（三级路径，聚合摘要格式与普通records不同）
+        futures_minute_hours = 2 if is_trading_hours() else 8
         try:
-            summaries = self.mini_client.get_futures_minute_context(hours=2)
+            summaries = self.mini_client.get_futures_minute_context(hours=futures_minute_hours)
             ctx["futures_minute"] = summaries
+            self._futures_minute_lookback_hours = futures_minute_hours
             logger.info("[CONTEXT] futures_minute: %d 个品种", len(summaries))
         except Exception as exc:
             logger.warning("[CONTEXT] futures_minute 获取失败: %s", exc)
             ctx["futures_minute"] = []
+            self._futures_minute_lookback_hours = futures_minute_hours
 
         self._context_cache = ctx
         self._context_fetched_at = now
@@ -448,7 +476,7 @@ class ResearcherScheduler:
         # 期货分钟K涨跌幅 Top5（按绝对值排序）
         futures_min = self._context_cache.get("futures_minute", [])
         if futures_min:
-            parts.append("【期货近2h涨跌 Top5】")
+            parts.append(f"【期货近{self._futures_minute_lookback_hours}h涨跌 Top5】")
             top5 = sorted(futures_min, key=lambda x: abs(x.get("change_pct", 0)), reverse=True)[:5]
             for r in top5:
                 sym = r.get("symbol", "").replace("KQ_m_", "")
@@ -457,6 +485,253 @@ class ResearcherScheduler:
                 parts.append(f"  {sym}: {close} ({chg:+.2f}%)")
 
         return "\n".join(parts)
+
+    def _build_futures_context_report(self, today: str, hour: int) -> Optional[Dict]:
+        """基于 Mini 分钟K上下文构建盘中数据研报。"""
+        futures_min = self._context_cache.get("futures_minute", [])
+        if not isinstance(futures_min, list) or not futures_min:
+            return None
+
+        normalized_items: List[Dict[str, Any]] = []
+        for item in futures_min:
+            if not isinstance(item, dict):
+                continue
+
+            symbol = str(item.get("symbol") or "").strip()
+            if not symbol:
+                continue
+
+            try:
+                change_pct = float(item.get("change_pct") or 0.0)
+            except (TypeError, ValueError):
+                change_pct = 0.0
+
+            short_symbol = _extract_short_symbol(symbol).upper() if _extract_short_symbol(symbol) else symbol
+            latest_close = item.get("latest_close")
+            volume = item.get("volume", 0)
+            if change_pct >= 0.6:
+                trend = "偏多"
+            elif change_pct <= -0.6:
+                trend = "偏空"
+            else:
+                trend = "震荡"
+
+            normalized_items.append({
+                "symbol": symbol,
+                "short_symbol": short_symbol,
+                "change_pct": round(change_pct, 2),
+                "latest_close": latest_close,
+                "volume": volume,
+                "trend": trend,
+            })
+
+        if not normalized_items:
+            return None
+
+        sorted_items = sorted(normalized_items, key=lambda row: abs(row["change_pct"]), reverse=True)
+        rising = sum(1 for row in normalized_items if row["change_pct"] > 0.3)
+        falling = sum(1 for row in normalized_items if row["change_pct"] < -0.3)
+        neutral = len(normalized_items) - rising - falling
+
+        if rising > falling + max(2, len(normalized_items) // 10):
+            bias = "整体偏强"
+        elif falling > rising + max(2, len(normalized_items) // 10):
+            bias = "整体偏弱"
+        else:
+            bias = "多空分化"
+
+        top_movers = [
+            f"{row['short_symbol']} {row['change_pct']:+.2f}%"
+            for row in sorted_items[:5]
+        ]
+        market_overview = (
+            f"Mini 近{self._futures_minute_lookback_hours}小时分钟K覆盖 {len(normalized_items)} 个期货主连，{bias}；"
+            f"上涨 {rising} 个，下跌 {falling} 个，震荡 {neutral} 个。"
+        )
+
+        futures_summary = {
+            "symbols_covered": len(normalized_items),
+            "market_overview": market_overview,
+            "top_movers": top_movers,
+            "symbols": {
+                row["short_symbol"]: {
+                    "trend": row["trend"],
+                    "change_pct": row["change_pct"],
+                    "confidence": 0.72,
+                }
+                for row in sorted_items[:10]
+            },
+        }
+
+        report_rows = []
+        for row in sorted_items[:10]:
+            latest_close = row["latest_close"]
+            latest_text = latest_close if latest_close is not None else "N/A"
+            report_rows.append({
+                "symbol": row["symbol"],
+                "trend": row["trend"],
+                "analysis": (
+                    f"{row['short_symbol']} 近2小时涨跌 {row['change_pct']:+.2f}%，"
+                    f"最新价 {latest_text}，当前判断为 {row['trend']}。"
+                ),
+                "change_pct": row["change_pct"],
+                "latest_close": latest_close,
+                "volume": row["volume"],
+            })
+
+        content = market_overview
+        if top_movers:
+            content = f"{content} 重点波动：{'；'.join(top_movers[:3])}。"
+
+        return {
+            "report_id": f"FUTURES-{today.replace('-', '')}-{hour:02d}",
+            "report_type": "futures",
+            "date": today,
+            "hour": hour,
+            "title": "Mini 分钟K数据研报",
+            "summary": market_overview,
+            "content": content,
+            "symbols": [row["short_symbol"] for row in sorted_items[:10]],
+            "symbols_covered": len(normalized_items),
+            "market_overview": market_overview,
+            "top_movers": top_movers,
+            "futures_summary": futures_summary,
+            "data": {
+                "total_symbols": len(normalized_items),
+                "reports": report_rows,
+            },
+            "confidence": 0.95,
+        }
+
+    def _build_macro_report_payload(
+        self,
+        today: str,
+        hour: int,
+        context_text: str,
+        analysis: Optional[Dict[str, Any]] = None,
+        fallback_reason: Optional[str] = None,
+    ) -> Dict:
+        """构建 Decision 可直接消费的宏观情报研报。"""
+        analysis = analysis or {}
+        coverage = {key: len(value) for key, value in self._context_cache.items() if value}
+        futures_min = self._context_cache.get("futures_minute", [])
+
+        movers: List[Dict[str, Any]] = []
+        if isinstance(futures_min, list):
+            for item in futures_min:
+                if not isinstance(item, dict):
+                    continue
+                symbol = str(item.get("symbol") or "").strip()
+                if not symbol:
+                    continue
+                try:
+                    change_pct = float(item.get("change_pct") or 0.0)
+                except (TypeError, ValueError):
+                    change_pct = 0.0
+                short_symbol = _extract_short_symbol(symbol).upper() if _extract_short_symbol(symbol) else symbol
+                movers.append({
+                    "symbol": short_symbol,
+                    "change_pct": round(change_pct, 2),
+                })
+
+        movers.sort(key=lambda row: abs(row["change_pct"]), reverse=True)
+        top_movers = [row["symbol"] for row in movers[:5]]
+        avg_change = sum(row["change_pct"] for row in movers) / len(movers) if movers else 0.0
+        max_abs_change = max((abs(row["change_pct"]) for row in movers), default=0.0)
+
+        macro_trend = str(analysis.get("macro_trend") or "").strip()
+        if not macro_trend:
+            if avg_change >= 0.4:
+                macro_trend = "偏多"
+            elif avg_change <= -0.4:
+                macro_trend = "偏空"
+            else:
+                macro_trend = "震荡"
+
+        risk_level = str(analysis.get("risk_level") or "").strip()
+        if risk_level not in {"high", "medium", "low"}:
+            risk_level = "high" if max_abs_change >= 2.0 else "medium"
+
+        default_drivers: List[str] = []
+        if coverage.get("macro"):
+            default_drivers.append(f"宏观指标样本 {coverage['macro']} 条")
+        if coverage.get("sentiment"):
+            default_drivers.append(f"市场情绪样本 {coverage['sentiment']} 条")
+        if coverage.get("futures_minute"):
+            default_drivers.append(f"期货分钟K覆盖 {coverage['futures_minute']} 个品种")
+        if coverage.get("shipping"):
+            default_drivers.append(f"航运指标样本 {coverage['shipping']} 条")
+        if not default_drivers:
+            default_drivers.append("Mini 上下文已刷新")
+
+        key_drivers = analysis.get("key_drivers") or default_drivers[:3]
+        volatility_signal = analysis.get("volatility_signal") or ("上升" if max_abs_change >= 2.0 else "稳定")
+        shipping_signal = analysis.get("shipping_signal") or ("扩张" if coverage.get("shipping") else "稳定")
+        cftc_signal = analysis.get("cftc_signal") or ""
+        forex_signal = analysis.get("forex_signal") or ""
+        sentiment = analysis.get("sentiment") or (
+            "乐观" if macro_trend == "偏多" else "悲观" if macro_trend == "偏空" else "中性"
+        )
+        recommended_sectors = analysis.get("recommended_sectors") or []
+        weather_impact = analysis.get("weather_impact") or "无"
+        impact_on_futures = analysis.get("impact_on_futures") or (
+            f"当前宏观研判为 {macro_trend}，风险等级 {risk_level}。"
+            f"Mini 上下文显示近端波动主要集中在 {'/'.join(top_movers[:3]) if top_movers else '主要期货品种'}。"
+        )
+        risk_note = analysis.get("risk_note") or (
+            f"LLM 宏观分析不可用，当前采用 Mini 上下文回退摘要。原因: {fallback_reason}"
+            if fallback_reason
+            else ""
+        )
+
+        summary_parts = [
+            f"宏观趋势 {macro_trend}",
+            f"风险 {risk_level}",
+        ]
+        summary_parts.extend(str(driver) for driver in key_drivers[:2])
+        summary = "；".join(part for part in summary_parts if part)
+
+        return {
+            "report_id": f"MACRO-{today.replace('-', '')}-{hour:02d}",
+            "report_type": "macro",
+            "date": today,
+            "hour": hour,
+            "title": "Mini 宏观情报研报",
+            "summary": summary,
+            "content": impact_on_futures,
+            "macro_trend": macro_trend,
+            "risk_level": risk_level,
+            "key_drivers": key_drivers,
+            "volatility_signal": volatility_signal,
+            "shipping_signal": shipping_signal,
+            "cftc_signal": cftc_signal,
+            "forex_signal": forex_signal,
+            "sentiment": sentiment,
+            "top_movers": top_movers,
+            "weather_impact": weather_impact,
+            "impact_on_futures": impact_on_futures,
+            "recommended_sectors": recommended_sectors,
+            "risk_note": risk_note,
+            "data_coverage": coverage,
+            "data": {
+                "macro_trend": macro_trend,
+                "risk_level": risk_level,
+                "key_drivers": key_drivers,
+                "volatility_signal": volatility_signal,
+                "shipping_signal": shipping_signal,
+                "cftc_signal": cftc_signal,
+                "forex_signal": forex_signal,
+                "sentiment": sentiment,
+                "top_movers": top_movers,
+                "weather_impact": weather_impact,
+                "impact_on_futures": impact_on_futures,
+                "recommended_sectors": recommended_sectors,
+                "risk_note": risk_note,
+                "data_coverage": coverage,
+                "context_summary": context_text[:800],
+            },
+            "confidence": 0.9 if fallback_reason else 1.0,
+        }
 
     async def _analyze_mini_context(self, today: str, hour: int) -> Optional[Dict]:
         """对 Mini 上下文数据进行 LLM 宏观分析，生成 macro_report 报告。"""
@@ -483,6 +758,9 @@ class ResearcherScheduler:
             '"risk_note":"主要风险提示"}'
         )
 
+        analysis: Dict[str, Any] = {}
+        fallback_reason: Optional[str] = None
+
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
@@ -496,49 +774,34 @@ class ResearcherScheduler:
                     timeout=ResearcherConfig.OLLAMA_TIMEOUT,
                 )
             if resp.status_code != 200:
-                return None
+                fallback_reason = f"ollama_status_{resp.status_code}"
+            else:
+                text = resp.json().get("response", "")
+                if "<think>" in text and "</think>" in text:
+                    text = text[text.index("</think>") + len("</think>"):]
+                text = text.strip()
 
-            text = resp.json().get("response", "")
-            if "<think>" in text and "</think>" in text:
-                text = text[text.index("</think>") + len("</think>"):]
-            text = text.strip()
-
-            analysis: Dict = {}
-            if "{" in text:
-                try:
-                    json_str = text[text.index("{"):text.rindex("}") + 1]
-                    analysis = json.loads(json_str)
-                except Exception:
-                    pass
-
-            coverage = {k: len(v) for k, v in self._context_cache.items() if v}
-            return {
-                "report_id": f"MACRO-{today.replace('-', '')}-{hour:02d}",
-                "report_type": "macro",
-                "date": today,
-                "hour": hour,
-                "data": {
-                    "macro_trend": analysis.get("macro_trend", "震荡"),
-                    "risk_level": analysis.get("risk_level", "medium"),
-                    "key_drivers": analysis.get("key_drivers", []),
-                    "volatility_signal": analysis.get("volatility_signal", "稳定"),
-                    "shipping_signal": analysis.get("shipping_signal", "稳定"),
-                    "cftc_signal": analysis.get("cftc_signal", ""),
-                    "forex_signal": analysis.get("forex_signal", ""),
-                    "sentiment": analysis.get("sentiment", "中性"),
-                    "top_movers": analysis.get("top_movers", []),
-                    "weather_impact": analysis.get("weather_impact", ""),
-                    "impact_on_futures": analysis.get("impact_on_futures", ""),
-                    "recommended_sectors": analysis.get("recommended_sectors", []),
-                    "risk_note": analysis.get("risk_note", ""),
-                    "data_coverage": coverage,
-                    "context_summary": context_text[:800],
-                },
-                "confidence": 1.0,
-            }
+                if "{" in text:
+                    try:
+                        json_str = text[text.index("{"):text.rindex("}") + 1]
+                        analysis = json.loads(json_str)
+                    except Exception:
+                        fallback_reason = "invalid_macro_json"
+                else:
+                    fallback_reason = "missing_macro_json"
         except Exception as exc:
-            logger.warning("[CONTEXT] 宏观 LLM 分析失败: %s", exc)
-            return None
+            fallback_reason = str(exc)
+
+        if fallback_reason:
+            logger.warning("[CONTEXT] 宏观 LLM 分析失败，使用回退摘要: %s", fallback_reason)
+
+        return self._build_macro_report_payload(
+            today,
+            hour,
+            context_text,
+            analysis=analysis,
+            fallback_reason=fallback_reason,
+        )
 
     def _check_sim_trading_latency(self) -> float:
         """检查 sim-trading 延迟（毫秒）"""
@@ -878,14 +1141,27 @@ class ResearcherScheduler:
                 "pushed_to_decision": 0, "errors": ["资源不足，暂停"], "elapsed_seconds": 0,
             }
 
+        futures_context_report: Optional[Dict[str, Any]] = None
+
         # ── 阶段0: 刷新 Mini 上下文数据（60分钟 TTL）──
         try:
             context_refreshed = await self._refresh_mini_context()
-            if context_refreshed and any(self._context_cache.values()):
-                macro_rpt = await self._analyze_mini_context(today, now.hour)
-                if macro_rpt:
-                    self._pending_macro_report = macro_rpt
-                    logger.info("[CONTEXT] 宏观研报已生成: %s", macro_rpt["report_id"])
+            slot_key = f"{today}-{now.hour:02d}"
+            if any(self._context_cache.values()):
+                if self._last_futures_context_report_slot != slot_key:
+                    futures_context_report = self._build_futures_context_report(today, now.hour)
+                    if futures_context_report:
+                        self._last_futures_context_report_slot = slot_key
+                        logger.info("[CONTEXT] 数据研报已生成: %s", futures_context_report["report_id"])
+
+                if self._last_macro_report_slot != slot_key:
+                    macro_rpt = await self._analyze_mini_context(today, now.hour)
+                    if macro_rpt:
+                        self._pending_macro_report = macro_rpt
+                        self._last_macro_report_slot = slot_key
+                        logger.info("[CONTEXT] 宏观研报已生成: %s", macro_rpt["report_id"])
+            elif context_refreshed:
+                logger.warning("[CONTEXT] Mini 上下文刷新完成但内容为空")
         except Exception as exc:
             errors.append(f"context_refresh: {exc}")
             logger.warning("[CONTEXT] 刷新/分析异常: %s", exc)
@@ -983,14 +1259,25 @@ class ResearcherScheduler:
         pushed = 0
         macro_report = self._pending_macro_report
         self._pending_macro_report = None  # 取出后清除，避免重复推送
-        if analyzed or kline_reports or macro_report:
+        if analyzed or kline_reports or macro_report or futures_context_report:
             try:
                 pushed = await self._push_rich_report_to_decision(
-                    analyzed, kline_reports, today, macro_report=macro_report
+                    analyzed,
+                    kline_reports,
+                    today,
+                    macro_report=macro_report,
+                    futures_report=futures_context_report,
                 )
             except Exception as e:
                 errors.append(f"推送失败: {e}")
                 logger.error(f"[STREAM] 推送 decision 异常: {e}", exc_info=True)
+
+        if pushed == 0:
+            if macro_report:
+                self._pending_macro_report = macro_report
+                self._last_macro_report_slot = None
+            if futures_context_report:
+                self._last_futures_context_report_slot = None
 
         # ── 阶段4: 邮件日报钩子 — 4段/天（08/13/20/00，各触发一次）──
         hour = now.hour
@@ -1022,6 +1309,19 @@ class ResearcherScheduler:
             f"mode={mode}, articles={len(analyzed)}, kline={len(kline_reports)}, "
             f"pushed={pushed}, errors={len(errors)}, elapsed={elapsed:.1f}s"
         )
+
+        # daily_stats 埋点（不阻断主链）
+        try:
+            report_id_for_stats = f"STREAM-{now.strftime('%H%M%S')}-{self._cycle_count}"
+            self.reporter.stats_tracker.record_report(
+                hour=now.hour,
+                report_id=report_id_for_stats,
+                json_path="",
+                elapsed_s=elapsed,
+                success=(len(errors) == 0),
+            )
+        except Exception as _stats_err:
+            logger.debug(f"[STREAM] daily_stats 埋点失败（非阻断）: {_stats_err}")
 
         return {
             "cycle_id": self._cycle_count,
@@ -1305,6 +1605,7 @@ class ResearcherScheduler:
         date: str,
         *,
         macro_report: Optional[Dict] = None,
+        futures_report: Optional[Dict] = None,
     ) -> int:
         """推送研报到 decision — 适配 Studio ReportBatchRequest schema"""
         decision_url = os.getenv("DECISION_API_URL", "http://192.168.31.142:8104")
@@ -1321,36 +1622,92 @@ class ResearcherScheduler:
                 key=lambda a: a.get("relevance", 0),
                 reverse=True,
             )
+            news_items = [
+                {
+                    "source": a.get("source_name", ""),
+                    "title": a.get("title", ""),
+                    "summary": a.get("summary_cn", ""),
+                    "sentiment": a.get("sentiment", "neutral"),
+                    "impact": a.get("impact_level", "low"),
+                    "symbols": a.get("affected_symbols", []),
+                }
+                for a in sorted_articles
+            ]
+            unique_symbols = sorted({
+                symbol
+                for article in sorted_articles
+                for symbol in (article.get("affected_symbols") or [])
+                if symbol
+            })
+            summary = f"本轮共分析 {len(sorted_articles)} 条新闻，涉及 {len(unique_symbols)} 个重点品种。"
             news_report = {
                 "report_id": f"NEWS-{date.replace('-','')}-{hour:02d}",
                 "report_type": "news",
                 "date": date,
                 "hour": hour,
+                "title": "市场新闻情绪研报",
+                "summary": summary,
+                "content": "\n".join(
+                    f"[{item['source']}] {item['title']} - {item['summary']}"
+                    for item in news_items[:8]
+                )[:1600],
+                "symbols": unique_symbols,
+                "news_items": news_items,
+                "crawler_stats": {
+                    "articles_processed": len(sorted_articles),
+                    "news_items": news_items,
+                },
                 "data": {
                     "total_items": len(sorted_articles),
-                    "items": [
-                        {
-                            "source": a.get("source_name", ""),
-                            "title": a.get("title", ""),
-                            "summary": a.get("summary_cn", ""),
-                            "sentiment": a.get("sentiment", "neutral"),
-                            "impact": a.get("impact_level", "low"),
-                            "symbols": a.get("affected_symbols", []),
-                        }
-                        for a in sorted_articles
-                    ],
+                    "items": news_items,
                 },
                 "confidence": 1.0,
             }
 
         # 构建 futures_report（适配 Studio schema）
-        futures_report = None
-        if kline_reports:
+        if futures_report is None and kline_reports:
+            sorted_kline = sorted(
+                kline_reports,
+                key=lambda item: abs(float(item.get("price_change_pct") or 0.0)),
+                reverse=True,
+            )
+            top_movers = [
+                f"{_extract_short_symbol(item.get('symbol', '')).upper() if _extract_short_symbol(item.get('symbol', '')) else item.get('symbol', '')} {float(item.get('price_change_pct') or 0.0):+.2f}%"
+                for item in sorted_kline[:5]
+            ]
+            market_overview = f"盘后日K覆盖 {len(kline_reports)} 个期货品种。"
             futures_report = {
                 "report_id": f"FUTURES-{date.replace('-','')}-{hour:02d}",
                 "report_type": "futures",
                 "date": date,
                 "hour": hour,
+                "title": "盘后期货数据研报",
+                "summary": market_overview,
+                "content": f"{market_overview} 重点波动：{'；'.join(top_movers[:3])}" if top_movers else market_overview,
+                "symbols": [
+                    _extract_short_symbol(item.get("symbol", "")).upper() if _extract_short_symbol(item.get("symbol", "")) else item.get("symbol", "")
+                    for item in sorted_kline[:10]
+                ],
+                "symbols_covered": len(kline_reports),
+                "market_overview": market_overview,
+                "top_movers": top_movers,
+                "futures_summary": {
+                    "symbols_covered": len(kline_reports),
+                    "market_overview": market_overview,
+                    "top_movers": top_movers,
+                    "symbols": {
+                        (
+                            _extract_short_symbol(item.get("symbol", "")).upper()
+                            if _extract_short_symbol(item.get("symbol", ""))
+                            else item.get("symbol", "")
+                        ): {
+                            "trend": item.get("trend", ""),
+                            "change_pct": float(item.get("price_change_pct") or 0.0),
+                            "confidence": 0.8,
+                        }
+                        for item in sorted_kline[:10]
+                    },
+                },
                 "data": {
                     "total_symbols": len(kline_reports),
                     "reports": [
@@ -1387,7 +1744,7 @@ class ResearcherScheduler:
                 )
                 success = resp.status_code in (200, 201)
                 logger.info(f"[PUSH] decision 评级推送: status={resp.status_code}, body={resp.text[:200]}")
-                return len(article_reports) + len(kline_reports) if success else 0
+                return payload["total_reports"] if success else 0
         except Exception as e:
             logger.error(f"[PUSH] decision 推送失败: {e}")
             return 0
