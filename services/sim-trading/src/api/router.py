@@ -607,7 +607,6 @@ def ctp_disconnect(request: Request):
             _gateway = None
         _system_state["ctp_md_connected"] = False
         _system_state["ctp_td_connected"] = False
-    return {"result": "disconnected"}
     return {"result": "disconnected", "state": _safe_state()}
 
 

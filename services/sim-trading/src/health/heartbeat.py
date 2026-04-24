@@ -48,16 +48,22 @@ def generate_heartbeat_report() -> Dict[str, Any]:
         logger.error("[heartbeat] failed to get CTP status: %s", exc)
         report["ctp"] = {"status": "error", "error": str(exc)}
 
-    # 2. 账户状态
+    # 2. 账户状态：余额/可用/持仓盈亏从 gateway._account 读取，成交数量从 ledger 读取
     try:
+        acct_gw = gw._account if gw else {}
         ledger = get_ledger()
         summary = ledger.get_account_summary()
+        close_pnl = acct_gw.get("close_pnl")
+        fp = acct_gw.get("floating_pnl")
+        today_pnl = None
+        if close_pnl is not None or fp is not None:
+            today_pnl = (close_pnl or 0.0) + (fp or 0.0)
         report["account"] = {
-            "balance": summary.get("balance"),
-            "available": summary.get("available"),
-            "margin": summary.get("margin"),
-            "floating_pnl": summary.get("floating_pnl"),
-            "today_pnl": summary.get("today_pnl"),
+            "balance": acct_gw.get("balance"),
+            "available": acct_gw.get("available"),
+            "margin": acct_gw.get("margin"),
+            "floating_pnl": fp,
+            "today_pnl": today_pnl,
             "trade_count": summary.get("trade_count", 0),
         }
     except Exception as exc:

@@ -65,16 +65,28 @@ def _cn_now() -> str:
 
 
 def _get_webhook(category: str, risk_level: str) -> str:
-    """按 category / risk_level 选择目标 Webhook URL。"""
+    """按 category / risk_level 选择目标 Webhook URL。
+
+    路由优先级：
+    1. TRADE/ORDER/SIGNAL/GATE 类 → 交易群（FEISHU_TRADE_WEBHOOK_URL）
+    2. P2 + 系统/心跳/收盘/通知 类 → 资讯群（FEISHU_INFO_WEBHOOK_URL）
+    3. 其余（P0/P1 报警 + 未分流 P2）→ 报警群（FEISHU_ALERT_WEBHOOK_URL）
+    任何群 URL 未配置时均 fallback 到 FEISHU_WEBHOOK_URL。
+    """
     fallback = os.environ.get("FEISHU_WEBHOOK_URL", "")
-    # 报警群：P0/P1/P2 风控
-    if risk_level in ("P0", "P1", "P2"):
-        return os.environ.get("FEISHU_ALERT_WEBHOOK_URL", fallback)
-    # 交易群：成交、订单、信号、门控
-    if category in ("TRADE", "ORDER", "SIGNAL", "GATE"):
-        return os.environ.get("FEISHU_TRADE_WEBHOOK_URL", fallback)
-    # 资讯群：其余（心跳/收盘汇总/系统）
-    return os.environ.get("FEISHU_INFO_WEBHOOK_URL", fallback)
+    cat = (category or "NOTIFY").upper()
+    # 交易群：成交/订单/信号/门控/CTP 成交回报
+    if cat in ("TRADE", "ORDER", "SIGNAL", "GATE", "CTP_TRADING"):
+        trade_url = os.environ.get("FEISHU_TRADE_WEBHOOK_URL", "")
+        if trade_url:
+            return trade_url
+    # 资讯群：P2 非关键事件（心跳/系统通知/收盘汇总）
+    if risk_level == "P2" and cat in ("SYSTEM", "SESSION", "NOTIFY", "RESEARCH"):
+        info_url = os.environ.get("FEISHU_INFO_WEBHOOK_URL", "")
+        if info_url:
+            return info_url
+    # 报警群：P0/P1 风控报警，或未被以上规则分流的事件
+    return os.environ.get("FEISHU_ALERT_WEBHOOK_URL", fallback)
 
 
 def _make_card(event: "RiskEvent", pending_banner: str = "") -> dict:
