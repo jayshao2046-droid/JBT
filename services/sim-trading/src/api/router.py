@@ -78,6 +78,7 @@ _system_state: Dict[str, Any] = {
     "ctp_td_front": os.getenv("SIMNOW_TRADE_FRONT", "tcp://124.74.248.10:41205"),
     "ctp_app_id": os.getenv("CTP_APP_ID", "client_jbtsim_1.0.0"),
     "ctp_auth_code": os.getenv("CTP_AUTH_CODE", "QN76PPIPR9EKM4QK"),
+    "reduce_only_mode": False,  # 只减仓模式：True 时禁止开仓
 }
 
 _LOCAL_VIRTUAL_PRINCIPAL = 500000.0
@@ -400,6 +401,43 @@ def create_order(req: OrderRequest, request: Request):
         if not preset.get("enabled", True):
             return {"rejected": True, "source": "risk_control",
                     "error": f"品种 {product_id} 未启用交易", "code": "PRODUCT_DISABLED"}
+
+    # ── 7. 灾难止损检查（净值回撤超阈值时熔断全停）──
+    _acct = gw._account if gw else {}
+    if _acct.get("balance") is not None and _acct.get("pre_balance") is not None:
+        from src.risk.guards import RiskGuards
+        if not RiskGuards().check_disaster_stop(_acct):
+            return {"rejected": True, "source": "risk_control",
+                    "error": "灾难止损已触发，禁止下单", "code": "DISASTER_STOP_TRIGGERED"}
+
+    # ── 8. 只减仓模式检查（reduce_only_mode 启用时禁止开仓）──
+    if _system_state.get("reduce_only_mode", False) and offset == "0":
+        try:
+            from src.risk.guards import emit_alert
+            emit_alert("P1", f"只减仓模式：拒绝开仓指令 {instrument_id}",
+                       {"event_code": "RISK_REDUCE_ONLY_REJECT", "symbol": instrument_id,
+                        "source": "risk_guard"})
+        except Exception:
+            pass
+        return {"rejected": True, "source": "risk_control",
+                "error": "只减仓模式：禁止开仓", "code": "REDUCE_ONLY_REJECT"}
+
+    # ── 9. 持仓累计上限检查（开仓时按品种合计持仓不得超 max_position）──
+    if preset and offset == "0":
+        max_pos = preset.get("max_position", 0)
+        if max_pos > 0:
+            from src.ledger.service import get_ledger
+            positions = get_ledger().get_positions()
+            current_pos = sum(
+                (p.get("position") or 0)
+                for p in positions
+                if str(p.get("instrument_id") or "").upper().startswith(product_id)
+            )
+            if current_pos + req.volume > max_pos:
+                return {"rejected": True, "source": "risk_control",
+                        "error": (f"开仓后持仓 {current_pos + req.volume} 手"
+                                  f" 超出上限 {max_pos} 手 ({product_id})"),
+                        "code": "EXCEED_MAX_POSITION"}
 
     # ── 执行下单（通过 ExecutionService 委托 Gateway）──
     try:
