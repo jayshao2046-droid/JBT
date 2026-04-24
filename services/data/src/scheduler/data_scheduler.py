@@ -1207,8 +1207,7 @@ def job_options(config: dict[str, Any]) -> None:
         logger.info("跳过期权行情: %s", reason)
         return
     from scheduler.pipeline import run_options_pipeline
-    today = datetime.now().strftime("%Y%m%d")
-    _safe_run("期权行情", run_options_pipeline, exchanges=["sse", "szse", "cffex"], trade_date=today, config=config)
+    _safe_run("期权行情", run_options_pipeline, exchanges=["sse", "szse", "cffex"], config=config)
 
 
 def job_market_session_watch(config: dict[str, Any]) -> None:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from collectors.base import BaseCollector
@@ -24,11 +24,30 @@ class PositionCollector(BaseCollector):
             raise RuntimeError("mock data is forbidden for position collector")
         if not self.token:
             raise RuntimeError("tushare token not configured for position collector")
-        try:
-            return self._fetch_live(symbol_list=symbols, trade_date=trade_date)
-        except Exception as exc:
-            self.logger.error("position live fetch failed: %s", exc)
-            raise
+        last_exc: Exception | None = None
+        for candidate in self._candidate_trade_dates(trade_date):
+            try:
+                records = self._fetch_live(symbol_list=symbols, trade_date=candidate)
+                if trade_date is None and candidate != datetime.now().strftime("%Y%m%d"):
+                    self.logger.info("position fallback succeeded: trade_date=%s", candidate)
+                return records
+            except Exception as exc:
+                last_exc = exc
+                if trade_date is None:
+                    self.logger.warning("position attempt failed for trade_date=%s: %s", candidate, exc)
+        self.logger.error("position live fetch failed: %s", last_exc)
+        raise last_exc or RuntimeError("all position fetchers failed")
+
+    @staticmethod
+    def _candidate_trade_dates(trade_date: str | None, lookback_days: int = 5) -> list[str]:
+        if trade_date:
+            return [trade_date]
+
+        today = datetime.now()
+        return [
+            (today - timedelta(days=offset)).strftime("%Y%m%d")
+            for offset in range(lookback_days + 1)
+        ]
 
     def _fetch_live(self, *, symbol_list: list[str] | None, trade_date: str | None) -> list[dict[str, Any]]:
         import tushare as ts
