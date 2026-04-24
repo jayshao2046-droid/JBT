@@ -170,6 +170,26 @@ class ResearcherPhi4Scorer:
         if sample_titles:
             observed_parts.append("样本标题=" + " | ".join(sample_titles))
 
+        # macro 报告：提取 source_report.data_coverage 及分析字段
+        if report_type == "macro":
+            source_report = report.get("source_report") or {}
+            data_coverage = source_report.get("data_coverage") or {}
+            if data_coverage:
+                coverage_parts = [f"{k}={v}" for k, v in data_coverage.items() if v]
+                if coverage_parts:
+                    observed_parts.append("数据覆盖=" + ",".join(coverage_parts))
+            macro_analysis = source_report.get("analysis") or {}
+            if macro_analysis:
+                macro_trend = macro_analysis.get("macro_trend") or ""
+                risk_level = macro_analysis.get("risk_level") or ""
+                key_drivers = macro_analysis.get("key_drivers") or []
+                if macro_trend:
+                    observed_parts.append(f"宏观趋势={macro_trend}")
+                if risk_level:
+                    observed_parts.append(f"风险等级={risk_level}")
+                if key_drivers:
+                    observed_parts.append("主要驱动=" + "|".join(str(d) for d in key_drivers[:3]))
+
         return {
             "report_type": report_type,
             "futures_symbols": futures_symbols,
