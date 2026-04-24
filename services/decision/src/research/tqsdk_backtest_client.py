@@ -1,24 +1,29 @@
 """TqSdk 回测客户端 — TASK-0127
 
-通过 HTTP API 调用 Studio backtest 服务进行 TqSdk 在线回测。
+通过 decision 内部 formal runner 执行 TqSdk 在线回测，不再依赖 Studio backtest HTTP。
 
 功能：
-1. 提交回测任务到 Studio backtest (http://192.168.31.142:8103)
-2. 轮询获取回测结果
+1. 提交内部 TqSdk formal backtest 任务
+2. 等待并返回 formal_report_v1 结果
 3. YAML 预处理与验证（TqSdk 兼容性检查）
 4. 主力合约代码转换
 """
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from datetime import datetime
+import re
 from pathlib import Path
 from typing import Any, Optional
 
-import httpx
 import yaml
+
+from src.backtest.runner import (
+    BacktestExecutionError,
+    BacktestJobInput,
+    OnlineBacktestRunner,
+)
+from src.core.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +34,7 @@ class TqSdkBacktestError(Exception):
 
 
 class TqSdkBacktestClient:
-    """TqSdk 回测客户端（通过 Studio backtest API）"""
+    """TqSdk 回测客户端（通过 decision 内部 runner）"""
 
     # 夜盘品种列表
     NIGHT_TRADING_COMMODITIES = {
@@ -55,13 +60,20 @@ class TqSdkBacktestClient:
         """初始化 TqSdk 回测客户端
 
         Args:
-            backtest_url: Studio backtest 服务地址
+            backtest_url: 保留兼容的旧参数，内部执行路径不再使用
             timeout: 回测超时时间（秒）
             data_url: Mini data API 地址（用于合约解析）
         """
         self.backtest_url = backtest_url.rstrip("/")
         self.timeout = timeout
-        self._client = httpx.AsyncClient(timeout=30.0)
+        self._settings = get_settings()
+        self._strategy_root = self._settings.tqsdk_strategy_yaml_dir.expanduser().resolve()
+        self._strategy_root.mkdir(parents=True, exist_ok=True)
+        self._runner = OnlineBacktestRunner(settings=self._settings)
+        # 与 air backtest 服务 _run_backtest_background 对齐：
+        # 不走 OnlineBacktestRunner.submit/_execute/wait_for_job 这条 asyncio 调度路径，
+        # submit_backtest 只准备 job_input，poll_result 才在 to_thread 里同步直跑 run_job_sync。
+        self._pending_jobs: dict[str, BacktestJobInput] = {}
 
         # 导入合约解析器
         from .contract_resolver import ContractResolver
@@ -103,60 +115,36 @@ class TqSdkBacktestClient:
         # 2. 预处理 YAML（主力合约转换）
         strategy = await self._preprocess_yaml(strategy)
 
-        # 3. 构建请求参数
+        # 3. 预处理后的 YAML 写入 formal runner 运行目录
         strategy_name = strategy.get("name", yaml_path.stem)
         symbols = strategy.get("symbols", [])
         if not symbols:
             raise TqSdkBacktestError("YAML 缺少 symbols 字段")
+        if len(symbols) > 1:
+            logger.warning("TqSdk formal runner 当前只使用首个 symbol: %s", symbols)
+
+        runtime_yaml_path, strategy_yaml_filename = self._persist_runtime_yaml(yaml_path, strategy)
+        task_id = f"tqsdk-{runtime_yaml_path.stem}-{id(self):x}-{len(symbols)}"
 
         payload = {
-            "strategy_id": strategy_name,  # 使用实际策略名，与 import 注册名一致
-            "strategy_name": strategy_name,
-            "engine_type": "tqsdk",
-            "start": start_date,
-            "end": end_date,
-            "symbols": symbols,
+            "job_id": task_id,
+            "strategy_template_id": str(strategy.get("template_id") or "generic"),
+            "strategy_yaml_filename": strategy_yaml_filename,
+            "symbol": str(symbols[0]),
+            "start_date": start_date,
+            "end_date": end_date,
             "initial_capital": initial_capital,
-            # 注意: 不传 params，TqSdk backtest 422 拒绝 runtime params override
-            # 最优参数已通过 import 写入 YAML，backtest 直接读取注册策略
         }
 
-        # 4. 确保策略已在 backtest 服务注册（避免 "Strategy X not found" 404）
         try:
-            import yaml as _yaml
-            strategy_yaml_content = _yaml.dump(strategy, allow_unicode=True, default_flow_style=False)
-            import_url = f"{self.backtest_url}/api/strategy/import"
-            import_resp = await self._client.post(
-                import_url,
-                json={"name": strategy_name, "content": strategy_yaml_content},
-            )
-            if import_resp.status_code in (200, 201):
-                logger.info(f"策略已注册到 backtest 服务: {strategy_name}")
-            else:
-                logger.warning(f"策略注册返回 {import_resp.status_code}，继续提交: {import_resp.text[:100]}")
-        except Exception as e:
-            logger.warning(f"策略注册步骤异常（非阻塞）: {e}")
-
-        # 5. 提交回测任务
-        try:
-            url = f"{self.backtest_url}/api/backtest/run"
-            logger.info(f"提交 TqSdk 回测任务: {strategy_name} ({start_date} ~ {end_date})")
-
-            response = await self._client.post(url, json=payload)
-            response.raise_for_status()
-
-            result = response.json()
-            task_id = result.get("task_id")
-
-            if not task_id:
-                raise TqSdkBacktestError(f"未返回 task_id: {result}")
-
-            logger.info(f"✅ TqSdk 回测任务已提交: task_id={task_id}")
+            logger.info("准备内部 TqSdk 回测任务: %s (%s ~ %s)", strategy_name, start_date, end_date)
+            # 只做规范化与登记，不进 asyncio 调度链路；真正执行放到 poll_result 内 to_thread 同步直跑
+            job_input = BacktestJobInput.from_mapping(payload)
+            self._pending_jobs[task_id] = job_input
+            logger.info(f"✅ TqSdk 回测任务已登记: task_id={task_id}")
             return task_id
-
-        except httpx.HTTPStatusError as e:
-            error_detail = e.response.text[:200] if e.response else str(e)
-            raise TqSdkBacktestError(f"提交回测失败 ({e.response.status_code}): {error_detail}") from e
+        except (BacktestExecutionError, ValueError) as exc:
+            raise TqSdkBacktestError(f"提交回测失败: {exc}") from exc
         except Exception as e:
             raise TqSdkBacktestError(f"提交回测异常: {e}") from e
 
@@ -179,49 +167,40 @@ class TqSdkBacktestClient:
         Raises:
             TqSdkBacktestError: 回测失败或超时
         """
+        _ = poll_interval
         max_wait = max_wait or self.timeout
-        start_time = asyncio.get_event_loop().time()
-        url = f"{self.backtest_url}/api/backtest/results/{task_id}"
 
-        logger.info(f"开始轮询 TqSdk 回测结果: task_id={task_id} (最大等待 {max_wait}s)")
+        job_input = self._pending_jobs.pop(task_id, None)
+        if job_input is None:
+            raise TqSdkBacktestError(f"回测任务不存在: task_id={task_id}")
 
-        while True:
-            elapsed = asyncio.get_event_loop().time() - start_time
-            if elapsed > max_wait:
-                raise TqSdkBacktestError(f"回测超时 ({max_wait}s): task_id={task_id}")
+        logger.info("运行内部 TqSdk 回测: task_id=%s (最大等待 %ss)", task_id, max_wait)
 
-            try:
-                response = await self._client.get(url)
-                response.raise_for_status()
-                result = response.json()
+        # 与 air backtest 服务 _run_backtest_background 对齐：
+        # 单次 to_thread 同步直跑 run_job_sync，不进 asyncio.create_task / Semaphore / wait_for_job 链路。
+        try:
+            report = await asyncio.wait_for(
+                asyncio.to_thread(self._runner.run_job_sync, job_input),
+                timeout=max_wait,
+            )
+        except asyncio.TimeoutError as exc:
+            raise TqSdkBacktestError(f"回测超时 ({max_wait}s): task_id={task_id}") from exc
+        except BacktestExecutionError as exc:
+            raise TqSdkBacktestError(f"回测执行失败: {exc}") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise TqSdkBacktestError(f"回测执行异常: {exc}") from exc
 
-                status = result.get("status", "unknown")
+        if report is None:
+            raise TqSdkBacktestError(f"回测未返回报告: task_id={task_id}")
 
-                if status == "completed":
-                    logger.info(f"✅ TqSdk 回测完成: task_id={task_id}")
-                    return result
+        if report.status == "failed":
+            raise TqSdkBacktestError(report.failure_reason or f"回测失败: {task_id}")
 
-                elif status == "failed":
-                    error = result.get("error", "未知错误")
-                    raise TqSdkBacktestError(f"回测失败: {error}")
-
-                elif status in ("pending", "running"):
-                    logger.debug(f"回测进行中 ({status}): {elapsed:.1f}s / {max_wait}s")
-                    await asyncio.sleep(poll_interval)
-
-                else:
-                    logger.warning(f"未知回测状态: {status}")
-                    await asyncio.sleep(poll_interval)
-
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 404:
-                    raise TqSdkBacktestError(f"回测任务不存在: task_id={task_id}") from e
-                raise TqSdkBacktestError(f"查询回测结果失败: {e}") from e
-            except TqSdkBacktestError:
-                raise
-            except Exception as e:
-                logger.warning(f"轮询异常，继续重试: {e}")
-                await asyncio.sleep(poll_interval)
+        result = report.to_formal_report_v1()
+        result["status"] = report.status
+        result["task_id"] = task_id
+        logger.info("✅ TqSdk 回测完成: task_id=%s", task_id)
+        return result
 
     def validate_yaml(self, strategy: dict) -> tuple[bool, list[str]]:
         """验证 YAML 是否符合 TqSdk 标准
@@ -268,8 +247,11 @@ class TqSdkBacktestClient:
             # 提取品种代码（去除交易所前缀）
             for symbol in symbols:
                 commodity = symbol.split(".")[-1] if "." in symbol else symbol
-                # 去除合约月份，只保留品种代码
-                commodity = "".join([c for c in commodity if c.isalpha()]).lower()
+                commodity = str(commodity).lower()
+                if commodity.endswith("_main"):
+                    commodity = commodity[:-5]
+                else:
+                    commodity = re.sub(r"\d+$", "", commodity)
 
                 if commodity in self.NIGHT_TRADING_COMMODITIES:
                     if not risk.get("force_close_night"):
@@ -285,15 +267,26 @@ class TqSdkBacktestClient:
         for field, desc in forbidden_fields:
             if field in strategy:
                 errors.append(f"禁止使用字段: {field} ({desc})，TqSdk 不支持")
+            if field in risk:
+                errors.append(f"禁止使用 risk.{field} ({desc})，请改用 risk.stop_loss/risk.take_profit ATR 配置")
 
-        # 止损止盈类型检查
-        stop_loss = strategy.get("stop_loss", {})
-        if stop_loss and stop_loss.get("type") not in ("atr", None):
-            errors.append(f"stop_loss.type 必须为 'atr'，当前为 '{stop_loss.get('type')}'")
+        # 止损止盈类型检查：统一从 risk 块读取，与 local engine 保持一致
+        if "stop_loss" in strategy:
+            errors.append("stop_loss 必须位于 risk 块内部，不能放在根级")
+        if "take_profit" in strategy:
+            errors.append("take_profit 必须位于 risk 块内部，不能放在根级")
 
-        take_profit = strategy.get("take_profit", {})
-        if take_profit and take_profit.get("type") not in ("atr", None):
-            errors.append(f"take_profit.type 必须为 'atr'，当前为 '{take_profit.get('type')}'")
+        stop_loss = risk.get("stop_loss", {})
+        if not stop_loss:
+            errors.append("risk.stop_loss 为必填项")
+        elif stop_loss.get("type") not in ("atr", None):
+            errors.append(f"risk.stop_loss.type 必须为 'atr'，当前为 '{stop_loss.get('type')}'")
+
+        take_profit = risk.get("take_profit", {})
+        if not take_profit:
+            errors.append("risk.take_profit 为必填项")
+        elif take_profit.get("type") not in ("atr", None):
+            errors.append(f"risk.take_profit.type 必须为 'atr'，当前为 '{take_profit.get('type')}'")
 
         return len(errors) == 0, errors
 
@@ -313,15 +306,32 @@ class TqSdkBacktestClient:
         converted_symbols = []
 
         for symbol in symbols:
-            # 如果是主力合约代码（以 0 结尾），需要转换
-            if symbol.endswith(".0") or symbol.endswith("0"):
+            # 支持三种需要解析的格式：
+            # 1. _main 通配符（如 SHFE.rb_main、DCE.m_main）→ 当前主力合约
+            # 2. 以 0 结尾的指数合约（如 DCE.p0、SHFE.rb0）→ 当前主力合约
+            # 3. 无交易所前缀的品种代码（如 rb、m）→ 自动补全交易所并解析
+            needs_resolve = (
+                "_main" in symbol
+                or symbol.endswith(".0")
+                or (".".join(symbol.split(".")[1:]) if "." in symbol else symbol).rstrip("0123456789") != (".".join(symbol.split(".")[1:]) if "." in symbol else symbol) and symbol.endswith("0")
+            )
+            # 简化判断：_main 结尾 或 合约代码末尾是 0（指数合约）
+            base = symbol.split(".")[-1] if "." in symbol else symbol
+            needs_resolve = "_main" in base or base.endswith("0")
+
+            if needs_resolve:
+                # 统一转换为 EXCHANGE.commodity0 格式供 resolver 处理
+                if "_main" in symbol:
+                    # SHFE.rb_main → SHFE.rb0
+                    resolve_symbol = symbol.replace("_main", "0")
+                else:
+                    resolve_symbol = symbol
                 try:
-                    # 调用合约解析器进行转换
-                    main_contract = await self._contract_resolver.get_main_contract(symbol)
-                    logger.info(f"主力合约转换: {symbol} → {main_contract}")
+                    main_contract = await self._contract_resolver.get_main_contract(resolve_symbol)
+                    logger.info(f"主力合约解析: {symbol} → {main_contract}")
                     converted_symbols.append(main_contract)
                 except Exception as e:
-                    logger.warning(f"主力合约转换失败 ({symbol}): {e}，保持原值")
+                    logger.warning(f"主力合约解析失败 ({symbol}): {e}，保持原值")
                     converted_symbols.append(symbol)
             else:
                 converted_symbols.append(symbol)
@@ -332,7 +342,6 @@ class TqSdkBacktestClient:
 
     async def close(self):
         """关闭客户端"""
-        await self._client.aclose()
         await self._contract_resolver.close()
 
     async def __aenter__(self):
@@ -340,3 +349,21 @@ class TqSdkBacktestClient:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
+
+    def _persist_runtime_yaml(self, source_path: Path, strategy: dict[str, Any]) -> tuple[Path, str]:
+        if self._strategy_root == source_path.parent or self._strategy_root in source_path.parents:
+            relative_path = source_path.relative_to(self._strategy_root)
+        else:
+            relative_path = Path(source_path.name)
+
+        target_path = self._strategy_root / "_tqsdk_runtime" / relative_path
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with target_path.open("w", encoding="utf-8") as handle:
+            yaml.safe_dump(
+                strategy,
+                handle,
+                allow_unicode=True,
+                sort_keys=False,
+                default_flow_style=False,
+            )
+        return target_path, target_path.relative_to(self._strategy_root).as_posix()

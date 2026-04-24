@@ -3,7 +3,7 @@
 【类型】标准实施任务  
 【建档】Atlas  
 【日期】2026-04-18  
-【状态】Atlas 复核问题已修复，待二次复核  
+【状态】2026-04-24 decision 内部 TqSdk U0 直修已收口，待继续推进 35 品种正式执行  
 【授权人】Jay.S  
 【执行 Agent】Livis  
 【服务边界】仅限 services/decision 单服务  
@@ -264,6 +264,36 @@ Livis 必须按品种串行，不得 35 个品种并发推进。
 1. 集成测试（单策略 + 单品种）
 2. 正式执行 35 品种流水线
 
+### 7.5 2026-04-24 U0 直修补丁（decision 单服务）
+
+#### 背景
+
+- 单品种真实探针已确认 TqSdk 提交链路能到达 decision 内部 formal runner。
+- 现场症状表现为 `poll_result()` 长等待超时，但 Air 的 backtest 服务同类回测可以正常完成。
+- 最终确认这不是单纯超时窗口过短，而是 decision 侧复用了 Air 运行态从未走过的异步调度分支。
+
+#### 根因
+
+1. Air `services/backtest/src/api/routes/backtest.py` 的正式回测路径是后台线程直接调用 `runner.run_job_sync(job_input)`。
+2. decision `services/decision/src/research/tqsdk_backtest_client.py` 走的是 `runner.submit()` → `asyncio.create_task()` → `wait_for_job()` 的异步调度链路。
+3. 两边 `runner.py` / `session.py` 实现虽然一致，但 Air 生产实际只验证过“线程 + 同步直跑”路径，没有验证 `submit/_execute/_semaphore/wait_for_job` 这条路径。
+4. 因此 decision 内部出现了“任务已提交，但 TqSdk 长时间不回收结果”的假超时现象。
+
+#### 修复
+
+- 修复文件：`services/decision/src/research/tqsdk_backtest_client.py`
+- 修复方式：
+  1. `submit_backtest()` 不再调用 `OnlineBacktestRunner.submit()`，仅登记规范化后的 `BacktestJobInput`
+  2. `poll_result()` 改为 `asyncio.to_thread(self._runner.run_job_sync, job_input)` 同步直跑
+  3. 执行模型与 Air 的 `_run_backtest_background -> runner.run_job_sync()` 保持一致
+
+#### 验证
+
+- 探针策略：`rb_trend_60m_v1`
+- 验证区间：`2024-01-01 ~ 2024-06-30`
+- 结果：修复后 `29.9s` 内返回 `status=completed`
+- 结论：decision 内部 TqSdk 正式回测结果回收链已恢复；原“超时”症状根因已排除
+
 ## 8. 当前派发结论
 
-U0 开发阶段已完成，所有核心模块已就绪。待集成测试通过后，可进入正式执行阶段。
+U0 开发阶段已完成，且 2026-04-24 decision 内部 TqSdk 结果回收链已完成事后修复收口。当前阻塞已从“TqSdk 长等待超时”收敛为其余候选策略自身的 YAML / 数据 /调优问题，可继续推进后续 35 品种正式执行与剩余问题剥离。
