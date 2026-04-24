@@ -267,7 +267,7 @@ async def _ctp_connection_guardian():
     IDLE_INTERVAL = 300         # 非交易时段休眠间隔（秒）
     ACCOUNT_REFRESH = 120       # 账户刷新间隔（秒）
     MAX_FAST_RETRIES = 3
-    RECONNECT_ALERT_COOLDOWN = 180      # 交易时段：断联超 3 分钟才发飞书报警
+    RECONNECT_ALERT_COOLDOWN = 600      # 交易时段：断联超 10 分钟才发飞书报警（止噪）
     IDLE_DISCONNECT_ALERT_COOLDOWN = 1800  # 非交易时段：每 30 分钟发一次飞书断联通知
     _fail_count = 0
     _last_checkpoint = None     # 避免同一检查点重复通知

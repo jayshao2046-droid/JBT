@@ -148,8 +148,14 @@ def _make_md_spi_class():
             self._api._record_disconnect("md", nReason)
             if is_trading_session():
                 try:
-                    from src.risk.guards import emit_alert
-                    emit_alert("P1", f"CTP 行情前置断开 reason={nReason}", {"event_code": "CTP_FRONT_DISCONNECTED", "source": "simnow_md"})
+                    import time as _t
+                    _now = _t.time()
+                    if _now - self._api._last_md_disconnect_alert_ts >= 300:
+                        self._api._last_md_disconnect_alert_ts = _now
+                        from src.risk.guards import emit_alert
+                        emit_alert("P1", f"CTP 行情前置断开 reason={nReason}", {"event_code": "CTP_FRONT_DISCONNECTED", "source": "simnow_md"})
+                    else:
+                        logger.info("[mdapi] disconnect alert suppressed (cooldown)")
                 except Exception:
                     pass
             else:
@@ -233,8 +239,14 @@ def _make_td_spi_class():
             self._api._record_disconnect("td", nReason)
             if is_trading_session():
                 try:
-                    from src.risk.guards import emit_alert
-                    emit_alert("P1", f"CTP 交易前置断开 reason={nReason}", {"event_code": "CTP_FRONT_DISCONNECTED", "source": "simnow_td"})
+                    import time as _t
+                    _now = _t.time()
+                    if _now - self._api._last_td_disconnect_alert_ts >= 300:
+                        self._api._last_td_disconnect_alert_ts = _now
+                        from src.risk.guards import emit_alert
+                        emit_alert("P1", f"CTP 交易前置断开 reason={nReason}", {"event_code": "CTP_FRONT_DISCONNECTED", "source": "simnow_td"})
+                    else:
+                        logger.info("[traderapi] disconnect alert suppressed (cooldown)")
                 except Exception:
                     pass
             else:
@@ -556,6 +568,8 @@ class SimNowGateway:
         self._last_md_disconnect_time = None
         self._last_td_disconnect_reason = None
         self._last_td_disconnect_time = None
+        self._last_md_disconnect_alert_ts = 0.0  # 断联告警冷却（300s），抑制重连噪音
+        self._last_td_disconnect_alert_ts = 0.0  # 断联告警冷却（300s），抑制重连噪音
         self._account: Dict = {}
         # ── 合约规格缓存（OnRspQryInstrument 填充）──
         # InstrumentID → {price_tick, max_order_volume, volume_multiple, exchange_id, product_id}
