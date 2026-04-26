@@ -1,0 +1,37 @@
+name: STRAT_czce_fg_rsi_extreme_60m
+description: CZCE.FG RSI极值套利：RSI深度超卖/超买纯反转 60m
+version: '1.0'
+category: mean_reversion
+factors:
+- factor_name: RSI
+  params:
+    period: 14
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: rsi < 25
+  short_condition: rsi > 75
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.023
+symbols:
+- KQ.m@CZCE.FG
+transaction_costs:
+  slippage_per_unit: 1.0
+  commission_per_lot_round_turn: 2.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 2.29
+  take_profit:
+    type: atr
+    atr_multiplier: 2.77
+tags:
+- CZCE
+- FG
+- rsi_extreme
+- mean_reversion
+- 60m

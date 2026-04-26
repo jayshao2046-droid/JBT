@@ -1797,6 +1797,15 @@ CRITICAL: 只输出纯 JSON，格式:
         # 更新信号条件（字符串表达式）
         signal = strategy.get("signal", {})
 
+        if "confirm_bars" in changes:
+            try:
+                new_confirm_bars = max(1, int(float(changes["confirm_bars"])))
+                old_confirm_bars = int(signal.get("confirm_bars", 1) or 1)
+                signal["confirm_bars"] = new_confirm_bars
+                logger.info(f"  - signal.confirm_bars: {old_confirm_bars} → {new_confirm_bars}")
+            except (TypeError, ValueError):
+                logger.warning("  - signal.confirm_bars 调整失败: %s", changes["confirm_bars"])
+
         # 替换 RSI 阈值
         if "rsi_long_threshold" in changes:
             long_cond = signal.get("long_condition", "")
@@ -1843,5 +1852,22 @@ CRITICAL: 只输出纯 JSON，格式:
                 short_cond = short_cond.replace(f"volume_ratio > {old_value}", f"volume_ratio > {new_value}")
                 signal["short_condition"] = short_cond
                 logger.info(f"  - signal.volume_ratio_short: {old_value} → {new_value}")
+
+        if "reduce_and_conditions" in changes:
+            for signal_key in ("long_condition", "short_condition"):
+                condition = signal.get(signal_key, "")
+                parts = [part.strip() for part in condition.split(" and ") if part.strip()]
+                if len(parts) <= 1:
+                    continue
+                removed = parts.pop()
+                signal[signal_key] = " and ".join(parts)
+                logger.info(f"  - signal.{signal_key}: 移除末尾 AND 条件 '{removed}'")
+
+        if "drop_market_filter_tail" in changes:
+            market_conditions = market_filter.get("conditions", [])
+            if len(market_conditions) > 1:
+                removed = market_conditions.pop()
+                market_filter["conditions"] = market_conditions
+                logger.info(f"  - market_filter.conditions: 移除末尾条件 '{removed}'")
 
         return strategy

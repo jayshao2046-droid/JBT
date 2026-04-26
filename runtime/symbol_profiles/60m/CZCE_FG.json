@@ -1,0 +1,35 @@
+{
+  "symbol": "CZCE.FG",
+  "volatility_3m": 0.3391149933833128,
+  "volatility_1y": 0.34186794006733734,
+  "volatility_5y": 0.2842095024602956,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 37.23,
+  "trend_strength_1y": 37.23,
+  "trend_strength_weighted": "Strong",
+  "autocorr_3m": -0.012134982058431653,
+  "autocorr_1y": 0.02615589941663681,
+  "skewness": 3.420076341222807,
+  "kurtosis": 47.419691716723065,
+  "liquidity": "High",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:57:00",
+    "data_start_date": "2018-04-27T01:00:00",
+    "data_end_date": "2026-04-22T11:00:00",
+    "data_points_3m": 384,
+    "data_points_1y": 1664,
+    "data_points_5y": 13711,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.9990336806603806,
+    "volatility": 0.9975842016509512,
+    "trend": 1.0,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.9959736694182522,
+    "warnings": []
+  }
+}

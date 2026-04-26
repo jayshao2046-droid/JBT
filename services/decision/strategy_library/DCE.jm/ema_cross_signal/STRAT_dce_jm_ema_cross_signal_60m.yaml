@@ -1,0 +1,42 @@
+name: STRAT_dce_jm_ema_cross_signal_60m
+description: DCE.jm EMA快慢线交叉信号差值正负 + ADX趋势过滤 60m
+version: '1.0'
+category: trend_following
+factors:
+- factor_name: EMA_Cross
+  params:
+    fast_period: 10
+    slow_period: 20
+- factor_name: ADX
+  params:
+    period: 14
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: ema_cross > 0 and adx > 17
+  short_condition: ema_cross < 0 and adx > 17
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.036
+symbols:
+- KQ.m@DCE.jm
+transaction_costs:
+  slippage_per_unit: 0.5
+  commission_per_lot_round_turn: 3.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 3.52
+  take_profit:
+    type: atr
+    atr_multiplier: 4.62
+  force_close_night: '22:55'
+tags:
+- DCE
+- jm
+- ema_cross_signal
+- trend_following
+- 60m

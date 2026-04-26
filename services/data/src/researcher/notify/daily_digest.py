@@ -91,6 +91,22 @@ class DailyDigest:
         evening_hours = [21, 22, 23]
         return self._generate_hourly_digest(date, evening_hours, "晚报")
 
+    def generate_night_digest(self, date: str) -> Dict[str, Any]:
+        """兼容旧调度器接口：生成 00:00~07:00 夜间报。"""
+        return self._generate_hourly_digest(date, list(range(0, 8)), "夜间报")
+
+    def generate_morning_report_digest(self, date: str) -> Dict[str, Any]:
+        """兼容旧调度器接口：生成 08:00~11:00 上午报。"""
+        return self._generate_hourly_digest(date, [8, 9, 10, 11], "上午报")
+
+    def generate_afternoon_digest(self, date: str) -> Dict[str, Any]:
+        """兼容旧调度器接口：生成 13:00~16:00 下午报。"""
+        return self._generate_hourly_digest(date, [13, 14, 15, 16], "下午报")
+
+    def generate_evening_session_digest(self, date: str) -> Dict[str, Any]:
+        """兼容旧调度器接口：生成 21:00~23:00 夜盘报。"""
+        return self._generate_hourly_digest(date, [21, 22, 23], "夜盘报")
+
     def _generate_hourly_digest(self, date: str, hours: List[int], digest_type: str) -> Dict[str, Any]:
         """
         生成指定小时范围的日报

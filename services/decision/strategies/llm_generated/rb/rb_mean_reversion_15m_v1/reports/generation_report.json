@@ -1,0 +1,174 @@
+{
+  "strategy_name": "rb_mean_reversion_15m_v1",
+  "symbol": "rb",
+  "category": "mean_reversion",
+  "timeframe": 15,
+  "factors": [
+    "Bollinger",
+    "RSI",
+    "ATR"
+  ],
+  "design_prompt": "为 rb 品种设计一个 mean_reversion 策略。\n品种特征: 品种: rb（特征分析失败，使用保守参数）\n时间周期: 15 分钟\n核心因子: Bollinger, RSI, ATR\n策略描述: 15分钟布林带+RSI超买超卖的中频均值回归策略\n\n输出 JSON 格式的策略设计，包含：\n- strategy_name: rb_mean_reversion_15m_v1\n- logic_description: 策略逻辑描述\n- entry_logic: 做多入场条件\n- exit_logic: 做多出场条件\n- short_entry_logic: 做空入场条件\n- short_exit_logic: 做空出场条件\n- risk_management: 风险管理方案（止损止盈规则）\n- recommended_factors: 推荐使用的技术指标列表\n",
+  "design_response": {
+    "strategy_name": "rb_mean_reversion_15m_v1",
+    "logic_description": "基于15分钟K线的布林带与RSI超买超卖共振的均值回归策略。核心思路：当价格偏离布林带中轨达到极端位置，且RSI确认超买/超卖状态时，判定价格将回归均值（布林带中轨），顺势入场。ATR用于动态止损止盈，适应rb品种波动率变化。由于品种特征分析失败，全部参数采用保守设定，降低仓位与放宽止损，以防御未知波动风险。",
+    "entry_logic": {
+      "description": "做多入场条件（价格超跌回归）",
+      "conditions": [
+        "收盘价 ≤ 布林带下轨（BBands_lower, period=20, std=2.0）",
+        "RSI(14) ≤ 30，确认超卖",
+        "当前K线收盘价 > 当前K线开盘价（出现阳线反转信号）",
+        "ATR(14) > 0，确认市场有波动（排除极端缩量）"
+      ],
+      "trigger": "满足以上全部条件时，在下一根K线开盘价挂单做多",
+      "position_size": "单次开仓不超过总资金的2%风险敞口（保守参数）"
+    },
+    "exit_logic": {
+      "description": "做多出场条件",
+      "conditions": [
+        {
+          "type": "止盈目标1",
+          "rule": "价格触及布林带中轨（SMA20），平仓50%"
+        },
+        {
+          "type": "止盈目标2",
+          "rule": "价格触及布林带上轨（BBands_upper），平仓剩余全部"
+        },
+        {
+          "type": "RSI出场",
+          "rule": "RSI(14) ≥ 60 且价格已回到中轨附近，全部平仓"
+        },
+        {
+          "type": "时间出场",
+          "rule": "持仓超过20根K线（即5小时）未触及任何止盈条件，按市价全部平仓"
+        },
+        {
+          "type": "止损出场",
+          "rule": "见 risk_management.stop_loss"
+        }
+      ]
+    },
+    "short_entry_logic": {
+      "description": "做空入场条件（价格超涨回归）",
+      "conditions": [
+        "收盘价 ≥ 布林带上轨（BBands_upper, period=20, std=2.0）",
+        "RSI(14) ≥ 70，确认超买",
+        "当前K线收盘价 < 当前K线开盘价（出现阴线反转信号）",
+        "ATR(14) > 0，确认市场有波动"
+      ],
+      "trigger": "满足以上全部条件时，在下一根K线开盘价挂单做空",
+      "position_size": "单次开仓不超过总资金的2%风险敞口（保守参数）"
+    },
+    "short_exit_logic": {
+      "description": "做空出场条件",
+      "conditions": [
+        {
+          "type": "止盈目标1",
+          "rule": "价格回落至布林带中轨（SMA20），平仓50%"
+        },
+        {
+          "type": "止盈目标2",
+          "rule": "价格回落至布林带下轨（BBands_lower），平仓剩余全部"
+        },
+        {
+          "type": "RSI出场",
+          "rule": "RSI(14) ≤ 40 且价格已回到中轨附近，全部平仓"
+        },
+        {
+          "type": "时间出场",
+          "rule": "持仓超过20根K线（即5小时）未触及任何止盈条件，按市价全部平仓"
+        },
+        {
+          "type": "止损出场",
+          "rule": "见 risk_management.stop_loss"
+        }
+      ]
+    },
+    "risk_management": {
+      "stop_loss": {
+        "method": "ATR动态止损（保守）",
+        "rule": "做多止损 = 入场价 - 2.5 × ATR(14)；做空止损 = 入场价 + 2.5 × ATR(14)",
+        "note": "使用2.5倍ATR而非常规2倍，因品种特征未知，需留更大容错空间"
+      },
+      "take_profit": {
+        "method": "分批止盈",
+        "rule": "第一目标布林中轨平50%，第二目标对侧布林轨平剩余50%",
+        "estimated_risk_reward_ratio": "约 1:1.5 至 1:2.5"
+      },
+      "max_daily_loss": {
+        "rule": "单日累计亏损达到账户总资金的3%时，当日停止交易"
+      },
+      "max_concurrent_positions": {
+        "rule": "同一方向最多持有1个仓位，多空可同时各持1个"
+      },
+      "position_sizing": {
+        "method": "固定风险比例法",
+        "rule": "每笔交易风险 = 账户净值 × 2%；手数 = 风险金额 / (止损点数 × 每点价值)",
+        "max_position": "单笔不超过总资金的10%保证金占用"
+      },
+      "slippage_protection": {
+        "rule": "rb为主力合约，滑点预设2个tick（即2元/吨），回测时需计入"
+      },
+      "trading_session_filter": {
+        "rule": "仅在rb主力交易时段开仓：09:00-11:30, 13:30-15:00, 21:00-23:00；避免集合竞价和尾盘最后5分钟开新仓"
+      }
+    },
+    "recommended_factors": [
+      {
+        "name": "Bollinger Bands",
+        "params": {
+          "period": 20,
+          "std_dev": 2.0
+        },
+        "role": "核心均值回归通道，判定价格偏离程度与回归目标"
+      },
+      {
+        "name": "RSI",
+        "params": {
+          "period": 14,
+          "overbought": 70,
+          "oversold": 30
+        },
+        "role": "超买超卖确认指标，与布林带形成共振过滤"
+      },
+      {
+        "name": "ATR",
+        "params": {
+          "period": 14
+        },
+        "role": "波动率度量，用于动态止损止盈计算与仓位管理"
+      },
+      {
+        "name": "SMA",
+        "params": {
+          "period": 20
+        },
+        "role": "布林带中轨，即均值回归目标价位（与BBands中轨一致）"
+      },
+      {
+        "name": "Volume",
+        "params": {},
+        "role": "辅助过滤：入场时成交量应不低于近20根K线均量的60%，排除无量假突破"
+      },
+      {
+        "name": "Bollinger Bandwidth",
+        "params": {
+          "period": 20
+        },
+        "role": "辅助指标：带宽过窄（<历史20%分位）时暂停开仓，因缩口后可能趋势突破而非回归"
+      }
+    ],
+    "backtest_notes": {
+      "symbol": "rb主力连续合约",
+      "timeframe": "15分钟",
+      "suggested_backtest_period": "至少最近2年数据（覆盖不同市场状态）",
+      "commission": "按交易所标准手续费 + 1个tick滑点",
+      "caution": "品种特征分析失败，当前参数为保守通用配置。建议在获得rb历史波动率、趋势强度等特征数据后，对Bollinger std_dev（可调至1.5-2.5）、RSI阈值（可调至25/75）、ATR止损倍数（可调至1.5-3.0）进行针对性优化。"
+    }
+  },
+  "model": "claude-opus-4-6",
+  "generated_at": "2026-04-24T19:14:07.461178",
+  "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/rb/rb_mean_reversion_15m_v1.yaml",
+  "saved_at": "2026-04-24T19:14:07.461507",
+  "report_type": "generation"
+}

@@ -1,0 +1,35 @@
+{
+  "symbol": "SHFE.cu",
+  "volatility_3m": 0.2151158567533262,
+  "volatility_1y": 0.1668553635163568,
+  "volatility_5y": 0.16941640759738943,
+  "volatility_weighted": "Medium",
+  "trend_strength_3m": 14.29,
+  "trend_strength_1y": 14.29,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": -0.059403652279033964,
+  "autocorr_1y": -0.014093248074620148,
+  "skewness": 0.3953452251121858,
+  "kurtosis": 13.396419161231108,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 22:53:22",
+    "data_start_date": "2021-04-26T01:00:00",
+    "data_end_date": "2026-04-22T06:00:00",
+    "data_points_3m": 447,
+    "data_points_1y": 1945,
+    "data_points_5y": 9318,
+    "missing_data_ratio": 0.10899842049587083
+  },
+  "confidence": {
+    "overall": 0.9304122463456008,
+    "volatility": 0.8805298261119376,
+    "trend": 0.9673004738512387,
+    "liquidity": 0.9564006318016517,
+    "data_sufficiency": 1.0,
+    "data_quality": 0.8910015795041292,
+    "feature_stability": 0.8553822537678315,
+    "warnings": []
+  }
+}

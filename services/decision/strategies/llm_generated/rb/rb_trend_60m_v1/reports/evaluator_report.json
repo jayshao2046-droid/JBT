@@ -1,7 +1,7 @@
 {
   "strategy_id": "rb_trend_60m_v1",
-  "evaluation_time": "2026-04-19T13:05:55.402793",
-  "final_score": 57,
+  "evaluation_time": "2026-04-24T19:25:46.955253",
+  "final_score": 47,
   "grade": "D",
   "breakdown": {
     "basic": {
@@ -26,7 +26,9 @@
             "force_close_night",
             "max_drawdown_pct",
             "no_overnight",
-            "per_symbol_fuse_yuan"
+            "per_symbol_fuse_yuan",
+            "stop_loss",
+            "take_profit"
           ]
         },
         "no_overnight": {
@@ -43,33 +45,35 @@
       }
     },
     "backtest": {
-      "score": 13,
+      "score": 0,
       "max": 30,
       "report": {
-        "sharpe_ratio": -1.1496,
-        "max_drawdown": 0.008055,
-        "win_rate": 0.4764,
-        "total_return": -0.007087,
-        "annualized_return": -0.001791,
-        "trades_count": 233,
-        "final_capital": 496456.28,
-        "status": "success"
+        "status": "success",
+        "sharpe_ratio": 0.0,
+        "max_drawdown": 1.0,
+        "win_rate": 0.0,
+        "total_return": 0.0,
+        "annualized_return": 0.0,
+        "trades_count": 0,
+        "final_capital": 500000.0,
+        "report_id": "rpt-31db3380b353",
+        "source": "formal_local"
       }
     },
     "pbo": {
-      "score": 0,
+      "score": 3,
       "max": 10,
       "report": {
         "status": "completed",
         "method": "temporal_stability_4q",
-        "positive_quarters": 0,
+        "positive_quarters": 1,
         "total_quarters": 4,
-        "stability_ratio": 0.0,
+        "stability_ratio": 0.25,
         "quarterly_sharpes": [
-          -0.7304,
-          -0.2198,
-          -2.8296,
-          -0.52
+          -1.0838,
+          -0.0758,
+          0.0,
+          1.0004
         ]
       }
     },
@@ -79,14 +83,14 @@
       "report": {
         "status": "completed",
         "factor_name": "EMA_Cross",
-        "ic_mean": -0.296736,
-        "ic_std": 0.29468,
-        "ic_ir": -1.007,
-        "t_stat": -100.5818,
+        "ic_mean": -0.278423,
+        "ic_std": 0.296511,
+        "ic_ir": -0.939,
+        "t_stat": -63.4501,
         "p_value": 0.01,
-        "ls_return": -9.1e-05,
-        "passed": false,
-        "samples": 9988
+        "ls_return": 0.00019,
+        "passed": true,
+        "samples": 4577
       }
     },
     "risk": {
@@ -136,11 +140,12 @@
     "can_deploy": false,
     "priority": "low",
     "suggestions": [
+      "降低仓位或收紧止损，控制回撤",
       "优化入场时机，提高 Sharpe Ratio",
       "提高入场阈值，提升胜率"
     ],
     "warnings": []
   },
-  "saved_at": "2026-04-19T13:05:55.403157",
+  "saved_at": "2026-04-24T19:25:46.955374",
   "report_type": "evaluator"
 }

@@ -1,0 +1,8 @@
+{
+  "stage": "baseline_local_backtest",
+  "error": "基线本地回测失败: 本地正式回测失败: unsupported expression node Subscript",
+  "context": {},
+  "saved_at": "2026-04-24T19:25:54.710086",
+  "report_type": "failure_baseline_local_backtest",
+  "run_id": "20260424_192552"
+}

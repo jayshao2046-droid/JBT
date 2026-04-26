@@ -762,16 +762,23 @@ class ResearcherScheduler:
         fallback_reason: Optional[str] = None
 
         try:
+            # F1（2026-04-24）：宏观 LLM 参数收紧 — /no_think + num_predict + keep_alive
+            tightened_prompt = "/no_think\n" + prompt
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     f"{ResearcherConfig.OLLAMA_URL}/api/generate",
                     json={
                         "model": ResearcherConfig.OLLAMA_MODEL,
-                        "prompt": prompt,
+                        "prompt": tightened_prompt,
                         "stream": False,
-                        "options": {"temperature": 0.3, "num_ctx": 4096},
+                        "keep_alive": ResearcherConfig.OLLAMA_KEEP_ALIVE,
+                        "options": {
+                            "temperature": 0.3,
+                            "num_ctx": 4096,
+                            "num_predict": ResearcherConfig.OLLAMA_NUM_PREDICT,
+                        },
                     },
-                    timeout=ResearcherConfig.OLLAMA_TIMEOUT,
+                    timeout=ResearcherConfig.OLLAMA_NEWS_TIMEOUT,
                 )
             if resp.status_code != 200:
                 fallback_reason = f"ollama_status_{resp.status_code}"
@@ -1205,6 +1212,20 @@ class ResearcherScheduler:
         new_articles = mini_news_articles + new_articles  # Mini 新闻优先置前
         logger.info(f"[STREAM] 周期 {self._cycle_count}: 新文章 {len(new_articles)} 条")
 
+        # ── F1（2026-04-24）：两段式管线第一段 — 7B 小模型前置筛选 ──
+        # 仅 score >= OLLAMA_PREFILTER_THRESHOLD 的新闻才进入 14B 深分析。
+        # 通过 OLLAMA_PREFILTER_ENABLED=false 可一键回滚单段式。
+        try:
+            from .news_prefilter import prefilter_news
+            _raw_count = len(new_articles)
+            new_articles = await prefilter_news(new_articles)
+            logger.info(
+                f"[STREAM] 前置筛选: {_raw_count} → {len(new_articles)} 条进入 14B"
+            )
+        except Exception as _pf_err:
+            errors.append(f"prefilter: {_pf_err}")
+            logger.warning(f"[PREFILTER] 异常，按全量放行: {_pf_err}")
+
         # 逐条 LLM 分析
         analyzed = []
         total = len(new_articles)
@@ -1480,19 +1501,23 @@ class ResearcherScheduler:
 {{"category":"futures/macro/energy/metals/agriculture/policy/general","relevance":0.0-1.0,"sentiment":"bullish/bearish/neutral","impact":"high/medium/low","symbols":["受影响品种代码"],"summary":"中文分析摘要(100字内)","key_points":["要点1","要点2"],"is_urgent":false}}"""
 
         try:
+            # F1（2026-04-24）：新闻 LLM 参数收紧 — /no_think + num_predict + keep_alive + 短 timeout
+            tightened_prompt = "/no_think\n" + prompt
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     f"{ResearcherConfig.OLLAMA_URL}/api/generate",
                     json={
                         "model": ResearcherConfig.OLLAMA_MODEL,
-                        "prompt": prompt,
+                        "prompt": tightened_prompt,
                         "stream": False,
+                        "keep_alive": ResearcherConfig.OLLAMA_KEEP_ALIVE,
                         "options": {
                             "temperature": 0.3,
                             "num_ctx": 4096,
+                            "num_predict": ResearcherConfig.OLLAMA_NUM_PREDICT,
                         },
                     },
-                    timeout=ResearcherConfig.OLLAMA_TIMEOUT,
+                    timeout=ResearcherConfig.OLLAMA_NEWS_TIMEOUT,
                 )
 
                 if resp.status_code != 200:

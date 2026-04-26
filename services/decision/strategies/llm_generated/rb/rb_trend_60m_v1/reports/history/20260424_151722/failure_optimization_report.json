@@ -1,0 +1,8 @@
+{
+  "stage": "optimization",
+  "error": "调优失败: OOS 数据不足: 33 根（需要 ≥ 50）",
+  "context": {},
+  "saved_at": "2026-04-24T15:17:28.017347",
+  "report_type": "failure_optimization",
+  "run_id": "20260424_151722"
+}

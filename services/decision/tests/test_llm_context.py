@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -112,6 +112,79 @@ def test_context_loader_refreshes_after_ttl(mock_daily_context):
 
 
 @pytest.mark.asyncio
+async def test_l2_context_uses_local_research_store_for_researcher_summary():
+    """L2 上下文应从本地 ResearchStore 读取 researcher 摘要，不再发第三次远端 latest 请求。"""
+    from src.llm.context_loader import get_l2_context
+
+    store = MagicMock()
+    store.get_fact_overview.return_value = {
+        "data": {
+            "available": True,
+            "label": "数据研报",
+            "latest_primary": {
+                "source_report": {"summary": "黑色系午盘偏强"},
+                "fact_record": {},
+            },
+        },
+        "intelligence": {
+            "available": True,
+            "label": "情报研报",
+            "fact_group": "intelligence",
+            "latest_primary": {
+                "source_report": {
+                    "macro_trend": "risk_on",
+                    "risk_level": "medium",
+                    "key_drivers": ["政策宽松"],
+                },
+                "fact_record": {},
+            },
+        },
+        "sentiment": {
+            "available": True,
+            "label": "情绪研报",
+            "latest_primary": {
+                "source_report": {"summary": "新闻情绪偏多"},
+                "fact_record": {},
+            },
+        },
+    }
+
+    daily_bars = [
+        {"datetime": f"2026-04-{index + 1:02d}T00:00:00", "close": 100 + index, "volume": 1000 + index}
+        for index in range(20)
+    ]
+    minute_bars = [
+        {"datetime": f"2026-04-24T10:{index:02d}:00", "close": 200 + index}
+        for index in range(60)
+    ]
+
+    mock_http = MagicMock()
+
+    daily_response = MagicMock()
+    daily_response.raise_for_status = MagicMock()
+    daily_response.json.return_value = {"bars": daily_bars}
+
+    minute_response = MagicMock()
+    minute_response.raise_for_status = MagicMock()
+    minute_response.json.return_value = {"bars": minute_bars}
+
+    mock_http.get = AsyncMock(side_effect=[daily_response, minute_response])
+    mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+    mock_http.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("src.llm.context_loader.ResearchStore", return_value=store):
+        with patch("src.llm.context_loader.httpx.AsyncClient", return_value=mock_http):
+            context, missing_sources = await get_l2_context("RB2505")
+
+    assert "本地 researcher 摘要" in context
+    assert "黑色系午盘偏强" in context
+    assert "政策宽松" in context
+    assert "新闻情绪偏多" in context
+    assert "研报摘要" not in missing_sources
+    assert mock_http.get.await_count == 2
+
+
+@pytest.mark.asyncio
 async def test_pipeline_research_with_context(mock_daily_context):
     """有上下文时，LLM 调用的 messages 中包含 researcher_context。"""
     from src.llm.pipeline import LLMPipeline
@@ -139,28 +212,32 @@ async def test_pipeline_research_with_context(mock_daily_context):
 
 @pytest.mark.asyncio
 async def test_pipeline_research_without_context():
-    """无上下文（ctx=None）时，LLM 调用行为与原有一致。"""
+    """无 data context 且无本地宏观摘要时，LLM 调用保持裸 intent。"""
     from src.llm.pipeline import LLMPipeline
 
     with patch("src.llm.pipeline.get_daily_context") as mock_get_ctx:
         mock_get_ctx.return_value = None  # 模拟 data 服务不可用
 
-        with patch("src.llm.client.OllamaClient.chat") as mock_chat:
-            mock_chat.return_value = {"content": "# Generated code", "model": "deepcoder:14b"}
+        with patch("src.llm.pipeline.ResearchStore.get_macro_summary") as mock_macro:
+            mock_macro.return_value = None
 
-            pipeline = LLMPipeline()
-            result = await pipeline.research("生成一个均线策略")
+            with patch("src.llm.client.OllamaClient.chat") as mock_chat:
+                mock_chat.return_value = {"content": "# Generated code", "model": "deepcoder:14b"}
 
-            assert "error" not in result
-            assert result["code"] == "# Generated code"
+                pipeline = LLMPipeline()
+                result = await pipeline.research("生成一个均线策略")
 
-            # 验证 messages 中不包含上下文标记
-            call_args = mock_chat.call_args
-            messages = call_args[0][1]
-            user_content = messages[1]["content"]
+                assert "error" not in result
+                assert result["code"] == "# Generated code"
 
-            assert "[今日市场预读]" not in user_content, "无上下文时不应包含上下文标记"
-            assert user_content == "生成一个均线策略", "无上下文时 user content 应与 intent 一致"
+                # 验证 messages 中不包含上下文标记
+                call_args = mock_chat.call_args
+                messages = call_args[0][1]
+                user_content = messages[1]["content"]
+
+                assert "[今日市场预读]" not in user_content, "无上下文时不应包含上下文标记"
+                assert "[最新宏观评级]" not in user_content, "无本地宏观摘要时不应注入宏观上下文"
+                assert user_content == "生成一个均线策略", "无上下文时 user content 应与 intent 一致"
 
 
 @pytest.mark.asyncio

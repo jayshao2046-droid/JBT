@@ -1,0 +1,37 @@
+{
+  "symbol": "SHFE.ru",
+  "volatility_3m": 0.2783571264873058,
+  "volatility_1y": 0.2476315819293283,
+  "volatility_5y": 0.2995567997485832,
+  "volatility_weighted": "Medium",
+  "trend_strength_3m": 38.95,
+  "trend_strength_1y": 38.95,
+  "trend_strength_weighted": "Strong",
+  "autocorr_3m": -0.06163927530646731,
+  "autocorr_1y": -0.02928581795652465,
+  "skewness": 2.9784481949267634,
+  "kurtosis": 73.33842956340543,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:54:40",
+    "data_start_date": "2018-04-27T01:00:00",
+    "data_end_date": "2026-04-22T06:30:00",
+    "data_points_3m": 1263,
+    "data_points_1y": 5463,
+    "data_points_5y": 43624,
+    "missing_data_ratio": 0.3697735980701231
+  },
+  "confidence": {
+    "overall": 0.8667831307113756,
+    "volatility": 0.8518446258135002,
+    "trend": 0.8890679205789631,
+    "liquidity": 0.8520905607719507,
+    "data_sufficiency": 1.0,
+    "data_quality": 0.6302264019298769,
+    "feature_stability": 0.9379611753908952,
+    "warnings": [
+      "数据质量较低: 缺失率 36.98%"
+    ]
+  }
+}

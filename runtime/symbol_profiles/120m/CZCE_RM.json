@@ -1,0 +1,35 @@
+{
+  "symbol": "CZCE.RM",
+  "volatility_3m": 0.165355370312395,
+  "volatility_1y": 0.14800327417683615,
+  "volatility_5y": 0.1859705771808645,
+  "volatility_weighted": "Medium",
+  "trend_strength_3m": 28.78,
+  "trend_strength_1y": 28.78,
+  "trend_strength_weighted": "Medium",
+  "autocorr_3m": -0.034706463437215035,
+  "autocorr_1y": -0.03157500539916552,
+  "skewness": 0.6307817514675615,
+  "kurtosis": 8.89556740942971,
+  "liquidity": "High",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-26 00:23:05",
+    "data_start_date": "2018-05-02T00:00:00",
+    "data_end_date": "2026-04-22T10:00:00",
+    "data_points_3m": 328,
+    "data_points_1y": 1418,
+    "data_points_5y": 11385,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.9859310441079894,
+    "volatility": 0.9648276102699733,
+    "trend": 1.0,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.9413793504499557,
+    "warnings": []
+  }
+}

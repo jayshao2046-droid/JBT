@@ -1,0 +1,41 @@
+name: STRAT_dce_i_aroon_trend_60m
+description: DCE.i Aroon趋势方向：Aroon上线强势 + 振荡子方向 + ADX确认 60m
+version: '1.0'
+category: trend_following
+factors:
+- factor_name: Aroon
+  params:
+    period: 25
+- factor_name: ADX
+  params:
+    period: 14
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: aroon_up > 70 and aroon_oscillator > 0 and adx > 17
+  short_condition: aroon_up < 30 and aroon_oscillator < 0 and adx > 17
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.06
+symbols:
+- KQ.m@DCE.i
+transaction_costs:
+  slippage_per_unit: 0.5
+  commission_per_lot_round_turn: 3.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 2.28
+  take_profit:
+    type: atr
+    atr_multiplier: 3.8
+  force_close_night: '22:55'
+tags:
+- DCE
+- i
+- aroon_trend
+- trend_following
+- 60m

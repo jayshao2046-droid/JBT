@@ -93,3 +93,90 @@ class TestResearcherScheduler:
 
             assert len(researches) == 1
             assert researches[0].symbol == "KQ.m@SHFE.rb"
+
+    def test_build_futures_context_report(self):
+        """测试 Mini 分钟K上下文可直接转成数据研报。"""
+        scheduler = ResearcherScheduler()
+        scheduler._context_cache = {
+            "futures_minute": [
+                {
+                    "symbol": "KQ_m_SHFE_rb",
+                    "latest_close": 3421.0,
+                    "change_pct": 1.26,
+                    "volume": 10000,
+                },
+                {
+                    "symbol": "KQ_m_DCE_i",
+                    "latest_close": 781.0,
+                    "change_pct": -0.88,
+                    "volume": 8500,
+                },
+            ]
+        }
+
+        report = scheduler._build_futures_context_report("2026-04-24", 17)
+
+        assert report is not None
+        assert report["report_type"] == "futures"
+        assert report["symbols_covered"] == 2
+        assert report["futures_summary"]["symbols_covered"] == 2
+        assert "Mini 近2小时分钟K覆盖 2 个期货主连" in report["summary"]
+        assert len(report["data"]["reports"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_refresh_mini_context_uses_wider_futures_window_off_hours(self):
+        """测试非交易时段会扩大 futures_minute 查询窗口，避免盘后 data 研报为空。"""
+        scheduler = ResearcherScheduler()
+
+        with patch("researcher.scheduler.is_trading_hours", return_value=False):
+            with patch.object(scheduler.mini_client, "get_context_data", return_value=[]):
+                with patch.object(
+                    scheduler.mini_client,
+                    "get_futures_minute_context",
+                    return_value=[{"symbol": "KQ_m_SHFE_rb", "latest_close": 3421.0, "change_pct": 1.26}],
+                ) as mock_futures:
+                    refreshed = await scheduler._refresh_mini_context()
+
+        assert refreshed is True
+        mock_futures.assert_called_once_with(hours=8)
+        assert scheduler._futures_minute_lookback_hours == 8
+        assert len(scheduler._context_cache["futures_minute"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_analyze_mini_context_falls_back_without_llm(self):
+        """测试宏观 LLM 不可用时仍生成可消费的情报研报。"""
+        scheduler = ResearcherScheduler()
+        scheduler._context_cache = {
+            "macro": [{"indicator": "cpi", "value": 2.1, "timestamp": "2026-04-24"}],
+            "sentiment": [{"indicator": "north_flow", "net_buy": 10, "timestamp": "2026-04-24"}],
+            "futures_minute": [
+                {"symbol": "KQ_m_SHFE_rb", "latest_close": 3421.0, "change_pct": 1.26, "volume": 10000},
+                {"symbol": "KQ_m_DCE_i", "latest_close": 781.0, "change_pct": -0.88, "volume": 8500},
+            ],
+        }
+
+        class _DummyResponse:
+            status_code = 503
+
+            def json(self):
+                return {}
+
+        class _DummyClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *args, **kwargs):
+                return _DummyResponse()
+
+        with patch("researcher.scheduler.httpx.AsyncClient", return_value=_DummyClient()):
+            report = await scheduler._analyze_mini_context("2026-04-24", 17)
+
+        assert report is not None
+        assert report["report_type"] == "macro"
+        assert report["macro_trend"] in {"偏多", "偏空", "震荡"}
+        assert report["risk_level"] in {"high", "medium", "low"}
+        assert report["data_coverage"]["futures_minute"] == 2
+        assert "回退摘要" in report["risk_note"]

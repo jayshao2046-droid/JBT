@@ -1,0 +1,8 @@
+{
+  "stage": "baseline_local_backtest",
+  "error": "基线本地回测失败: 本地正式回测失败: risk.daily_loss_limit must be greater than or equal to zero",
+  "context": {},
+  "saved_at": "2026-04-24T19:26:11.344277",
+  "report_type": "failure_baseline_local_backtest",
+  "run_id": "20260424_192609"
+}

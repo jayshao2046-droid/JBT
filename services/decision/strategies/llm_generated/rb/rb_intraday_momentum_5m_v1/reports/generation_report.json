@@ -1,0 +1,224 @@
+{
+  "strategy_name": "rb_intraday_momentum_5m_v1",
+  "symbol": "rb",
+  "category": "intraday_momentum",
+  "timeframe": 5,
+  "factors": [
+    "ATR",
+    "RSI",
+    "VolumeRatio"
+  ],
+  "design_prompt": "为 rb 品种设计一个 intraday_momentum 策略。\n品种特征: 品种: rb（特征分析失败，使用保守参数）\n时间周期: 5 分钟\n核心因子: ATR, RSI, VolumeRatio\n策略描述: 5分钟ATR波动脉冲+RSI动量+成交量确认的日内动量策略\n\n输出 JSON 格式的策略设计，包含：\n- strategy_name: rb_intraday_momentum_5m_v1\n- logic_description: 策略逻辑描述\n- entry_logic: 做多入场条件\n- exit_logic: 做多出场条件\n- short_entry_logic: 做空入场条件\n- short_exit_logic: 做空出场条件\n- risk_management: 风险管理方案（止损止盈规则）\n- recommended_factors: 推荐使用的技术指标列表\n",
+  "design_response": {
+    "strategy_name": "rb_intraday_momentum_5m_v1",
+    "logic_description": "基于5分钟K线的日内动量策略，核心逻辑为：当ATR突破近期均值表明波动放大时，结合RSI判断动量方向，并要求成交量放大确认，形成三重共振入场信号。策略仅在日内交易时段运行，尾盘强制平仓，适用于螺纹钢(rb)品种的趋势脉冲行情。保守参数设定以控制回撤。",
+    "entry_logic": {
+      "description": "做多入场条件（三条件同时满足）",
+      "conditions": [
+        {
+          "factor": "ATR_Pulse",
+          "rule": "当前5分钟K线的ATR(14) > ATR(14)的20周期简单移动均值 × 1.3",
+          "meaning": "波动率脉冲放大，市场出现方向性运动"
+        },
+        {
+          "factor": "RSI_Momentum",
+          "rule": "RSI(14) > 55 且 RSI(14) < 80 且 RSI(14) > RSI(14)[1]",
+          "meaning": "RSI处于多头区间且仍在上升，动量向上但未过热"
+        },
+        {
+          "factor": "VolumeRatio",
+          "rule": "当前5分钟成交量 > 过去20根K线成交量均值 × 1.5",
+          "meaning": "成交量显著放大，确认资金推动有效性"
+        }
+      ],
+      "additional_filters": [
+        "收盘价 > EMA(20)，确认短期趋势向上",
+        "当前时间在 09:05 ~ 14:30 之间（避开开盘剧烈波动和尾盘平仓期）",
+        "距离上一次平仓至少间隔3根K线（15分钟冷却期，避免频繁交易）"
+      ],
+      "execution": "在满足条件的5分钟K线收盘时，以下一根K线开盘价挂单入场"
+    },
+    "exit_logic": {
+      "description": "做多出场条件（任一满足即平仓）",
+      "conditions": [
+        {
+          "type": "止盈",
+          "rule": "浮盈达到 2 × ATR(14) 入场时刻值",
+          "meaning": "目标利润为入场时波动率的2倍"
+        },
+        {
+          "type": "止损",
+          "rule": "浮亏达到 1 × ATR(14) 入场时刻值",
+          "meaning": "止损为入场时波动率的1倍，盈亏比2:1"
+        },
+        {
+          "type": "动量衰竭",
+          "rule": "RSI(14) 从高位回落跌破50",
+          "meaning": "多头动量消失，主动离场"
+        },
+        {
+          "type": "量能萎缩",
+          "rule": "连续2根K线成交量 < 20周期均量 × 0.7",
+          "meaning": "资金推动力不足，趋势难以延续"
+        },
+        {
+          "type": "移动止盈",
+          "rule": "浮盈超过 1 × ATR 后，回撤 0.5 × ATR 则止盈离场",
+          "meaning": "锁定部分利润，防止盈利大幅回吐"
+        },
+        {
+          "type": "日内强平",
+          "rule": "14:50 强制平掉所有持仓",
+          "meaning": "日内策略不隔夜，规避隔夜跳空风险"
+        }
+      ]
+    },
+    "short_entry_logic": {
+      "description": "做空入场条件（三条件同时满足）",
+      "conditions": [
+        {
+          "factor": "ATR_Pulse",
+          "rule": "当前5分钟K线的ATR(14) > ATR(14)的20周期简单移动均值 × 1.3",
+          "meaning": "波动率脉冲放大"
+        },
+        {
+          "factor": "RSI_Momentum",
+          "rule": "RSI(14) < 45 且 RSI(14) > 20 且 RSI(14) < RSI(14)[1]",
+          "meaning": "RSI处于空头区间且仍在下降，动量向下但未过度超卖"
+        },
+        {
+          "factor": "VolumeRatio",
+          "rule": "当前5分钟成交量 > 过去20根K线成交量均值 × 1.5",
+          "meaning": "放量下跌确认空头力量"
+        }
+      ],
+      "additional_filters": [
+        "收盘价 < EMA(20)，确认短期趋势向下",
+        "当前时间在 09:05 ~ 14:30 之间",
+        "距离上一次平仓至少间隔3根K线（15分钟冷却期）"
+      ],
+      "execution": "在满足条件的5分钟K线收盘时，以下一根K线开盘价挂单入场"
+    },
+    "short_exit_logic": {
+      "description": "做空出场条件（任一满足即平仓）",
+      "conditions": [
+        {
+          "type": "止盈",
+          "rule": "浮盈达到 2 × ATR(14) 入场时刻值"
+        },
+        {
+          "type": "止损",
+          "rule": "浮亏达到 1 × ATR(14) 入场时刻值"
+        },
+        {
+          "type": "动量衰竭",
+          "rule": "RSI(14) 从低位回升突破50"
+        },
+        {
+          "type": "量能萎缩",
+          "rule": "连续2根K线成交量 < 20周期均量 × 0.7"
+        },
+        {
+          "type": "移动止盈",
+          "rule": "浮盈超过 1 × ATR 后，回撤 0.5 × ATR 则止盈离场"
+        },
+        {
+          "type": "日内强平",
+          "rule": "14:50 强制平掉所有空头持仓"
+        }
+      ]
+    },
+    "risk_management": {
+      "position_sizing": {
+        "method": "固定风险百分比法",
+        "max_risk_per_trade": "单笔亏损不超过账户净值的1%",
+        "formula": "手数 = (账户净值 × 1%) / (ATR(14) × 合约乘数)",
+        "contract_multiplier": 10,
+        "unit": "元/吨"
+      },
+      "daily_limits": {
+        "max_daily_loss": "账户净值的3%，触及后当日停止交易",
+        "max_daily_trades": 6,
+        "max_consecutive_losses": "连续3次止损后暂停交易30分钟"
+      },
+      "stop_loss": {
+        "initial_stop": "1 × ATR(14)，入场时刻计算",
+        "trailing_stop": "盈利超过1×ATR后启动移动止盈，回撤0.5×ATR平仓",
+        "hard_stop": "固定最大止损20点（防止极端行情ATR过大导致止损过宽）"
+      },
+      "take_profit": {
+        "primary_target": "2 × ATR(14)",
+        "partial_exit": "盈利达1.5×ATR时可平仓50%，剩余部分移动止盈跟踪"
+      },
+      "time_management": {
+        "no_entry_after": "14:30（距收盘不足30分钟不开新仓）",
+        "force_close": "14:50 全部平仓",
+        "no_entry_before": "09:05（开盘前5分钟不交易，等待首根K线定价）"
+      },
+      "special_rules": [
+        "夜盘时段(21:00-23:00)如启用，需单独控制仓位，不超过日盘仓位的50%",
+        "重大数据发布前后15分钟不开新仓（如经济数据、政策消息等）",
+        "当日盈利达账户净值5%时可选择止盈休息"
+      ]
+    },
+    "recommended_factors": [
+      {
+        "name": "ATR",
+        "period": 14,
+        "timeframe": "5min",
+        "usage": "衡量波动率脉冲，判断市场是否进入趋势状态，同时用于动态止损止盈计算"
+      },
+      {
+        "name": "RSI",
+        "period": 14,
+        "timeframe": "5min",
+        "usage": "判断动量方向和强度，多头区间>55做多，空头区间<45做空，避免超买超卖极值区"
+      },
+      {
+        "name": "VolumeRatio",
+        "period": 20,
+        "timeframe": "5min",
+        "usage": "成交量相对比率，>1.5倍确认资金推动有效性"
+      },
+      {
+        "name": "EMA",
+        "period": 20,
+        "timeframe": "5min",
+        "usage": "短期趋势过滤器，价格在EMA上方只做多，下方只做空"
+      },
+      {
+        "name": "VWAP",
+        "period": "intraday",
+        "timeframe": "5min",
+        "usage": "辅助参考：日内成交量加权均价，可作为额外的趋势确认和支撑阻力参考"
+      },
+      {
+        "name": "ATR_MA_Ratio",
+        "formula": "ATR(14) / SMA(ATR(14), 20)",
+        "timeframe": "5min",
+        "usage": "波动率扩张比率，>1.3触发脉冲信号"
+      }
+    ],
+    "parameter_summary": {
+      "ATR_period": 14,
+      "ATR_pulse_threshold": 1.3,
+      "RSI_period": 14,
+      "RSI_long_entry": "55-80",
+      "RSI_short_entry": "20-45",
+      "Volume_lookback": 20,
+      "Volume_threshold": 1.5,
+      "EMA_period": 20,
+      "profit_target_atr_multiple": 2.0,
+      "stop_loss_atr_multiple": 1.0,
+      "trailing_trigger_atr": 1.0,
+      "trailing_step_atr": 0.5,
+      "cooldown_bars": 3,
+      "note": "以上为保守参数设定，适用于rb品种特征分析不充分时的初始部署，建议经过至少3个月回测后再优化参数"
+    }
+  },
+  "model": "claude-opus-4-6",
+  "generated_at": "2026-04-24T19:23:00.831204",
+  "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/rb/rb_intraday_momentum_5m_v1.yaml",
+  "saved_at": "2026-04-24T19:23:00.831465",
+  "report_type": "generation"
+}

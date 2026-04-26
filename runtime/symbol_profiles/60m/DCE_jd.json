@@ -1,0 +1,35 @@
+{
+  "symbol": "DCE.jd",
+  "volatility_3m": 0.269299570516185,
+  "volatility_1y": 0.3068946620368456,
+  "volatility_5y": 0.27150970384089007,
+  "volatility_weighted": "Medium",
+  "trend_strength_3m": 15.92,
+  "trend_strength_1y": 15.92,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": 0.005771672755013261,
+  "autocorr_1y": 0.0011340633084096548,
+  "skewness": 13.072258719513387,
+  "kurtosis": 315.2050478968122,
+  "liquidity": "High",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:57:41",
+    "data_start_date": "2018-04-27T01:00:00",
+    "data_end_date": "2026-04-22T11:00:00",
+    "data_points_3m": 278,
+    "data_points_1y": 1198,
+    "data_points_5y": 9683,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.9852998062835723,
+    "volatility": 0.9632495157089305,
+    "trend": 1.0,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.9387491928482175,
+    "warnings": []
+  }
+}

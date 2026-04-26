@@ -1,0 +1,8 @@
+{
+  "stage": "optimization",
+  "error": "调优失败: zero_trades | 各单项阈值均有 ≥15% K线满足，问题可能是多条件 AND 组合交集为空，建议减少 AND 条件数量或降低 confirm_bars",
+  "context": {},
+  "saved_at": "2026-04-24T16:36:25.731894",
+  "report_type": "failure_optimization",
+  "run_id": "20260424_163605"
+}

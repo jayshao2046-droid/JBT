@@ -3,7 +3,7 @@
 【类型】标准实施任务  
 【建档】Atlas  
 【日期】2026-04-18  
-【状态】2026-04-24 decision 内部 TqSdk U0 直修已收口，待继续推进 35 品种正式执行  
+【状态】2026-04-24 单策略真实闭环已验证，LLM 自动化主链收口完成；待推进 35 品种全量执行与后续参数放宽  
 【授权人】Jay.S  
 【执行 Agent】Livis  
 【服务边界】仅限 services/decision 单服务  
@@ -294,6 +294,49 @@ Livis 必须按品种串行，不得 35 个品种并发推进。
 - 结果：修复后 `29.9s` 内返回 `status=completed`
 - 结论：decision 内部 TqSdk 正式回测结果回收链已恢复；原“超时”症状根因已排除
 
+### 7.6 2026-04-24 主链验收与收口结论
+
+#### 最小真实闭环样本
+
+- 验收样本：`rb` 品种流水线中的 `rb_trend_60m_v1`
+- 验收日志：`/tmp/pipeline_rb_v2.log`
+- 真实执行时间：2026-04-24 19:21 ~ 19:26
+
+#### 已确认跑通的步骤
+
+1. LLM 生成 YAML 策略
+2. Optuna 调优并写回最优参数
+3. decision 内部 formal local 回测
+4. 策略评分
+5. 分桶归档到 `services/decision/strategies/llm_ranked/`
+6. 报告证据复制到评分目录
+7. 飞书完成通知发送成功（Feishu webhook 返回 `HTTP 200`）
+
+#### 现场证据
+
+- `rb_trend_60m_v1` 已在评分目录形成完整证据链：
+  - `generation_report.json`
+  - `optimization_report.json`
+  - `local_backtest_report.json`
+  - `tqsdk_backtest_report.json`
+  - `evaluator_report.json`
+- `rb_trend_60m_v1` 已分桶到：`services/decision/strategies/llm_ranked/小于60分/rb/rb_trend_60m_v1/`
+- 日志已确认执行到 `[7/7] 发送飞书通知...`，且返回 `✅ 飞书通知已发送: rb_trend_60m_v1`
+
+#### 当前未闭环部分
+
+- 这次收口证明的是“LLM 自动化主链已跑通”，不是“35 品种全量执行已完成”。
+- 同一轮 `rb` 验证中其余 6 个策略失败，失败原因已收敛为独立上游问题：
+  1. `SHFE.rb_main0` 数据取数 `422`
+  2. `unsupported expression node Subscript`
+  3. `risk.daily_loss_limit must be greater than or equal to zero`
+- 因此，当前系统状态应判定为：**主链闭环已成立，全量生产仍待继续推进。**
+
 ## 8. 当前派发结论
 
-U0 开发阶段已完成，且 2026-04-24 decision 内部 TqSdk 结果回收链已完成事后修复收口。当前阻塞已从“TqSdk 长等待超时”收敛为其余候选策略自身的 YAML / 数据 /调优问题，可继续推进后续 35 品种正式执行与剩余问题剥离。
+U0 开发阶段已完成，且 2026-04-24 已完成两层收口：
+
+1. decision 内部 TqSdk 结果回收链修复已确认有效；
+2. `rb_trend_60m_v1` 已真实走通“生成 → 调优 → 本地回测 → TqSdk/证据回收 → 评分 → 分桶 → 飞书通知”的自动化主链。
+
+当前可以正式认定：**LLM 自动化主链已跑通并完成收口**。后续主线不再是排查链路是否可达，而是继续推进 35 品种全量执行，并把重心转向 LLM 生成/调优参数放宽，减少无价值策略、无信号策略和非法风险参数策略的比例。

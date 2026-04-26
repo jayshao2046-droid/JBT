@@ -79,7 +79,7 @@ queue_manager: Optional[QueueManager] = None
 _continuous_thread: Optional[threading.Thread] = None
 _continuous_running: bool = False
 
-# 防止 execute_hourly 并发重入（callback / /run 端点共享）
+# 防止 /run 端点触发的 execute_hourly 并发重入
 _hourly_lock = threading.Lock()
 
 # 全量采集状态
@@ -173,14 +173,16 @@ def _continuous_loop_thread():
                     f"today_total={today_total}, elapsed={elapsed:.1f}s"
                 )
                 _flush_all_logs()
-                # 如果本轮无新内容，等待 30 秒后再轮询
+                # 如果本轮无新内容，则等待 callback 等事件请求或 30 秒后再轮询
                 if new_art == 0 and kline == 0:
-                    import time as time_mod
-                    time_mod.sleep(30)
+                    wait_reason = scheduler.wait_for_stream_cycle_request(timeout_seconds=30) if scheduler else None
+                    if wait_reason:
+                        logger.info(f"[LOOP] 收到即时 stream 请求，提前开始下一轮: reason={wait_reason}")
             except Exception as e:
                 logger.error(f"[LOOP] 流式周期 {loop_count} 异常: {e}", exc_info=True)
-                import time as time_mod
-                time_mod.sleep(60)
+                wait_reason = scheduler.wait_for_stream_cycle_request(timeout_seconds=60) if scheduler else None
+                if wait_reason:
+                    logger.info(f"[LOOP] 异常后收到即时 stream 请求，提前重试: reason={wait_reason}")
     finally:
         loop.close()
     logger.info(f"[LOOP] 流式研究循环结束，共完成 {loop_count} 轮")
@@ -313,8 +315,10 @@ async def data_collection_callback(request: CallbackRequest):
     """
     接收 Mini data 采集器回调
 
-    当 Mini data 采集完成后，自动触发研究员分析
+    当 Mini data 采集完成后，请求一次即时 stream cycle。
     """
+    global scheduler, _continuous_thread
+
     logger.info(
         f"[CALLBACK] 收到 Mini data 回调: "
         f"collector={request.collector}, "
@@ -322,13 +326,21 @@ async def data_collection_callback(request: CallbackRequest):
         f"elapsed={request.elapsed_sec:.2f}s"
     )
 
-    # 触发研究员分析
-    hour = datetime.now().hour
-    await trigger_research(hour=hour)
+    if not scheduler:
+        raise HTTPException(status_code=500, detail="调度器未初始化")
+
+    if not _continuous_thread or not _continuous_thread.is_alive():
+        raise HTTPException(status_code=503, detail="stream 主链未运行")
+
+    reason = f"callback:{request.source}:{request.collector}"
+    scheduler.request_stream_cycle(reason=reason)
+    logger.info(f"[CALLBACK] 已请求即时 stream cycle: reason={reason}")
 
     return {
         "success": True,
-        "message": "已触发研究员分析"
+        "message": "已请求即时 stream cycle",
+        "trigger": "stream_cycle",
+        "timestamp": datetime.now().isoformat(),
     }
 
 

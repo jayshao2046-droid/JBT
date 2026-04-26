@@ -1,0 +1,43 @@
+name: STRAT_shfe_rb_macd_adx_60m
+description: SHFE.rb MACD + ADX 强趋势确认 60m
+version: '1.0'
+category: trend_following
+factors:
+- factor_name: MACD
+  params:
+    fast: 12
+    slow: 26
+    signal: 9
+- factor_name: ADX
+  params:
+    period: 14
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: macd_hist > 0 and macd_line > 0 and adx > 20
+  short_condition: macd_hist < 0 and macd_line < 0 and adx > 20
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.068
+symbols:
+- KQ.m@SHFE.rb
+transaction_costs:
+  slippage_per_unit: 1.0
+  commission_per_lot_round_turn: 3.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 2.53
+  take_profit:
+    type: atr
+    atr_multiplier: 4.42
+  force_close_night: '22:55'
+tags:
+- SHFE
+- rb
+- macd_adx
+- trend_following
+- 60m

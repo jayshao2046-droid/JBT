@@ -1,0 +1,35 @@
+{
+  "symbol": "CZCE.CF",
+  "volatility_3m": 0.13394911168625084,
+  "volatility_1y": 0.10152993215827363,
+  "volatility_5y": 0.15794138121124746,
+  "volatility_weighted": "Low",
+  "trend_strength_3m": 48.99,
+  "trend_strength_1y": 48.99,
+  "trend_strength_weighted": "Strong",
+  "autocorr_3m": -0.07168563451210908,
+  "autocorr_1y": -0.033488717432356374,
+  "skewness": -0.1939088679975013,
+  "kurtosis": 15.067841870412394,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:54:57",
+    "data_start_date": "2018-04-27T01:00:00",
+    "data_end_date": "2026-04-22T11:00:00",
+    "data_points_3m": 657,
+    "data_points_1y": 2849,
+    "data_points_5y": 23163,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.9616832055270881,
+    "volatility": 0.9042080138177201,
+    "trend": 1.0,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.8403466896962002,
+    "warnings": []
+  }
+}

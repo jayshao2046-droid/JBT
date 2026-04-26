@@ -1,0 +1,40 @@
+name: STRAT_czce_sr_wr_reversion_60m
+description: CZCE.SR Williams %R 极值均值回归：WR超买超卖反转 60m
+version: '1.0'
+category: mean_reversion
+factors:
+- factor_name: WilliamsR
+  params:
+    period: 14
+- factor_name: EMA
+  params:
+    period: 20
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: williams_r < -80 and close > ema
+  short_condition: williams_r > -20 and close < ema
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.06
+symbols:
+- KQ.m@CZCE.SR
+transaction_costs:
+  slippage_per_unit: 1.0
+  commission_per_lot_round_turn: 2.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 1.65
+  take_profit:
+    type: atr
+    atr_multiplier: 2.2
+tags:
+- CZCE
+- SR
+- wr_reversion
+- mean_reversion
+- 60m

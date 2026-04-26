@@ -1,0 +1,8 @@
+{
+  "stage": "optimization",
+  "error": "调优失败: 数据获取失败 SHFE.rb_main0: Client error '422 Unprocessable Entity' for url 'http://192.168.31.74:8105/api/v1/bars?symbol=SHFE.rb_main0&start=2022-01-01&end=2024-05-26&timeframe_minutes=15'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422",
+  "context": {},
+  "saved_at": "2026-04-24T19:25:52.992202",
+  "report_type": "failure_optimization",
+  "run_id": "20260424_192547"
+}

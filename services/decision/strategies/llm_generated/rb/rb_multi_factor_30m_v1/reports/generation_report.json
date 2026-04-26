@@ -1,0 +1,255 @@
+{
+  "strategy_name": "rb_multi_factor_30m_v1",
+  "symbol": "rb",
+  "category": "multi_factor",
+  "timeframe": 30,
+  "factors": [
+    "MACD",
+    "CCI",
+    "ATR",
+    "VolumeRatio"
+  ],
+  "design_prompt": "为 rb 品种设计一个 multi_factor 策略。\n品种特征: 品种: rb（特征分析失败，使用保守参数）\n时间周期: 30 分钟\n核心因子: MACD, CCI, ATR, VolumeRatio\n策略描述: 30分钟MACD+CCI+ATR+成交量四因子复合的多因子策略\n\n输出 JSON 格式的策略设计，包含：\n- strategy_name: rb_multi_factor_30m_v1\n- logic_description: 策略逻辑描述\n- entry_logic: 做多入场条件\n- exit_logic: 做多出场条件\n- short_entry_logic: 做空入场条件\n- short_exit_logic: 做空出场条件\n- risk_management: 风险管理方案（止损止盈规则）\n- recommended_factors: 推荐使用的技术指标列表\n",
+  "design_response": {
+    "strategy_name": "rb_multi_factor_30m_v1",
+    "logic_description": "30分钟周期下，基于MACD趋势判断、CCI超买超卖过滤、ATR动态波动率适配及成交量比率确认的四因子复合多因子策略。四个因子分别承担趋势识别、动量过滤、波动率适配和量能确认的角色，只有当多数因子共振时才触发交易信号，以提高胜率并降低假信号。由于品种特征分析失败，所有参数采用保守设定，仓位偏低，止损偏宽。",
+    "entry_logic": {
+      "description": "做多入场条件（需同时满足以下全部条件）",
+      "conditions": [
+        {
+          "factor": "MACD",
+          "condition": "DIF 上穿 DEA（金叉），且 MACD 柱状值 > 0 并连续放大至少2根K线",
+          "params": {
+            "fast_period": 12,
+            "slow_period": 26,
+            "signal_period": 9
+          }
+        },
+        {
+          "factor": "CCI",
+          "condition": "CCI 从 -100 以下回升并突破 -100，或 CCI 处于 -100 ~ +100 区间且方向向上",
+          "params": {
+            "period": 20,
+            "oversold_threshold": -100,
+            "overbought_threshold": 100
+          }
+        },
+        {
+          "factor": "ATR",
+          "condition": "当前ATR值处于近60根K线ATR的30%~70%分位区间（排除极端低波动和极端高波动行情）",
+          "params": {
+            "period": 14,
+            "lookback_window": 60,
+            "percentile_low": 30,
+            "percentile_high": 70
+          }
+        },
+        {
+          "factor": "VolumeRatio",
+          "condition": "当前K线成交量 / 过去20根K线平均成交量 >= 1.3（量能放大确认）",
+          "params": {
+            "period": 20,
+            "min_ratio": 1.3
+          }
+        }
+      ],
+      "execution": "在满足全部条件的当根30分钟K线收盘价位置挂单入场，若下一根K线开盘价偏离超过1个ATR则放弃本次入场"
+    },
+    "exit_logic": {
+      "description": "做多出场条件（满足任一即平仓）",
+      "conditions": [
+        {
+          "name": "MACD死叉出场",
+          "condition": "DIF 下穿 DEA（死叉），且 MACD 柱状值由正转负"
+        },
+        {
+          "name": "CCI超买回落出场",
+          "condition": "CCI 上穿 +200 后回落跌破 +100"
+        },
+        {
+          "name": "止损出场",
+          "condition": "价格跌破入场价 - 2.0 × ATR(14)"
+        },
+        {
+          "name": "止盈出场",
+          "condition": "价格上涨至入场价 + 3.0 × ATR(14)"
+        },
+        {
+          "name": "时间出场",
+          "condition": "持仓超过20根30分钟K线（即10小时）仍未触发止盈或止损，则按市价平仓"
+        },
+        {
+          "name": "量能萎缩出场",
+          "condition": "连续3根K线的VolumeRatio均低于0.5，表明市场参与度显著下降"
+        }
+      ]
+    },
+    "short_entry_logic": {
+      "description": "做空入场条件（需同时满足以下全部条件）",
+      "conditions": [
+        {
+          "factor": "MACD",
+          "condition": "DIF 下穿 DEA（死叉），且 MACD 柱状值 < 0 并连续放大至少2根K线",
+          "params": {
+            "fast_period": 12,
+            "slow_period": 26,
+            "signal_period": 9
+          }
+        },
+        {
+          "factor": "CCI",
+          "condition": "CCI 从 +100 以上回落并跌破 +100，或 CCI 处于 -100 ~ +100 区间且方向向下",
+          "params": {
+            "period": 20,
+            "oversold_threshold": -100,
+            "overbought_threshold": 100
+          }
+        },
+        {
+          "factor": "ATR",
+          "condition": "当前ATR值处于近60根K线ATR的30%~70%分位区间（排除极端低波动和极端高波动行情）",
+          "params": {
+            "period": 14,
+            "lookback_window": 60,
+            "percentile_low": 30,
+            "percentile_high": 70
+          }
+        },
+        {
+          "factor": "VolumeRatio",
+          "condition": "当前K线成交量 / 过去20根K线平均成交量 >= 1.3（量能放大确认）",
+          "params": {
+            "period": 20,
+            "min_ratio": 1.3
+          }
+        }
+      ],
+      "execution": "在满足全部条件的当根30分钟K线收盘价位置挂单入场，若下一根K线开盘价偏离超过1个ATR则放弃本次入场"
+    },
+    "short_exit_logic": {
+      "description": "做空出场条件（满足任一即平仓）",
+      "conditions": [
+        {
+          "name": "MACD金叉出场",
+          "condition": "DIF 上穿 DEA（金叉），且 MACD 柱状值由负转正"
+        },
+        {
+          "name": "CCI超卖反弹出场",
+          "condition": "CCI 下穿 -200 后反弹突破 -100"
+        },
+        {
+          "name": "止损出场",
+          "condition": "价格上涨至入场价 + 2.0 × ATR(14)"
+        },
+        {
+          "name": "止盈出场",
+          "condition": "价格下跌至入场价 - 3.0 × ATR(14)"
+        },
+        {
+          "name": "时间出场",
+          "condition": "持仓超过20根30分钟K线（即10小时）仍未触发止盈或止损，则按市价平仓"
+        },
+        {
+          "name": "量能萎缩出场",
+          "condition": "连续3根K线的VolumeRatio均低于0.5，表明市场参与度显著下降"
+        }
+      ]
+    },
+    "risk_management": {
+      "position_sizing": {
+        "method": "固定风险比例法",
+        "risk_per_trade": "1.0%（单笔交易最大亏损占总权益的1%，保守设定）",
+        "position_formula": "手数 = (总权益 × 1%) / (2.0 × ATR × 合约乘数)",
+        "max_position": "不超过总权益的15%对应的手数"
+      },
+      "stop_loss": {
+        "initial_stop": "2.0 × ATR(14)，保守宽止损以应对rb品种的正常波动",
+        "trailing_stop": "盈利达到1.5 × ATR后启用移动止损，回撤1.0 × ATR则平仓"
+      },
+      "take_profit": {
+        "target": "3.0 × ATR(14)，盈亏比 1.5:1",
+        "partial_exit": "盈利达到2.0 × ATR时平仓50%，剩余仓位使用移动止损保护"
+      },
+      "daily_risk_limit": {
+        "max_daily_loss": "总权益的3%，触及后当日停止交易",
+        "max_consecutive_losses": "连续亏损3笔后暂停交易2小时"
+      },
+      "session_filter": {
+        "allowed_sessions": "日盘 09:00-11:30, 13:30-15:00; 夜盘 21:00-23:00",
+        "avoid_periods": "开盘前5分钟和收盘前5分钟不开新仓，临近交割月减仓"
+      },
+      "correlation_control": {
+        "description": "若同时持有黑色系相关品种（如hc、i、j等），rb仓位减半以控制板块集中度风险"
+      }
+    },
+    "recommended_factors": [
+      {
+        "name": "MACD",
+        "role": "趋势识别",
+        "params": {
+          "fast_period": 12,
+          "slow_period": 26,
+          "signal_period": 9
+        },
+        "weight": 0.3,
+        "description": "核心趋势因子，通过DIF与DEA交叉判断趋势方向，柱状值大小衡量趋势强度"
+      },
+      {
+        "name": "CCI",
+        "role": "动量过滤",
+        "params": {
+          "period": 20,
+          "oversold_threshold": -100,
+          "overbought_threshold": 100,
+          "extreme_oversold": -200,
+          "extreme_overbought": 200
+        },
+        "weight": 0.25,
+        "description": "动量过滤因子，识别超买超卖区域，避免在极端位置追单，同时提供趋势方向确认"
+      },
+      {
+        "name": "ATR",
+        "role": "波动率适配",
+        "params": {
+          "period": 14,
+          "lookback_window": 60,
+          "stop_multiplier": 2.0,
+          "target_multiplier": 3.0
+        },
+        "weight": 0.2,
+        "description": "波动率因子，用于动态调整止损止盈距离和仓位大小，同时过滤波动率异常的市场环境"
+      },
+      {
+        "name": "VolumeRatio",
+        "role": "量能确认",
+        "params": {
+          "period": 20,
+          "entry_threshold": 1.3,
+          "exit_warning_threshold": 0.5,
+          "exit_warning_count": 3
+        },
+        "weight": 0.25,
+        "description": "成交量比率因子，确认价格突破的有效性，量价配合时信号可靠性更高"
+      }
+    ],
+    "backtest_suggestions": {
+      "data_period": "建议使用最近2-3年的rb 30分钟数据进行回测",
+      "out_of_sample": "预留最近6个月数据作为样本外测试",
+      "key_metrics": [
+        "年化收益率",
+        "最大回撤",
+        "夏普比率",
+        "胜率",
+        "盈亏比",
+        "平均持仓时间"
+      ],
+      "parameter_sensitivity": "对ATR倍数（1.5~2.5）和VolumeRatio阈值（1.1~1.5）进行参数敏感性分析",
+      "slippage_commission": "rb品种建议设置1跳滑点 + 万分之一手续费（含交易所+期货公司）"
+    }
+  },
+  "model": "claude-opus-4-6",
+  "generated_at": "2026-04-24T19:25:20.598112",
+  "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/rb/rb_multi_factor_30m_v1.yaml",
+  "saved_at": "2026-04-24T19:25:20.598752",
+  "report_type": "generation"
+}

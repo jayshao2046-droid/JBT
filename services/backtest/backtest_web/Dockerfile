@@ -11,7 +11,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-ARG BACKEND_BASE_URL=http://backtest:8103
+ARG BACKEND_BASE_URL=http://backtest-api:8103
 ENV BACKEND_BASE_URL=${BACKEND_BASE_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 
@@ -24,7 +24,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3001
-ENV BACKEND_BASE_URL=http://backtest:8103
+ENV BACKEND_BASE_URL=http://backtest-api:8103
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./.next

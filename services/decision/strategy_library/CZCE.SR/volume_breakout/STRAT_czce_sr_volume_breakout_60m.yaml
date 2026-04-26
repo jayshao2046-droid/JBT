@@ -1,0 +1,42 @@
+name: STRAT_czce_sr_volume_breakout_60m
+description: CZCE.SR 量能突破：成交量大幅放量 + MACD方向确认 60m
+version: '1.0'
+category: breakout
+factors:
+- factor_name: VolumeRatio
+  params:
+    period: 10
+- factor_name: MACD
+  params:
+    fast: 12
+    slow: 26
+    signal: 9
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: volume_ratio > 1.5 and macd_hist > 0
+  short_condition: volume_ratio > 1.5 and macd_hist < 0
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.1
+symbols:
+- KQ.m@CZCE.SR
+transaction_costs:
+  slippage_per_unit: 1.0
+  commission_per_lot_round_turn: 2.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 2.2
+  take_profit:
+    type: atr
+    atr_multiplier: 3.85
+tags:
+- CZCE
+- SR
+- volume_breakout
+- breakout
+- 60m

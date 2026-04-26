@@ -1,0 +1,11 @@
+# 机器生成的模板种子产物 — 不进入版本控制
+strategies/template_seed_generated/
+strategies/template_seed_reports/
+strategies/template_seed_tuning_candidates/
+
+# 运行时缓存与日志
+runtime/feature_cache/
+runtime/symbol_profiles/
+*.pyc
+__pycache__/
+.pytest_cache/

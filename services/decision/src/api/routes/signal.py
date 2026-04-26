@@ -453,7 +453,7 @@ def _get_signal_dispatcher():
 @router.post("/dispatch", status_code=status.HTTP_200_OK)
 async def dispatch_signal(request: Request):
     """将决策信号分发到 sim-trading 服务。"""
-    from shared.contracts.decision.signal_dispatch import SignalDispatchRequest
+    from ...core.signal_dispatcher import SignalDispatchRequest
 
     body = await request.json()
     parsed = SignalDispatchRequest(**body)

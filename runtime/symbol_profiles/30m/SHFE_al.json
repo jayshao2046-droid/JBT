@@ -1,0 +1,35 @@
+{
+  "symbol": "SHFE.al",
+  "volatility_3m": 0.2752901319454542,
+  "volatility_1y": 0.17764537477613782,
+  "volatility_5y": 0.172257821615803,
+  "volatility_weighted": "Medium",
+  "trend_strength_3m": 19.75,
+  "trend_strength_1y": 19.75,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": -0.02508713898833389,
+  "autocorr_1y": -0.013079325325072685,
+  "skewness": -0.4391371030153463,
+  "kurtosis": 30.3732569881695,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:56:15",
+    "data_start_date": "2018-04-27T01:00:00",
+    "data_end_date": "2026-04-22T06:30:00",
+    "data_points_3m": 872,
+    "data_points_1y": 3784,
+    "data_points_5y": 30069,
+    "missing_data_ratio": 0.12878045405867367
+  },
+  "confidence": {
+    "overall": 0.8928309192832111,
+    "volatility": 0.7964675252373645,
+    "trend": 0.9613658637823979,
+    "liquidity": 0.9484878183765305,
+    "data_sufficiency": 1.0,
+    "data_quality": 0.8712195459413263,
+    "feature_stability": 0.7251694357582776,
+    "warnings": []
+  }
+}

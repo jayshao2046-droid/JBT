@@ -1,0 +1,35 @@
+{
+  "symbol": "CZCE.TA",
+  "volatility_3m": 0.6245511705513431,
+  "volatility_1y": 0.35372493234008323,
+  "volatility_5y": 0.2792047271000401,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 36.73,
+  "trend_strength_1y": 36.73,
+  "trend_strength_weighted": "Strong",
+  "autocorr_3m": -0.020200171557108224,
+  "autocorr_1y": -0.026511308177121568,
+  "skewness": -4.248955894013904,
+  "kurtosis": 319.5771370109792,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:50:14",
+    "data_start_date": "2018-04-27T01:00:00",
+    "data_end_date": "2026-04-22T11:25:00",
+    "data_points_3m": 3774,
+    "data_points_1y": 16374,
+    "data_points_5y": 133167,
+    "missing_data_ratio": 0.16034955800554263
+  },
+  "confidence": {
+    "overall": 0.8568112461050318,
+    "volatility": 0.7222028942653506,
+    "trend": 0.9518951325983371,
+    "liquidity": 0.935860176797783,
+    "data_sufficiency": 1.0,
+    "data_quality": 0.8396504419944574,
+    "feature_stability": 0.6171796027783556,
+    "warnings": []
+  }
+}

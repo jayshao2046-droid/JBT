@@ -218,3 +218,36 @@ def test_digest_extracts_strategy_suggestions(mock_hourly_reports):
     assert len(suggestions) > 0
     # 策略建议应包含板块名称
     assert any("黑色系" in s or "贵金属" in s or "能源" in s for s in suggestions)
+
+
+def test_legacy_digest_methods_exist(temp_reports_dir, monkeypatch):
+    """测试旧调度器调用的兼容方法仍可用。"""
+    digest = DailyDigest()
+    monkeypatch.setattr(digest, 'reports_dir', temp_reports_dir)
+
+    date = "2026-04-15"
+    date_dir = temp_reports_dir / date
+    date_dir.mkdir(exist_ok=True)
+
+    sample_hours = {
+        "0000": "夜间波动有限",
+        "0800": "早盘情绪平稳",
+        "1300": "午后板块轮动",
+        "2100": "夜盘黑色偏强",
+    }
+    for filename, overview in sample_hours.items():
+        with open(date_dir / f"{filename}.json", "w", encoding="utf-8") as f:
+            json.dump({
+                "report_id": f"rep-{filename}",
+                "date": date,
+                "futures_summary": {"symbols_covered": 1, "market_overview": overview, "symbols": {}},
+                "stocks_summary": {"symbols_covered": 0},
+                "crawler_stats": {"sources_crawled": 1, "articles_processed": 1, "news_items": []},
+                "change_highlights": [],
+                "elapsed_seconds": 10.0,
+            }, f, ensure_ascii=False)
+
+    assert digest.generate_night_digest(date)["digest_type"] == "夜间报"
+    assert digest.generate_morning_report_digest(date)["digest_type"] == "上午报"
+    assert digest.generate_afternoon_digest(date)["digest_type"] == "下午报"
+    assert digest.generate_evening_session_digest(date)["digest_type"] == "夜盘报"

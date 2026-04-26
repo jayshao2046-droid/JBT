@@ -1,0 +1,37 @@
+{
+  "symbol": "CZCE.MA",
+  "volatility_3m": 0.7099535554904228,
+  "volatility_1y": 0.3909881942819022,
+  "volatility_5y": 0.29759606345443546,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 36.58,
+  "trend_strength_1y": 36.58,
+  "trend_strength_weighted": "Strong",
+  "autocorr_3m": -0.001536703446671399,
+  "autocorr_1y": -0.0068826509174352655,
+  "skewness": -3.550317467292967,
+  "kurtosis": 294.09075052343815,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:49:51",
+    "data_start_date": "2018-04-27T01:00:00",
+    "data_end_date": "2026-04-22T11:25:00",
+    "data_points_3m": 3774,
+    "data_points_1y": 16374,
+    "data_points_5y": 133167,
+    "missing_data_ratio": 0.16034955800554263
+  },
+  "confidence": {
+    "overall": 0.8507930031583589,
+    "volatility": 0.7071572868986686,
+    "trend": 0.9518951325983371,
+    "liquidity": 0.935860176797783,
+    "data_sufficiency": 1.0,
+    "data_quality": 0.8396504419944574,
+    "feature_stability": 0.5921035905005525,
+    "warnings": [
+      "特征不稳定: 波动率3M=0.7100 vs 1Y=0.3910, 趋势3M=36.5800 vs 1Y=36.5800"
+    ]
+  }
+}

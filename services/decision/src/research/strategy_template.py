@@ -7,7 +7,10 @@
 STRATEGY_YAML_TEMPLATE = """
 name: {strategy_name}
 description: {description}
+version: "1.0"
+category: "trend_following"
 
+# symbols 使用 _main 通配符：本地引擎匹配任意月份，TqSdk 自动解析为当前主力合约
 symbols:
   - {symbol}
 
@@ -16,19 +19,15 @@ timeframe_minutes: {timeframe}
 factors:
 {factors}
 
+market_filter:
+  enabled: true
+  conditions:
+{market_filter_conditions}
+
 signal:
   long_condition: "{long_condition}"
   short_condition: "{short_condition}"
   confirm_bars: {confirm_bars}
-
-market_filter:
-  conditions:
-{market_filter_conditions}
-
-risk:
-  stop_loss_yuan: {stop_loss}
-  daily_loss_limit_yuan: {daily_loss_limit}
-  max_drawdown_pct: {max_drawdown}
 
 position_fraction: {position_fraction}
 
@@ -36,7 +35,19 @@ transaction_costs:
   slippage_per_unit: {slippage}
   commission_per_lot_round_turn: {commission}
 
-no_overnight: true
+# risk 块：stop_loss 和 take_profit 必须在 risk 内部
+risk:
+  daily_loss_limit: {daily_loss_limit}    # 比例（如 0.001），非金额
+  max_drawdown: {max_drawdown}             # 比例（如 0.03），非百分数
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+  stop_loss:
+    type: "atr"
+    atr_multiplier: 1.5
+  take_profit:
+    type: "atr"
+    atr_multiplier: 2.5
 """
 
 # 因子配置示例
@@ -61,9 +72,9 @@ STRATEGY_TYPE_TEMPLATES = {
         "description": "基于波动率突破的趋势跟踪策略",
         "recommended_factors": ["ATR", "ADX", "Volume"],
         "entry_logic": "当ATR突破均值且ADX>25时，根据价格突破方向入场",
-        "exit_logic": "固定止损或反向信号",
+        "exit_logic": "ATR 倍数止损或反向信号",
         "risk_params": {
-            "stop_loss_yuan": 1000,
+            "stop_loss_atr_multiplier": 1.5,
             "position_fraction": 0.1,
         }
     },
@@ -73,7 +84,7 @@ STRATEGY_TYPE_TEMPLATES = {
         "entry_logic": "EMA金叉/死叉 + MACD确认 + ADX>25",
         "exit_logic": "反向信号或止损",
         "risk_params": {
-            "stop_loss_yuan": 1200,
+            "stop_loss_atr_multiplier": 1.8,
             "position_fraction": 0.12,
         }
     },
@@ -83,7 +94,7 @@ STRATEGY_TYPE_TEMPLATES = {
         "entry_logic": "价格触及布林带上下轨 + RSI超买超卖",
         "exit_logic": "回归中轨或止损",
         "risk_params": {
-            "stop_loss_yuan": 800,
+            "stop_loss_atr_multiplier": 1.2,
             "position_fraction": 0.08,
         }
     },

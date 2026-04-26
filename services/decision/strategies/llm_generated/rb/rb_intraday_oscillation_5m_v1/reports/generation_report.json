@@ -1,0 +1,177 @@
+{
+  "strategy_name": "rb_intraday_oscillation_5m_v1",
+  "symbol": "rb",
+  "category": "intraday_oscillation",
+  "timeframe": 5,
+  "factors": [
+    "KDJ",
+    "Bollinger",
+    "ATR"
+  ],
+  "design_prompt": "为 rb 品种设计一个 intraday_oscillation 策略。\n品种特征: 品种: rb（特征分析失败，使用保守参数）\n时间周期: 5 分钟\n核心因子: KDJ, Bollinger, ATR\n策略描述: 5分钟KDJ+布林带震荡区间交易的日内震荡策略\n\n输出 JSON 格式的策略设计，包含：\n- strategy_name: rb_intraday_oscillation_5m_v1\n- logic_description: 策略逻辑描述\n- entry_logic: 做多入场条件\n- exit_logic: 做多出场条件\n- short_entry_logic: 做空入场条件\n- short_exit_logic: 做空出场条件\n- risk_management: 风险管理方案（止损止盈规则）\n- recommended_factors: 推荐使用的技术指标列表\n",
+  "design_response": {
+    "strategy_name": "rb_intraday_oscillation_5m_v1",
+    "logic_description": "基于5分钟K线的KDJ指标与布林带（Bollinger Bands）结合ATR波动率过滤的日内震荡策略。核心思路：在布林带中轨与上下轨构成的震荡区间内，利用KDJ的超买超卖信号捕捉价格均值回归机会。ATR用于动态调整止损止盈幅度并过滤低波动无效信号。策略仅在日内运行，尾盘强制平仓，避免隔夜风险。由于rb品种特征分析失败，所有参数采用保守设定，仓位控制从严。",
+    "entry_logic": {
+      "description": "做多入场条件（多头开仓）",
+      "conditions": [
+        "价格触及或跌破布林带下轨（Close <= BollingerLower），表明价格处于震荡区间下沿",
+        "KDJ指标J值 < 20 且 K线上穿D线（金叉），确认超卖反转信号",
+        "当前5分钟K线为阳线（Close > Open），表明多头力量初步显现",
+        "ATR(14) > ATR(14)的20周期均值 × 0.5，过滤极低波动率环境下的虚假信号",
+        "当前时间在 09:05 - 14:30 之间（避开开盘5分钟波动和尾盘平仓时段）",
+        "布林带带宽（BandWidth = (Upper - Lower) / Middle）> 0.005，确认存在足够的震荡空间"
+      ],
+      "trigger": "以上条件同时满足时，在下一根5分钟K线开盘价挂单做多"
+    },
+    "exit_logic": {
+      "description": "做多出场条件（多头平仓）",
+      "conditions": [
+        "止盈条件1：价格触及布林带中轨（Close >= BollingerMiddle），获利了结第一目标仓位（50%）",
+        "止盈条件2：价格触及布林带上轨（Close >= BollingerUpper），获利了结剩余全部仓位",
+        "止损条件：价格跌破入场价 - 1.5 × ATR(14)，无条件止损全部仓位",
+        "KDJ信号反转：J值 > 80 且 K线下穿D线（死叉），提前出场",
+        "时间止损：持仓超过20根K线（100分钟）未触发止盈或止损，按市价平仓",
+        "尾盘强平：14:50之后无条件平仓所有多头持仓"
+      ]
+    },
+    "short_entry_logic": {
+      "description": "做空入场条件（空头开仓）",
+      "conditions": [
+        "价格触及或突破布林带上轨（Close >= BollingerUpper），表明价格处于震荡区间上沿",
+        "KDJ指标J值 > 80 且 K线下穿D线（死叉），确认超买反转信号",
+        "当前5分钟K线为阴线（Close < Open），表明空头力量初步显现",
+        "ATR(14) > ATR(14)的20周期均值 × 0.5，过滤极低波动率环境下的虚假信号",
+        "当前时间在 09:05 - 14:30 之间（避开开盘5分钟波动和尾盘平仓时段）",
+        "布林带带宽（BandWidth = (Upper - Lower) / Middle）> 0.005，确认存在足够的震荡空间"
+      ],
+      "trigger": "以上条件同时满足时，在下一根5分钟K线开盘价挂单做空"
+    },
+    "short_exit_logic": {
+      "description": "做空出场条件（空头平仓）",
+      "conditions": [
+        "止盈条件1：价格回落至布林带中轨（Close <= BollingerMiddle），获利了结第一目标仓位（50%）",
+        "止盈条件2：价格回落至布林带下轨（Close <= BollingerLower），获利了结剩余全部仓位",
+        "止损条件：价格突破入场价 + 1.5 × ATR(14)，无条件止损全部仓位",
+        "KDJ信号反转：J值 < 20 且 K线上穿D线（金叉），提前出场",
+        "时间止损：持仓超过20根K线（100分钟）未触发止盈或止损，按市价平仓",
+        "尾盘强平：14:50之后无条件平仓所有空头持仓"
+      ]
+    },
+    "risk_management": {
+      "position_sizing": {
+        "description": "保守仓位管理（因品种特征分析失败）",
+        "max_position_ratio": 0.02,
+        "max_position_ratio_note": "单笔开仓资金不超过总资金的2%",
+        "max_daily_positions": 4,
+        "max_daily_positions_note": "每日最多开仓4次，防止过度交易",
+        "max_concurrent_positions": 1,
+        "max_concurrent_positions_note": "同时只持有1个方向的仓位，不做对锁"
+      },
+      "stop_loss": {
+        "type": "ATR动态止损",
+        "multiplier": 1.5,
+        "description": "止损距离 = 1.5 × ATR(14)，根据当前波动率动态调整",
+        "max_stop_loss_ticks": 30,
+        "max_stop_loss_ticks_note": "止损上限30个最小变动价位（rb为1元/吨，即30元/吨），防止ATR异常放大时止损过宽"
+      },
+      "take_profit": {
+        "type": "分批止盈",
+        "level_1": {
+          "target": "布林带中轨",
+          "close_ratio": 0.5,
+          "description": "到达中轨平仓50%，并将剩余仓位止损移至成本价"
+        },
+        "level_2": {
+          "target": "布林带对侧轨道",
+          "close_ratio": 1.0,
+          "description": "到达对侧轨道平仓全部剩余仓位"
+        }
+      },
+      "daily_risk_control": {
+        "max_daily_loss": -0.015,
+        "max_daily_loss_note": "单日亏损达到总资金1.5%时，当日停止交易",
+        "max_consecutive_losses": 3,
+        "max_consecutive_losses_note": "连续亏损3笔后，当日暂停交易30分钟冷静期",
+        "max_daily_profit_lock": 0.03,
+        "max_daily_profit_lock_note": "单日盈利达到3%后缩减仓位至50%保护利润"
+      },
+      "forced_close": {
+        "time": "14:50",
+        "description": "每日14:50强制平仓所有持仓，不留隔夜仓位"
+      },
+      "slippage_allowance": {
+        "max_slippage_ticks": 2,
+        "description": "考虑rb流动性，预留2个tick的滑点容忍度"
+      }
+    },
+    "recommended_factors": [
+      {
+        "name": "KDJ",
+        "params": {
+          "N": 9,
+          "M1": 3,
+          "M2": 3
+        },
+        "role": "核心信号因子，提供超买超卖判断及金叉死叉交叉信号",
+        "timeframe": "5min"
+      },
+      {
+        "name": "Bollinger Bands",
+        "params": {
+          "period": 20,
+          "std_dev": 2.0
+        },
+        "role": "核心信号因子，定义震荡区间的上下边界及中轨均值回归目标",
+        "timeframe": "5min"
+      },
+      {
+        "name": "ATR",
+        "params": {
+          "period": 14
+        },
+        "role": "波动率过滤因子，动态调整止损止盈距离并过滤低波动环境",
+        "timeframe": "5min"
+      },
+      {
+        "name": "Bollinger BandWidth",
+        "params": {
+          "derived_from": "Bollinger Bands"
+        },
+        "role": "辅助过滤因子，衡量当前波动率是否足够支撑震荡策略盈利空间",
+        "timeframe": "5min"
+      },
+      {
+        "name": "Volume MA",
+        "params": {
+          "period": 20
+        },
+        "role": "辅助验证因子，成交量高于均量时信号可信度更高（可选增强）",
+        "timeframe": "5min"
+      },
+      {
+        "name": "RSI",
+        "params": {
+          "period": 14
+        },
+        "role": "辅助验证因子，与KDJ形成多指标共振确认超买超卖（可选增强）",
+        "timeframe": "5min"
+      }
+    ],
+    "parameter_notes": {
+      "conservative_reason": "由于rb品种特征分析失败，无法获取准确的波动率、趋势强度等统计特征，因此所有参数（仓位比例、止损倍数、每日交易次数上限）均采用保守设定。建议在实盘前使用至少3个月的5分钟历史数据进行回测验证，并根据回测结果微调参数。",
+      "optimization_suggestions": [
+        "KDJ超买超卖阈值可在10-30/70-90范围内优化",
+        "布林带标准差倍数可在1.5-2.5范围内优化",
+        "ATR止损倍数可在1.0-2.5范围内优化",
+        "布林带周期可在15-30范围内优化",
+        "建议加入趋势过滤器（如30分钟级别MA方向），在趋势行情中暂停震荡策略"
+      ]
+    }
+  },
+  "model": "claude-opus-4-6",
+  "generated_at": "2026-04-24T19:24:11.517569",
+  "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/rb/rb_intraday_oscillation_5m_v1.yaml",
+  "saved_at": "2026-04-24T19:24:11.518120",
+  "report_type": "generation"
+}

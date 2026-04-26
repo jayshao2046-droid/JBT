@@ -23,6 +23,7 @@ NewsScorer:
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -31,6 +32,7 @@ import numpy as np
 import pytest
 
 from src.research.correlation_monitor import CorrelationMonitor, CorrelationSnapshot
+from src.research.research_store import ResearchStore
 
 
 # ─────────────────────────────────────────────
@@ -241,3 +243,165 @@ class TestNewsScorerCore:
         scorer = NewsScorer.__new__(NewsScorer)
         scorer.SCORE_THRESHOLD = 6
         assert scorer._should_push(["rb"], held_symbols=["rb"], urgency=3) is False
+
+
+def _make_research_store(tmp_path) -> ResearchStore:
+    ResearchStore._instance = None
+    return ResearchStore(persist_dir=str(tmp_path / "research_store"))
+
+
+class TestResearcherFactStore:
+    """TASK-P1-20260424E2: researcher 三类事实库存证。"""
+
+    def test_store_builds_grouped_researcher_facts(self, tmp_path):
+        store = _make_research_store(tmp_path)
+
+        store.save(
+            "futures",
+            {
+                "report_id": "fut-001",
+                "score": 81.0,
+                "confidence": "high",
+                "reasoning": "期货主线清晰",
+            },
+            source_report={
+                "report_id": "fut-001",
+                "summary": "黑色系震荡偏强",
+                "symbols": ["rb", "hc"],
+            },
+            batch_context={"batch_id": "batch-1", "date": "2026-04-24", "hour": 9},
+        )
+        store.save(
+            "macro",
+            {
+                "report_id": "macro-001",
+                "score": 73.0,
+                "confidence": "medium",
+            },
+            source_report={
+                "report_id": "macro-001",
+                "macro_trend": "risk_on",
+                "risk_level": "medium",
+                "key_drivers": ["政策宽松"],
+                "recommended_sectors": ["黑色", "有色"],
+            },
+            batch_context={"batch_id": "batch-1", "date": "2026-04-24", "hour": 9},
+        )
+        store.save(
+            "news",
+            {"report_id": "news-001", "score": 68.0, "confidence": "medium"},
+            source_report={"report_id": "news-001", "summary": "国内新闻偏多"},
+            batch_context={"batch_id": "batch-1", "date": "2026-04-24", "hour": 9},
+        )
+        store.save(
+            "rss",
+            {"report_id": "rss-001", "score": 66.0, "confidence": "medium"},
+            source_report={"report_id": "rss-001", "summary": "海外 RSS 偏空"},
+            batch_context={"batch_id": "batch-1", "date": "2026-04-24", "hour": 9},
+        )
+        store.save(
+            "sentiment",
+            {"report_id": "sent-001", "score": 64.0, "confidence": "low"},
+            source_report={"report_id": "sent-001", "sentiment": "neutral"},
+            batch_context={"batch_id": "batch-1", "date": "2026-04-24", "hour": 9},
+        )
+
+        futures_latest = store.get_latest("futures")
+        assert futures_latest is not None
+        assert futures_latest["fact_group"] == "data"
+        assert futures_latest["source_report"]["symbols"] == ["rb", "hc"]
+
+        macro_summary = store.get_macro_summary()
+        assert macro_summary["available"] is True
+        assert macro_summary["macro_trend"] == "risk_on"
+        assert macro_summary["risk_level"] == "medium"
+
+        sentiment_snapshot = store.get_fact_group_snapshot("sentiment", limit=10)
+        assert sentiment_snapshot["available"] is True
+        assert sentiment_snapshot["primary_report_type"] == "news"
+        assert set(sentiment_snapshot["source_report_types"]) == {"news", "rss", "sentiment"}
+        assert len(sentiment_snapshot["history"]) == 3
+
+    def test_evaluate_route_persists_raw_reports_for_query_reuse(self, tmp_path, monkeypatch):
+        from src.api.routes import researcher_evaluate
+
+        store = _make_research_store(tmp_path)
+        researcher_evaluate._report_dedup_cache.clear()
+        monkeypatch.setattr(researcher_evaluate, "ResearchStore", lambda: store)
+
+        class _DummyScorer:
+            async def score_report_detail(self, report):
+                return {
+                    "score": 82.0,
+                    "confidence": "high",
+                    "reasoning": f"已评级 {report.get('report_id')}",
+                    "observed_content": report.get("summary", ""),
+                }
+
+        class _DummyFeishu:
+            async def send_researcher_score(self, **kwargs):
+                return True
+
+        monkeypatch.setattr(researcher_evaluate, "ResearcherPhi4Scorer", lambda: _DummyScorer())
+        monkeypatch.setattr(researcher_evaluate, "FeishuNotifier", lambda: _DummyFeishu())
+
+        batch = researcher_evaluate.ReportBatchRequest(
+            batch_id="batch-e2",
+            date="2026-04-24",
+            hour=10,
+            generated_at="2026-04-24T10:00:00",
+            futures_report={"report_id": "fut-002", "summary": "黑色偏强", "symbols": ["rb"]},
+            macro_report={"report_id": "macro-002", "macro_trend": "risk_off", "risk_level": "high"},
+            news_report={"report_id": "news-002", "summary": "新闻偏多"},
+            rss_report={"report_id": "rss-002", "summary": "RSS 偏空"},
+            sentiment_report={"report_id": "sent-002", "sentiment": "bearish"},
+            total_reports=5,
+            elapsed_seconds=2.5,
+        )
+
+        result = asyncio.run(researcher_evaluate.evaluate_researcher_reports(batch))
+        assert result["evaluated_count"] == 5
+
+        futures_latest = store.get_latest("futures")
+        assert futures_latest is not None
+        assert futures_latest["source_report"]["report_id"] == "fut-002"
+        assert futures_latest["fact_record"]["batch_id"] == "batch-e2"
+
+        sentiment_snapshot = store.get_fact_group_snapshot("sentiment", limit=10)
+        assert sentiment_snapshot["available"] is True
+        assert set(sentiment_snapshot["source_report_types"]) == {"news", "rss", "sentiment"}
+
+    def test_research_query_returns_grouped_fact_views(self, tmp_path, monkeypatch):
+        from src.api.routes import research_query
+
+        store = _make_research_store(tmp_path)
+        store.save(
+            "macro",
+            {"report_id": "macro-q-1", "score": 75.0, "confidence": "medium"},
+            source_report={
+                "report_id": "macro-q-1",
+                "macro_trend": "neutral",
+                "risk_level": "medium",
+            },
+            batch_context={"batch_id": "batch-q", "date": "2026-04-24", "hour": 11},
+        )
+        store.save(
+            "news",
+            {"report_id": "news-q-1", "score": 61.0, "confidence": "medium"},
+            source_report={"report_id": "news-q-1", "summary": "新闻摘要"},
+            batch_context={"batch_id": "batch-q", "date": "2026-04-24", "hour": 11},
+        )
+
+        monkeypatch.setattr(research_query, "ResearchStore", lambda: store)
+
+        overview = asyncio.run(research_query.get_fact_overview(limit=5))
+        assert overview["intelligence"]["available"] is True
+        assert overview["intelligence"]["latest"]["source_report"]["report_id"] == "macro-q-1"
+
+        intelligence_latest = asyncio.run(research_query.get_fact_group_latest("intelligence", limit=5))
+        assert intelligence_latest["primary_report_type"] == "macro"
+        assert intelligence_latest["latest"]["fact_record"]["risk_level"] == "medium"
+
+        sentiment_history = asyncio.run(research_query.get_fact_group_history("sentiment", limit=5))
+        assert sentiment_history["available"] is True
+        assert len(sentiment_history["history"]) == 1

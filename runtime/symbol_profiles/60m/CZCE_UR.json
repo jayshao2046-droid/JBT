@@ -1,0 +1,37 @@
+{
+  "symbol": "CZCE.UR",
+  "volatility_3m": 0.2849120679678945,
+  "volatility_1y": 0.23326652462548053,
+  "volatility_5y": 0.3073470186320858,
+  "volatility_weighted": "Medium",
+  "trend_strength_3m": 70.79,
+  "trend_strength_1y": 70.79,
+  "trend_strength_weighted": "Strong",
+  "autocorr_3m": -0.038781106118911744,
+  "autocorr_1y": -0.03744956026706746,
+  "skewness": 3.5995968712239375,
+  "kurtosis": 43.565554081218416,
+  "liquidity": "High",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:57:20",
+    "data_start_date": "2019-08-09T01:00:00",
+    "data_end_date": "2026-04-22T11:00:00",
+    "data_points_3m": 278,
+    "data_points_1y": 1198,
+    "data_points_5y": 8113,
+    "missing_data_ratio": 0.2721264614893153
+  },
+  "confidence": {
+    "overall": 0.8863513600962212,
+    "volatility": 0.8519416309852106,
+    "trend": 0.9183620615532053,
+    "liquidity": 0.8911494154042738,
+    "data_sufficiency": 1.0,
+    "data_quality": 0.7278735385106847,
+    "feature_stability": 0.8892992823866753,
+    "warnings": [
+      "数据质量较低: 缺失率 27.21%"
+    ]
+  }
+}

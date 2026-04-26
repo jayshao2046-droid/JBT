@@ -1,0 +1,18 @@
+{
+  "error": "数据获取失败 SHFE.rb_main0: Client error '422 Unprocessable Entity' for url 'http://192.168.31.74:8105/api/v1/bars?symbol=SHFE.rb_main0&start=2022-01-01&end=2024-05-26&timeframe_minutes=15'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422",
+  "baseline_local_backtest": {
+    "report_id": "rpt-fab21e80a58c",
+    "status": "completed",
+    "summary": {
+      "status": "completed",
+      "total_trades": 20,
+      "final_equity": 499208.0,
+      "max_drawdown": 0.001584,
+      "pnl": -792.0,
+      "win_rate": 0.05,
+      "sharpe": -0.6479
+    }
+  },
+  "saved_at": "2026-04-24T19:25:59.965524",
+  "report_type": "optimization"
+}

@@ -11,16 +11,18 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 
+from ..core.settings import get_settings
+from ..notifier.dispatcher import DecisionEvent, NotifyLevel, get_dispatcher
 from ..strategy.repository import get_repository
 from ..strategy.lifecycle import LifecycleStatus
 from .gate import PublishGate
 from .sim_adapter import SimTradingAdapter
 from .failover import FailoverManager, FailoverState
-from ..notifier.dispatcher import DecisionEvent, NotifyLevel, get_dispatcher
 
 logger = logging.getLogger(__name__)
 
 _TZ_CST = timezone(timedelta(hours=8))
+_shared_publish_executor: Optional["PublishExecutor"] = None
 
 
 class PublishStatus(str, enum.Enum):
@@ -38,6 +40,27 @@ class PublishResult:
     message: str
     strategy_snapshot: Dict[str, Any] = field(default_factory=dict)
     adapter_response: Dict[str, Any] = field(default_factory=dict)
+
+
+def _build_default_adapter() -> SimTradingAdapter:
+    settings = get_settings()
+    return SimTradingAdapter(
+        base_url=settings.sim_trading_url,
+        api_key=settings.sim_trading_api_key,
+        timeout=settings.publish_http_timeout,
+    )
+
+
+def _build_default_failover_manager() -> FailoverManager:
+    settings = get_settings()
+    return FailoverManager(sim_trading_url=settings.sim_trading_url)
+
+
+def get_publish_executor() -> "PublishExecutor":
+    global _shared_publish_executor
+    if _shared_publish_executor is None:
+        _shared_publish_executor = PublishExecutor()
+    return _shared_publish_executor
 
 
 class PublishExecutor:
@@ -59,8 +82,8 @@ class PublishExecutor:
         failover_manager: Optional[FailoverManager] = None,
     ) -> None:
         self._gate = gate or PublishGate()
-        self._adapter = adapter or SimTradingAdapter()
-        self._failover_manager = failover_manager or FailoverManager()
+        self._adapter = adapter or _build_default_adapter()
+        self._failover_manager = failover_manager or _build_default_failover_manager()
         self._dispatcher = get_dispatcher()
 
     def execute(self, strategy_id: str, target: str = "sim-trading") -> PublishResult:

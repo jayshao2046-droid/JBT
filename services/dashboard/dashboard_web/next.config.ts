@@ -10,10 +10,6 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: '/api/sim-trading/:path*',
-        destination: `${SIM_TRADING_URL}/:path*`,
-      },
-      {
         source: '/api/backtest/:path*',
         destination: `${BACKTEST_URL}/:path*`,
       },

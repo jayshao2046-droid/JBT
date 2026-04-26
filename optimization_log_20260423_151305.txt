@@ -1,4 +1,0 @@
-Traceback (most recent call last):
-  File "/Users/jayshao/JBT/optimize_cf_strategy.py", line 24, in <module>
-    from src.research.strategy_param_optimizer import StrategyParamOptimizer
-ModuleNotFoundError: No module named 'src'

@@ -1,0 +1,35 @@
+{
+  "symbol": "INE.sc",
+  "volatility_3m": 0.8671069278233583,
+  "volatility_1y": 0.48210685693738276,
+  "volatility_5y": 0.3603855624830345,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 17.88,
+  "trend_strength_1y": 17.88,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": -0.04902624765865759,
+  "autocorr_1y": -0.03666151339272745,
+  "skewness": -2.3849632493791124,
+  "kurtosis": 381.1634399226817,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:51:30",
+    "data_start_date": "2018-04-27T01:00:00",
+    "data_end_date": "2026-04-24T18:25:00",
+    "data_points_3m": 6306,
+    "data_points_1y": 26466,
+    "data_points_5y": 207687,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.9041706048327007,
+    "volatility": 0.7604265120817518,
+    "trend": 1.0,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.6007108534695864,
+    "warnings": []
+  }
+}

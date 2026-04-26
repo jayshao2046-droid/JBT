@@ -206,9 +206,12 @@ class StrategyParamOptimizer:
                     hi = round(v * 3.0, 4)
                     space[k] = {"type": "float", "low": lo, "high": hi, "original": v}
 
-        # ATR 止损/止盈乘数（stop_loss / take_profit 是 YAML 顶层字段，不在 risk 下）
+        # ATR 止损/止盈乘数（优先读取 risk.stop_loss/risk.take_profit，兼容旧根级字段）
+        risk_section = strategy.get("risk", {}) if isinstance(strategy.get("risk"), dict) else {}
         for section_key, param_key in [("stop_loss", "stop_atr_mult"), ("take_profit", "take_atr_mult")]:
-            sect = strategy.get(section_key, {})
+            sect = risk_section.get(section_key)
+            if not isinstance(sect, dict):
+                sect = strategy.get(section_key, {})
             if isinstance(sect, dict) and "atr_multiplier" in sect:
                 v = float(sect["atr_multiplier"])
                 space[param_key] = {"type": "float", "low": 0.5, "high": 5.0, "original": v}
@@ -454,6 +457,16 @@ class StrategyParamOptimizer:
                 suggested_relaxations[relax_key] = str(round(suggested, 4))
 
         if not diagnosis_parts:
+            current_confirm_bars = int(signal.get("confirm_bars", 1) or 1)
+            market_conditions = market_filter.get("conditions", [])
+
+            if current_confirm_bars > 1:
+                suggested_relaxations["confirm_bars"] = str(max(1, current_confirm_bars - 1))
+            else:
+                suggested_relaxations["reduce_and_conditions"] = "1"
+                if len(market_conditions) > 1:
+                    suggested_relaxations["drop_market_filter_tail"] = "1"
+
             diagnosis_parts.append(
                 "各单项阈值均有 ≥15% K线满足，问题可能是多条件 AND 组合交集为空，"
                 "建议减少 AND 条件数量或降低 confirm_bars"

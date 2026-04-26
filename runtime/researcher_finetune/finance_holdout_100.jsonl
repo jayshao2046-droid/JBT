@@ -1,0 +1,100 @@
+{"id": "sym_rb", "topic": "品种识别-rb", "prompt": "请用 JSON 给出期货品种 rb 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["SHFE", "螺纹钢", "黑色金属"]}
+{"id": "sym_hc", "topic": "品种识别-hc", "prompt": "请用 JSON 给出期货品种 hc 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["SHFE", "热轧卷板", "黑色金属"]}
+{"id": "sym_cu", "topic": "品种识别-cu", "prompt": "请用 JSON 给出期货品种 cu 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["SHFE", "沪铜", "有色金属"]}
+{"id": "sym_al", "topic": "品种识别-al", "prompt": "请用 JSON 给出期货品种 al 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["SHFE", "沪铝", "有色金属"]}
+{"id": "sym_zn", "topic": "品种识别-zn", "prompt": "请用 JSON 给出期货品种 zn 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["SHFE", "沪锌", "有色金属"]}
+{"id": "sym_au", "topic": "品种识别-au", "prompt": "请用 JSON 给出期货品种 au 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["SHFE", "沪金", "贵金属"]}
+{"id": "sym_ag", "topic": "品种识别-ag", "prompt": "请用 JSON 给出期货品种 ag 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["SHFE", "沪银", "贵金属"]}
+{"id": "sym_ru", "topic": "品种识别-ru", "prompt": "请用 JSON 给出期货品种 ru 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["SHFE", "天然橡胶", "化工"]}
+{"id": "sym_fu", "topic": "品种识别-fu", "prompt": "请用 JSON 给出期货品种 fu 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["SHFE", "燃料油", "能源化工"]}
+{"id": "sym_bu", "topic": "品种识别-bu", "prompt": "请用 JSON 给出期货品种 bu 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["SHFE", "沥青", "能源化工"]}
+{"id": "sym_i", "topic": "品种识别-i", "prompt": "请用 JSON 给出期货品种 i 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["DCE", "铁矿石", "黑色金属"]}
+{"id": "sym_j", "topic": "品种识别-j", "prompt": "请用 JSON 给出期货品种 j 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["DCE", "焦炭", "黑色金属"]}
+{"id": "sym_jm", "topic": "品种识别-jm", "prompt": "请用 JSON 给出期货品种 jm 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["DCE", "焦煤", "黑色金属"]}
+{"id": "sym_m", "topic": "品种识别-m", "prompt": "请用 JSON 给出期货品种 m 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["DCE", "豆粕", "农产品"]}
+{"id": "sym_y", "topic": "品种识别-y", "prompt": "请用 JSON 给出期货品种 y 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["DCE", "豆油", "农产品"]}
+{"id": "sym_p", "topic": "品种识别-p", "prompt": "请用 JSON 给出期货品种 p 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["DCE", "棕榈油", "农产品"]}
+{"id": "sym_c", "topic": "品种识别-c", "prompt": "请用 JSON 给出期货品种 c 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["DCE", "玉米", "农产品"]}
+{"id": "sym_l", "topic": "品种识别-l", "prompt": "请用 JSON 给出期货品种 l 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["DCE", "塑料", "化工"]}
+{"id": "sym_v", "topic": "品种识别-v", "prompt": "请用 JSON 给出期货品种 v 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["DCE", "PVC", "化工"]}
+{"id": "sym_pp", "topic": "品种识别-pp", "prompt": "请用 JSON 给出期货品种 pp 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["DCE", "聚丙烯", "化工"]}
+{"id": "sym_MA", "topic": "品种识别-MA", "prompt": "请用 JSON 给出期货品种 MA 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CZCE", "甲醇", "化工"]}
+{"id": "sym_TA", "topic": "品种识别-TA", "prompt": "请用 JSON 给出期货品种 TA 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CZCE", "PTA", "化工"]}
+{"id": "sym_SR", "topic": "品种识别-SR", "prompt": "请用 JSON 给出期货品种 SR 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CZCE", "白糖", "农产品"]}
+{"id": "sym_CF", "topic": "品种识别-CF", "prompt": "请用 JSON 给出期货品种 CF 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CZCE", "棉花", "农产品"]}
+{"id": "sym_OI", "topic": "品种识别-OI", "prompt": "请用 JSON 给出期货品种 OI 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CZCE", "菜籽油", "农产品"]}
+{"id": "sym_FG", "topic": "品种识别-FG", "prompt": "请用 JSON 给出期货品种 FG 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CZCE", "玻璃", "建材"]}
+{"id": "sym_SA", "topic": "品种识别-SA", "prompt": "请用 JSON 给出期货品种 SA 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CZCE", "纯碱", "化工"]}
+{"id": "sym_UR", "topic": "品种识别-UR", "prompt": "请用 JSON 给出期货品种 UR 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CZCE", "尿素", "化工"]}
+{"id": "sym_SF", "topic": "品种识别-SF", "prompt": "请用 JSON 给出期货品种 SF 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CZCE", "硅铁", "黑色金属"]}
+{"id": "sym_SM", "topic": "品种识别-SM", "prompt": "请用 JSON 给出期货品种 SM 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CZCE", "锰硅", "黑色金属"]}
+{"id": "sym_IF", "topic": "品种识别-IF", "prompt": "请用 JSON 给出期货品种 IF 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CFFEX", "沪深300股指期货", "金融"]}
+{"id": "sym_IH", "topic": "品种识别-IH", "prompt": "请用 JSON 给出期货品种 IH 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CFFEX", "上证50股指期货", "金融"]}
+{"id": "sym_IC", "topic": "品种识别-IC", "prompt": "请用 JSON 给出期货品种 IC 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CFFEX", "中证500股指期货", "金融"]}
+{"id": "sym_IM", "topic": "品种识别-IM", "prompt": "请用 JSON 给出期货品种 IM 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CFFEX", "中证1000股指期货", "金融"]}
+{"id": "sym_T", "topic": "品种识别-T", "prompt": "请用 JSON 给出期货品种 T 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CFFEX", "10年期国债期货", "金融"]}
+{"id": "sym_TF", "topic": "品种识别-TF", "prompt": "请用 JSON 给出期货品种 TF 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CFFEX", "5年期国债期货", "金融"]}
+{"id": "sym_sc", "topic": "品种识别-sc", "prompt": "请用 JSON 给出期货品种 sc 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["INE", "原油", "能源"]}
+{"id": "sym_ni", "topic": "品种识别-ni", "prompt": "请用 JSON 给出期货品种 ni 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["SHFE", "沪镍", "有色金属"]}
+{"id": "sym_eg", "topic": "品种识别-eg", "prompt": "请用 JSON 给出期货品种 eg 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["DCE", "乙二醇", "化工"]}
+{"id": "sym_RM", "topic": "品种识别-RM", "prompt": "请用 JSON 给出期货品种 RM 的交易所、中文名称和所属板块。", "expected_keys": ["exchange", "name_cn"], "expected_values": ["CZCE", "菜籽粕", "农产品"]}
+{"id": "fund_00", "topic": "螺纹钢库存去化", "prompt": "螺纹钢社会库存连续3周去化，现货升水期货150元/吨，钢厂利润转正，请用 JSON 输出 {direction, reason, risk}。", "expected_keys": ["direction", "reason", "risk"], "expected_values": ["看涨", "去库", "需求"]}
+{"id": "fund_01", "topic": "豆粕南美增产", "prompt": "巴西大豆增产预期明确，CBOT 走低，国内压榨利润修复，请用 JSON 输出 {direction, reason, risk}。", "expected_keys": ["direction", "reason"], "expected_values": ["空", "供应", "进口"]}
+{"id": "fund_02", "topic": "原油 OPEC 减产", "prompt": "OPEC+ 宣布减产 100 万桶，但全球 PMI 走弱，请用 JSON 输出 {direction, reason, risk}。", "expected_keys": ["direction", "reason", "risk"], "expected_values": ["短", "减产", "需求"]}
+{"id": "fund_03", "topic": "铜电网投资", "prompt": "电网投资同比+15%，新能源车销量超预期，LME 库存创新低，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["涨", "需求", "库存"]}
+{"id": "fund_04", "topic": "铁矿石钢厂亏损", "prompt": "钢厂利润转负，铁水产量下滑，但港口库存低位，请用 JSON 输出 {direction, reason, risk}。", "expected_keys": ["direction", "reason"], "expected_values": ["空", "减产", "需求"]}
+{"id": "fund_05", "topic": "棕榈油马来累库", "prompt": "马来 4 月库存环比+8%，印尼出口政策收紧，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["震荡", "库存"]}
+{"id": "fund_06", "topic": "黄金降息预期", "prompt": "美联储暗示 9 月降息概率上升，美债收益率回落 30bp，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["涨", "利率", "降息"]}
+{"id": "fund_07", "topic": "白糖巴西压榨", "prompt": "巴西中南部双周压榨超预期，原糖跌至 18 美分，国内现货升水期货 800 元，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["空", "成本", "升水"]}
+{"id": "fund_08", "topic": "PTA 成本下游", "prompt": "PX 涨 200，PTA 现金流 -100，聚酯负荷 88%，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["强", "成本", "下游"]}
+{"id": "fund_09", "topic": "玉米深加工", "prompt": "深加工开机率 72%，养殖端豆粕替代用量增加，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["强", "需求", "替代"]}
+{"id": "fund_10", "topic": "沪铜美元走弱", "prompt": "美元指数跌破 100，LME 注销仓单激增，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["涨", "美元", "库存"]}
+{"id": "fund_11", "topic": "沪镍印尼供应", "prompt": "印尼镍铁出口配额收紧，新能源电池需求回暖，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["涨", "供应", "需求"]}
+{"id": "fund_12", "topic": "玻璃地产竣工", "prompt": "地产竣工面积同比转负，玻璃库存累积，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["空", "需求", "库存"]}
+{"id": "fund_13", "topic": "纯碱光伏需求", "prompt": "光伏装机超预期，纯碱厂家库存降至历史低位，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["涨", "需求", "库存"]}
+{"id": "fund_14", "topic": "尿素出口", "prompt": "国内尿素出口窗口打开，印度招标价创新高，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["涨", "出口", "需求"]}
+{"id": "fund_15", "topic": "橡胶东南亚", "prompt": "泰国主产区进入开割旺季，但中国汽车销量超预期，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["震荡", "供应", "需求"]}
+{"id": "fund_16", "topic": "沪锌冶炼", "prompt": "锌精矿加工费跌至历史低位，冶炼厂减产意愿强，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["涨", "供应", "加工费"]}
+{"id": "fund_17", "topic": "豆油生柴", "prompt": "美国生柴需求超预期，豆棕价差扩大，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["强", "需求", "生柴"]}
+{"id": "fund_18", "topic": "焦煤山西", "prompt": "山西安全检查升级，焦煤主产区减产明显，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["涨", "供应", "减产"]}
+{"id": "fund_19", "topic": "棉花新棉", "prompt": "新疆新棉播种面积同比下降，下游纱厂库存低位，请用 JSON 输出 {direction, reason}。", "expected_keys": ["direction", "reason"], "expected_values": ["涨", "供应", "需求"]}
+{"id": "macro_00", "topic": "CFTC 净多减仓", "prompt": "CFTC 非商业净多持仓连续 3 周下降，多空比 2:1 → 1.2:1，请用 JSON 输出 {signal, level, caveat}。", "expected_keys": ["signal", "level"], "expected_values": ["减仓", "弱化", "滞后"]}
+{"id": "macro_01", "topic": "FOMC 转鹰", "prompt": "FOMC 措辞由 patient 改为 data-dependent，请用 JSON 输出 {stance, rate_path, asset_impact}。", "expected_keys": ["stance", "rate_path"], "expected_values": ["鹰", "降息", "美元"]}
+{"id": "macro_02", "topic": "PMI/CPI/PPI", "prompt": "中国 PMI 重回荣枯线上方，CPI 同比 0.3%，PPI -2.5%，请用 JSON 输出 {phase, policy_implication}。", "expected_keys": ["phase", "policy_implication"], "expected_values": ["复苏", "宽松"]}
+{"id": "macro_03", "topic": "ECB 鹰派", "prompt": "ECB 主席表态 rates restrictive for sufficient time，请用 JSON 输出 {eur, bond_yield, equity}。", "expected_keys": ["eur", "bond_yield"], "expected_values": ["强", "高位", "压制"]}
+{"id": "macro_04", "topic": "非农疲软", "prompt": "美国非农新增 6 万低于预期 18 万，失业率 4.0→4.2%，请用 JSON 输出 {growth_signal, fed_implication, asset_view}。", "expected_keys": ["growth_signal", "fed_implication"], "expected_values": ["降温", "降息"]}
+{"id": "macro_05", "topic": "美元走强", "prompt": "美元指数突破 106，新兴市场货币普跌，请用 JSON 输出 {commodity_impact, em_impact}。", "expected_keys": ["commodity_impact", "em_impact"], "expected_values": ["压制", "压力"]}
+{"id": "macro_06", "topic": "LPR 降息", "prompt": "中国 LPR 5 年期降 25bp，请用 JSON 输出 {sector_impact, market_signal}。", "expected_keys": ["sector_impact", "market_signal"], "expected_values": ["地产", "宽松"]}
+{"id": "macro_07", "topic": "美 10Y 收益率", "prompt": "美 10Y 国债收益率突破 5%，请用 JSON 输出 {risk_asset, gold_impact}。", "expected_keys": ["risk_asset", "gold_impact"], "expected_values": ["承压", "压制"]}
+{"id": "macro_08", "topic": "OPEC+ 会议", "prompt": "市场预期 OPEC+ 会议延长减产，请用 JSON 输出 {oil_view, hedge}。", "expected_keys": ["oil_view"], "expected_values": ["涨", "支撑"]}
+{"id": "macro_09", "topic": "中国出口", "prompt": "中国出口同比+8%，超预期，请用 JSON 输出 {growth_signal, sector_impact}。", "expected_keys": ["growth_signal", "sector_impact"], "expected_values": ["回暖", "出口"]}
+{"id": "macro_10", "topic": "地产销售", "prompt": "30 大中城市新房成交同比-30%，请用 JSON 输出 {commodity_impact, policy_signal}。", "expected_keys": ["commodity_impact"], "expected_values": ["压制", "黑色"]}
+{"id": "macro_11", "topic": "M2 增速", "prompt": "中国 M2 同比+10.5%，社融超预期，请用 JSON 输出 {market_signal, sector_impact}。", "expected_keys": ["market_signal"], "expected_values": ["流动性", "宽松"]}
+{"id": "macro_12", "topic": "VIX 飙升", "prompt": "VIX 单日上涨 30%，突破 30，请用 JSON 输出 {market_state, hedge}。", "expected_keys": ["market_state"], "expected_values": ["恐慌", "避险"]}
+{"id": "macro_13", "topic": "人民币贬值", "prompt": "USDCNY 突破 7.3，请用 JSON 输出 {commodity_impact, export_impact}。", "expected_keys": ["commodity_impact"], "expected_values": ["进口", "成本"]}
+{"id": "macro_14", "topic": "BoJ 加息", "prompt": "BoJ 意外加息 25bp，请用 JSON 输出 {jpy, carry_trade}。", "expected_keys": ["jpy", "carry_trade"], "expected_values": ["升值", "套利"]}
+{"id": "risk_00", "topic": "Sharpe", "prompt": "请用 JSON 解释 Sharpe 比率，输出 {definition, formula, typical_threshold}。", "expected_keys": ["definition", "formula"], "expected_values": ["收益", "波动率", "无风险"]}
+{"id": "risk_01", "topic": "Sortino", "prompt": "请用 JSON 解释 Sortino 比率，输出 {definition, formula, vs_sharpe}。", "expected_keys": ["definition", "formula"], "expected_values": ["下行", "波动"]}
+{"id": "risk_02", "topic": "Calmar", "prompt": "请用 JSON 解释 Calmar 比率，输出 {definition, formula, use_case}。", "expected_keys": ["definition", "formula"], "expected_values": ["回撤", "年化"]}
+{"id": "risk_03", "topic": "最大回撤", "prompt": "请用 JSON 解释最大回撤(MDD)，输出 {definition, calculation}。", "expected_keys": ["definition"], "expected_values": ["最高", "最低", "净值"]}
+{"id": "risk_04", "topic": "VaR", "prompt": "请用 JSON 解释 95% 单日 VaR，输出 {definition, methods, limitation}。", "expected_keys": ["definition", "methods"], "expected_values": ["置信", "损失"]}
+{"id": "risk_05", "topic": "凯利公式", "prompt": "请用 JSON 解释凯利公式仓位管理，输出 {formula, practical_use, risk}。", "expected_keys": ["formula", "practical_use"], "expected_values": ["胜率", "赔率"]}
+{"id": "risk_06", "topic": "Sharpe 评估", "prompt": "Sharpe = 1.5 是否优秀？请用 JSON 输出 {evaluation, caveat}。", "expected_keys": ["evaluation"], "expected_values": ["较好", "样本"]}
+{"id": "risk_07", "topic": "滑点", "prompt": "请用 JSON 解释期货交易滑点，输出 {definition, source, mitigation}。", "expected_keys": ["definition"], "expected_values": ["成交", "报价"]}
+{"id": "risk_08", "topic": "风险平价", "prompt": "请用 JSON 解释风险平价(Risk Parity)的核心思想，输出 {principle, application}。", "expected_keys": ["principle"], "expected_values": ["风险", "贡献"]}
+{"id": "risk_09", "topic": "信息比率", "prompt": "请用 JSON 解释信息比率(Information Ratio)，输出 {definition, formula}。", "expected_keys": ["definition", "formula"], "expected_values": ["跟踪", "误差"]}
+{"id": "contract_00", "topic": "螺纹换月", "prompt": "螺纹钢主力合约换月规则是什么？请用 JSON 输出 {rule, typical_month}。", "expected_keys": ["rule"], "expected_values": ["持仓", "成交", "1", "5", "10"]}
+{"id": "contract_01", "topic": "沪铜单位", "prompt": "沪铜期货合约单位是多少？请用 JSON 输出 {unit}。", "expected_keys": ["unit"], "expected_values": ["5", "吨"]}
+{"id": "contract_02", "topic": "黄金交割", "prompt": "上海期货交易所黄金期货合约单位是？请用 JSON 输出 {unit}。", "expected_keys": ["unit"], "expected_values": ["1000", "克"]}
+{"id": "contract_03", "topic": "IF 乘数", "prompt": "沪深 300 股指期货合约乘数是？请用 JSON 输出 {multiplier}。", "expected_keys": ["multiplier"], "expected_values": ["300"]}
+{"id": "contract_04", "topic": "T 标的", "prompt": "T 合约（10 年期国债期货）的标的债券是什么？请用 JSON 输出 {underlying, face_value}。", "expected_keys": ["underlying"], "expected_values": ["10年", "100万"]}
+{"id": "contract_05", "topic": "股指手续费", "prompt": "中金所股指期货平今手续费一般如何收取？请用 JSON 输出 {fee_type, note}。", "expected_keys": ["fee_type"], "expected_values": ["万分", "成交额"]}
+{"id": "contract_06", "topic": "交割月限仓", "prompt": "自然人客户在交割月前的限仓变化？请用 JSON 输出 {pre_delivery, delivery_month}。", "expected_keys": ["pre_delivery", "delivery_month"], "expected_values": ["平仓", "禁止"]}
+{"id": "contract_07", "topic": "扩板", "prompt": "连续单边市后涨跌停板如何扩板？请用 JSON 输出 {expansion_rule}。", "expected_keys": ["expansion_rule"], "expected_values": ["50%", "扩"]}
+{"id": "contract_08", "topic": "保证金阶梯", "prompt": "临近交割月保证金如何阶梯式调整？请用 JSON 输出 {stages}。", "expected_keys": ["stages"], "expected_values": ["交割月", "提高"]}
+{"id": "contract_09", "topic": "强平", "prompt": "期货公司在客户保证金不足时如何处理？请用 JSON 输出 {process}。", "expected_keys": ["process"], "expected_values": ["追保", "强平"]}
+{"id": "news_00", "topic": "新闻 bullish", "prompt": "新闻：螺纹钢库存连续 3 周去化，钢厂利润转正。请输出 {sentiment, impact_symbols, reason} JSON。", "expected_keys": ["sentiment", "impact_symbols"], "expected_values": ["bullish", "rb", "看涨"]}
+{"id": "news_01", "topic": "新闻 bearish", "prompt": "新闻：地产销售同比-30%，建材需求疲弱。请输出 {sentiment, impact_symbols, reason} JSON。", "expected_keys": ["sentiment", "impact_symbols"], "expected_values": ["bearish", "rb", "fg"]}
+{"id": "news_02", "topic": "新闻 neutral", "prompt": "新闻：央行重启 7 天逆回购操作 1000 亿。请输出 {sentiment, impact_symbols, reason} JSON。", "expected_keys": ["sentiment"], "expected_values": ["neutral", "中性"]}
+{"id": "news_03", "topic": "新闻 多品种", "prompt": "新闻：OPEC+ 宣布额外减产 100 万桶/日。请输出 {sentiment, impact_symbols, reason} JSON。", "expected_keys": ["sentiment", "impact_symbols"], "expected_values": ["bullish", "sc", "原油"]}
+{"id": "news_04", "topic": "新闻 宏观", "prompt": "新闻：美联储 9 月降息 25bp。请输出 {sentiment, impact_symbols, reason} JSON。", "expected_keys": ["sentiment", "impact_symbols"], "expected_values": ["bullish", "au", "黄金"]}

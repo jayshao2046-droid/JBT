@@ -1,0 +1,35 @@
+{
+  "symbol": "CZCE.OI",
+  "volatility_3m": 0.12016257348555681,
+  "volatility_1y": 0.09293884593389348,
+  "volatility_5y": 0.11984439745181923,
+  "volatility_weighted": "Low",
+  "trend_strength_3m": 20.11,
+  "trend_strength_1y": 20.11,
+  "trend_strength_weighted": "Medium",
+  "autocorr_3m": -0.07419608368222502,
+  "autocorr_1y": 0.021044565522321434,
+  "skewness": 0.3638764537473036,
+  "kurtosis": 4.8830018539659275,
+  "liquidity": "High",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:58:36",
+    "data_start_date": "2018-04-27T00:00:00",
+    "data_end_date": "2026-04-22T08:00:00",
+    "data_points_3m": 164,
+    "data_points_1y": 712,
+    "data_points_5y": 5695,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.9648494956724203,
+    "volatility": 0.9121237391810504,
+    "trend": 1.0,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.8535395653017506,
+    "warnings": []
+  }
+}

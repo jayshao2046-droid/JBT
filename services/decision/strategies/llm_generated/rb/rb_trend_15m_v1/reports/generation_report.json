@@ -1,0 +1,238 @@
+{
+  "strategy_name": "rb_trend_15m_v1",
+  "symbol": "rb",
+  "category": "trend_following",
+  "timeframe": 15,
+  "factors": [
+    "MACD",
+    "ADX",
+    "ATR"
+  ],
+  "design_prompt": "为 rb 品种设计一个 trend_following 策略。\n品种特征: 品种: rb（特征分析失败，使用保守参数）\n时间周期: 15 分钟\n核心因子: MACD, ADX, ATR\n策略描述: 15分钟MACD动量+ADX趋势过滤+ATR风控的中频趋势跟踪策略\n\n输出 JSON 格式的策略设计，包含：\n- strategy_name: rb_trend_15m_v1\n- logic_description: 策略逻辑描述\n- entry_logic: 做多入场条件\n- exit_logic: 做多出场条件\n- short_entry_logic: 做空入场条件\n- short_exit_logic: 做空出场条件\n- risk_management: 风险管理方案（止损止盈规则）\n- recommended_factors: 推荐使用的技术指标列表\n",
+  "design_response": {
+    "strategy_name": "rb_trend_15m_v1",
+    "logic_description": "基于15分钟K线的rb螺纹钢趋势跟踪策略。利用MACD捕捉动量方向与交叉信号，ADX过滤震荡行情确保仅在趋势明确时入场，ATR动态度量波动率用于自适应止损止盈。策略核心思路：ADX确认趋势存在 → MACD确认趋势方向与动量 → ATR管理风险敞口。采用保守参数以适应特征分析不足的情况，降低假信号频率。",
+    "entry_logic": {
+      "description": "做多入场条件（需同时满足以下全部条件）",
+      "conditions": [
+        {
+          "id": "L1",
+          "factor": "ADX",
+          "rule": "ADX(14) > 20",
+          "purpose": "确认当前处于趋势行情，过滤横盘震荡"
+        },
+        {
+          "id": "L2",
+          "factor": "MACD",
+          "rule": "MACD_DIF(12,26) 上穿 MACD_DEA(9)，即MACD金叉",
+          "purpose": "捕捉多头动量启动信号"
+        },
+        {
+          "id": "L3",
+          "factor": "MACD",
+          "rule": "MACD柱状图（DIF - DEA）由负转正，且连续2根15分钟K线MACD柱状图递增",
+          "purpose": "确认多头动量正在加速，避免虚假金叉"
+        },
+        {
+          "id": "L4",
+          "factor": "+DI/-DI",
+          "rule": "+DI(14) > -DI(14)",
+          "purpose": "方向指标确认多头力量占优"
+        },
+        {
+          "id": "L5",
+          "factor": "价格位置",
+          "rule": "收盘价 > EMA(20)",
+          "purpose": "价格位于短期均线上方，辅助确认多头格局"
+        }
+      ],
+      "execution": "当L1-L5全部满足时，在当根15分钟K线收盘价挂单买入开仓"
+    },
+    "exit_logic": {
+      "description": "做多出场条件（满足任一即触发平仓）",
+      "conditions": [
+        {
+          "id": "LX1",
+          "type": "止损",
+          "rule": "价格跌破 入场价 - 2.0 × ATR(14)",
+          "purpose": "ATR自适应止损，控制单笔亏损"
+        },
+        {
+          "id": "LX2",
+          "type": "止盈",
+          "rule": "价格上涨至 入场价 + 3.0 × ATR(14)",
+          "purpose": "ATR自适应止盈，盈亏比1.5:1"
+        },
+        {
+          "id": "LX3",
+          "type": "趋势消退",
+          "rule": "ADX(14) 从高位回落，且当前 ADX < 18",
+          "purpose": "趋势衰减信号，主动退出避免回撤"
+        },
+        {
+          "id": "LX4",
+          "type": "动量反转",
+          "rule": "MACD_DIF 下穿 MACD_DEA（死叉）",
+          "purpose": "动量反转信号，及时止盈或止损"
+        },
+        {
+          "id": "LX5",
+          "type": "移动止盈",
+          "rule": "盈利超过 1.5 × ATR(14) 后，止损上移至 入场价 + 0.5 × ATR(14)，此后每上涨 0.5 × ATR 止损跟随上移 0.5 × ATR",
+          "purpose": "锁定利润，让盈利奔跑"
+        }
+      ]
+    },
+    "short_entry_logic": {
+      "description": "做空入场条件（需同时满足以下全部条件）",
+      "conditions": [
+        {
+          "id": "S1",
+          "factor": "ADX",
+          "rule": "ADX(14) > 20",
+          "purpose": "确认当前处于趋势行情"
+        },
+        {
+          "id": "S2",
+          "factor": "MACD",
+          "rule": "MACD_DIF(12,26) 下穿 MACD_DEA(9)，即MACD死叉",
+          "purpose": "捕捉空头动量启动信号"
+        },
+        {
+          "id": "S3",
+          "factor": "MACD",
+          "rule": "MACD柱状图（DIF - DEA）由正转负，且连续2根15分钟K线MACD柱状图绝对值递增（负值加深）",
+          "purpose": "确认空头动量正在加速"
+        },
+        {
+          "id": "S4",
+          "factor": "-DI/+DI",
+          "rule": "-DI(14) > +DI(14)",
+          "purpose": "方向指标确认空头力量占优"
+        },
+        {
+          "id": "S5",
+          "factor": "价格位置",
+          "rule": "收盘价 < EMA(20)",
+          "purpose": "价格位于短期均线下方，辅助确认空头格局"
+        }
+      ],
+      "execution": "当S1-S5全部满足时，在当根15分钟K线收盘价挂单卖出开仓"
+    },
+    "short_exit_logic": {
+      "description": "做空出场条件（满足任一即触发平仓）",
+      "conditions": [
+        {
+          "id": "SX1",
+          "type": "止损",
+          "rule": "价格上涨至 入场价 + 2.0 × ATR(14)",
+          "purpose": "ATR自适应止损"
+        },
+        {
+          "id": "SX2",
+          "type": "止盈",
+          "rule": "价格下跌至 入场价 - 3.0 × ATR(14)",
+          "purpose": "ATR自适应止盈"
+        },
+        {
+          "id": "SX3",
+          "type": "趋势消退",
+          "rule": "ADX(14) 从高位回落，且当前 ADX < 18",
+          "purpose": "趋势衰减信号"
+        },
+        {
+          "id": "SX4",
+          "type": "动量反转",
+          "rule": "MACD_DIF 上穿 MACD_DEA（金叉）",
+          "purpose": "动量反转信号"
+        },
+        {
+          "id": "SX5",
+          "type": "移动止盈",
+          "rule": "盈利超过 1.5 × ATR(14) 后，止损下移至 入场价 - 0.5 × ATR(14)，此后每下跌 0.5 × ATR 止损跟随下移 0.5 × ATR",
+          "purpose": "锁定利润"
+        }
+      ]
+    },
+    "risk_management": {
+      "position_sizing": {
+        "method": "基于ATR的动态仓位管理",
+        "rule": "单笔风险金额 = 账户权益 × 1.0%，开仓手数 = 单笔风险金额 / (2.0 × ATR(14) × 合约乘数10)",
+        "max_position": "单品种最大持仓不超过账户权益的15%"
+      },
+      "stop_loss": {
+        "initial_stop": "2.0 × ATR(14)，约为rb 15分钟级别正常波动的2倍",
+        "trailing_stop": "盈利达 1.5×ATR 后启动追踪止损，步进 0.5×ATR",
+        "max_loss_per_trade": "账户权益的 1.0%（保守设定）"
+      },
+      "take_profit": {
+        "target": "3.0 × ATR(14)",
+        "profit_loss_ratio": "1.5 : 1（最低目标盈亏比）"
+      },
+      "daily_risk_control": {
+        "max_daily_loss": "账户权益的 3.0%，触发后当日停止交易",
+        "max_daily_trades": 6,
+        "max_consecutive_losses": "连续3笔亏损后暂停30分钟（2根K线）"
+      },
+      "time_filter": {
+        "active_sessions": "09:00-11:30, 13:30-15:00, 21:00-23:00",
+        "avoid_periods": "开盘前5分钟（09:00-09:05）和收盘前5分钟避免新开仓",
+        "overnight_rule": "夜盘持仓不过日盘，23:00前强制平仓或设置硬止损"
+      }
+    },
+    "recommended_factors": [
+      {
+        "name": "MACD",
+        "params": {
+          "fast": 12,
+          "slow": 26,
+          "signal": 9
+        },
+        "role": "核心动量信号",
+        "usage": "金叉/死叉作为入场触发，柱状图递增确认动量加速"
+      },
+      {
+        "name": "ADX",
+        "params": {
+          "period": 14
+        },
+        "role": "趋势强度过滤",
+        "usage": "ADX>20确认趋势存在，ADX<18判定趋势消退；+DI/-DI判断趋势方向"
+      },
+      {
+        "name": "ATR",
+        "params": {
+          "period": 14
+        },
+        "role": "波动率度量与风控",
+        "usage": "动态计算止损距离(2×ATR)、止盈目标(3×ATR)、追踪止损步进、仓位规模"
+      },
+      {
+        "name": "EMA",
+        "params": {
+          "period": 20
+        },
+        "role": "辅助趋势确认",
+        "usage": "价格与EMA20的相对位置作为多空方向辅助过滤"
+      },
+      {
+        "name": "+DI / -DI",
+        "params": {
+          "period": 14
+        },
+        "role": "方向指标",
+        "usage": "+DI>-DI确认多头占优，-DI>+DI确认空头占优，与ADX配套使用"
+      }
+    ],
+    "parameter_notes": {
+      "conservative_reason": "品种特征分析失败，所有参数采用保守设定：ADX阈值偏高(20)减少假突破入场，止损倍数偏大(2.0×ATR)容忍更多波动，单笔风险偏低(1.0%)控制回撤",
+      "optimization_suggestion": "待积累足够rb品种历史回测数据后，可针对以下参数进行优化：ADX入场阈值(18-25)、ATR止损倍数(1.5-2.5)、ATR止盈倍数(2.5-4.0)、MACD参数组合、EMA周期",
+      "backtest_period": "建议使用最近2年的rb 15分钟数据进行回测验证，含不同市场状态（趋势/震荡/高波动）"
+    }
+  },
+  "model": "claude-opus-4-6",
+  "generated_at": "2026-04-24T19:11:52.201930",
+  "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/rb/rb_trend_15m_v1.yaml",
+  "saved_at": "2026-04-24T19:11:52.202253",
+  "report_type": "generation"
+}

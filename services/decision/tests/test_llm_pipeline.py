@@ -317,3 +317,70 @@ async def test_fetch_kline_data_fallback_uses_current_api_params():
             assert "start" in params
             assert "end" in params
 
+
+@pytest.mark.asyncio
+async def test_evaluate_researcher_report_uses_local_research_store():
+    """pipeline 后段 researcher 消费应走本地 ResearchStore，而不是远端 latest。"""
+    mock_client = AsyncMock(spec=OllamaClient)
+    pipeline = LLMPipeline(client=mock_client)
+
+    histories = {
+        "futures": [
+            {
+                "report_id": "fut-0900",
+                "source_report": {"summary": "早盘震荡", "symbols": ["rb"]},
+                "batch_context": {"hour": 9},
+                "fact_record": {"generated_at": "2026-04-24T09:00:00"},
+            },
+            {
+                "report_id": "fut-1500",
+                "source_report": {"summary": "午盘黑色偏强", "symbols": ["rb", "hc"]},
+                "batch_context": {"hour": 15},
+                "fact_record": {"generated_at": "2026-04-24T15:00:00"},
+            },
+        ],
+        "stocks": [],
+        "news": [
+            {
+                "report_id": "news-1500",
+                "source_report": {
+                    "news": [
+                        {"title": "钢厂去库", "content": "库存继续下降", "source": "财联社"},
+                    ]
+                },
+                "batch_context": {"hour": 15},
+                "fact_record": {"generated_at": "2026-04-24T15:00:00"},
+            }
+        ],
+        "rss": [],
+        "sentiment": [],
+    }
+
+    store = MagicMock()
+    store.get_history.side_effect = lambda report_type, limit=50: histories.get(report_type, [])
+
+    with patch("src.llm.pipeline.ResearchStore", return_value=store):
+        with patch.object(pipeline.researcher_phi4_scorer, "_score_report_full", new_callable=AsyncMock) as mock_score:
+            with patch.object(pipeline, "_send_feishu_notification", new_callable=AsyncMock) as mock_notify:
+                mock_score.return_value = {
+                    "score": 82.0,
+                    "confidence": "high",
+                    "reasoning": "本地库存证完整",
+                    "improvements": [],
+                    "model": "qwen3:14b-q4_K_M",
+                }
+                mock_notify.return_value = {"success": True}
+
+                result = await pipeline.evaluate_researcher_report(segment="15:00")
+
+    assert result["notification_sent"] is True
+    assert result["score"] == 82.0
+    assert result["report"]["source"] == "research_store"
+    assert result["report"]["futures_summary"]["market_overview"] == "午盘黑色偏强"
+    assert result["report"]["crawler_stats"]["articles_processed"] == 1
+
+    scored_report = mock_score.await_args.kwargs["report"]
+    assert scored_report["futures_summary"]["symbols_covered"] == 2
+    assert scored_report["crawler_stats"]["news_items"][0]["title"] == "钢厂去库"
+    mock_notify.assert_awaited_once()
+

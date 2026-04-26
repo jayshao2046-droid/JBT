@@ -1,0 +1,37 @@
+{
+  "symbol": "DCE.pg",
+  "volatility_3m": 0.8186267491874146,
+  "volatility_1y": 0.46280823846750296,
+  "volatility_5y": 0.4151206349833201,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 7.44,
+  "trend_strength_1y": 7.44,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": 0.020227140756121573,
+  "autocorr_1y": 0.02217358166190414,
+  "skewness": -0.2436964571330228,
+  "kurtosis": 73.08859772297362,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:55:56",
+    "data_start_date": "2020-03-30T01:00:00",
+    "data_end_date": "2026-04-22T11:00:00",
+    "data_points_3m": 657,
+    "data_points_1y": 2849,
+    "data_points_5y": 17389,
+    "missing_data_ratio": 0.3595139586377457
+  },
+  "confidence": {
+    "overall": 0.7926965418493894,
+    "volatility": 0.6614983339423463,
+    "trend": 0.8921458124086763,
+    "liquidity": 0.8561944165449017,
+    "data_sufficiency": 1.0,
+    "data_quality": 0.6404860413622543,
+    "feature_stability": 0.61558753588945,
+    "warnings": [
+      "数据质量较低: 缺失率 35.95%"
+    ]
+  }
+}

@@ -2,6 +2,7 @@ import collections
 import hmac
 import logging
 import os
+import socket
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -64,14 +65,44 @@ _SIM_API_KEY = os.environ.get("SIM_API_KEY", "")
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 _PUBLIC_PATHS = {"/health", "/api/v1/health", "/api/v1/version"}
+_DEFAULT_TRUSTED_UNAUTH_HOSTS = {
+    "127.0.0.1",
+    "::1",
+    "localhost",
+    "testclient",
+    "192.168.31.142",
+    "100.86.182.114",
+    "172.16.1.130",
+    "192.168.31.187",
+    "100.91.19.67",
+}
+
+
+def _trusted_unauth_hosts() -> set[str]:
+    configured = {
+        host.strip()
+        for host in os.environ.get("SIM_TRUSTED_UNAUTH_HOSTS", "").split(",")
+        if host.strip()
+    }
+    return _DEFAULT_TRUSTED_UNAUTH_HOSTS | configured
+
+
+def _is_local_request(request: Request) -> bool:
+    host = request.client.host if request.client else ""
+    return host in _trusted_unauth_hosts()
 
 
 async def _verify_api_key(request: Request, api_key: Optional[str] = Depends(_api_key_header)) -> None:
-    """全局 API Key 认证中间件（P1-1 修复：生产环境强制验证）。"""
+    """全局 API Key 认证中间件。
+
+    规则：
+    - public 路径永久免认证
+    - 配置了 SIM_API_KEY 时，所有非 public 路径都必须带正确 key
+    - 未配置 SIM_API_KEY 时，只允许本机与可信代理主机访问；其它远端访问一律锁死
+    """
     if request.url.path in _PUBLIC_PATHS:
         return
 
-    # P1-1 修复：生产环境必须配置 API Key
     env = os.environ.get("JBT_ENV", "development").lower()
     if not _SIM_API_KEY:
         if env == "production":
@@ -79,8 +110,12 @@ async def _verify_api_key(request: Request, api_key: Optional[str] = Depends(_ap
                 status_code=503,
                 detail="SIM_API_KEY not configured in production environment"
             )
-        # 开发环境允许未配置 API Key
-        return
+        if _is_local_request(request):
+            return
+        raise HTTPException(
+            status_code=503,
+            detail="SIM_API_KEY not configured; remote access is locked"
+        )
 
     if not api_key or not hmac.compare_digest(api_key, _SIM_API_KEY):
         raise HTTPException(status_code=403, detail="invalid or missing API key")
@@ -267,6 +302,7 @@ async def _ctp_connection_guardian():
     IDLE_INTERVAL = 300         # 非交易时段休眠间隔（秒）
     ACCOUNT_REFRESH = 120       # 账户刷新间隔（秒）
     MAX_FAST_RETRIES = 3
+    RECONNECT_INTERVAL = 120    # 断联重连间隔（秒）：每 2 分钟最多重建一次 CTP SDK 避免崩溃
     RECONNECT_ALERT_COOLDOWN = 600      # 交易时段：断联超 10 分钟才发飞书报警（止噪）
     IDLE_DISCONNECT_ALERT_COOLDOWN = 1800  # 非交易时段：每 30 分钟发一次飞书断联通知
     _fail_count = 0
@@ -276,8 +312,9 @@ async def _ctp_connection_guardian():
     _last_preopen_sent = None   # 避免同一开盘前检查重复触发
     _last_open_sent = None      # 避免同一开盘通知重复推送
     _last_reconnect_alert_ts = 0.0
-    _last_idle_disconnect_alert_ts = 0.0  # 非交易时段断联通知冷却
     _session_disconnect_ts: Optional[float] = None  # 交易时段首次断联时间戳
+    _last_reconnect_attempt_ts = 0.0    # 上次实际执行重连（gateway 重建）的时间戳
+    _idle_disconnect_executed = False
 
     def _in_pre_session():
         """工作日盘前窗口判定"""
@@ -445,9 +482,10 @@ async def _ctp_connection_guardian():
 
     async def _try_connect(silent: bool = True):
         """尝试 CTP 建连，返回 (md_ok, td_ok)"""
-        nonlocal _fail_count
+        nonlocal _fail_count, _last_reconnect_attempt_ts
         try:
             from src.api.router import ctp_connect
+            _last_reconnect_attempt_ts = time.time()
             result = await asyncio.get_running_loop().run_in_executor(
                 None, lambda: ctp_connect(silent=silent),
             )
@@ -458,15 +496,50 @@ async def _ctp_connection_guardian():
             else:
                 _fail_count += 1
             return md_ok, td_ok
+        except HTTPException as exc:
+            _fail_count += 1
+            if exc.status_code == 503 and "CTP fronts unreachable" in str(exc.detail):
+                logger.info("[guardian] connect skipped: %s", exc.detail)
+            else:
+                logger.warning("[guardian] connect failed (attempt %d): %s", _fail_count, exc)
+            return False, False
         except Exception as exc:
             _fail_count += 1
             logger.warning("[guardian] connect failed (attempt %d): %s", _fail_count, exc)
             return False, False
 
-    # --- 首次连接：24h 保持连接，无条件建连 ---
+    def _ensure_idle_disconnect():
+        """非交易时段计划断联：仅执行一次，不发告警。"""
+        nonlocal _idle_disconnect_executed, _session_disconnect_ts, _last_reconnect_alert_ts
+        if _idle_disconnect_executed:
+            return
+        try:
+            from src.api.router import _get_gateway, disconnect_gateway_internal
+
+            gw_idle = _get_gateway()
+            if gw_idle is None:
+                logger.info("[guardian] idle window entered, no CTP session to disconnect")
+            else:
+                st_idle = gw_idle.status
+                if st_idle.get("md_connected") or st_idle.get("td_connected"):
+                    logger.info("[guardian] idle window entered, disconnecting CTP intentionally")
+                else:
+                    logger.info("[guardian] idle window entered, clearing stale disconnected gateway")
+                disconnect_gateway_internal()
+        except Exception as exc_idle:
+            logger.warning("[guardian] idle planned disconnect error: %s", exc_idle)
+        finally:
+            _idle_disconnect_executed = True
+            _session_disconnect_ts = None
+            _last_reconnect_alert_ts = 0.0
+
+    # --- 首次连接：仅在交易/盘前窗口建连，空闲窗口保持静默 ---
     await asyncio.sleep(2)
-    logger.info("[guardian] initial connect (24h keepalive mode)")
-    await _try_connect(silent=False)
+    if is_trading_session() or _in_pre_session():
+        logger.info("[guardian] initial connect inside active window")
+        await _try_connect(silent=True)
+    else:
+        logger.info("[guardian] initial window is idle, skip connect")
 
     # --- 守护循环 ---
     while True:
@@ -474,45 +547,18 @@ async def _ctp_connection_guardian():
         in_pre = _in_pre_session()
 
         if in_session:
+            _idle_disconnect_executed = False
             await asyncio.sleep(FAST_INTERVAL)
         elif in_pre:
+            _idle_disconnect_executed = False
             await asyncio.sleep(PRE_INTERVAL)
         else:
-            # 非交易 + 非盘前 → 检查收盘总结 + 24h 保持 CTP 连接
+            # 非交易 + 非盘前 → 检查收盘总结 + 计划断联静默
             sc = _check_session_close()
             if sc is not None and sc[0] != _last_summary_sent:
                 _last_summary_sent = sc[0]
                 _send_session_summary(sc[1])
-            # 24h 保持连接：非交易时段也检查并重连（断联每 30 分钟飞书通知一次）
-            try:
-                import time as _time
-                from src.api.router import _get_gateway
-                gw_idle = _get_gateway()
-                if gw_idle is None:
-                    logger.info("[guardian] idle: gateway not created, attempting connect")
-                    await _try_connect(silent=True)
-                else:
-                    st_idle = gw_idle.status
-                    if not st_idle.get("md_connected") or not st_idle.get("td_connected"):
-                        logger.info("[guardian] idle: disconnected (md=%s td=%s), reconnecting",
-                                    st_idle.get("md_connected"), st_idle.get("td_connected"))
-                        md_r, td_r = await _try_connect(silent=True)
-                        if not md_r or not td_r:
-                            # 重连失败 → 每 30 分钟才发一次飞书通知，防止信息爆炸
-                            now_idle_ts = _time.time()
-                            if now_idle_ts - _last_idle_disconnect_alert_ts >= IDLE_DISCONNECT_ALERT_COOLDOWN:
-                                _send_guardian_alert(
-                                    "P1", "CTP_IDLE_DISCONNECTED",
-                                    f"非交易时段 CTP 断联（md={st_idle.get('md_connected')}, "
-                                    f"td={st_idle.get('td_connected')}），持续断联中，下次通知间隔 30 分钟",
-                                    "SYSTEM"
-                                )
-                                _last_idle_disconnect_alert_ts = now_idle_ts
-                        else:
-                            # 重连成功，重置冷却（恢复不单独通知，避免扰动）
-                            _last_idle_disconnect_alert_ts = 0.0
-            except Exception as exc_idle:
-                logger.warning("[guardian] idle reconnect error: %s", exc_idle)
+            _ensure_idle_disconnect()
             await asyncio.sleep(IDLE_INTERVAL)
             continue
 
@@ -520,10 +566,10 @@ async def _ctp_connection_guardian():
             from src.api.router import _get_gateway, _system_state
             gw = _get_gateway()
 
-            # --- gateway 未创建 → 尝试建连 ---
+            # --- gateway 未创建 → 尝试建连（静默模式：避免每次服务重启都发告警）---
             if gw is None:
                 logger.info("[guardian] gateway not created, attempting connect")
-                await _try_connect(silent=not in_session)
+                await _try_connect(silent=True)
                 continue
 
             # --- 同步系统状态 ---
@@ -593,12 +639,20 @@ async def _ctp_connection_guardian():
                     _session_disconnect_ts = now_ts
                 disconnect_duration = now_ts - _session_disconnect_ts
 
-                # 尝试重连
-                logger.info("[guardian] session monitor: md=%s td=%s, reconnecting (%.0fs since disconnect)",
-                            md_ok, td_ok, disconnect_duration)
-                md_ok, td_ok = await _try_connect(silent=True)
+                # 尝试重连（限速：每 2 分钟最多重建一次 CTP SDK，避免频繁 destroy+recreate 导致 SDK 崩溃）
+                if now_ts - _last_reconnect_attempt_ts >= RECONNECT_INTERVAL:
+                    _last_reconnect_attempt_ts = now_ts
+                    logger.info("[guardian] session monitor: md=%s td=%s, reconnecting (%.0fs since disconnect)",
+                                md_ok, td_ok, disconnect_duration)
+                    md_ok, td_ok = await _try_connect(silent=True)
+                else:
+                    logger.debug("[guardian] session monitor: reconnect throttled, %.0fs since last attempt",
+                                 now_ts - _last_reconnect_attempt_ts)
+                    md_ok, td_ok = False, False
+
                 if md_ok or td_ok:
                     _session_disconnect_ts = None  # 重连成功，清除计时
+                    _last_reconnect_attempt_ts = 0.0
                     try:
                         from src.notifier.dispatcher import get_dispatcher
                         dp = get_dispatcher()
@@ -607,7 +661,7 @@ async def _ctp_connection_guardian():
                     except Exception:
                         pass
                 else:
-                    # 3 分钟内未连回才发飞书报警，冷却期内不重复
+                    # 断联超 10 分钟才发飞书报警，冷却期内不重复
                     if (disconnect_duration >= RECONNECT_ALERT_COOLDOWN
                             and now_ts - _last_reconnect_alert_ts >= RECONNECT_ALERT_COOLDOWN):
                         # 发送前再确认状态，避免抖动恢复后的误报

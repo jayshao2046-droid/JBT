@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from .research_store import ResearchStore
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,10 +47,6 @@ class NewsScorer:
             data_api_url: 数据服务 API 地址（保留兼容，当前未使用）
             ollama_url: Ollama API 地址
         """
-        # researcher 报告源统一走 Alienware researcher 服务，不走 data 服务
-        self.researcher_api_url = os.getenv(
-            "RESEARCHER_SERVICE_URL", "http://192.168.31.187:8199"
-        )
         self.ollama_url = ollama_url or os.getenv(
             "OLLAMA_BASE_URL", "http://192.168.31.142:11434"
         )
@@ -110,27 +108,93 @@ class NewsScorer:
         return results
 
     async def _fetch_latest_report(self) -> Optional[Dict[str, Any]]:
-        """拉取最新研报（从 Alienware researcher 服务直连）。
+        """拉取最新研报（从 Decision 本地 ResearchStore sentiment facts 聚合）。
 
         Returns:
             研报 JSON，失败时返回 None
         """
         try:
-            url = f"{self.researcher_api_url}/reports/latest"
+            snapshot = ResearchStore().get_fact_group_snapshot("sentiment", limit=10)
+            if not snapshot.get("available"):
+                return None
 
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(url)
-                resp.raise_for_status()
+            latest = snapshot.get("latest_primary") or snapshot.get("latest") or {}
+            source_report = latest.get("source_report")
+            if not isinstance(source_report, dict):
+                source_report = {}
 
-                data = resp.json()
-                if not data:
-                    return None
+            news_items = self._collect_local_news_items(snapshot)
+            if not news_items:
+                return None
 
-                return data
+            report = dict(source_report)
+            report["news"] = news_items
+            report.setdefault("report_id", latest.get("report_id") or source_report.get("report_id"))
+
+            fact_record = latest.get("fact_record")
+            if isinstance(fact_record, dict):
+                generated_at = fact_record.get("generated_at")
+                if generated_at:
+                    report.setdefault("generated_at", generated_at)
+
+            return report
 
         except Exception as e:
             logger.warning(f"拉取研报失败: {e}", exc_info=True)
             return None
+
+    @staticmethod
+    def _news_items_from_report(report: Dict[str, Any]) -> List[Dict[str, Any]]:
+        if not isinstance(report, dict):
+            return []
+
+        if isinstance(report.get("news"), list):
+            return report["news"]
+
+        if isinstance(report.get("news_items"), list):
+            return report["news_items"]
+
+        crawler_stats = report.get("crawler_stats")
+        if isinstance(crawler_stats, dict) and isinstance(crawler_stats.get("news_items"), list):
+            return crawler_stats["news_items"]
+
+        summary = report.get("summary") or report.get("content")
+        title = report.get("title") or report.get("report_id")
+        if summary or title:
+            return [{
+                "title": title or "研报摘要",
+                "content": summary or "",
+                "source": report.get("source", "research_store"),
+            }]
+
+        return []
+
+    def _collect_local_news_items(self, snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
+        history = snapshot.get("history") or []
+        collected: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+
+        for record in history:
+            if not isinstance(record, dict):
+                continue
+
+            source_report = record.get("source_report")
+            if not isinstance(source_report, dict):
+                continue
+
+            for item in self._news_items_from_report(source_report):
+                if not isinstance(item, dict):
+                    continue
+
+                title = str(item.get("title", "")).strip()
+                content = str(item.get("content", "")).strip()
+                dedup_key = f"{title}|{content[:80]}"
+                if dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
+                collected.append(item)
+
+        return collected
 
     def _extract_news_items(self, report: Dict[str, Any]) -> List[Dict[str, Any]]:
         """从研报中提取资讯条目列表。
@@ -141,9 +205,7 @@ class NewsScorer:
         Returns:
             资讯条目列表
         """
-        # 根据 TASK-0110 的研报格式提取资讯
-        # 假设研报格式为 {"news": [...], ...}
-        news_items = report.get("news", [])
+        news_items = self._news_items_from_report(report)
 
         if not isinstance(news_items, list):
             logger.warning("研报 news 字段格式错误")

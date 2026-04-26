@@ -49,6 +49,8 @@ class StrategyEvaluator:
         strategy_path: str,
         start_date: str,
         end_date: str,
+        local_backtest_report: Optional[dict[str, Any]] = None,
+        sandbox_backtest_result: Any = None,
     ) -> dict[str, Any]:
         """完整评估单个策略。
 
@@ -69,16 +71,19 @@ class StrategyEvaluator:
         # 2. 基础合规性检查（30 分）
         basic_score, basic_report = self._check_basic_compliance(strategy)
 
-        # 3. 回测评估（30 分）— 调用 YAMLSignalExecutor，预生成代码供后续复用
-        backtest_result = await self.yaml_executor.execute(strategy, start_date, end_date)
-        backtest_score, backtest_report = self._score_backtest_result(backtest_result)
-        # 缓存 bars + code 供后续阶段复用
-        _bars = backtest_result.equity_curve  # equity curve 用于 PBO
-        _code = backtest_result.generated_code
+        # 3. 回测评估（30 分）— 优先消费 formal local 结果，避免与主流程引擎口径不一致
+        if local_backtest_report is not None:
+            backtest_score, backtest_report = self._score_formal_backtest_report(local_backtest_report)
+            backtest_report['source'] = 'formal_local'
+        else:
+            if sandbox_backtest_result is None:
+                sandbox_backtest_result = await self.yaml_executor.execute(strategy, start_date, end_date)
+            backtest_score, backtest_report = self._score_backtest_result(sandbox_backtest_result)
+            backtest_report['source'] = 'yaml_signal_executor'
 
         # 4. PBO 过拟合检测（10 分）
         pbo_score, pbo_report = await self._run_pbo_validation(
-            strategy, start_date, end_date, backtest_result
+            strategy, start_date, end_date, sandbox_backtest_result
         )
 
         # 5. 因子有效性验证（10 分）
@@ -253,6 +258,58 @@ class StrategyEvaluator:
             'status': 'success',
         }
         return score, report
+
+    def _score_formal_backtest_report(self, report: dict[str, Any]) -> tuple[int, dict]:
+        """将 formal_report_v1 转为评分和报告。"""
+        summary = report.get('summary', {}) if isinstance(report, dict) else {}
+        status = summary.get('status') or report.get('status')
+        if status != 'completed':
+            return 0, {
+                'status': 'failed',
+                'error': report.get('error') or f'formal local status={status}',
+                'sharpe_ratio': 0.0,
+                'max_drawdown': 1.0,
+                'win_rate': 0.0,
+                'trades_count': 0,
+            }
+
+        sharpe = float(summary.get('sharpe') or 0.0)
+        max_dd = float(summary.get('max_drawdown') or 1.0)
+        win_rate = float(summary.get('win_rate') or 0.0)
+        trades_count = int(summary.get('total_trades') or 0)
+        final_equity = float(summary.get('final_equity') or 0.0)
+        initial_capital = float(report.get('job', {}).get('initial_capital') or 0.0)
+        pnl = float(summary.get('pnl') or 0.0)
+        total_return = (pnl / initial_capital) if initial_capital else 0.0
+
+        score = 0
+        if sharpe >= 3.0:   score += 10
+        elif sharpe >= 2.5: score += 8
+        elif sharpe >= 2.0: score += 6
+        elif sharpe >= 1.5: score += 4
+        elif sharpe >= 1.0: score += 2
+
+        if max_dd <= 0.01:   score += 10
+        elif max_dd <= 0.015: score += 8
+        elif max_dd <= 0.02:  score += 6
+        elif max_dd <= 0.03:  score += 3
+
+        if win_rate >= 0.60:   score += 10
+        elif win_rate >= 0.55: score += 8
+        elif win_rate >= 0.50: score += 6
+        elif win_rate >= 0.45: score += 3
+
+        return score, {
+            'status': 'success',
+            'sharpe_ratio': sharpe,
+            'max_drawdown': max_dd,
+            'win_rate': win_rate,
+            'total_return': total_return,
+            'annualized_return': 0.0,
+            'trades_count': trades_count,
+            'final_capital': final_equity,
+            'report_id': report.get('report_id'),
+        }
 
     async def _run_backtest_evaluation(
         self, strategy: dict, start_date: str, end_date: str

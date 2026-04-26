@@ -1,0 +1,218 @@
+{
+  "strategy_name": "rb_breakout_30m_v1",
+  "symbol": "rb",
+  "category": "breakout",
+  "timeframe": 30,
+  "factors": [
+    "Bollinger",
+    "VolumeRatio",
+    "ATR"
+  ],
+  "design_prompt": "为 rb 品种设计一个 breakout 策略。\n品种特征: 品种: rb（特征分析失败，使用保守参数）\n时间周期: 30 分钟\n核心因子: Bollinger, VolumeRatio, ATR\n策略描述: 30分钟布林带收窄后放量突破的中频突破策略\n\n输出 JSON 格式的策略设计，包含：\n- strategy_name: rb_breakout_30m_v1\n- logic_description: 策略逻辑描述\n- entry_logic: 做多入场条件\n- exit_logic: 做多出场条件\n- short_entry_logic: 做空入场条件\n- short_exit_logic: 做空出场条件\n- risk_management: 风险管理方案（止损止盈规则）\n- recommended_factors: 推荐使用的技术指标列表\n",
+  "design_response": {
+    "strategy_name": "rb_breakout_30m_v1",
+    "logic_description": "基于30分钟周期的布林带收窄后放量突破策略。核心逻辑：当布林带带宽（BandWidth）收窄至近期低位，表明市场处于低波动蓄势阶段；一旦价格伴随成交量放大突破布林带上轨或下轨，视为有效突破信号。利用ATR动态调整止损止盈距离，适应rb品种的波动特性。由于品种特征分析失败，所有参数均采用保守设定，降低假突破风险。",
+    "entry_logic": {
+      "description": "做多入场条件：布林带收窄 + 放量向上突破布林带上轨",
+      "conditions": [
+        {
+          "id": "L1",
+          "factor": "BollingerBandWidth",
+          "rule": "当前布林带带宽（BandWidth = (上轨 - 下轨) / 中轨）处于最近60根K线的最低20%分位以下，确认处于收窄蓄势状态"
+        },
+        {
+          "id": "L2",
+          "factor": "BollingerUpper",
+          "rule": "收盘价向上突破布林带上轨（Close > BollingerUpper_20_2），且前一根K线收盘价在布林带上轨之下（Close[-1] <= BollingerUpper_20_2[-1]）"
+        },
+        {
+          "id": "L3",
+          "factor": "VolumeRatio",
+          "rule": "当根K线成交量与前20根K线平均成交量之比（VolumeRatio）>= 1.5，确认放量"
+        },
+        {
+          "id": "L4",
+          "factor": "ATR",
+          "rule": "ATR(14) > 0，即市场存在有效波动（过滤极端低波动无效行情）"
+        }
+      ],
+      "trigger": "L1 AND L2 AND L3 AND L4 同时满足时，以下一根30分钟K线开盘价挂单做多"
+    },
+    "exit_logic": {
+      "description": "做多出场条件：止损/止盈/布林中轨回撤/持仓时间限制",
+      "conditions": [
+        {
+          "id": "LX1",
+          "type": "止损",
+          "rule": "价格跌破入场价 - 2 × ATR(14)，触发止损平仓"
+        },
+        {
+          "id": "LX2",
+          "type": "止盈",
+          "rule": "价格上涨至入场价 + 3 × ATR(14)，触发止盈平仓"
+        },
+        {
+          "id": "LX3",
+          "type": "中轨回撤止损",
+          "rule": "收盘价跌破布林带中轨（Close < BollingerMiddle_20），视为突破失败，平仓"
+        },
+        {
+          "id": "LX4",
+          "type": "时间止损",
+          "rule": "持仓超过20根K线（即10小时/约2个半交易日）仍未触及止盈，平仓离场"
+        },
+        {
+          "id": "LX5",
+          "type": "移动止损",
+          "rule": "当浮盈超过1.5×ATR后，将止损上移至入场价+0.5×ATR，锁定部分利润"
+        }
+      ],
+      "priority": "LX1 > LX2 > LX5 > LX3 > LX4，按优先级先触发先执行"
+    },
+    "short_entry_logic": {
+      "description": "做空入场条件：布林带收窄 + 放量向下突破布林带下轨",
+      "conditions": [
+        {
+          "id": "S1",
+          "factor": "BollingerBandWidth",
+          "rule": "当前布林带带宽（BandWidth）处于最近60根K线的最低20%分位以下，确认处于收窄蓄势状态"
+        },
+        {
+          "id": "S2",
+          "factor": "BollingerLower",
+          "rule": "收盘价向下突破布林带下轨（Close < BollingerLower_20_2），且前一根K线收盘价在布林带下轨之上（Close[-1] >= BollingerLower_20_2[-1]）"
+        },
+        {
+          "id": "S3",
+          "factor": "VolumeRatio",
+          "rule": "当根K线成交量与前20根K线平均成交量之比（VolumeRatio）>= 1.5，确认放量"
+        },
+        {
+          "id": "S4",
+          "factor": "ATR",
+          "rule": "ATR(14) > 0，即市场存在有效波动"
+        }
+      ],
+      "trigger": "S1 AND S2 AND S3 AND S4 同时满足时，以下一根30分钟K线开盘价挂单做空"
+    },
+    "short_exit_logic": {
+      "description": "做空出场条件：止损/止盈/布林中轨反弹/持仓时间限制",
+      "conditions": [
+        {
+          "id": "SX1",
+          "type": "止损",
+          "rule": "价格涨破入场价 + 2 × ATR(14)，触发止损平仓"
+        },
+        {
+          "id": "SX2",
+          "type": "止盈",
+          "rule": "价格下跌至入场价 - 3 × ATR(14)，触发止盈平仓"
+        },
+        {
+          "id": "SX3",
+          "type": "中轨反弹止损",
+          "rule": "收盘价涨回布林带中轨上方（Close > BollingerMiddle_20），视为突破失败，平仓"
+        },
+        {
+          "id": "SX4",
+          "type": "时间止损",
+          "rule": "持仓超过20根K线（即10小时/约2个半交易日）仍未触及止盈，平仓离场"
+        },
+        {
+          "id": "SX5",
+          "type": "移动止损",
+          "rule": "当浮盈超过1.5×ATR后，将止损下移至入场价-0.5×ATR，锁定部分利润"
+        }
+      ],
+      "priority": "SX1 > SX2 > SX5 > SX3 > SX4，按优先级先触发先执行"
+    },
+    "risk_management": {
+      "position_sizing": {
+        "method": "固定风险百分比法",
+        "max_risk_per_trade": "单笔交易最大亏损不超过账户总资金的1.5%（保守设定）",
+        "position_formula": "手数 = (账户资金 × 1.5%) / (2 × ATR(14) × 合约乘数 × 每点价值)",
+        "max_position": "单品种最大持仓不超过账户总资金的15%保证金占用"
+      },
+      "stop_loss": {
+        "initial_stop": "2 × ATR(14)，rb品种保守参数，留足波动空间",
+        "trailing_stop": "浮盈 > 1.5 × ATR 后启动移动止损，止损移至入场价 ± 0.5 × ATR"
+      },
+      "take_profit": {
+        "target": "3 × ATR(14)，盈亏比 1.5:1",
+        "partial_exit": "可选：浮盈达2×ATR时平仓50%，剩余仓位用移动止损保护"
+      },
+      "max_daily_loss": "单日累计亏损达账户总资金3%时停止当日交易",
+      "max_concurrent_trades": "rb品种同时最多持有1个方向的仓位，不做对锁",
+      "slippage_allowance": "考虑rb品种流动性，入场滑点预留1-2个tick（即1-2元/吨）",
+      "trading_session_filter": "仅在主力交易时段（09:00-11:30, 13:30-15:00, 21:00-23:00）开仓，避免开盘前5分钟和收盘前5分钟的异常波动"
+    },
+    "recommended_factors": [
+      {
+        "name": "Bollinger Bands",
+        "params": {
+          "period": 20,
+          "std_dev": 2
+        },
+        "purpose": "计算上轨、下轨、中轨和带宽，判断收窄与突破"
+      },
+      {
+        "name": "BollingerBandWidth",
+        "params": {
+          "period": 20,
+          "std_dev": 2,
+          "lookback": 60,
+          "percentile": 20
+        },
+        "purpose": "量化布林带收窄程度，BandWidth处于近60根K线最低20%分位确认收窄"
+      },
+      {
+        "name": "VolumeRatio",
+        "params": {
+          "period": 20,
+          "threshold": 1.5
+        },
+        "purpose": "当前成交量与均量比值，>=1.5确认放量突破有效性"
+      },
+      {
+        "name": "ATR",
+        "params": {
+          "period": 14
+        },
+        "purpose": "度量波动率，动态设定止损（2×ATR）和止盈（3×ATR）距离"
+      },
+      {
+        "name": "KDJ",
+        "params": {
+          "k_period": 9,
+          "d_period": 3,
+          "j_period": 3
+        },
+        "purpose": "辅助过滤：做多时J值<80避免超买区追高，做空时J值>20避免超卖区追空（可选）"
+      },
+      {
+        "name": "MACD",
+        "params": {
+          "fast": 12,
+          "slow": 26,
+          "signal": 9
+        },
+        "purpose": "辅助趋势确认：做多时MACD柱状图为正或由负转正加分，做空反之（可选）"
+      }
+    ],
+    "backtest_params": {
+      "symbol": "rb",
+      "timeframe": "30min",
+      "initial_capital": 500000,
+      "commission": 0.0001,
+      "slippage_ticks": 2,
+      "contract_multiplier": 10,
+      "margin_ratio": 0.12,
+      "note": "由于品种特征分析失败，所有参数采用保守设定：较宽的止损（2×ATR）、较高的放量阈值（1.5倍）、较低的单笔风险（1.5%），建议在至少2年历史数据上回测验证后再实盘"
+    }
+  },
+  "model": "claude-opus-4-6",
+  "generated_at": "2026-04-24T19:13:03.038776",
+  "yaml_path": "/Users/jayshao/JBT/services/decision/strategies/llm_generated/rb/rb_breakout_30m_v1.yaml",
+  "saved_at": "2026-04-24T19:13:03.039040",
+  "report_type": "generation"
+}

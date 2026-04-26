@@ -71,6 +71,7 @@ def test_on_instrument_filters_non_futures_and_option_style_symbols():
         md_front="tcp://md",
         td_front="tcp://td",
         instruments=["MA", "RB"],
+        auth_code="test-auth-code",
     )
 
     gateway._on_instrument("MA605", "MA", simnow_mod._FUTURES_PRODUCT_CLASS, None, None)
@@ -149,6 +150,7 @@ def test_schedule_reconnect_only_once_per_channel():
         password="demo",
         md_front="tcp://md",
         td_front="tcp://td",
+        auth_code="test-auth-code",
     )
     with gateway._lock:
         gateway._md_status = "md_disconnected"
@@ -178,6 +180,7 @@ def test_disconnect_prevents_reconnect_scheduling():
         password="demo",
         md_front="tcp://md",
         td_front="tcp://td",
+        auth_code="test-auth-code",
     )
 
     gateway.disconnect()

@@ -13,12 +13,48 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
+from pydantic import BaseModel, Field
 
-from shared.contracts.decision.signal_dispatch import (
-    SignalDispatchRequest,
-    SignalDispatchResponse,
-    SignalStatusResponse,
-)
+from .settings import get_settings
+
+try:
+    from shared.contracts.decision.signal_dispatch import (
+        SignalDispatchRequest,
+        SignalDispatchResponse,
+        SignalStatusResponse,
+    )
+except ModuleNotFoundError:
+    class SignalDispatchRequest(BaseModel):
+        signal_id: str = Field(..., min_length=1)
+        strategy_id: str = Field(..., min_length=1)
+        symbol: str = Field(..., min_length=1)
+        direction: str = Field(..., pattern=r"^(buy|sell|long|short)$")
+        quantity: float = Field(..., gt=0)
+        price: Optional[float] = None
+        order_type: str = Field(default="market", pattern=r"^(market|limit)$")
+        timestamp: Optional[str] = None
+        valid_until: Optional[str] = None
+        account_id: Optional[str] = None
+        risk_level: str = Field(default="normal", pattern=r"^(low|normal|high|critical)$")
+        meta_data: Optional[dict] = None
+
+
+    class SignalDispatchResponse(BaseModel):
+        status: str
+        signal_id: str
+        execution_id: Optional[str] = None
+        message: str
+        timestamp: str
+        errors: list[str] = Field(default_factory=list)
+
+
+    class SignalStatusResponse(BaseModel):
+        signal_id: str
+        status: str
+        dispatched_at: Optional[str] = None
+        executed_at: Optional[str] = None
+        execution_id: Optional[str] = None
+        error: Optional[str] = None
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +65,18 @@ _BASE_BACKOFF = 0.5  # seconds
 class SignalDispatcher:
     """将 SignalDispatchRequest 转发到 sim-trading 的 /api/v1/signals/receive。"""
 
-    def __init__(self, sim_trading_url: str = "http://localhost:8101") -> None:
-        self.sim_trading_url = sim_trading_url.rstrip("/")
+    def __init__(
+        self,
+        sim_trading_url: str | None = None,
+        api_key: str | None = None,
+        timeout: float = 10.0,
+    ) -> None:
+        settings = get_settings()
+        resolved_api_key = settings.sim_trading_api_key if api_key is None else api_key
+
+        self.sim_trading_url = (sim_trading_url or settings.sim_trading_url).rstrip("/")
+        self._api_key = (resolved_api_key or "").strip()
+        self._timeout = timeout
         # 安全修复：P1-1 - 使用 OrderedDict 替代普通 dict，自动维护插入顺序
         self._dispatched: OrderedDict[str, dict] = OrderedDict()
         self.max_history = 10000
@@ -71,12 +117,13 @@ class SignalDispatcher:
         # 3. 发送到 sim-trading（带重试）
         url = f"{self.sim_trading_url}/api/v1/signals/receive"
         payload = request.model_dump(mode="json")
+        headers = {"X-API-Key": self._api_key} if self._api_key else None
         errors: list[str] = []
 
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
-                async with httpx.AsyncClient(timeout=10) as client:
-                    resp = await client.post(url, json=payload)
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    resp = await client.post(url, json=payload, headers=headers)
                 resp.raise_for_status()
                 body = resp.json()
                 execution_id = body.get("execution_id") or f"exec-{uuid.uuid4().hex[:12]}"

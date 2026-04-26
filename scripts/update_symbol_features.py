@@ -2,7 +2,10 @@
 """每日更新品种特征（增量更新）
 
 在每天 17:30（日K线采集完成后）自动运行，更新 data API 当前支持的连续合约特征。
+
+默认覆盖 5/15/30/60/120/240 分钟线和 1440 日线。
 """
+import argparse
 import asyncio
 import json
 import logging
@@ -23,6 +26,10 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+DEFAULT_INTERVALS = (5, 15, 30, 60, 120, 240, 1440)
+DEFAULT_SYMBOL_DELAY_SECONDS = 3.0
+LEGACY_DAILY_CACHE_DIR = "runtime/symbol_profiles"
 
 DEFAULT_SYMBOLS = [
     # 上期所 (SHFE)
@@ -69,89 +76,202 @@ def load_supported_symbols(api_base_url: str) -> list[str]:
     return symbols
 
 
-async def update_all_symbols():
-    """更新所有品种的特征"""
-    data_service_url = "http://192.168.31.74:8105"
-    symbols = load_supported_symbols(data_service_url)
+def build_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="更新品种特征（默认覆盖 6 个分钟周期 + 日线）")
+    parser.add_argument(
+        "--intervals",
+        nargs="+",
+        type=int,
+        default=list(DEFAULT_INTERVALS),
+        help="要更新的 K 线周期，单位分钟。默认: 5 15 30 60 120 240 1440",
+    )
+    parser.add_argument(
+        "--symbols",
+        nargs="+",
+        help="仅更新指定品种，例如 SHFE.rb0 DCE.i0；默认从 data API 自动读取全部 continuous symbols",
+    )
+    parser.add_argument(
+        "--force-full",
+        action="store_true",
+        help="忽略缓存，强制对指定周期做全量重算",
+    )
+    parser.add_argument(
+        "--symbol-delay-seconds",
+        type=float,
+        default=DEFAULT_SYMBOL_DELAY_SECONDS,
+        help="相邻品种之间的等待秒数，默认 3 秒，用于减轻 Mini data API 压力",
+    )
+    return parser
+
+
+def normalize_intervals(intervals: list[int]) -> list[int]:
+    normalized: list[int] = []
+    seen: set[int] = set()
+    for interval in intervals:
+        if interval <= 0:
+            raise ValueError(f"interval must be positive, got {interval}")
+        if interval in seen:
+            continue
+        seen.add(interval)
+        normalized.append(interval)
+    return normalized
+
+
+def resolve_cache_dir(interval: int) -> str:
+    if interval == 1440:
+        return LEGACY_DAILY_CACHE_DIR
+    return f"runtime/symbol_profiles/{interval}m"
+
+
+async def update_symbols_for_interval(
+    *,
+    data_service_url: str,
+    symbols: list[str],
+    interval: int,
+    force_full: bool,
+    symbol_delay_seconds: float,
+) -> dict[str, object]:
+    cache_dir = resolve_cache_dir(interval)
+    interval_label = "日K线" if interval == 1440 else f"{interval}分钟K线"
 
     logger.info("=" * 80)
-    logger.info("开始更新品种特征（增量更新）")
+    logger.info("开始更新品种特征 [%s]", interval_label)
     logger.info("=" * 80)
-    logger.info(f"品种数量: {len(symbols)}")
-    logger.info(f"数据源: Mini API ({data_service_url})")
-    logger.info(f"K线周期: 日K线 (1440分钟)")
+    logger.info("品种数量: %s", len(symbols))
+    logger.info("数据源: Mini API (%s)", data_service_url)
+    logger.info("缓存目录: %s", cache_dir)
+    logger.info("更新模式: %s", "全量重算" if force_full else "增量更新")
     logger.info("=" * 80)
 
     profiler = SymbolProfiler(
         data_service_url=data_service_url,
-        interval=1440,  # 日K线
-        enable_cache=True
+        interval=interval,
+        enable_cache=True,
+        cache_dir=cache_dir,
     )
 
     success_count = 0
-    failed_symbols = []
+    failed_symbols: list[str] = []
 
-    for i, symbol in enumerate(symbols, 1):
-        logger.info(f"[{i}/{len(symbols)}] 更新 {symbol}...")
+    for index, symbol in enumerate(symbols, 1):
+        logger.info("[%s/%s][%s] 更新 %s...", index, len(symbols), interval_label, symbol)
 
         try:
-            # 使用增量更新（如果缓存有效）
-            features = await profiler.calculate_features(symbol, force_full=False)
+            features = await profiler.calculate_features(symbol, force_full=force_full)
 
             if features:
                 success_count += 1
                 logger.info(
-                    f"  ✅ 波动率={features.volatility_weighted}({features.volatility_1y:.4f}), "
-                    f"趋势={features.trend_strength_weighted}({features.trend_strength_1y:.4f}), "
-                    f"置信度={features.confidence.overall:.2f}"
+                    "  ✅ 波动率=%s(%.4f), 趋势=%s(%.4f), 置信度=%.2f",
+                    features.volatility_weighted,
+                    features.volatility_1y,
+                    features.trend_strength_weighted,
+                    features.trend_strength_1y,
+                    features.confidence.overall,
                 )
             else:
                 failed_symbols.append(symbol)
-                logger.warning(f"  ❌ 更新失败（数据不足）")
+                logger.warning("  ❌ 更新失败（数据不足）")
 
-        except Exception as e:
+        except Exception as exc:
             failed_symbols.append(symbol)
-            logger.error(f"  ❌ 更新失败: {e}")
+            logger.error("  ❌ 更新失败: %s", exc)
 
-    # 汇总报告
-    logger.info("=" * 80)
-    logger.info("更新完成")
-    logger.info("=" * 80)
-    logger.info(f"成功: {success_count}/{len(symbols)}")
-    logger.info(f"失败: {len(failed_symbols)}/{len(symbols)}")
+        if symbol_delay_seconds > 0 and index < len(symbols):
+            await asyncio.sleep(symbol_delay_seconds)
 
-    if failed_symbols:
-        logger.warning(f"失败品种: {', '.join(failed_symbols)}")
-
-    # 缓存统计
     from services.decision.src.research.feature_cache_manager import FeatureCacheManager
-    cache_manager = FeatureCacheManager(cache_dir="runtime/symbol_profiles")
-    stats = cache_manager.get_cache_stats()
 
-    logger.info(f"\n缓存统计:")
-    logger.info(f"  总品种数: {stats['total_symbols']}")
-    logger.info(f"  有效缓存: {stats['valid_caches']}")
-    logger.info(f"  过期缓存: {stats['expired_caches']}")
+    stats = FeatureCacheManager(cache_dir=cache_dir).get_cache_stats()
 
-    return success_count, failed_symbols
+    logger.info("=" * 80)
+    logger.info("[%s] 更新完成", interval_label)
+    logger.info("=" * 80)
+    logger.info("成功: %s/%s", success_count, len(symbols))
+    logger.info("失败: %s/%s", len(failed_symbols), len(symbols))
+    if failed_symbols:
+        logger.warning("失败品种: %s", ", ".join(failed_symbols))
+
+    logger.info("缓存统计:")
+    logger.info("  总品种数: %s", stats["total_symbols"])
+    logger.info("  有效缓存: %s", stats["valid_caches"])
+    logger.info("  过期缓存: %s", stats["expired_caches"])
+
+    return {
+        "interval": interval,
+        "cache_dir": cache_dir,
+        "success_count": success_count,
+        "failed_symbols": failed_symbols,
+        "total_symbols": len(symbols),
+    }
+
+
+async def update_all_symbols(args: argparse.Namespace) -> list[dict[str, object]]:
+    """按指定周期更新所有品种特征。"""
+    data_service_url = "http://192.168.31.74:8105"
+    symbols = args.symbols or load_supported_symbols(data_service_url)
+    intervals = normalize_intervals(args.intervals)
+
+    logger.info("=" * 80)
+    logger.info("开始更新品种特征（默认 6 个分钟周期 + 日线）")
+    logger.info("=" * 80)
+    logger.info("品种数量: %s", len(symbols))
+    logger.info("数据源: Mini API (%s)", data_service_url)
+    logger.info("周期列表: %s", ", ".join(str(interval) for interval in intervals))
+    logger.info("品种间延迟: %.1fs", args.symbol_delay_seconds)
+    logger.info("=" * 80)
+
+    results: list[dict[str, object]] = []
+    for interval in intervals:
+        result = await update_symbols_for_interval(
+            data_service_url=data_service_url,
+            symbols=symbols,
+            interval=interval,
+            force_full=args.force_full,
+            symbol_delay_seconds=args.symbol_delay_seconds,
+        )
+        results.append(result)
+
+    return results
 
 
 async def main():
-    try:
-        success_count, failed_symbols = await update_all_symbols()
+    args = build_argument_parser().parse_args()
 
-        if len(failed_symbols) == 0:
-            logger.info("\n✅ 所有品种更新成功")
+    try:
+        results = await update_all_symbols(args)
+
+        total_success = sum(int(result["success_count"]) for result in results)
+        total_failed = sum(len(result["failed_symbols"]) for result in results)
+        total_targets = sum(int(result["total_symbols"]) for result in results)
+
+        logger.info("=" * 80)
+        logger.info("全周期汇总")
+        logger.info("=" * 80)
+        for result in results:
+            interval = int(result["interval"])
+            interval_label = "日K线" if interval == 1440 else f"{interval}分钟K线"
+            logger.info(
+                "%s: 成功 %s/%s, 失败 %s, 缓存目录=%s",
+                interval_label,
+                result["success_count"],
+                result["total_symbols"],
+                len(result["failed_symbols"]),
+                result["cache_dir"],
+            )
+
+        if total_failed == 0:
+            logger.info("\n✅ 所有周期更新成功 (%s/%s)", total_success, total_targets)
             sys.exit(0)
-        elif success_count > 0:
-            logger.warning(f"\n⚠️ 部分品种更新失败 ({len(failed_symbols)} 个)")
+        elif total_success > 0:
+            logger.warning("\n⚠️ 部分周期存在失败 (%s 个)", total_failed)
             sys.exit(1)
         else:
             logger.error("\n❌ 所有品种更新失败")
             sys.exit(2)
 
-    except Exception as e:
-        logger.error(f"\n❌ 更新任务失败: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error("\n❌ 更新任务失败: %s", exc, exc_info=True)
         sys.exit(3)
 
 

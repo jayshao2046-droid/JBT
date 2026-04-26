@@ -1,0 +1,49 @@
+name: STRAT_shfe_rb_multi_confirm_60m
+description: SHFE.rb 多重确认趋势：MACD + RSI + ADX + EMA 四重过滤 60m
+version: '1.0'
+category: trend_following
+factors:
+- factor_name: MACD
+  params:
+    fast: 12
+    slow: 26
+    signal: 9
+- factor_name: RSI
+  params:
+    period: 14
+- factor_name: ADX
+  params:
+    period: 14
+- factor_name: EMA
+  params:
+    period: 20
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: macd_hist > 0 and rsi > 50 and adx > 20 and close > ema
+  short_condition: macd_hist < 0 and rsi < 50 and adx > 20 and close < ema
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.068
+symbols:
+- KQ.m@SHFE.rb
+transaction_costs:
+  slippage_per_unit: 1.0
+  commission_per_lot_round_turn: 3.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 2.53
+  take_profit:
+    type: atr
+    atr_multiplier: 3.8
+  force_close_night: '22:55'
+tags:
+- SHFE
+- rb
+- multi_confirm
+- trend_following
+- 60m

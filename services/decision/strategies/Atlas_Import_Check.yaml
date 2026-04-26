@@ -1,0 +1,44 @@
+name: "Atlas_Import_Check"
+description: "导入链路验证"
+version: "1.0"
+category: "trend_following"
+symbols:
+  - "DCE.p2609"
+timeframe_minutes: 30
+factors:
+  - factor_name: "EMA_Cross"
+    weight: 0.5
+    params:
+      fast_period: 20
+      slow_period: 60
+  - factor_name: "ATR"
+    weight: 0.5
+    params:
+      period: 14
+market_filter:
+  enabled: true
+  conditions:
+    - "atr > 0.0025 * close"
+signal:
+  long_condition: "ema_cross > 0"
+  short_condition: "false"
+  confirm_bars: 1
+position_fraction: 0.08
+transaction_costs:
+  slippage_per_unit: 1
+  commission_per_lot_round_turn: 6
+risk:
+  daily_loss_limit: 0.05
+  max_drawdown: 0.01
+  force_close_day: "14:55"
+  force_close_night: "22:55"
+  no_overnight: true
+  stop_loss:
+    atr_multiplier: 1.5
+    type: "atr"
+  take_profit:
+    atr_multiplier: 2.5
+    type: "atr"
+tags:
+  - "atlas"
+  - "import_check"

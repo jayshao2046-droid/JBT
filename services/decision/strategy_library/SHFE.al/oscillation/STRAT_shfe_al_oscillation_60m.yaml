@@ -1,0 +1,43 @@
+name: STRAT_shfe_al_oscillation_60m
+description: SHFE.al 震荡策略：KDJ超卖/超买转折 + RSI方向确认 60m
+version: '1.0'
+category: oscillator
+factors:
+- factor_name: KDJ
+  params:
+    k_period: 9
+    d_period: 3
+    j_smooth: 3
+- factor_name: RSI
+  params:
+    period: 14
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: kdj_k < 30 and kdj_k > kdj_d and rsi < 45
+  short_condition: kdj_k > 70 and kdj_k < kdj_d and rsi > 55
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.051
+symbols:
+- KQ.m@SHFE.al
+transaction_costs:
+  slippage_per_unit: 10.0
+  commission_per_lot_round_turn: 3.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 1.89
+  take_profit:
+    type: atr
+    atr_multiplier: 3.17
+  force_close_night: '22:55'
+tags:
+- SHFE
+- al
+- oscillation
+- oscillator
+- 60m

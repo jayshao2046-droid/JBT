@@ -1,0 +1,45 @@
+name: STRAT_czce_pf_momentum_60m
+description: CZCE.PF 多因子动量：MACD + RSI + 成交量放大三重动量 60m
+version: '1.0'
+category: momentum
+factors:
+- factor_name: MACD
+  params:
+    fast: 12
+    slow: 26
+    signal: 9
+- factor_name: RSI
+  params:
+    period: 14
+- factor_name: VolumeRatio
+  params:
+    period: 10
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: macd_hist > 0 and rsi > 50 and volume_ratio > 1.2
+  short_condition: macd_hist < 0 and rsi < 50 and volume_ratio > 1.2
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.065
+symbols:
+- KQ.m@CZCE.PF
+transaction_costs:
+  slippage_per_unit: 1.0
+  commission_per_lot_round_turn: 2.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 2.97
+  take_profit:
+    type: atr
+    atr_multiplier: 4.12
+tags:
+- CZCE
+- PF
+- momentum
+- momentum
+- 60m

@@ -1,0 +1,35 @@
+{
+  "symbol": "CZCE.SA",
+  "volatility_3m": 0.21388162144641087,
+  "volatility_1y": 0.2049041292119574,
+  "volatility_5y": 0.26543283074956553,
+  "volatility_weighted": "Medium",
+  "trend_strength_3m": 53.24,
+  "trend_strength_1y": 53.24,
+  "trend_strength_weighted": "Strong",
+  "autocorr_3m": -0.053060519290941195,
+  "autocorr_1y": 0.0005640087458144678,
+  "skewness": 0.8615755060730989,
+  "kurtosis": 13.241073463868986,
+  "liquidity": "High",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-26 00:23:10",
+    "data_start_date": "2019-12-06T00:00:00",
+    "data_end_date": "2026-04-22T10:00:00",
+    "data_points_3m": 328,
+    "data_points_1y": 1418,
+    "data_points_5y": 9053,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.9947424238238751,
+    "volatility": 0.9868560595596876,
+    "trend": 1.0,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.9780934325994793,
+    "warnings": []
+  }
+}

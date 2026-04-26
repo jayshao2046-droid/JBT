@@ -1,0 +1,42 @@
+name: STRAT_shfe_fu_mean_reversion_60m
+description: SHFE.fu 布林带均值回归：价格触碰上下轨 + RSI超买超卖 60m
+version: '1.0'
+category: mean_reversion
+factors:
+- factor_name: BollingerBands
+  params:
+    period: 20
+    std_dev: 2
+- factor_name: RSI
+  params:
+    period: 14
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: close < bollinger_lower and rsi < 35
+  short_condition: close > bollinger_upper and rsi > 65
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.027
+symbols:
+- KQ.m@SHFE.fu
+transaction_costs:
+  slippage_per_unit: 1.0
+  commission_per_lot_round_turn: 3.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 2.64
+  take_profit:
+    type: atr
+    atr_multiplier: 3.08
+  force_close_night: '22:55'
+tags:
+- SHFE
+- fu
+- mean_reversion
+- mean_reversion
+- 60m

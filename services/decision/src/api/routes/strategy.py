@@ -12,10 +12,16 @@ from ...core.settings import get_settings
 from ...gating.backtest_gate import get_backtest_gate
 from ...gating.research_gate import get_research_gate
 from ...persistence.state_store import get_state_store
-from ...publish.executor import PublishExecutor, PublishStatus
+from ...publish.executor import (
+    PublishExecutor as _PublishExecutor,
+    PublishStatus,
+    get_publish_executor,
+)
 from ...publish.gate import PublishGate
 from ...strategy.repository import get_repository, StrategyPackage
 from ...strategy.lifecycle import LifecycleStatus, to_contract_state
+
+PublishExecutor = _PublishExecutor
 
 router = APIRouter(prefix="/strategies", tags=["strategy"])
 
@@ -369,7 +375,8 @@ def get_strategy_lifecycle(strategy_id: str) -> dict:
 
 @router.post("/{strategy_id}/publish")
 def publish_strategy(strategy_id: str, req: StrategyPublishRequest) -> JSONResponse:
-    result = PublishExecutor().execute(strategy_id, req.target)
+    executor = get_publish_executor() if PublishExecutor is _PublishExecutor else PublishExecutor()
+    result = executor.execute(strategy_id, req.target)
     body = _publish_response(
         strategy_id=strategy_id,
         status_name=result.status.value,

@@ -1,0 +1,42 @@
+name: STRAT_dce_j_bb_rsi_arb_60m
+description: DCE.j 布林带+RSI统计套利：价格偏离均值2σ + RSI确认 60m
+version: '1.0'
+category: mean_reversion
+factors:
+- factor_name: BollingerBands
+  params:
+    period: 20
+    std_dev: 2
+- factor_name: RSI
+  params:
+    period: 14
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: close < bollinger_lower and rsi < 40
+  short_condition: close > bollinger_upper and rsi > 60
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.032
+symbols:
+- KQ.m@DCE.j
+transaction_costs:
+  slippage_per_unit: 0.5
+  commission_per_lot_round_turn: 3.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 2.64
+  take_profit:
+    type: atr
+    atr_multiplier: 3.39
+  force_close_night: '22:55'
+tags:
+- DCE
+- j
+- bb_rsi_arb
+- mean_reversion
+- 60m

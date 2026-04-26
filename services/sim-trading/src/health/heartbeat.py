@@ -3,10 +3,31 @@
 每 2 小时整点推送 sim-trading 系统健康状态到飞书
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, time as dtime, timedelta
 from typing import Dict, Any, Optional
 
+from src.gateway.simnow import is_trading_session
+
 logger = logging.getLogger(__name__)
+
+
+_PRE_SESSION_WINDOWS = [
+    (dtime(8, 25), dtime(9, 0)),
+    (dtime(12, 35), dtime(13, 0)),
+    (dtime(20, 25), dtime(21, 0)),
+]
+
+
+def _get_session_mode(now: Optional[datetime] = None) -> str:
+    current = now or datetime.now()
+    if is_trading_session(current):
+        return "trading"
+    if current.weekday() >= 5:
+        return "idle"
+    current_time = current.time()
+    if any(start <= current_time < end for start, end in _PRE_SESSION_WINDOWS):
+        return "preopen"
+    return "idle"
 
 
 def generate_heartbeat_report() -> Dict[str, Any]:
@@ -14,8 +35,12 @@ def generate_heartbeat_report() -> Dict[str, Any]:
     from src.api.router import _get_gateway, _system_state
     from src.ledger.service import get_ledger
 
+    now = datetime.now()
+    session_mode = _get_session_mode(now)
+    gw = None
+
     report = {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": now.isoformat(),
         "service": "sim-trading",
         "status": "unknown",
         "ctp": {},
@@ -73,6 +98,8 @@ def generate_heartbeat_report() -> Dict[str, Any]:
     # 3. 系统状态
     try:
         report["system"] = {
+            "session_mode": session_mode,
+            "expected_ctp_connection": session_mode in {"trading", "preopen"},
             "ctp_md_connected": _system_state.get("ctp_md_connected", False),
             "ctp_td_connected": _system_state.get("ctp_td_connected", False),
             "last_disconnect_reason": _system_state.get("last_disconnect_reason"),
@@ -95,10 +122,15 @@ def generate_heartbeat_report() -> Dict[str, Any]:
         report["uptime"] = {"status": "error", "error": str(exc)}
 
     # 5. 综合健康状态
-    ctp_ok = report["ctp"].get("status") == "connected"
+    ctp_ok = bool(report["ctp"].get("md_connected") and report["ctp"].get("td_connected"))
     account_ok = report["account"].get("balance") is not None
 
-    if ctp_ok and account_ok:
+    if session_mode == "idle" and not ctp_ok:
+        report["ctp"]["status"] = "planned_disconnect"
+        report["ctp"]["md_status"] = "planned_idle"
+        report["ctp"]["td_status"] = "planned_idle"
+        report["status"] = "idle"
+    elif ctp_ok and account_ok:
         report["status"] = "healthy"
     elif ctp_ok or account_ok:
         report["status"] = "degraded"
@@ -125,11 +157,19 @@ def _format_uptime(seconds: float) -> str:
 def format_heartbeat_message(report: Dict[str, Any]) -> str:
     """格式化心跳报告为飞书消息"""
     status = report.get("status", "unknown")
-    timestamp = report.get("timestamp", "")
+    system = report.get("system", {})
+    session_mode = system.get("session_mode", "unknown")
+
+    session_mode_label = {
+        "trading": "交易时段",
+        "preopen": "盘前窗口",
+        "idle": "空闲窗口",
+    }.get(session_mode, session_mode)
 
     # 状态图标
     status_icon = {
         "healthy": "✅",
+        "idle": "🌙",
         "degraded": "⚠️",
         "unhealthy": "🔴",
         "unknown": "❓",
@@ -156,6 +196,9 @@ def format_heartbeat_message(report: Dict[str, Any]) -> str:
     # 构造消息
     lines = [
         f"{status_icon} **系统状态**: {status.upper()}",
+        "",
+        f"**运行模式**",
+        f"  当前窗口: {session_mode_label}",
         "",
         f"**CTP 连接**",
         f"  行情通道: {md_icon} {ctp.get('md_status', 'unknown')}",
@@ -203,6 +246,7 @@ def send_heartbeat_to_feishu(report: Dict[str, Any]) -> bool:
         status = report.get("status", "unknown")
         risk_level = {
             "healthy": "P2",
+            "idle": "P2",
             "degraded": "P1",
             "unhealthy": "P0",
             "unknown": "P1",

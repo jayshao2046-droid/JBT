@@ -1,0 +1,37 @@
+{
+  "symbol": "SHFE.sp",
+  "volatility_3m": 0.1666268940097124,
+  "volatility_1y": 0.19433851665728094,
+  "volatility_5y": 0.21498635517624656,
+  "volatility_weighted": "Medium",
+  "trend_strength_3m": 10.47,
+  "trend_strength_1y": 10.47,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": 0.03324644208948052,
+  "autocorr_1y": 0.003818965323357351,
+  "skewness": 3.8540924093174724,
+  "kurtosis": 101.83920037500329,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:54:43",
+    "data_start_date": "2018-11-27T01:00:00",
+    "data_end_date": "2026-04-22T06:45:00",
+    "data_points_3m": 1149,
+    "data_points_1y": 4691,
+    "data_points_5y": 38006,
+    "missing_data_ratio": 0.25207674897028665
+  },
+  "confidence": {
+    "overall": 0.9022240885763577,
+    "volatility": 0.8815985959260377,
+    "trend": 0.9243769753089139,
+    "liquidity": 0.8991693004118853,
+    "data_sufficiency": 1.0,
+    "data_quality": 0.7479232510297134,
+    "feature_stability": 0.9287027010285397,
+    "warnings": [
+      "数据质量较低: 缺失率 25.21%"
+    ]
+  }
+}

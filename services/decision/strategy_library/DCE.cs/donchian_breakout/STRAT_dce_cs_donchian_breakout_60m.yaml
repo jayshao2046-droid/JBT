@@ -1,0 +1,41 @@
+name: STRAT_dce_cs_donchian_breakout_60m
+description: DCE.cs 唐奇安通道突破：价格突破N期高低轨 + ADX趋势确认 60m
+version: '1.0'
+category: breakout
+factors:
+- factor_name: DonchianBreakout
+  params:
+    period: 20
+- factor_name: ADX
+  params:
+    period: 14
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: close > donchian_high and adx > 20
+  short_condition: close < donchian_low and adx > 20
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.076
+symbols:
+- KQ.m@DCE.cs
+transaction_costs:
+  slippage_per_unit: 1.0
+  commission_per_lot_round_turn: 2.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 2.53
+  take_profit:
+    type: atr
+    atr_multiplier: 5.06
+  force_close_night: '22:55'
+tags:
+- DCE
+- cs
+- donchian_breakout
+- breakout
+- 60m

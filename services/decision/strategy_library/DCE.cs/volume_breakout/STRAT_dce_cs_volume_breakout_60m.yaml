@@ -1,0 +1,43 @@
+name: STRAT_dce_cs_volume_breakout_60m
+description: DCE.cs 量能突破：成交量大幅放量 + MACD方向确认 60m
+version: '1.0'
+category: breakout
+factors:
+- factor_name: VolumeRatio
+  params:
+    period: 10
+- factor_name: MACD
+  params:
+    fast: 12
+    slow: 26
+    signal: 9
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: volume_ratio > 1.5 and macd_hist > 0
+  short_condition: volume_ratio > 1.5 and macd_hist < 0
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.085
+symbols:
+- KQ.m@DCE.cs
+transaction_costs:
+  slippage_per_unit: 1.0
+  commission_per_lot_round_turn: 2.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 2.53
+  take_profit:
+    type: atr
+    atr_multiplier: 4.42
+  force_close_night: '22:55'
+tags:
+- DCE
+- cs
+- volume_breakout
+- breakout
+- 60m

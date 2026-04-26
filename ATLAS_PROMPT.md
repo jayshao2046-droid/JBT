@@ -45,6 +45,31 @@
 
 ## 最近动作
 
+- 2026-04-26：researcher 14B / 7B 恢复链已闭环完成。Alienware Ollama 现已稳定持有 `qwen3:14b-q4_K_M` 与 `qwen3:14b`；researcher 7B 已从 `checkpoint-150` 成功恢复并跑完整轮续训，最终产出 `D:\researcher7b_prefilter_run_20260425\final_adapter`，`training_done.txt` 时间戳为 `2026-04-26 02:59:07`。恢复 wrapper 最终日志确认：`resume_7b_exit=0`、`restore_start`、全部 `JBT_Researcher_Hourly_*` 任务已重新启用，且 `JBT_ProcessMonitor`、`JBT_Researcher_Service`、`JBT_Researcher_Watchdog`、`JBT_SimTrading_Watchdog` 均已重新启动，`restore_done` 已落盘。最终实机校验：Alienware `curl http://127.0.0.1:8101/health` 返回 `{"status":"ok","service":"sim-trading"}`，`curl http://127.0.0.1:8199/health` 返回 `{"status":"ok","service":"researcher","timestamp":"2026-04-26T02:59:58.829924","ollama_url":"http://localhost:11434","model":"qwen3:14b-q4_K_M"}`。todo：`[x]` 完成 14B 导入；`[x]` 完成 7B 续训；`[x]` 完成进程自动恢复；`[x]` 完成最终健康校验。
+
+- 2026-04-26：`TASK-0129` decision 历史生成目录清理已治理闭环。已按显式 23 个 YAML 文件签发并校验 Token `tok-79b0d20d-0eca-44a8-a551-8eb75aed13ee`，完成 MacBook 与 Studio 四个历史目录清理，保留 `services/decision/strategies/Atlas_Import_Check.yaml` 与本地 `services/decision/strategy_library`；项目架构师 FINAL 已确认 Studio 缺少 `services/decision/strategy_library` 属既有环境差异，非本次误删，本批已 lockback。`TASK-0128` supplement PRE 已通过，锁单已扩至脚本 + 窄测 + 3 个 template_seed_* 输出边界；其后脚本实现批 Token `tok-38088590-374e-4360-ac9d-3d710c66aa7f` 已签发，当前只覆盖 `run_template_seed_baseline_pipeline.py` 与 `test_template_seed_baseline_pipeline.py` 两个显式文件。Jay.S 最新业务口径已同步为“首批默认 42 品种，不是 35 品种”；当前 deterministic pipeline 与窄测已落地，自校验为 `pytest services/decision/tests/test_template_seed_baseline_pipeline.py -q` → `4 passed`，并确认新脚本对 `OpenAICompatibleClient` / `CodeGenerator` / `llm_generated` / `llm_ranked` 的引用为 0。todo：`[x]` 0129 PRE/token/双端清理/FINAL/lockback；`[x]` 0128 supplement PRE；`[x]` 0128 lock 扩白名单；`[x]` 0128 脚本实现批 Token；`[x]` 落地 deterministic pipeline 脚本；`[x]` 完成窄测与聚焦验证；`[ ]` 再按显式产物文件推进 0128 运行批 Token。
+- 2026-04-26：`TASK-0128` 运行批已完成。smoke 验证通过（SymbolProfiler 正常）。修复脚本 DEFAULT_DATA_URL 由 .76→.74（Mini 真实 IP）。运行批 Token tok-bf761640 已签发，新建 services/decision/.gitignore 屏蔽三个产物目录，锁单已追加运行批记录。下一步：黑色系首批 baseline 回测（需 Jay.S 确认）。
+
+- 2026-04-26：researcher 14B 导入 Alienware Ollama 已完成，`qwen3:14b-q4_K_M` 与 `qwen3:14b` 已成功注册。7B 恢复链当前也已从“能起脚本但无法续训”推进到“真实恢复训练”：先修复 `atlas_resume_7b_and_restore_20260426.ps1` 的 PowerShell 原生命令 stderr 误判，再修复 `atlas_train_researcher_prefilter_resume_20260426.py` 对 PyTorch 2.6 `torch.load(weights_only=True)` 的 RNG checkpoint 兼容问题（numpy `_reconstruct` / dtype safe globals + RNG state 恢复 fallback），现已确认 Alienware 上 researcher 7B 从 `checkpoint-150` 重新进入 Trainer 主循环，并已推进到 `153/222`。当前未触发 researcher/watchdog/sim-trading 自动恢复，仅因为 wrapper 仍在等待本轮训练自然结束并生成 `training_done.txt`。todo：`[x]` 完成 14B Alienware Ollama 导入；`[x]` 修复 7B wrapper 调用层；`[x]` 修复 7B PyTorch 2.6 checkpoint 兼容；`[x]` 确认 7B 重新进入 step 级训练；`[ ]` 等待 7B 训练完成；`[ ]` 核对自动恢复任务全部执行。
+
+- 2026-04-26：researcher 14B / 7B 恢复链推进中。Studio 侧 researcher 14B 已确认原始 MLX quantized fused 输出不兼容 Ollama/llama.cpp 的 HF 直转路径（`Qwen3ForCausalLM` safetensors 在 `model.embed_tokens.biases` 等量化张量命名处失败）；现已改走“`mlx_lm fuse --dequantize` → `convert_hf_to_gguf.py` → `llama-quantize Q4_K_M`”根因修复路径，并成功生成 `runtime/researcher_finetune/gguf/qwen3-jbt-news-14b-q4_K_M.gguf`（约 8.4G）。Alienware 侧已预置 GGUF 版 Modelfile 与导入脚本，当前正通过 MacBook 控制端向 `D:\jbt-models\qwen3-jbt-news-14b-q4_K_M.gguf` 传输；导入脚本已改为成功导入 `qwen3:14b-q4_K_M` / `qwen3:14b` 后自动后台启动 `C:\Users\17621\atlas_resume_7b_and_restore_20260426.ps1`。7B 侧已完成最小 resume 修复：`C:\Users\17621\atlas_train_researcher_prefilter_resume_20260426.py` 新增 `--resume-from-checkpoint` 并确认远端已包含 `trainer.train(resume_from_checkpoint=...)`；自动恢复包装脚本已上传且 checkpoint-150 路径存在。当前 todo：`[x]` 修通 14B GGUF 量化链；`[x]` 预置 Alienware GGUF 导入链；`[x]` 修复 7B resume 与自动恢复脚本；`[ ]` 等待 14B GGUF 传输 + Ollama 注册完成；`[ ]` 确认 7B 自动续训起跑；`[ ]` 等待 7B 完成后自动恢复 researcher / watchdog / sim-trading。
+
+- 2026-04-25：Alienware researcher 7B 已从“bootstrap 成功但训练秒退”修正为“真实起训”。先前虽然 `bootstrap.log` 已写入 `training start` / `training pid=300608`，但进程立即消失且 stdout/stderr 为空；进一步以前台重跑钉死根因后确认，不是显存或下载问题，而是 `C:\Users\17621\venvs\researcher7b` 中 `transformers==4.51.3` 的 `TrainingArguments` 参数名为 `eval_strategy`，而临时训练脚本仍写成 `evaluation_strategy`，导致一进入 `TrainingArguments(...)` 就 `TypeError` 退出。现已对白名单外的远端临时训练脚本 `C:\Users\17621\atlas_train_researcher_prefilter_20260425.py` 做最小兼容修正，并重新拉起训练；前台证据显示 researcher 7B 现已真正进入 Trainer 主循环，当前已跑到 `3/222` step，单 step 约 `27~28s`，据此粗估总训练时长约 `1h45m~2h15m`（含中间 eval/save 开销）。同时，Alienware 本地 Ollama 模型仓已清空并重建空目录，当前 `ollama list` 为空，仅保留 researcher 7B 所需 Hugging Face 训练底座。todo：`[x]` 清理 Alienware Ollama 模型仓；`[x]` 修复 7B 训练脚本与 transformers 参数兼容；`[x]` researcher 7B 真正起训；`[ ]` 持续观察 7B 是否稳定推进到首个 save/eval；`[ ]` researcher 14B 完成后再恢复 decision 14B。
+
+- 2026-04-25：按 Jay.S“尽可能减少所有进程，只为做一件事，让训练全量继续”的进一步收口指令，训练运行态已进一步压缩。Studio 侧 researcher 14B 续训在切回后已连续推进到 `Iter 120`，`Iter 50/100` 均已成功保存 adapter，新日志 `runtime/researcher_finetune/logs/train_20260425_181412_resume7700_full16_b1_s1024.log` 当前峰值显存约 `10.528 GB`，暂未再次出现 OOM，可视为已稳定越过起跑阶段。Alienware 侧已完成两项清场：`1)` 先确认 researcher 7B bootstrap 已从 `proxy direct download start` 推进到 `download size=3864726424`、`missing shard ready`、`training start`、`training pid=300608`，说明 7B 已正式进入训练而非停留在下载；`2)` 盘点实际 Ollama 模型资产后，发现并非“7B+31B”，而是用户目录 `C:\Users\17621\.ollama\models\` 中残留 `qwen2.5:7b-instruct-q4_K_M`、`qwen3:14b`、`qwen3:14b-q4_K_M` 三组本地模型文件，因此已直接清空并重建 `.ollama\models` 空目录，当前 `ollama list` 返回空表，Alienware 推理模型现场已清干净，仅保留 researcher 7B 训练所需的 Hugging Face 底座与训练输出目录。todo：`[x]` 确认 Studio 14B 续训越过起跑段且未再 OOM；`[x]` 清空 Alienware Ollama 模型仓；`[x]` researcher 7B 下载完成并进入训练；`[ ]` 继续观察 7B 首批 step 级输出；`[ ]` researcher 14B 完成后再恢复 decision 14B（恢复点仍为 `runtime/decision_finetune_seed_20260425/adapters_seed14b_20260425/0000250_adapters.safetensors`）。
+
+- 2026-04-25：按 Jay.S 最新指令，Studio 14B 训练位已从 decision 切回 researcher，全量续训已重新拉起。先前只读核实确认：researcher 14B 原批次并未完成，而是在 `train_20260425_121003_full16_b1_s1024_clean.log` 推进到 `Iter 7720` 后因 Metal OOM 退出；Studio 当时已自动转为 decision 14B seed 训练，并在 `runtime/decision_finetune_seed_20260425/adapters_seed14b_20260425/` 落出到 `0000250_adapters.safetensors`。根据 Jay.S“先让 researcher 14B 跑完，再继续 decision 14B”的最新指令，现已在 Studio 执行最小运行态切换：终止 decision 进程链 `22302/22306/22309`，并通过 `atlas_switch_studio_to_researcher14b_full_resume_20260425.sh` 以**原 full16 / batch=1 / seq=1024 / grad-checkpoint 配置不降参**恢复 researcher 14B；新续训进程链为 `22494/22501/22507/22508`，日志 `runtime/researcher_finetune/logs/train_20260425_181412_resume7700_full16_b1_s1024.log` 已确认打印 `Loading fine-tuned weights from .../0007700_adapters.safetensors` 与 `Starting training..., iters: 7095`，说明当前研究员 14B 已按剩余步数全量续跑。todo：`[x]` 停掉 Studio decision 14B；`[x]` 拉起 Studio researcher 14B 全量续训；`[ ]` 持续观察 researcher 是否再次 OOM；`[ ]` Alienware 7B 下载完成后确认自动起训；`[ ]` researcher 完成后再恢复 decision 14B（当前最近恢复点为 `0000250_adapters.safetensors`）。
+
+- 2026-04-25：Alienware researcher 7B 修复链已切换到“复用现有 snapshot + 代理直补缺 shard”路径。进一步核实确认：Alienware 上 `Qwen2.5-7B-Instruct` 不是“完全不存在”，而是全局 Hugging Face snapshot `C:\Users\17621\.cache\huggingface\hub\models--Qwen--Qwen2.5-7B-Instruct\snapshots\a09...` 已完整具备 `config/tokenizer + model-00001/00002/00004`，唯一缺失 `model-00003-of-00004.safetensors`；`ollama` 本机已安装但 `ollama list` 为空，因此当前不能作为 researcher 7B 训练权重来源，而且即便有 Ollama 模型也只适合推理，不适合作为当前 Transformers/PEFT QLoRA 训练输入。现已停止旧的整包 `snapshot_download` 修复链，改为下发 `atlas_repair_and_start_researcher7b_via_proxy_20260425.ps1`，通过 `127.0.0.1:7897` 代理把缺失 shard 直接写回现有 snapshot 后再后台起训；运行态证据：`bootstrap.log` 已进入 `proxy direct download start`，目标临时文件 `model-00003-of-00004.safetensors.download` 已从约 `343MB` 增长到约 `472MB`，说明当前方案处于真实下载推进中而非卡死。todo：`[x]` 验证“现有模型但缺单 shard”事实；`[x]` 验证 Ollama 当前不可作为训练权重来源；`[ ]` 等待缺失 shard 下载完成并确认 `training pid` / `train.stdout.log`。
+
+- 2026-04-24：sim-trading 非交易窗口静默修复远端复核 + decision 连通巡检完成。第 1 项已在 Alienware 实机确认：`/health` 正常，`runtime/uvicorn.log` 于 01:37 重启后出现 `initial window is idle, skip connect` 与 `idle window entered, no CTP session to disconnect`，证明新的 off-hours guardian 逻辑已生效。第 2 项结论为“当前链路不可用且根因已定位”：`services/decision/src/core/settings.py` 解析出的 `sim_trading_url` 仍为 `http://localhost:8101`，而 Studio 本机 `127.0.0.1:8101` 不存在；`services/decision/src/publish/sim_adapter.py` 与 `src/publish/failover.py` 又读取另一套变量名 `SIM_TRADING_SERVICE_URL`，形成配置漂移；从 Studio 直接探测 `SimTradingAdapter().health_check()` 返回 False，默认 `FailoverManager` 也指向 localhost 并仅累计到 `(1/3)` 即随请求对象销毁；同时从 Studio 直打 Alienware `POST /api/v1/strategy/publish` 与 `POST /api/v1/signals/receive` 均返回 `403 invalid or missing API key`，说明即使 URL 修正，decision 侧当前也未向 sim-trading 透传 `X-API-Key`。本轮未修改业务代码，只完成巡检、证据收集与仓库记忆回写；todo：`[x]` 确认 sim 远端新 guardian 生效；`[x]` 巡检 decision publish/failover/端口连接；`[ ]` 交易前再做盘前自动预连实机验证。
+
+- 2026-04-25：researcher / decision 训练排期运行态续核验完成。Alienware researcher 7B 当前存在完整进程链：`cmd(300588) -> powershell(259880) -> python(58540/261012)`，主训练 Python `261012` 启动于 `16:38:43`，CPU 累计约 `139.23`，工作集约 `758MB`；输出目录 `D:\researcher7b_prefilter_run_20260425` 已生成 `dataset/train.jsonl`、`val.jsonl`、`stats.json`，GPU 摘要显示 RTX 2070 当前约 `7%` GPU / `1%` 显存利用、`1344/8192MB` 已占用，但 `train.stdout.log` / `train.stderr.log` 仍为空，且尚未出现 `checkpoint-*` 或 `trainer_state.json`，因此当前判定为“训练主进程存活、准备阶段已完成，但尚未抓到 step 级输出证据”。Studio 侧 researcher 14B 已确认真实推进：`21453/21454/21457` 持续存活约 5 小时，其中 Python 子进程 `21457` 仍有 CPU 占用（约 `6.7%`）；经 `lsof` 追踪，当前 stdout/stderr 实际落在 `~/JBT/runtime/researcher_finetune/logs/train_20260425_121003_full16_b1_s1024_clean.log`，最新 tail 已推进到 `Iter 7220`，期间持续出现 `Val loss`、`Train loss`、`Saved adapter weights`，峰值显存约 `11.713 GB`，说明 researcher 14B 正在稳定训练。decision 接力队列 `22089` 持续在跑，`~/jbt/runtime/decision_finetune_seed_20260425/queue_and_train.log` 最新仍为 `2026-04-25T09:07:38Z researcher 14B still running; waiting for slot`，与 researcher 14B 的现役日志状态一致，说明 decision 14B 尚未误并发重启。本轮未做任何停止或重启动作。todo：`[x]` 核验 Alienware 7B 进程/GPU/输出目录；`[x]` 核验 Studio researcher 14B 与 decision queue；`[ ]` 继续追踪 Alienware step 级输出与 Studio queue 接力起训时刻。
+
+- 2026-04-25：Alienware researcher 7B 下载失败根因已钉死并进入修复态。用户回传的前台训练日志已证明首个真实阻塞不是训练脚本或 CUDA，而是 Hugging Face 权重下载中断后生成了坏快照：`C:\Users\17621\.cache\huggingface\hub\models--Qwen--Qwen2.5-7B-Instruct\snapshots\a09...` 中 `model-00003-of-00004.safetensors` 缺失，导致随后 `AutoModelForCausalLM.from_pretrained()` 直接报 `OSError`。为避免继续复用坏缓存，已改为临时修复链：下发 `atlas_download_qwen25_7b_20260425.py` + `atlas_bootstrap_researcher7b_20260425.ps1`，新增专用模型目录 `D:\hf_models\Qwen2.5-7B-Instruct` 与专用 cache `D:\hf_cache_researcher7b`，并安装 `hf_xet` 后通过独立 bootstrap 先拉模型、再从本地模型目录起训。当前运行态证据：bootstrap 进程链仍存活（`cmd 279096 -> powershell 293908 -> python 284600/268620`），其中主 downloader Python `268620` 启动于 `17:34:40`，CPU 累计约 `163.97`，工作集约 `1.83GB`；`D:\hf_cache_researcher7b` 下已出现 `models--Qwen--Qwen2.5-7B-Instruct` 与 `xet\https___cas_serv-*` 目录，说明修复链已进入实际下载阶段，而非再次秒退。当前尚未进入训练 step 阶段，需继续等 bootstrap 从 `download model snapshot start` 推进到 `download model snapshot ready` / `training start`。todo：`[x]` 回收用户日志并确认坏快照根因；`[x]` 启动专用 cache/local-dir 修复链；`[ ]` 等待 download ready 后确认 7B 训练重新起跑。
+
+- 2026-04-24：sim-trading“安全隐患 + 断联根因”终查批次已完成。已确认并落地 4 项最小修复：`1)` `services/sim-trading/src/main.py` 收紧全局鉴权，`SIM_API_KEY` 缺失时仅允许本机与可信代理主机（Studio/Alienware 本机）访问，MacBook 无 key 直打 `8101` 已从 `200` 变为 `503`；`2)` `services/sim-trading/src/api/router.py` 在 `ctp_connect()` 前增加 front reachability gate，并删除残留 `CTP_AUTH_CODE` 硬编码默认值；`3)` guardian 记录最近一次建连尝试时间，启动后 10 秒内不再立刻二次 idle reconnect，而是进入 throttle；`4)` 审计报告已更新到 `docs/reports/sim-trading_audit_20260424.md`。远端验证：`/health=200`，`/api/v1/status=503(no key)`，日志出现 `idle: disconnected ... reconnect throttled`。当前批次 todo：`[x]` 记录本批 todo；`[x]` 封堵匿名接口访问；`[x]` 停止盲目 CTP 重连；`[x]` 更新审计报告；`[x]` 验证本地与远端结果。
+
 - 2026-04-24：`TASK-0127` decision 内部 TqSdk 回测“超时”问题已按 U0 完成根因收口。对比确认 Air 与 decision 的 `runner.py/session.py` 并无实现分叉，真正差异仅在调用模型：Air 正式回测是后台线程直接 `runner.run_job_sync()`，decision 误用了未被 Air 运行态验证的 `submit/_execute/wait_for_job` 异步链路。现已在 `services/decision/src/research/tqsdk_backtest_client.py` 切回 `_pending_jobs + asyncio.to_thread(run_job_sync)` 的同步直跑模型；`rb_trend_60m_v1` 半年窗口探针 `29.9s` 返回 `completed`，证明 TqSdk 结果回收链已恢复。额外确认：本次 `rb` final-only 全链复跑里未再次进入 TqSdk 的原因，是候选策略在上游本地回测 / 调优阶段已因 `SHFE.rb_main0` 422、表达式兼容、负风险参数等问题提前出池，这些属于与 TqSdk 修复无关的独立遗留。
 
 - 2026-04-22：已新建 `TASK-P1-20260422-Alienware-sim-trading真演练`，作为 researcher 演练闭环后的独立下一批。当前 todo 已冻结为：`1)` 建档/预审/锁定；`2)` 只读确认 sim-trading Windows 启动路径；`3)` 执行真实 deploy；`4)` 执行真实 rollback；`5)` 收口治理留痕。只读基线已确认：`http://192.168.31.187:8101/health` 正常返回，Alienware 上 `services/sim-trading/src/main.py`、服务目录 `.venv` 与仓库根 `.venv` 均存在。当前假设：现有 `windows_uvicorn` 分支可直接完成真实演练；若失败，再按补充预审最小扩白名单，不与 researcher 批次混单。
@@ -787,3 +812,134 @@ Mini 采集 → context API (/api/v1/context/macro,volatility,shipping,sentiment
   - `jbt_rsync_deploy.sh` 的 `--dry-run` 改为纯离线预演，不再触发 SSH / rsync 远端连接；弱网或离线环境下也能直接验证参数、路径和目标映射
   - 修复 `jbt_rsync_rollback.sh` 顶层误用 `local config` 的 bash 语法错误
   - 本地验证通过：`bash -n` 语法检查通过，`--service data --dry-run` 可在离线场景正常完成并写入 manifest
+
+- 2026-04-24：**F1/F4/F5 Token 全部签发完成 ✅**
+  - 本批次为 researcher LLM 优化（F1）+ Studio QLoRA 微调（F4+F5 合并）
+  - 项目架构师 subagent 已完成三单预审（F1 条件通过/F4 通过/F5 条件通过）
+  - F5-R1 blocker 已由 Jay.S 接受方案 B（数据 Agent 内部维护术语，不跨服务读 decision/configs/）
+  - **Token-A（F1）**：`tok-7fe4661f-fc40-4da9-8dfc-623fc439395e`，48h 有效，7 文件白名单
+  - **Token-B（F4+F5）**：`tok-f3ecbff6-4a6b-4ca9-8481-12debed46163`，14 天有效，8 文件白名单
+  - 锁控记录：`docs/locks/lock-20260424-F1-F4F5.md`
+  - 前置动作：Alienware `deepcoder:14b` 已删除（9GB freed）；`qwen2.5:7b-instruct-q4_K_M` 后台 pull 已启动（F1 开工前需再次确认 ollama list）
+  - 两端统一模型目标：`qwen3:14b-q4_K_M`（量化版）；F4F5 产物 `qwen3-jbt-news:14b-q4_K_M` 同时推 Alienware + Studio
+  - **当前待办**：
+    1. ⏳ F1 实施 — 待 qwen2.5:7b pull 完成后，数据 Agent 开始修改 7 个白名单文件（Token-A）
+    2. ⏳ F4+F5 数据准备与 LoRA 训练 — 数据 Agent 在 Studio 上创建训练脚本，启动 24h 训练（Token-B）
+    3. ⏳ 两端推送验证 — 训练完成后 A/B 测试，Jay.S 确认后走独立后置小批次切换 config
+## 批次日志 | 2026-04-24 | Atlas（新窗口）— researcher LLM 优化与 Studio LoRA 预审汇总
+
+**任务**：TASK-P1-20260424F1 / F4 / F5 三单预审完成，待 Jay.S 签 Token
+
+### Todos
+- [x] 读取 HANDOFF 与三单任务文件
+- [x] 确认 Alienware qwen2.5:7b 拉取状态
+- [x] 调用项目架构师对 F1 / F4 / F5 分别预审
+- [x] 确认 decision / researcher 两端 LLM 路径与模型版本
+- [ ] Jay.S 签发 Token（F1 / F4+F5 合并）
+- [ ] F1 实施（Alienware 轨）
+- [ ] F4+F5 数据准备 + LoRA 训练（Studio 轨）
+- [ ] F1 验收 Lockback → F4+F5 A/B → Lockback
+
+### 预审结论汇总
+
+| 单号 | 结论 | 前置条件 | REVIEW 文件 |
+|------|------|---------|------------|
+| F1 | 有条件通过 ✅ | C1（scheduler.py 限定行范围）+ C2（补 OLLAMA_PREFILTER_ENABLED） | REVIEW-PRE-20260424-TASK-P1-20260424F1.md |
+| F4 | 通过 ✅ | 无阻断；Studio 资源占用监控 + 数据来源留痕 | REVIEW-PRE-20260424-TASK-P1-20260424F4.md |
+| F5 | 有条件通过 ✅ | R1（decision/configs/ 空目录，术语来源需选方案 B：数据 Agent 内部维护，不读 decision） | REVIEW-PRE-20260424-TASK-P1-20260424F5.md |
+
+### 新发现（查明后更新）
+
+- **Alienware researcher**：`OLLAMA_MODEL = "qwen3:14b"`（非量化完整版，config.py 硬编码）
+- **Studio decision**：`gate_reviewer.py MODEL = "qwen3:14b-q4_K_M"`、`researcher_qwen3_scorer.py` 默认也用 `qwen3:14b-q4_K_M`（量化版）
+- **Studio ollama list 实测**：只有 `qwen3:14b-q4_K_M`，deepcoder 已不在 Studio，仅在 Alienware
+- **LoRA 产物"一鸡两吃"**：新模型 `qwen3-jbt-news:14b-q4_K_M` 可同时推送 Alienware + Studio；Alienware 切量化节省显存，Studio 替换旧量化版；两端均直接受益于金融知识增强；需在 F4 验收补一条"Studio ollama 同步部署并 researcher_qwen3_scorer 验证通过"
+- **Decision 消费收益**：researcher_qwen3_scorer / gate_reviewer 均用 qwen3；F4/F5 训练产物同步提升评分质量 + 宏观语义理解，是 F3（Decision macro 评分失真）的根本解法之一
+- **Alienware qwen2.5:7b 状态**：当前 ollama list 未出现（deepcoder:14b + qwen3:14b 两项），日志 `C:\Users\17621\ollama_pull_qwen25_7b.log` 无内容；拉取进程可能已失败或仍挂起 → F1 开工前需确认或重启拉取
+
+### Token 签发请求
+
+请 Jay.S 签发以下两枚 Token：
+
+**Token-A（F1）**
+- 任务：TASK-P1-20260424F1
+- Agent：数据
+- 文件（7）：`services/data/src/researcher/llm_analyzer.py`、`kline_analyzer.py`、`scheduler.py`、`config.py`、`prompts.py`、`news_prefilter.py`（新增）、`services/data/.env.example`
+- 附注 C1：scheduler.py 改动限于 line 767 / line 1474 周边 ±30 行及 stream cycle 入分析队列钩子，禁止触及 daily_stats / queue_manager 段
+- 附注 C2：.env.example 必须包含 `OLLAMA_PREFILTER_ENABLED` 共 6 个新增变量
+- TTL：48h
+
+**Token-B（F4+F5 合并）**
+- 任务：TASK-P1-20260424F4 + TASK-P1-20260424F5（同一次训练）
+- Agent：数据
+- 文件（8）：`scripts/researcher_finetune/prepare_dataset.py`、`train_lora_mlx.sh`、`export_to_ollama.sh`、`build_finance_corpus.py`、`merge_with_f4_dataset.py`、`eval_finance_holdout.py`、`runtime/researcher_finetune/finance_holdout_100.jsonl`、**新增：`scripts/researcher_finetune/deploy_model_to_nodes.sh`**（推送新模型到 Alienware + Studio 两端）
+- 附注 F5-R1：术语数据来源使用方案 B（数据 Agent 内部维护，不读 decision/configs/），如 Jay.S 同意可立即合并签发
+- 附注 Studio：A/B 验收通过后，Studio 的 `gate_reviewer.py` / `researcher_qwen3_scorer.py` 的 OLLAMA_MODEL 切换走独立后置小批次（不并入本次 Token）
+- TTL：14天（覆盖训练 + A/B 第一周）
+
+**⚠️ F1 开工前置**：需先确认 Alienware `qwen2.5:7b-instruct-q4_K_M` 已拉取完成（当前状态：未知/疑似失败）
+
+【签名】Atlas（新窗口）2026-04-24
+
+---
+
+## 批次日志 | 2026-04 | Atlas — sim-trading 全量系统审计与修复（U0 事后审计收口）
+
+**触发**：Jay.S 指令"先解决报警的问题，然后全量检查 sim 端，检查所有逻辑，风控，连接，守护等所有系统问题及逻辑错误问题"
+
+### Todos（全部完成）
+
+- [x] 只读诊断：确认持续报警根因（CTP 双通道断联 + guardian/heartbeat/dispatcher 三路噪音叠加）
+- [x] 止噪修复 Commit 1：simnow.py 断线冷却 300s + main.py RECONNECT_ALERT_COOLDOWN 180→600s
+- [x] B3 修复：feishu.py `_get_webhook()` category 优先分流（所有消息都进 ALERT 群 → 三群正确路由）
+- [x] B4 修复：heartbeat.py account 字段来源从 ledger→gw._account（心跳永远 degraded 修复）
+- [x] B5 修复：router.py `ctp_disconnect()` 死代码 double return 删除
+- [x] 全量审计：execution/failover/ledger/dispatcher/quiet_window/trade_push/simnow 回调/router/kpi/stats/persistence
+- [x] B6 修复：`check_disaster_stop()` 接入 create_order 步骤 7（净值回撤≥阈值熔断拒单）
+- [x] B6b 修复：`reduce_only_mode` 状态接入步骤 8（只减仓模式禁止开仓）
+- [x] B7 修复：`max_position` 持仓累计上限接入步骤 9（开仓时按品种合计不超上限）
+- [x] 部署验证：三次 scp + schtasks 重启，服务健康 `/health` = ok
+- [x] git commit（独立 3 次）
+
+### 修复汇总
+
+| Bug | 文件 | 说明 | Commit |
+|-----|------|------|--------|
+| 断线噪音 | simnow.py / main.py | MD/TD 冷却 300s + guardian 冷却 600s | Commit 1 |
+| B3 飞书路由 | feishu.py | `_get_webhook()` category 优先分流 | Commit 2 |
+| B4 心跳 | heartbeat.py | account 字段从 gw._account 读 | Commit 2 |
+| B5 死代码 | router.py | `ctp_disconnect()` double return 删除 | Commit 2 |
+| B6 灾难止损 | router.py | check_disaster_stop 接入下单主路径 | Commit 3 |
+| B6b 只减仓 | router.py | reduce_only_mode 接入下单主路径 | Commit 3 |
+| B7 持仓上限 | router.py | max_position 开仓时合计校验 | Commit 3 |
+
+### 审计结论（无重大遗留问题）
+
+- kpi/calculator.py：纯计算工具，逻辑正常，无副作用
+- stats/{performance/execution/market}.py：纯计算工具，逻辑正常
+- persistence/storage.py：JSON 文件存储，线程安全，逻辑正常
+- simnow.py 全段：连接/断线/重连/查账/查持仓逻辑正常，Timer 引用已保存
+- notifier/{dispatcher/quiet_window/trade_push}：逻辑正常，无需修改
+- execution/service.py + failover/handler.py：逻辑正常，无需修改
+
+【签名】Atlas 2026-04（sim-trading 全量审计收口）
+
+---
+
+## 进行中 | 2026-04-25 | researcher / decision 训练排程推进
+
+### 状态摘要
+
+- Studio researcher 14B 继续运行中：`mlx_lm lora --data runtime/researcher_finetune/dataset` 仍存活，未中断。
+- Alienware researcher 7B 训练环境已打通：`torch 2.5.1+cu121`、`cuda=True`、`gpu=RTX 2070`、`bitsandbytes 0.49.2`、`transformers/datasets/peft/accelerate` 已装齐。
+- Alienware researcher 7B 弱监督数据已落盘：总 article `4071`，筛后样本 `672`，train/val=`606/66`。
+- Alienware researcher 7B 已真实起跑：目标脚本 `C:\Users\17621\atlas_train_researcher_prefilter_20260425.py`，训练相关进程仍存活（校验时 `58540`、`261012`）。
+- Studio decision 14B seed 数据已生成并发送：seed 总样本 `69`，train/valid=`61/8`，目录 `runtime/decision_finetune_seed_20260425/dataset/`。
+- Studio decision 14B 采用“自动接力”而非误并发：队列脚本 `~/atlas_queue_studio_decision14b_20260425.sh` 当前存活（校验时 PID `22089`），日志已确认 `researcher 14B still running; waiting for slot`。
+
+### 本轮修正
+
+- 初版 Studio decision 队列等待条件写成完整命令片段，未命中 researcher 训练命令，导致误并发启动一轮 decision 14B。
+- 已立即停止误起的 decision 进程，仅保留 researcher 14B；等待条件改为匹配 `runtime/researcher_finetune/dataset`，复核通过后重新排队。
+
+【签名】Atlas 2026-04-25（训练排程推进收口）

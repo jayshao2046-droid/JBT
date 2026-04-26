@@ -6,10 +6,11 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import urllib.request
 import urllib.error
 from typing import Any, Dict
+
+from ..core.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +21,28 @@ class SimTradingAdapter:
     URL: {SIM_TRADING_SERVICE_URL}/api/v1/strategy/publish
     """
 
-    def __init__(self) -> None:
-        self._base_url: str = os.environ.get(
-            "SIM_TRADING_SERVICE_URL", "http://localhost:8101"
-        ).rstrip("/")
-        self._timeout: int = int(os.environ.get("PUBLISH_HTTP_TIMEOUT", "10"))
+    def __init__(
+        self,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        timeout: int | None = None,
+    ) -> None:
+        settings = get_settings()
+        resolved_base_url = base_url or settings.sim_trading_url
+        resolved_api_key = settings.sim_trading_api_key if api_key is None else api_key
+
+        self._base_url = resolved_base_url.rstrip("/")
+        self._api_key = (resolved_api_key or "").strip()
+        self._timeout = settings.publish_http_timeout if timeout is None else timeout
 
     def _publish_url(self) -> str:
         return f"{self._base_url}/api/v1/strategy/publish"
+
+    def _request_headers(self) -> dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        if self._api_key:
+            headers["X-API-Key"] = self._api_key
+        return headers
 
     def health_check(self) -> bool:
         """
@@ -67,7 +82,7 @@ class SimTradingAdapter:
             req = urllib.request.Request(
                 url,
                 data=body,
-                headers={"Content-Type": "application/json"},
+                headers=self._request_headers(),
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:

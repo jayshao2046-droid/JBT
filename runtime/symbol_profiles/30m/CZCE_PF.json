@@ -1,0 +1,35 @@
+{
+  "symbol": "CZCE.PF",
+  "volatility_3m": 0.4876607827765798,
+  "volatility_1y": 0.2741152769605171,
+  "volatility_5y": 0.23262465088434583,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 13.93,
+  "trend_strength_1y": 13.93,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": -0.007302602879927866,
+  "autocorr_1y": -0.009932792792322056,
+  "skewness": -1.5063929871751398,
+  "kurtosis": 64.53298946324169,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:55:07",
+    "data_start_date": "2020-10-12T01:00:00",
+    "data_end_date": "2026-04-22T11:00:00",
+    "data_points_3m": 657,
+    "data_points_1y": 2849,
+    "data_points_5y": 15953,
+    "missing_data_ratio": 0.1517336548116316
+  },
+  "confidence": {
+    "overall": 0.8579609818548324,
+    "volatility": 0.7207692820428968,
+    "trend": 0.9544799035565106,
+    "liquidity": 0.9393065380753474,
+    "data_sufficiency": 1.0,
+    "data_quality": 0.8482663451883684,
+    "feature_stability": 0.6104822974773103,
+    "warnings": []
+  }
+}

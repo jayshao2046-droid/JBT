@@ -1,0 +1,37 @@
+{
+  "symbol": "DCE.l",
+  "volatility_3m": 0.36705967126019096,
+  "volatility_1y": 0.19283274298025488,
+  "volatility_5y": 0.13897236125478862,
+  "volatility_weighted": "Medium",
+  "trend_strength_3m": 14.59,
+  "trend_strength_1y": 14.59,
+  "trend_strength_weighted": "Weak",
+  "autocorr_3m": 0.005561052882466606,
+  "autocorr_1y": 0.006447221780970618,
+  "skewness": -1.3334904178463307,
+  "kurtosis": 37.69306485701114,
+  "liquidity": "High",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-26 00:24:22",
+    "data_start_date": "2018-05-02T00:00:00",
+    "data_end_date": "2026-04-22T10:00:00",
+    "data_points_3m": 328,
+    "data_points_1y": 1418,
+    "data_points_5y": 10949,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.8915784162457663,
+    "volatility": 0.7289460406144156,
+    "trend": 1.0,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.5482434010240261,
+    "warnings": [
+      "特征不稳定: 波动率3M=0.3671 vs 1Y=0.1928, 趋势3M=14.5900 vs 1Y=14.5900"
+    ]
+  }
+}

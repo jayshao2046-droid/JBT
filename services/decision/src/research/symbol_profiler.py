@@ -138,8 +138,34 @@ class SymbolProfiler:
         "m": (0.12, 0.35), "i": (0.20, 0.50), "sc": (0.20, 0.50),
     }
 
-    # 每日交易分钟数（期货日盘+夜盘合计约 600 分钟）
-    TRADING_MINS_PER_DAY = 600
+    # 每日有效交易分钟数（默认值，对有全段夜盘品种适用）
+    # 日盘：09:00-11:30(150) + 13:30-15:00(90) = 240min
+    # 夜盘：各品种 0~240min
+    TRADING_MINS_PER_DAY = 480  # fallback，真实计算使用 _get_trading_mins()
+
+    # 品种→每日实际交易分钟数映射
+    # 无夜盘：CZCE农产品 + DCE.jd/lh = 240min
+    # 标准夜盘 21:00-23:00/23:30（约2~2.5h）= 240+120~150 ≈ 360min
+    # 长夜盘 21:00-01:00（约4h）= 240+240 = 480min
+    PRODUCT_TRADING_MINS: dict = {
+        # 无夜盘：日盘 240 min
+        "AP": 240, "CF": 240, "CJ": 240, "CY": 240, "PK": 240,
+        "SR": 240, "WH": 240, "jd": 240, "lh": 240,
+        # 标准夜盘 ≈ 360 min
+        "FG": 360, "MA": 360, "OI": 360, "PF": 360, "RM": 360,
+        "RS": 360, "SA": 360, "SF": 360, "SM": 360, "TA": 360,
+        "UR": 360, "ZC": 360,
+        "a": 360, "b": 360, "c": 360, "cs": 360, "eb": 360,
+        "eg": 360, "i": 360, "j": 360, "jm": 360, "l": 360,
+        "m": 360, "p": 360, "pp": 360, "v": 360, "y": 360,
+        "rb": 360, "hc": 360, "fu": 360, "bu": 360, "sp": 360,
+        "wr": 360, "lu": 360,
+        # 长夜盘 21:00-01:00 ≈ 480 min
+        "cu": 480, "al": 480, "zn": 480, "pb": 480,
+        "ni": 480, "sn": 480, "ss": 480,
+        "au": 480, "ag": 480,
+        "sc": 480, "ec": 480,
+    }
 
     def __init__(
         self,
@@ -165,6 +191,25 @@ class SymbolProfiler:
         else:
             self.cache_manager = None
 
+    def _get_trading_mins(self, symbol: str) -> int:
+        """根据品种代码返回每日实际交易分钟数。
+
+        无夜盘品种(CZCE农产品等) → 240
+        标准夜盘品种 → 360
+        长夜盘品种(SHFE有色/贵金属/INE原油) → 480
+        """
+        import re
+        # 从各种格式中提取纯产品代码
+        # KQ.m@SHFE.rb → rb, SHFE.rb → rb, rb → rb
+        raw = symbol
+        if "@" in raw:
+            raw = raw.split("@", 1)[1]
+        if "." in raw:
+            raw = raw.split(".", 1)[1]
+        # 去掉尾部数字（合约月份）
+        product = re.sub(r'\d+$', '', raw).strip()
+        return self.PRODUCT_TRADING_MINS.get(product, self.TRADING_MINS_PER_DAY)
+
     async def calculate_features(self, symbol: str, force_full: bool = False) -> Optional[SymbolFeatures]:
         """计算品种特征（增强版，支持增量更新）
 
@@ -187,22 +232,22 @@ class SymbolProfiler:
 
             # 全量计算
             logger.info(f"执行全量计算: {symbol}")
-            # 获取不同时间窗口的数据
+            # 获取不同时间窗口的数据（扩展到 8 年以利用更长历史）
             bars_3m = await self._fetch_bars(symbol, days=90)
             bars_1y = await self._fetch_bars(symbol, days=365)
-            bars_5y = await self._fetch_bars(symbol, days=1825)
+            bars_5y = await self._fetch_bars(symbol, days=2920)  # 8年，覆盖Mini实际库深
 
             if not bars_3m or not bars_1y:
                 logger.warning(f"品种 {symbol} 数据不足")
                 return None
 
             # 记录数据溯源
-            metadata = self._create_metadata(bars_3m, bars_1y, bars_5y)
+            metadata = self._create_metadata(bars_3m, bars_1y, bars_5y, symbol=symbol)
 
             # 计算波动率
-            vol_3m = self._calculate_volatility(bars_3m)
-            vol_1y = self._calculate_volatility(bars_1y)
-            vol_5y = self._calculate_volatility(bars_5y) if bars_5y else vol_1y
+            vol_3m = self._calculate_volatility(bars_3m, symbol)
+            vol_1y = self._calculate_volatility(bars_1y, symbol)
+            vol_5y = self._calculate_volatility(bars_5y, symbol) if bars_5y else vol_1y
 
             # 加权波动率（短期 60% + 中期 30% + 长期 10%）
             vol_weighted_value = vol_3m * 0.6 + vol_1y * 0.3 + vol_5y * 0.1
@@ -349,10 +394,10 @@ class SymbolProfiler:
             logger.error(f"获取数据失败 {symbol}: {e}")
             return []
 
-    def _calculate_volatility(self, bars: list[dict]) -> float:
+    def _calculate_volatility(self, bars: list[dict], symbol: str = "") -> float:
         """计算波动率（年化标准差）
 
-        根据实际 K 线周期动态计算年化因子：
+        根据实际 K 线周期及品种有无夜盘动态计算年化因子：
         bars_per_day = trading_mins_per_day / interval
         annualization_factor = sqrt(252 * bars_per_day)
         """
@@ -376,8 +421,9 @@ class SymbolProfiler:
         variance = sum((r - mean_return) ** 2 for r in returns) / len(returns)
         std_dev = variance ** 0.5
 
-        # 动态年化因子：根据实际 K 线周期计算
-        bars_per_day = max(1, self.TRADING_MINS_PER_DAY // self.interval)
+        # 动态年化因子：按品种实际交易分钟数计算，区分有无夜盘
+        trading_mins = self._get_trading_mins(symbol) if symbol else self.TRADING_MINS_PER_DAY
+        bars_per_day = max(1, trading_mins // self.interval)
         annualization_factor = (252 * bars_per_day) ** 0.5
 
         return std_dev * annualization_factor
@@ -547,7 +593,8 @@ class SymbolProfiler:
         self,
         bars_3m: list[dict],
         bars_1y: list[dict],
-        bars_5y: list[dict]
+        bars_5y: list[dict],
+        symbol: str = ""
     ) -> FeatureMetadata:
         """创建特征元数据（数据溯源）"""
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -566,10 +613,15 @@ class SymbolProfiler:
         data_start = start_5y or start_1y
         data_end = end_5y or end_1y
 
-        # 计算缺失数据比例
-        expected_points_3m = 90 * 4  # 90天 * 4小时/天（假设60分钟K线）
-        expected_points_1y = 365 * 4
-        expected_points_5y = 1825 * 4
+        # 计算缺失数据比例：使用品种实际每日交易分钟数（区分有无夜盘）
+        # 无夜盘 → 240 min/day；标准夜盘 → 360 min/day；长夜盘 → 480 min/day
+        trading_mins = self._get_trading_mins(symbol) if symbol else self.TRADING_MINS_PER_DAY
+        bars_per_trading_day = trading_mins / self.interval
+        trading_day_ratio = 5 / 7  # 每自然日约5/7是交易日
+        # bars_5y 现在对应 8 年窗口（2920天）
+        expected_points_3m = int(90   * trading_day_ratio * bars_per_trading_day)
+        expected_points_1y = int(365  * trading_day_ratio * bars_per_trading_day)
+        expected_points_5y = int(2920 * trading_day_ratio * bars_per_trading_day)
 
         actual_3m = len(bars_3m)
         actual_1y = len(bars_1y)

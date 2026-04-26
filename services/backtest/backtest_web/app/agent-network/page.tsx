@@ -1054,10 +1054,11 @@ export default function StrategyManagementPage() {
     strategyName: string,
     prepared: NonNullable<Awaited<ReturnType<typeof prepareStrategyYamlForAction>>>,
     imported: Record<string, any> | null | undefined,
+    engineTypeOverride?: BacktestEngineType,
   ) => {
     const basePayload: Record<string, any> = {
       strategy_id: strategyName,
-      engine_type: selectedEngineType,
+      engine_type: engineTypeOverride ?? selectedEngineType,
       start: backtestStart,
       end: backtestEnd,
     }
@@ -1340,7 +1341,7 @@ export default function StrategyManagementPage() {
     }
   }
 
-  const handleSaveParamsAndRun = async (strategyNameOverride?: string) => {
+  const handleSaveParamsAndRun = async (strategyNameOverride?: string, engineTypeOverride?: BacktestEngineType) => {
     const name = strategyNameOverride ?? selectedStrategyForRun
     if (!name) {
       setRunParamMsg("请先在下方选择一个策略（点击策略名）")
@@ -1365,7 +1366,7 @@ export default function StrategyManagementPage() {
       setStrategyYamlParams(buildYamlEditState(prepared.nextDocument))
       setSystemConfig({ ...prepared.effectiveSystemConfig })
 
-      const runPayloads = buildRunPayloads(name, prepared, imported)
+      const runPayloads = buildRunPayloads(name, prepared, imported, engineTypeOverride)
       const responses = await submitRunPayloads(runPayloads)
       const failedResponses = responses.filter((r: any) => r.status === 'failed' && r.error_message)
       if (failedResponses.length > 0) {
@@ -2341,8 +2342,11 @@ export default function StrategyManagementPage() {
             <Button onClick={() => handleSaveCurrentStrategy()} className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1 min-w-[160px]" disabled={isSavingParams || !selectedStrategyForRun}>
               <Save className="w-4 h-4 mr-2" />{isSavingParams ? "保存中..." : "保存当前策略"}
             </Button>
-            <Button onClick={() => handleSaveParamsAndRun()} className="bg-orange-500 hover:bg-orange-600 text-white flex-1 min-w-[160px]" disabled={isLoading || !selectedStrategyForRun}>
-              <Play className="w-4 h-4 mr-2" />回测当前策略
+            <Button onClick={() => handleSaveParamsAndRun(undefined, "tqsdk")} className="bg-orange-500 hover:bg-orange-600 text-white flex-1 min-w-[140px]" disabled={isLoading || !selectedStrategyForRun}>
+              <Play className="w-4 h-4 mr-2" />TqSdk 回测
+            </Button>
+            <Button onClick={() => handleSaveParamsAndRun(undefined, "local")} className="bg-indigo-500 hover:bg-indigo-600 text-white flex-1 min-w-[140px]" disabled={isLoading || !selectedStrategyForRun}>
+              <Play className="w-4 h-4 mr-2" />本地回测
             </Button>
             <Button onClick={handleBatchRunBacktest} className="bg-blue-600 hover:bg-blue-700 text-white flex-1 min-w-[160px]" disabled={isLoading || selectedIds.size === 0}>
               <Play className="w-4 h-4 mr-2" />批量回测已选 ({selectedIds.size})
@@ -2626,7 +2630,10 @@ export default function StrategyManagementPage() {
                           <Button variant="ghost" size="icon" className="text-neutral-400 hover:text-purple-400 h-8 w-8" title="编辑 YAML" onClick={() => handleOpenYamlEditor(s.name)}>
                             <FileText className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="text-neutral-400 hover:text-blue-400 h-8 w-8" title="用当前策略 YAML 真值快速回测" onClick={async (e) => { e.stopPropagation(); await handleSaveParamsAndRun(s.name) }}>
+                          <Button variant="ghost" size="icon" className="text-neutral-400 hover:text-orange-400 h-8 w-8" title="TqSdk 在线回测" onClick={async (e) => { e.stopPropagation(); await handleSaveParamsAndRun(s.name, "tqsdk") }}>
+                            <Play className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="text-neutral-400 hover:text-indigo-400 h-8 w-8" title="本地引擎回测" onClick={async (e) => { e.stopPropagation(); await handleSaveParamsAndRun(s.name, "local") }}>
                             <Play className="w-4 h-4" />
                           </Button>
                           {/* 查看报告 */}

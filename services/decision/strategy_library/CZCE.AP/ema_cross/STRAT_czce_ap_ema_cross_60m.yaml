@@ -1,0 +1,40 @@
+name: STRAT_czce_ap_ema_cross_60m
+description: CZCE.AP 均线交叉趋势：EMA(9) 金叉/死叉 SMA(21) 60m
+version: '1.0'
+category: trend_following
+factors:
+- factor_name: EMA
+  params:
+    period: 9
+- factor_name: SMA
+  params:
+    period: 21
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: ema > sma and close > ema
+  short_condition: ema < sma and close < ema
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.036
+symbols:
+- KQ.m@CZCE.AP
+transaction_costs:
+  slippage_per_unit: 1.0
+  commission_per_lot_round_turn: 2.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 3.17
+  take_profit:
+    type: atr
+    atr_multiplier: 4.31
+tags:
+- CZCE
+- AP
+- ema_cross
+- trend_following
+- 60m

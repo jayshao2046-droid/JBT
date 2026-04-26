@@ -192,6 +192,44 @@ def test_recovery_notification_after_disconnect():
     assert last_event.risk_level == "P2"
 
 
+def test_heartbeat_idle_window_marks_planned_disconnect():
+    """非交易且非盘前窗口，断联应被视为计划空闲而非系统异常。"""
+    from src.health import heartbeat as heartbeat_mod
+
+    ledger = MagicMock()
+    ledger.get_account_summary.return_value = {}
+
+    with patch("src.health.heartbeat._get_session_mode", return_value="idle"), \
+         patch("src.api.router._get_gateway", return_value=None), \
+         patch("src.ledger.service.get_ledger", return_value=ledger):
+        report = heartbeat_mod.generate_heartbeat_report()
+
+    assert report["status"] == "idle"
+    assert report["ctp"]["status"] == "planned_disconnect"
+    assert report["system"]["session_mode"] == "idle"
+
+
+def test_heartbeat_idle_report_uses_p2_notify_level():
+    """planned idle 心跳仍可发送，但不应升级成 P1/P0 告警。"""
+    from src.health import heartbeat as heartbeat_mod
+
+    dispatcher = MagicMock()
+
+    report = {
+        "status": "idle",
+        "account": {},
+        "ctp": {"md_connected": False, "td_connected": False, "md_status": "planned_idle", "td_status": "planned_idle"},
+        "system": {"session_mode": "idle"},
+        "uptime": {},
+    }
+
+    with patch("src.notifier.dispatcher.get_dispatcher", return_value=dispatcher):
+        assert heartbeat_mod.send_heartbeat_to_feishu(report) is True
+
+    event = dispatcher.dispatch.call_args.args[0]
+    assert event.risk_level == "P2"
+
+
 # ---------------------------------------------------------------------------
 # 7. CTP 成交回报数据流入 ledger
 # ---------------------------------------------------------------------------

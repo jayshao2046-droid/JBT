@@ -129,28 +129,34 @@ class FeishuStrategyNotifier:
         # 策略参数（精简显示）
         timeframe = params.get("timeframe_minutes", "N/A")
         position_fraction = params.get("position_fraction", "N/A")
-        stop_loss = params.get("stop_loss", {})
-        take_profit = params.get("take_profit", {})
+        risk = params.get("risk", {})
+        stop_loss = risk.get("stop_loss") if isinstance(risk, dict) else None
+        take_profit = risk.get("take_profit") if isinstance(risk, dict) else None
+        if not isinstance(stop_loss, dict):
+            stop_loss = params.get("stop_loss", {})
+        if not isinstance(take_profit, dict):
+            take_profit = params.get("take_profit", {})
         stop_loss_atr = stop_loss.get("atr_multiplier", "N/A") if isinstance(stop_loss, dict) else "N/A"
         take_profit_atr = take_profit.get("atr_multiplier", "N/A") if isinstance(take_profit, dict) else "N/A"
 
-        risk = params.get("risk", {})
         force_close_day = risk.get("force_close_day", "N/A") if isinstance(risk, dict) else "N/A"
         no_overnight = risk.get("no_overnight", False) if isinstance(risk, dict) else False
 
         # 本地回测结果
-        local_sharpe = local_result.get("sharpe_ratio", 0)
-        local_drawdown = local_result.get("max_drawdown", 0) * 100
-        local_win_rate = local_result.get("win_rate", 0) * 100
-        local_annual_return = local_result.get("annualized_return", 0) * 100
-        local_trades = local_result.get("trades_count", 0)
+        local_metrics = self._extract_metrics(local_result)
+        local_sharpe = local_metrics["sharpe_ratio"]
+        local_drawdown = local_metrics["max_drawdown"] * 100
+        local_win_rate = local_metrics["win_rate"] * 100
+        local_annual_return = local_metrics["annualized_return"] * 100
+        local_trades = local_metrics["trades_count"]
 
         # TqSdk 回测结果
-        tqsdk_sharpe = tqsdk_result.get("sharpe_ratio", 0)
-        tqsdk_drawdown = tqsdk_result.get("max_drawdown", 0) * 100
-        tqsdk_win_rate = tqsdk_result.get("win_rate", 0) * 100
-        tqsdk_annual_return = tqsdk_result.get("annualized_return", 0) * 100
-        tqsdk_trades = tqsdk_result.get("trades_count", 0)
+        tqsdk_metrics = self._extract_metrics(tqsdk_result)
+        tqsdk_sharpe = tqsdk_metrics["sharpe_ratio"]
+        tqsdk_drawdown = tqsdk_metrics["max_drawdown"] * 100
+        tqsdk_win_rate = tqsdk_metrics["win_rate"] * 100
+        tqsdk_annual_return = tqsdk_metrics["annualized_return"] * 100
+        tqsdk_trades = tqsdk_metrics["trades_count"]
 
         # 构建卡片内容
         content = f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -215,6 +221,38 @@ JBT decision | {datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M
         }
 
         return card
+
+    def _extract_metrics(self, report: dict[str, Any] | None) -> dict[str, float]:
+        """兼容旧扁平结果和 formal_report_v1 的嵌套 summary。"""
+        if not isinstance(report, dict):
+            return {
+                "sharpe_ratio": 0.0,
+                "max_drawdown": 0.0,
+                "win_rate": 0.0,
+                "annualized_return": 0.0,
+                "trades_count": 0,
+            }
+
+        summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+        if summary:
+            initial_capital = float(report.get("job", {}).get("initial_capital") or 0.0)
+            pnl = float(summary.get("pnl") or 0.0)
+            total_return = (pnl / initial_capital) if initial_capital else 0.0
+            return {
+                "sharpe_ratio": float(summary.get("sharpe") or 0.0),
+                "max_drawdown": float(summary.get("max_drawdown") or 0.0),
+                "win_rate": float(summary.get("win_rate") or 0.0),
+                "annualized_return": total_return,
+                "trades_count": int(summary.get("total_trades") or 0),
+            }
+
+        return {
+            "sharpe_ratio": float(report.get("sharpe_ratio") or 0.0),
+            "max_drawdown": float(report.get("max_drawdown") or 0.0),
+            "win_rate": float(report.get("win_rate") or 0.0),
+            "annualized_return": float(report.get("annualized_return") or 0.0),
+            "trades_count": int(report.get("trades_count") or 0),
+        }
 
     async def close(self):
         """关闭客户端"""

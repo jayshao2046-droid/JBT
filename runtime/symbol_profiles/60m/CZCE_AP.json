@@ -1,0 +1,35 @@
+{
+  "symbol": "CZCE.AP",
+  "volatility_3m": 0.37599719975441687,
+  "volatility_1y": 0.225914852005903,
+  "volatility_5y": 0.2790483343296756,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 45.25,
+  "trend_strength_1y": 45.25,
+  "trend_strength_weighted": "Strong",
+  "autocorr_3m": 0.022638779180814732,
+  "autocorr_1y": 0.005428379163224061,
+  "skewness": -11.186590788682855,
+  "kurtosis": 256.3459392486189,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:56:54",
+    "data_start_date": "2018-04-27T01:00:00",
+    "data_end_date": "2026-04-24T06:00:00",
+    "data_points_3m": 290,
+    "data_points_1y": 1210,
+    "data_points_5y": 9695,
+    "missing_data_ratio": 0.0
+  },
+  "confidence": {
+    "overall": 0.9202802225267108,
+    "volatility": 0.8007005563167768,
+    "trend": 1.0,
+    "liquidity": 1.0,
+    "data_sufficiency": 1.0,
+    "data_quality": 1.0,
+    "feature_stability": 0.6678342605279615,
+    "warnings": []
+  }
+}

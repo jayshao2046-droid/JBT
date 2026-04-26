@@ -1,0 +1,38 @@
+{
+  "symbol": "SHFE.au",
+  "volatility_3m": 0.4722266502487909,
+  "volatility_1y": 0.24904672823624113,
+  "volatility_5y": 0.14810251275152436,
+  "volatility_weighted": "High",
+  "trend_strength_3m": 23.28,
+  "trend_strength_1y": 23.28,
+  "trend_strength_weighted": "Medium",
+  "autocorr_3m": 0.011753399701481667,
+  "autocorr_1y": 0.006797853767318858,
+  "skewness": -6.012694668499877,
+  "kurtosis": 541.400421523426,
+  "liquidity": "Low",
+  "metadata": {
+    "data_source": "Mini API (http://192.168.31.74:8105)",
+    "calculation_time": "2026-04-25 23:51:47",
+    "data_start_date": "2018-04-27T01:00:00",
+    "data_end_date": "2026-04-22T06:55:00",
+    "data_points_3m": 3868,
+    "data_points_1y": 23512,
+    "data_points_5y": 202472,
+    "missing_data_ratio": 0.24096925303966732
+  },
+  "confidence": {
+    "overall": 0.8153534307750309,
+    "volatility": 0.6588682034574107,
+    "trend": 0.9277092240880997,
+    "liquidity": 0.9036122987841331,
+    "data_sufficiency": 1.0,
+    "data_quality": 0.7590307469603327,
+    "feature_stability": 0.5519316322821848,
+    "warnings": [
+      "数据质量较低: 缺失率 24.10%",
+      "特征不稳定: 波动率3M=0.4722 vs 1Y=0.2490, 趋势3M=23.2800 vs 1Y=23.2800"
+    ]
+  }
+}

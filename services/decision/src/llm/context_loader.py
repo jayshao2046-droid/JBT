@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+from ..research.research_store import ResearchStore
+
 logger = logging.getLogger(__name__)
 
 
@@ -135,6 +137,60 @@ def _extract_bars(payload: Any) -> List[Dict[str, Any]]:
 
 def _bar_time(bar: Dict[str, Any]) -> str:
     return str(bar.get("datetime") or bar.get("timestamp") or "N/A")
+
+
+def _format_local_research_summary(snapshot: Dict[str, Any]) -> Optional[str]:
+    latest = snapshot.get("latest_primary") or snapshot.get("latest")
+    if not isinstance(latest, dict):
+        return None
+
+    source_report = latest.get("source_report")
+    if not isinstance(source_report, dict):
+        source_report = {}
+
+    fact_record = latest.get("fact_record")
+    if not isinstance(fact_record, dict):
+        fact_record = {}
+
+    label = snapshot.get("label", "研报")
+    summary = source_report.get("summary") or fact_record.get("summary")
+    if summary:
+        return f"{label}: {summary}"
+
+    if snapshot.get("fact_group") == "intelligence":
+        trend = fact_record.get("macro_trend") or source_report.get("macro_trend")
+        risk = fact_record.get("risk_level") or source_report.get("risk_level")
+        drivers = fact_record.get("key_drivers") or source_report.get("key_drivers") or []
+        parts = []
+        if trend:
+            parts.append(f"趋势 {trend}")
+        if risk:
+            parts.append(f"风险 {risk}")
+        if drivers:
+            parts.append(f"驱动 {', '.join(drivers[:3])}")
+        if parts:
+            return f"{label}: {'; '.join(parts)}"
+
+    title = source_report.get("title") or fact_record.get("title")
+    if title:
+        return f"{label}: {title}"
+
+    return None
+
+
+def _load_local_research_summaries() -> List[str]:
+    overview = ResearchStore().get_fact_overview(limit_per_group=1)
+    summaries = []
+
+    for fact_group in ("data", "intelligence", "sentiment"):
+        snapshot = overview.get(fact_group) or {}
+        if not snapshot.get("available"):
+            continue
+        summary = _format_local_research_summary(snapshot)
+        if summary:
+            summaries.append(summary)
+
+    return summaries
 
 
 async def get_l1_context(symbol: str) -> Tuple[str, List[str]]:
@@ -300,38 +356,21 @@ async def get_l2_context(symbol: str) -> Tuple[str, List[str]]:
         missing_sources.append("60根分钟线")
         context_parts.append(f"\n[DATA_DEGRADED] 60根分钟线拉取失败: {str(exc)}")
 
-    # 3. 拉取研报摘要（从 Alienware researcher 服务直连，不走 Mini data）
-    researcher_api_url = os.getenv("RESEARCHER_SERVICE_URL", "http://192.168.31.187:8199")
+    # 3. 读取 Decision 本地 ResearchStore researcher 事实摘要，不再直连 Alienware latest
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                f"{researcher_api_url.rstrip('/')}/reports/latest",
-            )
-            response.raise_for_status()
-            data = response.json()
-            # Alienware /reports/latest 直接返回报告对象（含 report_id 字段），不是 {report: {...}} 包装格式
-            report = data if (data and data.get("report_id")) else data.get("report", {})
-
-            if not report:
-                logger.info(f"L2 上下文：{symbol} 研报为空（TASK-0110 未就绪或无数据）")
-                missing_sources.append("研报摘要")
-                context_parts.append("\n[DATA_DEGRADED] 研报摘要缺失（数据研究员未就绪）")
-            else:
-                summary = report.get("summary", "无摘要")
-                context_parts.append(f"\n研报摘要:\n  {summary[:200]}")
-
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 404:
-            logger.warning(f"L2 上下文：研报 API 未就绪 (404)，TASK-0110 可能未部署")
+        research_summaries = _load_local_research_summaries()
+        if not research_summaries:
+            logger.info(f"L2 上下文：{symbol} 本地 researcher 摘要为空")
             missing_sources.append("研报摘要")
-            context_parts.append("\n[DATA_DEGRADED] 研报摘要缺失（API 未就绪）")
+            context_parts.append("\n[DATA_DEGRADED] 本地 researcher 摘要缺失")
         else:
-            logger.error(f"L2 上下文研报拉取失败 (HTTP {exc.response.status_code}): {symbol}")
-            missing_sources.append("研报摘要")
-            context_parts.append(f"\n[DATA_DEGRADED] 研报拉取失败: HTTP {exc.response.status_code}")
+            context_parts.append("\n本地 researcher 摘要:")
+            for summary in research_summaries:
+                context_parts.append(f"  {summary[:200]}")
+
     except Exception as exc:
-        logger.error(f"L2 上下文研报拉取异常: {symbol} - {exc}")
+        logger.error(f"L2 上下文本地 researcher 摘要读取异常: {symbol} - {exc}")
         missing_sources.append("研报摘要")
-        context_parts.append(f"\n[DATA_DEGRADED] 研报拉取异常: {str(exc)}")
+        context_parts.append(f"\n[DATA_DEGRADED] 本地 researcher 摘要读取异常: {str(exc)}")
 
     return "\n".join(context_parts), missing_sources

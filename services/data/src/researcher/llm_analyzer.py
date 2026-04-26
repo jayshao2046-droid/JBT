@@ -1,11 +1,17 @@
 """
-LLM 分析器 - 使用 qwen3:14b 分析数据
+LLM 分析器 - 使用 qwen3:14b-q4_K_M 分析数据
 
 职责：
 1. 从共享队列消费数据
-2. 调用 Ollama qwen3:14b 进行分析
+2. 调用 Ollama qwen3:14b-q4_K_M 进行分析
 3. 结合历史上下文连贯写作
 4. 输出分析结果到报告缓冲区
+
+F1（2026-04-24）参数收紧：
+- 关闭 <think> 长推理（prompt 头部注入 /no_think）
+- 固定 num_predict / num_ctx / keep_alive
+- 单条 timeout 收紧到 OLLAMA_NEWS_TIMEOUT
+- 若上游已通过 news_prefilter 打分（_prefilter_score < 阈值），直接跳过
 """
 import logging
 import time
@@ -14,6 +20,8 @@ from datetime import datetime
 import requests
 import multiprocessing as mp
 import json
+
+from .config import ResearcherConfig
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +33,7 @@ class LLMAnalyzer:
         self.queue = queue
         self.stop_event = stop_event
         self.ollama_url = "http://localhost:11434/api/generate"
-        self.model = "qwen3:14b"
+        self.model = ResearcherConfig.OLLAMA_MODEL
 
         # 报告缓冲区（简化：实际应使用共享内存或数据库）
         self.report_buffer = []
@@ -61,6 +69,11 @@ class LLMAnalyzer:
     def _analyze_event(self, event: dict) -> dict:
         """分析单个事件"""
         try:
+            # F1：若上游 prefilter 已判为低分，跳过深分析
+            score = event.get("_prefilter_score")
+            if score is not None and score < ResearcherConfig.OLLAMA_PREFILTER_THRESHOLD:
+                return None
+
             event_type = event.get("type")
 
             if event_type == "kline_alert":
@@ -146,21 +159,31 @@ class LLMAnalyzer:
         }
 
     def _call_ollama(self, prompt: str) -> str:
-        """调用 Ollama API"""
+        """调用 Ollama API（F1 收紧版）"""
         try:
+            tightened_prompt = "/no_think\n" + prompt if "/no_think" not in prompt[:32] else prompt
             resp = requests.post(
                 self.ollama_url,
                 json={
                     "model": self.model,
-                    "prompt": prompt,
-                    "stream": False
+                    "prompt": tightened_prompt,
+                    "stream": False,
+                    "keep_alive": ResearcherConfig.OLLAMA_KEEP_ALIVE,
+                    "options": {
+                        "temperature": ResearcherConfig.OLLAMA_TEMPERATURE,
+                        "num_ctx": 4096,
+                        "num_predict": ResearcherConfig.OLLAMA_NUM_PREDICT,
+                    },
                 },
-                timeout=30
+                timeout=ResearcherConfig.OLLAMA_NEWS_TIMEOUT,
             )
 
             if resp.status_code == 200:
                 result = resp.json()
-                return result.get("response", "")
+                text = result.get("response", "")
+                if "<think>" in text and "</think>" in text:
+                    text = text[text.index("</think>") + len("</think>"):]
+                return text.strip()
             else:
                 return "分析失败"
 

@@ -13,11 +13,29 @@ class ResearcherConfig:
 
     # Alienware Ollama 配置
     OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.31.187:11434")
-    OLLAMA_MODEL = "qwen3:14b"
+    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:14b-q4_K_M")
     OLLAMA_TEMPERATURE = 0.3
     OLLAMA_NUM_CTX = 8192
     # 安全修复：P2-3 - 从环境变量读取超时配置
     OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "120.0"))
+
+    # ── F1（2026-04-24）：LLM 参数收紧 + 两段式管线（前置筛选 + 14B 深分析）──
+    # 14B 深分析 num_predict 上限（控制单条输出 token 数 → 控制单条耗时）
+    OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "512"))
+    # 14B 模型常驻显存时长（错峰：prefilter 用短 keep_alive，避免与 14B OOM）
+    OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "10m")
+    # 单条新闻深分析 timeout（秒）— 收紧自 120s
+    OLLAMA_NEWS_TIMEOUT = float(os.getenv("OLLAMA_NEWS_TIMEOUT", "45"))
+    # 两段式管线开关（false → 走旧的单段直分析，回滚开关）
+    OLLAMA_PREFILTER_ENABLED = os.getenv("OLLAMA_PREFILTER_ENABLED", "true").lower() in ("1", "true", "yes")
+    # 前置筛选小模型
+    OLLAMA_PREFILTER_MODEL = os.getenv("OLLAMA_PREFILTER_MODEL", "qwen2.5:7b-instruct-q4_K_M")
+    # 前置筛选阈值（0–10），≥ 阈值才进入 14B 深分析
+    OLLAMA_PREFILTER_THRESHOLD = int(os.getenv("OLLAMA_PREFILTER_THRESHOLD", "7"))
+    # 前置筛选模型 keep_alive（短，避免与 14B 同时常驻 8GB 显存）
+    OLLAMA_PREFILTER_KEEP_ALIVE = os.getenv("OLLAMA_PREFILTER_KEEP_ALIVE", "30s")
+    # 前置筛选单条 timeout（秒）— 7B 模型预期 < 5s
+    OLLAMA_PREFILTER_TIMEOUT = float(os.getenv("OLLAMA_PREFILTER_TIMEOUT", "10"))
 
     # Mini data API 配置
     DATA_API_URL = os.getenv("DATA_API_URL", "http://192.168.31.74:8105")
@@ -189,7 +207,7 @@ class ResearcherConfig:
 
     # ── Studio LLM 评级配置（2026-04-17 切换到 qwen3）─────────────────────
     SCORER_API_URL: str = os.getenv("SCORER_API_URL", "http://192.168.31.142:11434/api/generate")
-    SCORER_MODEL: str = os.getenv("SCORER_MODEL", "qwen3:14b")  # 原为 phi4-reasoning:14b
+    SCORER_MODEL: str = os.getenv("SCORER_MODEL", "qwen3:14b-q4_K_M")  # 原为 phi4-reasoning:14b
     # 安全修复：P2-3 - 从环境变量读取超时配置
     SCORER_TIMEOUT: float = float(os.getenv("SCORER_TIMEOUT", "30.0"))  # 超时后 fallback 到数学算法
 

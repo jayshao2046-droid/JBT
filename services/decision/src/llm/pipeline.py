@@ -9,15 +9,15 @@ import logging
 import os
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
+from ..research.research_store import ResearchStore
 from .client import OllamaClient, HybridClient
 from .openai_client import OpenAICompatibleClient
 from .context_loader import get_daily_context
 from .prompts import ANALYST_SYSTEM, AUDITOR_SYSTEM, RESEARCHER_SYSTEM
-from .researcher_loader import ResearcherLoader
 from .researcher_scorer import ResearcherScorer
 from .researcher_phi4_scorer import ResearcherPhi4Scorer
 
@@ -102,12 +102,248 @@ class LLMPipeline:
             self.auditor_model = os.getenv("OLLAMA_AUDITOR_MODEL", "qwen3:14b-q4_K_M")
             self.analyst_model = os.getenv("OLLAMA_ANALYST_MODEL", "qwen3:14b-q4_K_M")
 
-        # TASK-0121-D1: 初始化研究员报告加载器和评分器
-        # D2: researcher 专用 URL，不再复用 DATA_SERVICE_URL
-        researcher_service_url = os.getenv("RESEARCHER_SERVICE_URL", "http://192.168.31.187:8199")
-        self.researcher_loader = ResearcherLoader(researcher_service_url)
+        # TASK-P1-20260424E3: pipeline 后段 researcher 消费统一回落本地 ResearchStore
         self.researcher_scorer = ResearcherScorer()
         self.researcher_phi4_scorer = ResearcherPhi4Scorer(client=self.client)
+
+    @staticmethod
+    def _parse_datetime(value: Any) -> Optional[datetime]:
+        if not value or not isinstance(value, str):
+            return None
+
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _parse_segment_hour(segment: Optional[str]) -> Optional[int]:
+        if not segment:
+            return None
+
+        token = segment.replace("-", ":").split(":", 1)[0]
+        if token.isdigit():
+            hour = int(token)
+            if 0 <= hour <= 23:
+                return hour
+        return None
+
+    @classmethod
+    def _record_hour(cls, record: Dict[str, Any]) -> Optional[int]:
+        batch_context = record.get("batch_context")
+        if isinstance(batch_context, dict):
+            hour = batch_context.get("hour")
+            if isinstance(hour, int):
+                return hour
+            if isinstance(hour, str) and hour.isdigit():
+                return int(hour)
+
+        for container_name in ("fact_record", "source_report"):
+            container = record.get(container_name)
+            if not isinstance(container, dict):
+                continue
+            parsed = cls._parse_datetime(container.get("generated_at"))
+            if parsed is not None:
+                return parsed.hour
+
+        parsed = cls._parse_datetime(record.get("stored_at"))
+        return parsed.hour if parsed is not None else None
+
+    @classmethod
+    def _record_generated_at(cls, record: Dict[str, Any]) -> Optional[str]:
+        for container_name in ("fact_record", "source_report", "batch_context"):
+            container = record.get(container_name)
+            if isinstance(container, dict) and container.get("generated_at"):
+                return container["generated_at"]
+        stored_at = record.get("stored_at")
+        return stored_at if isinstance(stored_at, str) else None
+
+    @classmethod
+    def _select_local_report_record(
+        cls,
+        store: ResearchStore,
+        report_type: str,
+        segment: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
+        history = store.get_history(report_type, limit=50)
+        if not history:
+            return None
+
+        target_hour = cls._parse_segment_hour(segment)
+        if target_hour is None:
+            return history[-1]
+
+        for record in reversed(history):
+            if isinstance(record, dict) and cls._record_hour(record) == target_hour:
+                return record
+
+        # 与旧 ResearcherLoader 保持兼容：segment 未命中时仍回退到本地 latest，而非远端 latest
+        return history[-1]
+
+    @staticmethod
+    def _market_section_from_record(record: Optional[Dict[str, Any]], nested_key: str) -> Dict[str, Any]:
+        if not isinstance(record, dict):
+            return {}
+
+        source_report = record.get("source_report")
+        if not isinstance(source_report, dict):
+            return {}
+
+        nested_section = source_report.get(nested_key)
+        if isinstance(nested_section, dict):
+            return dict(nested_section)
+
+        symbols = source_report.get("symbols")
+        if not isinstance(symbols, list):
+            symbol = source_report.get("symbol")
+            symbols = [symbol] if symbol else []
+
+        section: Dict[str, Any] = {}
+        symbols_covered = source_report.get("symbols_covered")
+        if symbols_covered is None and symbols:
+            symbols_covered = len(symbols)
+        if symbols_covered is not None:
+            section["symbols_covered"] = symbols_covered
+
+        market_overview = (
+            source_report.get("market_overview")
+            or source_report.get("summary")
+            or source_report.get("content")
+            or ""
+        )
+        if market_overview:
+            section["market_overview"] = market_overview
+
+        sector_rotation = source_report.get("sector_rotation")
+        if isinstance(sector_rotation, dict) and sector_rotation:
+            section["sector_rotation"] = sector_rotation
+
+        return section
+
+    @staticmethod
+    def _news_items_from_source_report(source_report: Dict[str, Any]) -> List[Dict[str, Any]]:
+        if not isinstance(source_report, dict):
+            return []
+
+        if isinstance(source_report.get("news"), list):
+            return source_report["news"]
+
+        if isinstance(source_report.get("news_items"), list):
+            return source_report["news_items"]
+
+        crawler_stats = source_report.get("crawler_stats")
+        if isinstance(crawler_stats, dict) and isinstance(crawler_stats.get("news_items"), list):
+            return crawler_stats["news_items"]
+
+        summary = source_report.get("summary") or source_report.get("content")
+        title = source_report.get("title") or source_report.get("report_id")
+        if summary or title:
+            return [{
+                "title": title or "研报摘要",
+                "content": summary or "",
+                "source": source_report.get("source", "research_store"),
+            }]
+
+        return []
+
+    @classmethod
+    def _crawler_stats_from_records(cls, records: List[Optional[Dict[str, Any]]]) -> Dict[str, Any]:
+        news_items: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+
+            source_report = record.get("source_report")
+            if not isinstance(source_report, dict):
+                continue
+
+            for item in cls._news_items_from_source_report(source_report):
+                if not isinstance(item, dict):
+                    continue
+
+                title = str(item.get("title", "")).strip()
+                content = str(item.get("content", "")).strip()
+                dedup_key = f"{title}|{content[:80]}"
+                if dedup_key in seen:
+                    continue
+
+                seen.add(dedup_key)
+                news_items.append(item)
+
+        if not news_items:
+            return {}
+
+        return {
+            "news_items": news_items,
+            "articles_processed": len(news_items),
+        }
+
+    def _build_local_researcher_report(self, segment: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        store = ResearchStore()
+        selected_records = {
+            report_type: self._select_local_report_record(store, report_type, segment)
+            for report_type in ("futures", "stocks", "news", "rss", "sentiment")
+        }
+
+        if not any(selected_records.values()):
+            return None
+
+        report: Dict[str, Any] = {
+            "source": "research_store",
+            "segment": segment or "latest",
+        }
+
+        futures_summary = self._market_section_from_record(
+            selected_records.get("futures"),
+            "futures_summary",
+        )
+        if futures_summary:
+            report["futures_summary"] = futures_summary
+
+        stocks_summary = self._market_section_from_record(
+            selected_records.get("stocks"),
+            "stocks_summary",
+        )
+        if stocks_summary:
+            report["stocks_summary"] = stocks_summary
+
+        crawler_stats = self._crawler_stats_from_records([
+            selected_records.get("news"),
+            selected_records.get("rss"),
+            selected_records.get("sentiment"),
+        ])
+        if crawler_stats:
+            report["crawler_stats"] = crawler_stats
+
+        if not any(key in report for key in ("futures_summary", "stocks_summary", "crawler_stats")):
+            return None
+
+        anchor_records = [record for record in selected_records.values() if isinstance(record, dict)]
+        anchor = max(
+            anchor_records,
+            key=lambda record: self._parse_datetime(self._record_generated_at(record)) or datetime.min,
+        )
+
+        report["report_id"] = anchor.get("report_id") or f"local-facts-{int(time.time())}"
+        generated_at = self._record_generated_at(anchor)
+        if generated_at:
+            report["generated_at"] = generated_at
+
+        for report_type, record in selected_records.items():
+            if not isinstance(record, dict):
+                continue
+            _RESEARCH_AUDIT_LOG.append({
+                "consumer": "pipeline.evaluate_researcher_report",
+                "report_type": report_type,
+                "action": "load_from_research_store",
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "segment": segment or "latest",
+                "report_id": record.get("report_id"),
+            })
+
+        return report
 
     async def research(self, intent: str) -> Dict[str, Any]:
         """
@@ -695,22 +931,22 @@ class LLMPipeline:
         result = {}
 
         try:
-            # 1. 从 Alienware 加载最新报告
-            logger.info(f"从 Alienware 加载研究员报告 (segment={segment})")
-            report = self.researcher_loader.get_latest_report(segment=segment)
+            # 1. 从 Decision 本地 ResearchStore 加载 researcher 事实
+            logger.info(f"从本地 ResearchStore 加载研究员报告 (segment={segment})")
+            report = self._build_local_researcher_report(segment=segment)
 
             if not report:
                 return {
-                    "error": "未找到研究员报告",
+                    "error": "未找到本地 researcher 事实",
                     "duration_seconds": time.time() - start_time
                 }
 
             result["report"] = report
-            logger.info(f"已加载报告: {report.get('report_id', 'unknown')}")
+            logger.info(f"已组装本地报告: {report.get('report_id', 'unknown')}")
 
             # 2. 使用 qwen3 进行评级
             logger.info("使用 qwen3 评估报告")
-            scoring_result = await self.researcher_phi4_scorer.score_report(
+            scoring_result = await self.researcher_phi4_scorer._score_report_full(
                 report=report,
                 context={}  # 可以传入持仓、市场上下文等
             )

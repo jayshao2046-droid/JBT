@@ -1,0 +1,43 @@
+name: STRAT_dce_pg_kdj_reversion_60m
+description: DCE.pg KDJ超买超卖均值回归：KD双线极值 + RSI确认 60m
+version: '1.0'
+category: mean_reversion
+factors:
+- factor_name: KDJ
+  params:
+    k_period: 9
+    d_period: 3
+    j_smooth: 3
+- factor_name: RSI
+  params:
+    period: 14
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: kdj_k < 20 and kdj_d < 20 and rsi < 45
+  short_condition: kdj_k > 80 and kdj_d > 80 and rsi > 55
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.027
+symbols:
+- KQ.m@DCE.pg
+transaction_costs:
+  slippage_per_unit: 1.0
+  commission_per_lot_round_turn: 2.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 2.64
+  take_profit:
+    type: atr
+    atr_multiplier: 3.08
+  force_close_night: '22:55'
+tags:
+- DCE
+- pg
+- kdj_reversion
+- mean_reversion
+- 60m

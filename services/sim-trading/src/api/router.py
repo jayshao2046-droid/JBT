@@ -1,5 +1,6 @@
 import os
 import hmac
+import socket
 import uuid
 from collections import deque
 from datetime import datetime, timedelta
@@ -17,6 +18,8 @@ router = APIRouter(prefix="/api/v1", tags=["sim-trading"])
 
 # ---------- SimNow Gateway 单例 ----------
 _gateway = None   # type: Any   # SimNowGateway | None
+_CTP_CONNECT_FAIL_ALERT_COOLDOWN = 600
+_last_ctp_connect_fail_alert_ts = 0.0
 
 # ---------- ExecutionService 单例（激活后委托 Gateway 执行下单）----------
 from src.execution.service import ExecutionService as _ExecutionService
@@ -26,8 +29,60 @@ _execution_service = _ExecutionService()   # 模块加载时创建，CTP 连接�
 def _get_gateway():
     return _gateway
 
+
+def _parse_tcp_front(front: str) -> Optional[tuple[str, int]]:
+    value = (front or "").strip()
+    if not value:
+        return None
+    if "://" in value:
+        scheme, value = value.split("://", 1)
+        if scheme.lower() != "tcp":
+            return None
+    host, sep, port_text = value.rpartition(":")
+    if not sep or not host:
+        return None
+    try:
+        return host, int(port_text)
+    except ValueError:
+        return None
+
+
+def get_ctp_front_reachability(
+    md_front: Optional[str] = None,
+    td_front: Optional[str] = None,
+    timeout: float = 2.0,
+) -> Dict[str, bool]:
+    md_value = md_front or _system_state.get("ctp_md_front") or os.getenv("SIMNOW_MD_FRONT", "")
+    td_value = td_front or _system_state.get("ctp_td_front") or os.getenv("SIMNOW_TRADE_FRONT", "")
+    results: Dict[str, bool] = {}
+    for channel, front in {"md": md_value, "td": td_value}.items():
+        endpoint = _parse_tcp_front(front)
+        if endpoint is None:
+            results[channel] = False
+            continue
+        try:
+            with socket.create_connection(endpoint, timeout=timeout):
+                results[channel] = True
+        except OSError:
+            results[channel] = False
+    return results
+
 # ---------- CTP 连接锁（防止并发 connect 调用造成 _gateway 竞态）----------
 _connect_lock = _ThreadLock()
+
+
+def disconnect_gateway_internal() -> None:
+    """供 guardian 等站内调用的最小断联 helper，不走 HTTP 鉴权路径。"""
+    global _gateway
+    with _connect_lock:
+        if _gateway is not None:
+            try:
+                _gateway.disconnect()
+            except Exception:
+                pass
+            _gateway = None
+        _system_state["ctp_md_connected"] = False
+        _system_state["ctp_td_connected"] = False
 
 
 def _require_write_api_key(request: Request) -> None:
@@ -77,7 +132,7 @@ _system_state: Dict[str, Any] = {
     "ctp_md_front": os.getenv("SIMNOW_MD_FRONT", "tcp://124.74.248.10:41213"),
     "ctp_td_front": os.getenv("SIMNOW_TRADE_FRONT", "tcp://124.74.248.10:41205"),
     "ctp_app_id": os.getenv("CTP_APP_ID", "client_jbtsim_1.0.0"),
-    "ctp_auth_code": os.getenv("CTP_AUTH_CODE", "QN76PPIPR9EKM4QK"),
+    "ctp_auth_code": os.getenv("CTP_AUTH_CODE", ""),
     "reduce_only_mode": False,  # 只减仓模式：True 时禁止开仓
 }
 
@@ -551,7 +606,7 @@ def save_ctp_config(req: CtpConfigRequest, request: Request):
     return {"result": "ctp config saved"}
 
 def ctp_connect(silent: bool = False):
-    global _gateway
+    global _gateway, _last_ctp_connect_fail_alert_ts
     import logging
     from src.gateway.simnow import SimNowGateway, _CTP_AVAILABLE
 
@@ -568,6 +623,16 @@ def ctp_connect(silent: bool = False):
 
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id not configured")
+
+    reachability = get_ctp_front_reachability(md_front=md_front, td_front=td_front)
+    if not (reachability.get("md") or reachability.get("td")):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "CTP fronts unreachable: "
+                f"md={reachability.get('md', False)} td={reachability.get('td', False)}"
+            ),
+        )
 
     # 并发保护：同一时刻只允许一个 connect 操作（sync 路由运行在线程池，需显式加锁）
     if not _connect_lock.acquire(blocking=False):
@@ -612,9 +677,15 @@ def ctp_connect(silent: bool = False):
 
     if not silent:
         try:
+            import time
             from src.risk.guards import emit_alert
-            if not (st["md_connected"] or st["td_connected"]):
+            now_ts = time.time()
+            if (
+                not (st["md_connected"] or st["td_connected"])
+                and now_ts - _last_ctp_connect_fail_alert_ts >= _CTP_CONNECT_FAIL_ALERT_COOLDOWN
+            ):
                 emit_alert("P1", "CTP 连接超时，行情与交易接口均未就绪", {"event_code": "CTP_CONNECT_FAILED", "account_id": _system_state.get("ctp_user_id", ""), "stage_preset": "sim"})
+                _last_ctp_connect_fail_alert_ts = now_ts
         except Exception:
             pass
 
@@ -635,16 +706,7 @@ def ctp_connect_api(request: Request, silent: bool = False):
 @router.post("/ctp/disconnect")
 def ctp_disconnect(request: Request):
     _require_write_api_key(request)
-    global _gateway
-    with _connect_lock:
-        if _gateway is not None:
-            try:
-                _gateway.disconnect()
-            except Exception:
-                pass
-            _gateway = None
-        _system_state["ctp_md_connected"] = False
-        _system_state["ctp_td_connected"] = False
+    disconnect_gateway_internal()
     return {"result": "disconnected", "state": _safe_state()}
 
 

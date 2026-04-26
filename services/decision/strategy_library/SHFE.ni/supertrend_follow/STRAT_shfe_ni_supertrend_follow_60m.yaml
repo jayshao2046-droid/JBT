@@ -1,0 +1,42 @@
+name: STRAT_shfe_ni_supertrend_follow_60m
+description: SHFE.ni 超趋势跟踪：Supertrend方向 + ADX强度过滤 60m
+version: '1.0'
+category: trend_following
+factors:
+- factor_name: Supertrend
+  params:
+    period: 10
+    multiplier: 3.0
+- factor_name: ADX
+  params:
+    period: 14
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: supertrend_direction > 0 and adx > 20
+  short_condition: supertrend_direction < 0 and adx > 20
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.058
+symbols:
+- KQ.m@SHFE.ni
+transaction_costs:
+  slippage_per_unit: 10.0
+  commission_per_lot_round_turn: 3.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 2.97
+  take_profit:
+    type: atr
+    atr_multiplier: 4.82
+  force_close_night: '22:55'
+tags:
+- SHFE
+- ni
+- supertrend_follow
+- trend_following
+- 60m

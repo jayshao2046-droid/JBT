@@ -4,29 +4,12 @@
 完整闭环流程：
 1. 生成策略矩阵（7-10 个策略/品种）
 2. 逐个调优（Optuna IS/OOS）
-3. 本地回测（Mini 数据）
-4. TqSdk 回测（Studio backtest API）
-5. 评分分桶
-6. 证据留存
-7. 飞书通知
-
-执行顺序：
-- 35 个品种串行执行
-- 每个品种内策略串行执行
-- 每个策略完成后立即飞书通知
-
-用法：
-    cd /Users/jayshao/JBT/services/decision
-    source ../../.venv/bin/activate
-    python scripts/run_full_pipeline_35_symbols.py \\
-        --data-url http://192.168.31.74:8105 \\
-        --backtest-url http://192.168.31.142:8103 \\
-        --ollama-url http://192.168.31.142:11434 \\
-        --feishu-webhook https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_TOKEN \\
-        --start 2022-01-01 \\
-        --end 2024-12-31 \\
-        --n-trials 100
+3. 正式本地回测（decision internal formal local engine）
+4. TqSdk 回测（decision internal formal runner）
+5. 评分与分桶归档
+6. 证据留存与飞书通知
 """
+
 from __future__ import annotations
 
 import argparse
@@ -56,6 +39,7 @@ from src.research.tqsdk_backtest_client import TqSdkBacktestClient
 from src.research.evidence_manager import EvidenceManager
 from src.research.feishu_strategy_notifier import FeishuStrategyNotifier
 from src.research.contract_resolver import ContractResolver
+from src.research.local_formal_backtest_client import LocalFormalBacktestClient
 from src.research.yaml_signal_executor import YAMLSignalExecutor
 from src.research.symbol_profiler import SymbolProfiler
 from src.research.code_generator import CodeGenerator
@@ -273,6 +257,7 @@ async def process_one_strategy(
     template: dict,
     yaml_path: Path,
     executor: YAMLSignalExecutor,
+    local_backtest_client: LocalFormalBacktestClient,
     optimizer: StrategyParamOptimizer,
     evaluator: StrategyEvaluator,
     tqsdk_client: TqSdkBacktestClient,
@@ -329,6 +314,27 @@ async def process_one_strategy(
                     yaml.dump(strategy, f, allow_unicode=True, default_flow_style=False)
                 logger.info(f"  ✓ 自动补全 risk.force_close_night=22:55（夜盘品种）")
 
+        # 规范化旧 YAML：将根级 stop_loss/take_profit 迁移到 risk 块
+        risk_section = strategy.setdefault("risk", {})
+        normalized_risk_keys: list[str] = []
+        for section_key in ("stop_loss", "take_profit"):
+            root_section = strategy.get(section_key)
+            if not isinstance(root_section, dict):
+                continue
+            if not isinstance(risk_section.get(section_key), dict):
+                risk_section[section_key] = root_section
+            strategy.pop(section_key, None)
+            normalized_risk_keys.append(section_key)
+
+        if normalized_risk_keys:
+            with open(yaml_path, "w", encoding="utf-8") as f:
+                yaml.dump(strategy, f, allow_unicode=True, default_flow_style=False)
+            logger.info(
+                "  ✓ 已规范化 YAML 风控结构: %s -> risk.%s",
+                ", ".join(normalized_risk_keys),
+                ", risk.".join(normalized_risk_keys),
+            )
+
         # 预检: 基本字段校验
         preflight_errors = _preflight_check(strategy, strategy_name)
         if preflight_errors:
@@ -341,14 +347,49 @@ async def process_one_strategy(
             )
             return result
 
-        # 1. 调优
+        # 1. 基线本地回测（未调优原始 YAML）
+        logger.info("  [1/7] 基线本地回测（formal local baseline）...")
+        try:
+            baseline_local_result = await local_backtest_client.run_backtest(
+                yaml_path,
+                start_date,
+                end_date,
+                initial_capital=500000.0,
+            )
+        except Exception as e:
+            fail_msg = f"基线本地回测失败: {e}"
+            result["status"] = "failed"
+            result["error"] = fail_msg
+            evidence_mgr.save_failure_report(
+                symbol, strategy_name, "baseline_local_backtest", fail_msg,
+                run_id=result["run_id"],
+            )
+            logger.warning(f"  ✗ {fail_msg}")
+            return result
+
+        baseline_status = baseline_local_result.get("status") or baseline_local_result.get("summary", {}).get("status")
+        if baseline_status != "completed":
+            fail_msg = f"基线本地回测未完成: status={baseline_status}"
+            result["status"] = "failed"
+            result["error"] = fail_msg
+            evidence_mgr.save_failure_report(
+                symbol, strategy_name, "baseline_local_backtest", fail_msg,
+                context={"baseline": baseline_local_result},
+                run_id=result["run_id"],
+            )
+            logger.warning(f"  ✗ {fail_msg}")
+            return result
+
+        result["baseline_local_backtest"] = baseline_local_result
+
+        # 2. 调优
         if previous_params:
-            logger.info(f"  [1/5] Warm-start 调优（基于上轮最优参数）...")
+            logger.info(f"  [2/7] Warm-start 调优（基于上轮最优参数）...")
             opt_result = await optimizer.reoptimize_recycled(
                 strategy, start_date, end_date, previous_params,
             )
         else:
-            logger.info(f"  [1/5] 首轮调优...")
+            logger.info(f"  [2/7] 首轮调优...")
             opt_result = await optimizer.optimize(strategy, start_date, end_date)
 
         # 1a. 零交易诊断 → 放宽条件 → 重试（仅首轮，最多 1 次）
@@ -375,8 +416,14 @@ async def process_one_strategy(
                     break
                 logger.warning(f"  调优第 {attempt + 1} 次失败: {opt_result.get('error')}")
 
-        result["optimization"] = opt_result
-        evidence_mgr.save_optimization_report(symbol, strategy_name, opt_result)
+        optimization_report = dict(opt_result)
+        optimization_report["baseline_local_backtest"] = {
+            "report_id": baseline_local_result.get("report_id"),
+            "status": baseline_local_result.get("status"),
+            "summary": baseline_local_result.get("summary", {}),
+        }
+        result["optimization"] = optimization_report
+        evidence_mgr.save_optimization_report(symbol, strategy_name, optimization_report)
 
         # 1c. 调优完全失败 → 早退（不浪费后续回测 / TqSdk / 评分）
         if "error" in opt_result:
@@ -393,7 +440,7 @@ async def process_one_strategy(
             logger.warning(f"  ✗ {fail_msg}")
             return result
 
-        # 1d. 将 Optuna 最优参数写回 YAML（保证 TqSdk / Step2 使用已调优参数）
+        # 1d. 将 Optuna 最优参数写回 YAML（保证 formal local / TqSdk 使用已调优参数）
         best_params = opt_result.get("best_params") if opt_result else None
         if best_params:
             try:
@@ -407,9 +454,16 @@ async def process_one_strategy(
                         if k in factor.get("params", {}):
                             factor["params"][k] = v
                             updated_keys.append(k)
-                # 写回顶层 stop_loss / take_profit 的 atr_multiplier
+                # 写回 risk.stop_loss / risk.take_profit 的 atr_multiplier（兼容旧根级字段）
+                risk_section = strategy_data.setdefault("risk", {})
                 for section, mult_key in (("stop_loss", "stop_atr_mult"), ("take_profit", "take_atr_mult")):
-                    if mult_key in best_params and isinstance(strategy_data.get(section), dict):
+                    if mult_key not in best_params:
+                        continue
+                    target_section = risk_section.get(section)
+                    if isinstance(target_section, dict):
+                        target_section["atr_multiplier"] = best_params[mult_key]
+                        updated_keys.append(mult_key)
+                    elif isinstance(strategy_data.get(section), dict):
                         strategy_data[section]["atr_multiplier"] = best_params[mult_key]
                         updated_keys.append(mult_key)
                 # 写回顶层 position_fraction
@@ -423,19 +477,39 @@ async def process_one_strategy(
             except Exception as e:
                 logger.warning(f"  ⚠ 参数写回 YAML 失败: {e}")
 
-        # 2. 本地回测（复用 Optuna 已验证的代码，避免重复调用 LLM）
+        # 3. 调优后正式本地回测（decision 内部 formal local engine）
         generated_code = opt_result.get("generated_code")
-        logger.info(f"  [2/5] 本地回测...{'（复用 Optuna 代码）' if generated_code else ''}")
-        local_result = await executor.execute(strategy, start_date, end_date, params_override=best_params, cached_code=generated_code)
-        result["local_backtest"] = local_result.to_dict()
-        evidence_mgr.save_local_backtest_report(symbol, strategy_name, local_result.to_dict())
+        logger.info("  [3/7] 调优后正式本地回测（formal local engine）...")
+        local_result = await local_backtest_client.run_backtest(
+            yaml_path,
+            start_date,
+            end_date,
+            initial_capital=500000.0,
+        )
+        result["local_backtest"] = local_result
+        evidence_mgr.save_local_backtest_report(
+            symbol,
+            strategy_name,
+            {
+                "baseline": baseline_local_result,
+                "optimized": local_result,
+            },
+        )
 
-        # 2b. XGBoost 信号过滤训练（用本轮交易记录学习哪些特征组合更可能盈利）
+        # 2b. XGBoost 信号过滤训练（复用研究沙箱交易特征，不影响正式回测主链）
+        sandbox_result = None
         try:
             from src.research.xgboost_signal_filter import XGBoostSignalFilter
             xgb_filter = XGBoostSignalFilter(symbol=symbol, strategy_name=strategy_name)
-            # 从 result.trades 获取原始交易记录（含开仓特征快照），而非 to_dict()
-            raw_trades = local_result.trades
+            sandbox_result = await executor.execute(
+                strategy,
+                start_date,
+                end_date,
+                params_override=best_params,
+                cached_code=generated_code,
+            )
+            # 从沙箱 result.trades 获取带特征快照的原始交易记录；正式 local report 不提供该扩展字段
+            raw_trades = sandbox_result.trades
             if raw_trades:
                 X, y = xgb_filter.collect_trade_features(raw_trades)
                 if len(X) >= xgb_filter.min_samples:
@@ -462,13 +536,13 @@ async def process_one_strategy(
             logger.warning(f"  XGBoost 过滤跳过: {e}")
             result["xgboost_filter"] = {"status": "error", "reason": str(e)}
 
-        # 3. TqSdk 回测（可选）— 使用当前日期往前推 2 年作为回测区间
+        # 4. TqSdk 回测（可选）— 使用当前日期往前推 2 年作为回测区间
         #    TqSdk 失败不应阻断整个策略流程（评分 / 归档仍可基于本地回测继续）
         if run_tqsdk:
             from datetime import timedelta
             tqsdk_end = datetime.now().strftime("%Y-%m-%d")
             tqsdk_start = (datetime.now() - timedelta(days=730)).strftime("%Y-%m-%d")
-            logger.info(f"  [3/5] TqSdk 回测（{tqsdk_start} ~ {tqsdk_end}）...")
+            logger.info(f"  [4/7] TqSdk 回测（{tqsdk_start} ~ {tqsdk_end}）...")
             try:
                 task_id = await tqsdk_client.submit_backtest(yaml_path, tqsdk_start, tqsdk_end)
                 tqsdk_result = await tqsdk_client.poll_result(task_id)
@@ -479,18 +553,24 @@ async def process_one_strategy(
                 tqsdk_result = {"status": "failed", "error": str(e)}
                 result["tqsdk_backtest"] = tqsdk_result
         else:
-            logger.info(f"  [3/5] TqSdk 回测跳过（仅最终轮执行）")
+            logger.info(f"  [4/7] TqSdk 回测跳过（仅最终轮执行）")
             tqsdk_result = {"status": "skipped", "reason": "final_round_only"}
             result["tqsdk_backtest"] = tqsdk_result
 
-        # 4. 评分
-        logger.info(f"  [4/5] 策略评分...")
-        eval_result = await evaluator.evaluate_strategy(str(yaml_path), start_date, end_date)
+        # 5. 评分
+        logger.info(f"  [5/7] 策略评分...")
+        eval_result = await evaluator.evaluate_strategy(
+            str(yaml_path),
+            start_date,
+            end_date,
+            local_backtest_report=local_result,
+            sandbox_backtest_result=sandbox_result,
+        )
         result["evaluation"] = eval_result
         evidence_mgr.save_evaluator_report(symbol, strategy_name, eval_result)
 
-        # 5. 分桶归档
-        logger.info(f"  [5/5] 分桶归档...")
+        # 6. 分桶归档
+        logger.info(f"  [6/7] 分桶归档...")
         final_score = eval_result.get("final_score", 0)
         grade = eval_result.get("grade", "D")
         is_fused = grade == "BLOCKED"
@@ -508,8 +588,8 @@ async def process_one_strategy(
         # 5b. 归档归因记录（策略为何拿到这个分数）
         try:
             monitor = StrategyMonitor()
-            sharpe = local_result.to_dict().get("sharpe_ratio")
-            max_dd = local_result.to_dict().get("max_drawdown")
+            sharpe = local_result.get("summary", {}).get("sharpe")
+            max_dd = local_result.get("summary", {}).get("max_drawdown")
             if final_score < 60 or is_fused:
                 reason = "fused" if is_fused else "low_score"
                 monitor.record_archive_attribution(
@@ -523,15 +603,15 @@ async def process_one_strategy(
         except Exception as e:
             logger.warning(f"  归档归因记录失败: {e}")
 
-        # 6. 飞书通知
-        logger.info(f"  [6/6] 发送飞书通知...")
+        # 7. 飞书通知
+        logger.info(f"  [7/7] 发送飞书通知...")
         await feishu_notifier.notify_strategy_completed(
             symbol=symbol,
             strategy_name=strategy_name,
             category=template["category"],
             factors=template["factors"],
             params=strategy,
-            local_result=local_result.to_dict(),
+            local_result=local_result,
             tqsdk_result=tqsdk_result,
             final_score=final_score,
             grade=grade,
@@ -731,108 +811,115 @@ async def process_one_symbol(
 
     # 初始化组件
     executor = YAMLSignalExecutor(args.data_url, args.ollama_url)
+    local_backtest_client = LocalFormalBacktestClient(args.data_url)
     optimizer = StrategyParamOptimizer(executor, n_trials=args.n_trials)
     evaluator = StrategyEvaluator(args.data_url, args.ollama_url)
-    tqsdk_client = TqSdkBacktestClient(args.backtest_url)
+    tqsdk_client = TqSdkBacktestClient(args.backtest_url, data_url=args.data_url)
     evidence_mgr = EvidenceManager(_BASE / "strategies" / "llm_ranked")
     feishu_notifier = FeishuStrategyNotifier(args.feishu_webhook)
 
-    # 策略生成目录
-    output_dir = _BASE / "strategies" / "llm_generated" / symbol
-    output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        # 策略生成目录
+        output_dir = _BASE / "strategies" / "llm_generated" / symbol
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 生成策略矩阵
-    yaml_files = await generate_strategies_for_symbol(
-        symbol=symbol,
-        output_dir=output_dir,
-        data_url=args.data_url,
-        ollama_url=args.ollama_url,
-        evidence_mgr=evidence_mgr,
-        max_generate_strategies=max(0, int(getattr(args, "max_strategies", 0))),
-    )
+        # 生成策略矩阵
+        yaml_files = await generate_strategies_for_symbol(
+            symbol=symbol,
+            output_dir=output_dir,
+            data_url=args.data_url,
+            ollama_url=args.ollama_url,
+            evidence_mgr=evidence_mgr,
+            max_generate_strategies=max(0, int(getattr(args, "max_strategies", 0))),
+        )
 
-    if not yaml_files:
-        logger.warning(f"品种 {symbol} 未生成任何策略，跳过")
+        if not yaml_files:
+            logger.warning(f"品种 {symbol} 未生成任何策略，跳过")
+            return {
+                "symbol": symbol,
+                "total": 0,
+                "completed": 0,
+                "failed": 0,
+                "results": [],
+            }
+
+        if args.max_strategies and args.max_strategies > 0:
+            yaml_files = yaml_files[: args.max_strategies]
+
+        iterations = max(1, int(getattr(args, "strategy_iterations", 1)))
+        if iterations > 1 and yaml_files:
+            yaml_files = [yaml_files[0]] * iterations
+
+        progress.start_symbol(symbol, len(yaml_files))
+
+        # 逐个处理策略
+        results = []
+        previous_best_params = None
+        for idx, yaml_path in enumerate(yaml_files, 1):
+            template = STRATEGY_TEMPLATES[0] if iterations > 1 else STRATEGY_TEMPLATES[idx - 1]
+            run_tqsdk = True
+            if getattr(args, "tqsdk_mode", "every-round") == "final-only":
+                run_tqsdk = idx == len(yaml_files)
+            result = await process_one_strategy(
+                symbol=symbol,
+                template=template,
+                yaml_path=yaml_path,
+                executor=executor,
+                local_backtest_client=local_backtest_client,
+                optimizer=optimizer,
+                evaluator=evaluator,
+                tqsdk_client=tqsdk_client,
+                evidence_mgr=evidence_mgr,
+                feishu_notifier=feishu_notifier,
+                start_date=args.start,
+                end_date=args.end,
+                idx=idx,
+                total=len(yaml_files),
+                run_tqsdk=run_tqsdk,
+                previous_params=previous_best_params if iterations > 1 else None,
+            )
+            # 追踪最优参数供下一轮 warm-start
+            opt = result.get("optimization", {})
+            if opt and opt.get("best_params"):
+                previous_best_params = opt["best_params"]
+            results.append(result)
+            progress.complete_strategy()
+
+        progress.complete_symbol(symbol)
+
+        # 统计
+        completed = sum(1 for r in results if r["status"] == "completed")
+        failed = len(results) - completed
+
+        logger.info(f"\n品种 {symbol} 完成: {completed}/{len(results)} 成功, {failed} 失败")
+
+        # 策略池容量检查
+        try:
+            monitor = StrategyMonitor()
+            high_score = sum(1 for r in results if r.get("final_score", 0) >= 70)
+            pool_check = monitor.check_pool_capacity(
+                production_count=completed,
+                candidate_count=high_score,
+            )
+            if pool_check["needs_replenishment"]:
+                logger.warning(f"⚠ {pool_check['reason']}")
+            result_summary = {"pool_check": pool_check}
+        except Exception as e:
+            logger.warning(f"策略池检查失败: {e}")
+            result_summary = {}
+
         return {
             "symbol": symbol,
-            "total": 0,
-            "completed": 0,
-            "failed": 0,
-            "results": [],
+            "total": len(results),
+            "completed": completed,
+            "failed": failed,
+            "results": results,
+            **result_summary,
         }
-
-    if args.max_strategies and args.max_strategies > 0:
-        yaml_files = yaml_files[: args.max_strategies]
-
-    iterations = max(1, int(getattr(args, "strategy_iterations", 1)))
-    if iterations > 1 and yaml_files:
-        yaml_files = [yaml_files[0]] * iterations
-
-    progress.start_symbol(symbol, len(yaml_files))
-
-    # 逐个处理策略
-    results = []
-    previous_best_params = None
-    for idx, yaml_path in enumerate(yaml_files, 1):
-        template = STRATEGY_TEMPLATES[0] if iterations > 1 else STRATEGY_TEMPLATES[idx - 1]
-        run_tqsdk = True
-        if getattr(args, "tqsdk_mode", "every-round") == "final-only":
-            run_tqsdk = idx == len(yaml_files)
-        result = await process_one_strategy(
-            symbol=symbol,
-            template=template,
-            yaml_path=yaml_path,
-            executor=executor,
-            optimizer=optimizer,
-            evaluator=evaluator,
-            tqsdk_client=tqsdk_client,
-            evidence_mgr=evidence_mgr,
-            feishu_notifier=feishu_notifier,
-            start_date=args.start,
-            end_date=args.end,
-            idx=idx,
-            total=len(yaml_files),
-            run_tqsdk=run_tqsdk,
-            previous_params=previous_best_params if iterations > 1 else None,
-        )
-        # 追踪最优参数供下一轮 warm-start
-        opt = result.get("optimization", {})
-        if opt and opt.get("best_params"):
-            previous_best_params = opt["best_params"]
-        results.append(result)
-        progress.complete_strategy()
-
-    progress.complete_symbol(symbol)
-
-    # 统计
-    completed = sum(1 for r in results if r["status"] == "completed")
-    failed = len(results) - completed
-
-    logger.info(f"\n品种 {symbol} 完成: {completed}/{len(results)} 成功, {failed} 失败")
-
-    # 策略池容量检查
-    try:
-        monitor = StrategyMonitor()
-        high_score = sum(1 for r in results if r.get("final_score", 0) >= 70)
-        pool_check = monitor.check_pool_capacity(
-            production_count=completed,
-            candidate_count=high_score,
-        )
-        if pool_check["needs_replenishment"]:
-            logger.warning(f"⚠ {pool_check['reason']}")
-        result_summary = {"pool_check": pool_check}
-    except Exception as e:
-        logger.warning(f"策略池检查失败: {e}")
-        result_summary = {}
-
-    return {
-        "symbol": symbol,
-        "total": len(results),
-        "completed": completed,
-        "failed": failed,
-        "results": results,
-        **result_summary,
-    }
+    finally:
+        await local_backtest_client.close()
+        await tqsdk_client.close()
+        await feishu_notifier.close()
 
 
 async def main():

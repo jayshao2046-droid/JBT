@@ -1,0 +1,45 @@
+name: STRAT_czce_ma_parabolicsar_trend_60m
+description: CZCE.MA 抛物线SAR趋势跟踪：SAR方向 + EMA方向 + ADX确认 60m
+version: '1.0'
+category: trend_following
+factors:
+- factor_name: ParabolicSAR
+  params:
+    af_start: 0.02
+    af_max: 0.2
+- factor_name: EMA
+  params:
+    period: 20
+- factor_name: ADX
+  params:
+    period: 14
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: psar_direction > 0 and close > ema and adx > 17
+  short_condition: psar_direction < 0 and close < ema and adx > 17
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.036
+symbols:
+- KQ.m@CZCE.MA
+transaction_costs:
+  slippage_per_unit: 1.0
+  commission_per_lot_round_turn: 2.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 3.52
+  take_profit:
+    type: atr
+    atr_multiplier: 4.62
+  force_close_night: '22:55'
+tags:
+- CZCE
+- MA
+- parabolicsar_trend
+- trend_following
+- 60m

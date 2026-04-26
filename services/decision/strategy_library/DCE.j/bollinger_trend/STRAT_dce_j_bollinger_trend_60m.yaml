@@ -1,0 +1,45 @@
+name: STRAT_dce_j_bollinger_trend_60m
+description: DCE.j 布林带中轨方向趋势：价格站上/下中轨 + EMA方向 + ADX 60m
+version: '1.0'
+category: trend_following
+factors:
+- factor_name: BollingerBands
+  params:
+    period: 20
+    std_dev: 2
+- factor_name: EMA
+  params:
+    period: 10
+- factor_name: ADX
+  params:
+    period: 14
+- factor_name: ATR
+  params:
+    period: 14
+signal:
+  long_condition: close > bollinger_mid and ema > bollinger_mid and adx > 17
+  short_condition: close < bollinger_mid and ema < bollinger_mid and adx > 17
+  confirm_bars: 1
+timeframe_minutes: 60
+position_fraction: 0.032
+symbols:
+- KQ.m@DCE.j
+transaction_costs:
+  slippage_per_unit: 0.5
+  commission_per_lot_round_turn: 3.0
+risk:
+  force_close_day: '14:55'
+  no_overnight: true
+  stop_loss:
+    type: atr
+    atr_multiplier: 3.52
+  take_profit:
+    type: atr
+    atr_multiplier: 4.62
+  force_close_night: '22:55'
+tags:
+- DCE
+- j
+- bollinger_trend
+- trend_following
+- 60m

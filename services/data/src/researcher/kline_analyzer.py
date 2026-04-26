@@ -388,18 +388,25 @@ class KlineAnalyzer:
         """调用 Ollama LLM"""
         try:
             http = await self._get_http()
+            # F1（2026-04-24）：参数收紧
+            # - 在 prompt 头部注入 /no_think 关闭长推理
+            # - num_predict 限制单条输出 token
+            # - keep_alive 控制 14B 常驻时长，避免与 7B prefilter 争 8GB 显存
+            tightened_prompt = "/no_think\n" + prompt if "/no_think" not in prompt[:32] else prompt
             resp = await http.post(
                 f"{self.ollama_url}/api/generate",
                 json={
                     "model": self.ollama_model,
-                    "prompt": prompt,
+                    "prompt": tightened_prompt,
                     "stream": False,
+                    "keep_alive": ResearcherConfig.OLLAMA_KEEP_ALIVE,
                     "options": {
                         "temperature": 0.3,
                         "num_ctx": 4096,
+                        "num_predict": ResearcherConfig.OLLAMA_NUM_PREDICT,
                     },
                 },
-                timeout=90.0,
+                timeout=ResearcherConfig.OLLAMA_NEWS_TIMEOUT,
             )
             if resp.status_code == 200:
                 text = resp.json().get("response", "")

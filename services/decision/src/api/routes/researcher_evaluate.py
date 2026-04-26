@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """研究员报告评级端点 - 接收 Alienware 研究员推送并触发 LLM 评级
 
 使用 qwen3:14b 模型进行报告评级（2026-04-17 切换，原为 qwen3:14b）
@@ -7,7 +9,7 @@ import logging
 import asyncio
 import os
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -52,12 +54,12 @@ class ReportBatchRequest(BaseModel):
     date: str
     hour: int
     generated_at: str
-    futures_report: Dict[str, Any] | None = None
-    stocks_report: Dict[str, Any] | None = None
-    news_report: Dict[str, Any] | None = None
-    macro_report: Dict[str, Any] | None = None
-    rss_report: Dict[str, Any] | None = None
-    sentiment_report: Dict[str, Any] | None = None
+    futures_report: Optional[Dict[str, Any]] = None
+    stocks_report: Optional[Dict[str, Any]] = None
+    news_report: Optional[Dict[str, Any]] = None
+    macro_report: Optional[Dict[str, Any]] = None
+    rss_report: Optional[Dict[str, Any]] = None
+    sentiment_report: Optional[Dict[str, Any]] = None
     total_reports: int = 0
     elapsed_seconds: float = 0.0
 
@@ -120,10 +122,24 @@ async def evaluate_researcher_reports(batch: ReportBatchRequest):
                     if field in report_obj:
                         result_record[field] = report_obj[field]
 
-            results.append(result_record)
-
             # 持久化到 ResearchStore（供 GET /api/v1/research/latest 查询）
-            research_store.save(report_kind, result_record)
+            stored_record = research_store.save(
+                report_kind,
+                result_record,
+                source_report=report_obj,
+                batch_context={
+                    "batch_id": batch.batch_id,
+                    "date": batch.date,
+                    "hour": batch.hour,
+                    "generated_at": batch.generated_at,
+                },
+            )
+
+            results.append({
+                **result_record,
+                "fact_group": stored_record.get("fact_group"),
+                "stored_at": stored_record.get("stored_at"),
+            })
 
             await feishu.send_researcher_score(
                 report_type=report_label,
@@ -154,6 +170,16 @@ async def evaluate_researcher_reports(batch: ReportBatchRequest):
         if batch.macro_report:
             logger.info(f"评级宏观报告: {batch.macro_report.get('report_id')}")
             await _evaluate_and_notify("macro", "宏观", batch.macro_report)
+
+        # 评级 RSS 报告
+        if batch.rss_report:
+            logger.info(f"评级 RSS 报告: {batch.rss_report.get('report_id')}")
+            await _evaluate_and_notify("rss", "RSS", batch.rss_report)
+
+        # 评级情绪报告
+        if batch.sentiment_report:
+            logger.info(f"评级情绪报告: {batch.sentiment_report.get('report_id')}")
+            await _evaluate_and_notify("sentiment", "情绪", batch.sentiment_report)
 
         logger.info(f"完成 qwen3 评级: {batch.batch_id}, 评级 {len(results)} 份报告")
 

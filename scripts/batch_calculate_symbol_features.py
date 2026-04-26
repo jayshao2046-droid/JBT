@@ -1,11 +1,23 @@
 #!/usr/bin/env python3
-"""批量计算 35 个品种的特征画像
+"""批量计算 42 个品种的特征画像（支持多周期）
+
+支持的周期：15 / 30 / 60 / 120 / 240 分钟
+每个周期独立输出到 runtime/symbol_profiles/{interval}m/
+
+用法：
+  python scripts/batch_calculate_symbol_features.py               # 默认只跑 60m
+  python scripts/batch_calculate_symbol_features.py --intervals 15 30 60 120 240
+  python scripts/batch_calculate_symbol_features.py --intervals 60
+
+说明：
+  - 策略用哪个周期，就应该用对应周期的特征（波动率/自相关在不同 interval 有显著差异）
+  - 5min 暂不支持（API 数据量过大，约 3年×480根=5万条，可能触发限速）
 
 输出：
-1. 每个品种的特征 JSON 文件
-2. 汇总报告（CSV 格式）
-3. 置信度低于 0.7 的品种列表
+  - runtime/symbol_profiles/{interval}m/{EXCHANGE.PRODUCT}.json
+  - runtime/symbol_profiles/{interval}m/summary.csv
 """
+import argparse
 import asyncio
 import json
 import sys
@@ -18,64 +30,74 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from services.decision.src.research.symbol_profiler import SymbolProfiler
 
 
-# 35 个品种列表
+# 42 个品种列表（与 generate_42_factor_expansion_strategies.py 保持一致）
+# 使用裸品种格式，SymbolProfiler 内部自动转为 KQ_m_ 连续合约格式
 SYMBOLS = [
-    # 黑色系
-    "SHFE.rb2505",  # 螺纹钢
-    "DCE.i2505",    # 铁矿石
-    "DCE.j2505",    # 焦炭
-    "DCE.jm2505",   # 焦煤
-    "SHFE.hc2505",  # 热轧卷板
+    # CZCE 农产品/化工（大写商品码）
+    "CZCE.AP",  # 苹果
+    "CZCE.CF",  # 棉花
+    "CZCE.FG",  # 玻璃
+    "CZCE.MA",  # 甲醇
+    "CZCE.OI",  # 菜油
+    "CZCE.PF",  # 短纤
+    "CZCE.RM",  # 菜粕
+    "CZCE.SA",  # 纯碱
+    "CZCE.SR",  # 白糖
+    "CZCE.TA",  # PTA
+    "CZCE.UR",  # 尿素
 
-    # 有色金属
-    "SHFE.cu2505",  # 铜
-    "SHFE.al2505",  # 铝
-    "SHFE.zn2505",  # 锌
-    "SHFE.pb2505",  # 铅
-    "SHFE.ni2505",  # 镍
-    "SHFE.sn2505",  # 锡
+    # DCE 黑色系/农产品/化工（小写）
+    "DCE.a",    # 豆一
+    "DCE.c",    # 玉米
+    "DCE.cs",   # 玉米淀粉
+    "DCE.eb",   # 苯乙烯
+    "DCE.eg",   # 乙二醇
+    "DCE.i",    # 铁矿石
+    "DCE.j",    # 焦炭
+    "DCE.jd",   # 鸡蛋
+    "DCE.jm",   # 焦煤
+    "DCE.l",    # 塑料
+    "DCE.lh",   # 生猪
+    "DCE.m",    # 豆粕
+    "DCE.p",    # 棕榈油
+    "DCE.pg",   # 液化石油气
+    "DCE.pp",   # 聚丙烯
+    "DCE.v",    # PVC
+    "DCE.y",    # 豆油
 
-    # 贵金属
-    "SHFE.au2506",  # 黄金
-    "SHFE.ag2506",  # 白银
+    # INE
+    "INE.sc",   # 原油
 
-    # 能源化工
-    "SHFE.fu2505",  # 燃料油
-    "SHFE.bu2506",  # 沥青
-    "SHFE.ru2505",  # 橡胶
-    "DCE.l2505",    # 塑料
-    "DCE.v2505",    # PVC
-    "DCE.pp2505",   # 聚丙烯
-    "DCE.eg2505",   # 乙二醇
-    "DCE.eb2505",   # 苯乙烯
-    "DCE.pg2505",   # 液化石油气
-
-    # 农产品
-    "DCE.m2505",    # 豆粕
-    "DCE.y2505",    # 豆油
-    "DCE.a2505",    # 豆一
-    "DCE.b2505",    # 豆二
-    "DCE.p2505",    # 棕榈油
-    "DCE.c2505",    # 玉米
-    "DCE.cs2505",   # 玉米淀粉
-    "CZCE.SR505",   # 白糖
-    "CZCE.CF505",   # 棉花
-    "CZCE.TA505",   # PTA
-    "CZCE.MA505",   # 甲醇
-    "CZCE.RM505",   # 菜粕
-    "CZCE.OI505",   # 菜油
+    # SHFE 金属/能源（小写）
+    "SHFE.ag",  # 白银
+    "SHFE.al",  # 铝
+    "SHFE.au",  # 黄金
+    "SHFE.bu",  # 沥青
+    "SHFE.cu",  # 铜
+    "SHFE.fu",  # 燃料油
+    "SHFE.hc",  # 热轧卷板
+    "SHFE.ni",  # 镍
+    "SHFE.rb",  # 螺纹钢
+    "SHFE.ru",  # 橡胶
+    "SHFE.sp",  # 纸浆
+    "SHFE.ss",  # 不锈钢
+    "SHFE.zn",  # 锌
 ]
 
 
-async def main():
-    profiler = SymbolProfiler(data_service_url="http://192.168.31.74:8105")
+async def run_for_interval(interval: int) -> None:
+    """对所有品种跑指定 interval 的特征计算，输出到 runtime/symbol_profiles/{interval}m/"""
+    profiler = SymbolProfiler(
+        data_service_url="http://192.168.31.74:8105",
+        interval=interval,
+    )
 
-    # 创建输出目录
-    output_dir = Path("runtime/symbol_profiles")
+    # 创建输出目录（按周期分目录）
+    output_dir = Path(f"runtime/symbol_profiles/{interval}m")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 80)
-    print(f"批量计算 {len(SYMBOLS)} 个品种的特征画像")
+    print(f"批量计算 {len(SYMBOLS)} 个品种特征画像  [interval={interval}min]")
     print("=" * 80)
     print(f"数据源: Mini API (http://192.168.31.74:8105)")
     print(f"输出目录: {output_dir}")
@@ -90,7 +112,7 @@ async def main():
         print(f"\n[{i}/{len(SYMBOLS)}] 处理 {symbol}...")
 
         try:
-            features = await profiler.calculate_features(symbol)
+            features = await profiler.calculate_features(symbol, force_full=True)
 
             if not features:
                 print(f"  ❌ 失败：数据不足")
@@ -158,6 +180,10 @@ async def main():
             print(f"  ❌ 异常: {e}")
             failed_symbols.append(symbol)
 
+        # 每个 symbol 后等待 3s，避免 Mini API 连接池耗尽
+        if i < len(SYMBOLS):
+            await asyncio.sleep(3)
+
     # 生成汇总报告
     print(f"\n{'=' * 80}")
     print("汇总报告")
@@ -171,7 +197,7 @@ async def main():
             f.write(f"{r['symbol']},{r['volatility']},{r['volatility_1y']:.4f},"
                    f"{r['trend']},{r['liquidity']},{r['confidence']:.2f},{r['warnings']}\n")
 
-    print(f"\n总计: {len(SYMBOLS)} 个品种")
+    print(f"\n总计: {len(SYMBOLS)} 个品种  [interval={interval}min]")
     print(f"  ✅ 成功: {len(results)} 个")
     print(f"  ❌ 失败: {len(failed_symbols)} 个")
     print(f"  ⚠️ 低置信度 (<0.7): {len(low_confidence_symbols)} 个")
@@ -188,10 +214,34 @@ async def main():
 
     print(f"\n输出文件:")
     print(f"  - JSON: {output_dir}/*.json")
-    print(f"  - CSV: {csv_file}")
+    print(f"  - CSV: {output_dir}/summary.csv")
 
     print(f"\n完成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 80)
+
+
+async def main():
+    parser = argparse.ArgumentParser(description="批量计算品种特征画像（多周期支持）")
+    parser.add_argument(
+        "--intervals",
+        nargs="+",
+        type=int,
+        default=[60],
+        choices=[5, 15, 30, 60, 120, 240],
+        help="要计算的 K 线周期（分钟），可多选，默认 60。示例: --intervals 15 30 60",
+    )
+    args = parser.parse_args()
+
+    intervals = args.intervals
+    print(f"\n将依次计算以下周期的特征: {intervals}\n")
+
+    for interval in intervals:
+        await run_for_interval(interval)
+        if len(intervals) > 1:
+            print(f"\n{'▶' * 40}")
+            print(f"  {interval}min 完成，稍作等待后继续下一个周期...")
+            print(f"{'▶' * 40}\n")
+            await asyncio.sleep(2)  # 避免连续请求过猛
 
 
 if __name__ == "__main__":

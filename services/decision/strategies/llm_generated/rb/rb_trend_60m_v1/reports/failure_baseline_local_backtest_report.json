@@ -1,0 +1,8 @@
+{
+  "stage": "baseline_local_backtest",
+  "error": "基线本地回测失败: 本地正式回测失败: strategy YAML not found: rb_trend_60m_v1.yaml",
+  "context": {},
+  "saved_at": "2026-04-24T15:15:00.189449",
+  "report_type": "failure_baseline_local_backtest",
+  "run_id": "20260424_151459"
+}
