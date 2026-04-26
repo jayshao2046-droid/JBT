@@ -1521,6 +1521,7 @@ class ResearcherScheduler:
                 )
 
                 if resp.status_code != 200:
+                    logger.warning(f"[ANALYZE] LLM 分析失败 [{source_id}]: HTTP {resp.status_code}, body={resp.text[:200]}")
                     return None
 
                 text = resp.json().get("response", "")
